@@ -4,10 +4,11 @@
 import AGENT_0 from "./task-check.txt"
 import AGENT_1 from "./sub-coding.txt"
 import AGENT_2 from "./strict-plan.txt"
-import AGENT_3 from "./coding.txt"
-import AGENT_4 from "./planning.txt"
-import AGENT_5 from "./quick-explore.txt"
-import AGENT_6 from "./fix-agent.txt"
+import AGENT_3 from "./explore.txt"
+import AGENT_4 from "./coding.txt"
+import AGENT_5 from "./planning.txt"
+import AGENT_6 from "./quick-explore.txt"
+import AGENT_7 from "./fix-agent.txt"
 
 export const BUILTIN_AGENTS = [
   AGENT_0,
@@ -16,5 +17,6 @@ export const BUILTIN_AGENTS = [
   AGENT_3,
   AGENT_4,
   AGENT_5,
-  AGENT_6
+  AGENT_6,
+  AGENT_7
 ]
