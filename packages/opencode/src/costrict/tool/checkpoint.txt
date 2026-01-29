@@ -1,0 +1,130 @@
+Creates and manages snapshots of the project state using a shadow Git repository for safe experimentation and recovery.
+
+# Purpose
+
+The checkpoint tool allows agents to:
+- **State Preservation**: Create snapshots of project files before and after modifications
+- **Safe Experimentation**: Allow safe reversion of changes if needed
+- **Recovery Management**: Enable restoration of project state at any checkpoint
+- **Change Tracking**: Record changes with descriptive messages for auditing
+
+# Important Notes
+
+- Operates in a **shadow Git repository** (NOT the user's main repo) at ~/.costrict/checkpoint/<project_hash>
+- Does NOT interfere with the user's own Git configuration or repository
+- All checkpoints are stored separately from the user's version control
+- Only for agent use - users should use their own version control systems
+
+# Available Actions
+
+## 1. commit - Create a checkpoint
+
+Creates a snapshot of the current project state.
+
+**Required parameters:**
+- `message`: Descriptive message for the checkpoint
+
+**Returns:** Commit hash and success message
+
+**Example:**
+```json
+{
+  "action": "commit",
+  "message": "task: 1.1 - implemented user authentication"
+}
+```
+
+## 2. list - List all checkpoints
+
+Lists all available checkpoints (up to 50 most recent).
+
+**Required parameters:** None
+
+**Returns:** List of checkpoints with hashes, messages, and dates
+
+**Example:**
+```json
+{
+  "action": "list"
+}
+```
+
+## 3. show_diff - Show changes in a checkpoint
+
+Shows the diff of changes introduced by a specific checkpoint.
+
+**Required parameters:**
+- `commit_hash`: The hash of the checkpoint to show
+
+**Returns:** Full unified diff output
+
+**Example:**
+```json
+{
+  "action": "show_diff",
+  "commit_hash": "abc123def456"
+}
+```
+
+## 4. restore - Restore to a checkpoint
+
+Restores the project state to a specific checkpoint.
+
+**Important:** This operation only restores tracked files. Untracked files (newly created files not in the checkpoint) will be preserved.
+
+**Required parameters:**
+- `commit_hash`: The hash of the checkpoint to restore
+
+**Optional parameters:**
+- `files`: Array of specific file paths to restore (if omitted, restores all tracked files)
+
+**Returns:** Success message
+
+**Example (restore all tracked files):**
+```json
+{
+  "action": "restore",
+  "commit_hash": "abc123def456"
+}
+```
+
+**Example (restore specific files):**
+```json
+{
+  "action": "restore",
+  "commit_hash": "abc123def456",
+  "files": ["src/auth.ts", "src/utils/validation.ts"]
+}
+```
+
+## 5. revert - Create a revert commit
+
+Creates a new commit that undoes the changes from a specific checkpoint.
+
+**Required parameters:**
+- `commit_hash`: The hash of the checkpoint to revert
+
+**Returns:** Hash of the new revert commit
+
+**Example:**
+```json
+{
+  "action": "revert",
+  "commit_hash": "abc123def456"
+}
+```
+
+# Best Practices
+
+1. **After Task Completion**: Create a checkpoint after completing each significant task
+2. **Before Risky Changes**: Create a checkpoint before making potentially breaking changes
+3. **Descriptive Messages**: Use clear, descriptive messages (e.g., "task: 1.1 - fixed authentication bug")
+4. **Review Before Restore**: Use `show_diff` to review changes before restoring
+
+# Error Handling
+
+If a checkpoint operation fails:
+- Check that the shadow repository is accessible
+- Verify that the commit hash exists (use `list` to see available checkpoints)
+- Ensure there are no file permission issues
+- The error message will provide specific details about what went wrong

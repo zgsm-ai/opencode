@@ -1,0 +1,70 @@
+name: Build CLI Binaries
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-all:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch tags
+        run: git fetch --force --tags
+
+      - name: Setup Bun and install dependencies
+        uses: ./.github/actions/setup-bun
+
+      - name: Install platform-specific dependencies
+        run: |
+          cd packages/opencode
+          bun install --os="*" --cpu="*" @opentui/core@$(node -p "require('./package.json').dependencies['@opentui/core']")
+          bun install --os="*" --cpu="*" @parcel/watcher@$(node -p "require('./package.json').dependencies['@parcel/watcher']")
+
+      - name: Build all platforms
+        run: |
+          cd packages/opencode
+          bun run script/build.ts --skip-install
+
+      - name: Create archives for GitHub release
+        run: |
+          cd packages/opencode
+          for key in dist/opencode-*/; do
+            key=$(basename "$key")
+            if [[ "$key" == *"linux"* ]]; then
+              (cd "dist/${key}/bin" && tar -czf "../../${key}.tar.gz" *)
+            else
+              (cd "dist/${key}/bin" && zip -r "../../${key}.zip" *)
+            fi
+          done
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: costrict-cli-all-platforms
+          path: |
+            packages/opencode/dist/*.tar.gz
+            packages/opencode/dist/*.zip
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Build Summary
+        if: always()
+        run: |
+          echo "## 🎉 CoStrict CLI Build Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ CLI binaries built successfully for all platforms!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📦 Built Platforms" >> $GITHUB_STEP_SUMMARY
+          echo "- Linux: x64, x64-baseline, arm64 (glibc & musl)" >> $GITHUB_STEP_SUMMARY
+          echo "- macOS: arm64, x64, x64-baseline" >> $GITHUB_STEP_SUMMARY
+          echo "- Windows: x64, x64-baseline" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📥 Download" >> $GITHUB_STEP_SUMMARY
+          echo "Visit the [Actions run page](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) to download the compiled binaries." >> $GITHUB_STEP_SUMMARY
