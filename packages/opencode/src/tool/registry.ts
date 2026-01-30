@@ -31,6 +31,7 @@ import { FileOutlineTool } from "../costrict/tool/file-outline"
 import { CheckpointTool } from "../costrict/tool/checkpoint"
 import { ApplyPatchTool } from "./apply_patch"
 import { TaskDoneWithChangeIdTool } from "./task_done_with_change_id"
+import { AskForTaskDoneOrContinueTool } from "./ask_for_task_done_or_continue"
 
 export namespace ToolRegistry {
   const log = Log.create({ service: "tool.registry" })
@@ -123,6 +124,7 @@ export namespace ToolRegistry {
       ...(config.experimental?.batch_tool === true ? [BatchTool] : []),
       ...(Flag.COSTRICT_EXPERIMENTAL_PLAN_MODE && Flag.COSTRICT_CLIENT === "cli" ? [PlanExitTool, PlanEnterTool] : []),
       TaskDoneWithChangeIdTool,
+      AskForTaskDoneOrContinueTool,
       ...custom,
     ]
   }
@@ -156,6 +158,11 @@ export namespace ToolRegistry {
           // task_done_with_change_id is only available to proposal agent
           if (t.id === "task_done_with_change_id") {
             return agent?.name === "proposal"
+          }
+
+          // ask_for_task_done_or_continue is only available to taskcheck agent
+          if (t.id === "ask_for_task_done_or_continue") {
+            return agent?.name === "taskcheck"
           }
 
           return true

@@ -15,6 +15,7 @@ import PROMPT_EXPLORE from "./prompt/explore.txt"
 import PROMPT_SUMMARY from "./prompt/summary.txt"
 import PROMPT_TITLE from "./prompt/title.txt"
 import PROMPT_PROPOSAL from "./prompt/proposal.txt"
+import PROMPT_TASKCHECK from "./prompt/taskcheck.txt"
 import { PermissionNext } from "@/permission/next"
 import { mergeDeep, pipe, sortBy, values } from "remeda"
 import { Global } from "@/global"
@@ -137,6 +138,36 @@ export namespace Agent {
         mode: "primary",
         native: true,
         prompt: PROMPT_PROPOSAL,
+      },
+      taskcheck: {
+        name: "taskcheck",
+        description: "Task quality checking and improvement agent. Checks if tasks in tasks.md are clear, precise, and complete. Verifies requirements coverage, code location precision, and style consistency. Can only modify tasks.md, not code files.",
+        options: {},
+        permission: PermissionNext.merge(
+          defaults,
+          PermissionNext.fromConfig({
+            question: "allow",
+            // Only allow editing tasks.md
+            edit: {
+              "*": "deny",
+              "**/proposal/*/tasks.md": "allow",
+              "proposal/*/tasks.md": "allow",
+            },
+            write: {
+              "*": "deny",
+            },
+            // Allow bash for verification and exploration
+            bash: "allow",
+            // Allow reading any file for code exploration
+            read: "allow",
+            // Disable other edit tools
+            apply_patch: "deny",
+          }),
+          user,
+        ),
+        mode: "primary",
+        native: true,
+        prompt: PROMPT_TASKCHECK,
       },
       general: {
         name: "general",
