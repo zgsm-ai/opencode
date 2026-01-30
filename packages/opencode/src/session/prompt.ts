@@ -50,6 +50,41 @@ import { Truncate } from "@/tool/truncation"
 // @ts-ignore
 globalThis.AI_SDK_LOG_WARNINGS = false
 
+async function extractTextContent(message: MessageV2.Assistant): Promise<string | undefined> {
+  const parts = await MessageV2.parts(message.id)
+  const textPart = parts.find((part): part is MessageV2.TextPart => part.type === "text")
+  return textPart?.text
+}
+
+async function llmIndicatesTaskCompleted(message: MessageV2.Assistant): Promise<boolean> {
+  // 获取工具调用列表
+  const parts = await MessageV2.parts(message.id)
+  const toolParts = parts.filter((part) => part.type === "tool") as MessageV2.ToolPart[]
+
+  // 检查是否调用了 task_done 工具
+  const taskDoneCall = toolParts.find((part) => part.tool === "task_done")
+
+  // 只有当调用了 task_done 工具且工具执行完成时，才认为任务完成
+  return taskDoneCall !== undefined && taskDoneCall.state.status === "completed"
+}
+
+function extractSummary(toolPart: MessageV2.ToolPart): string | undefined {
+  if (toolPart.state.status !== "completed") {
+    return undefined
+  }
+
+  const resultText = toolPart.state.output || ""
+  // 工具结果格式是 "Task done.\n\nSummary:\n{summary}"
+  if (resultText.includes("Summary:")) {
+    const parts = resultText.split("Summary:")
+    if (parts.length > 1) {
+      return parts[1].trim()
+    }
+  }
+
+  return resultText || undefined
+}
+
 export namespace SessionPrompt {
   const log = Log.create({ service: "session.prompt" })
   export const OUTPUT_TOKEN_MAX = Flag.COSTRICT_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 32_000
@@ -293,6 +328,32 @@ export namespace SessionPrompt {
       }
 
       if (!lastUser) throw new Error("No user message found in stream. This should never happen.")
+      
+      // 检查是否有 task 完成指示（通过 task_done 工具）
+      if (lastAssistant && lastUser.id < lastAssistant.id) {
+        const isTaskCompleted = await llmIndicatesTaskCompleted(lastAssistant)
+
+        if (isTaskCompleted) {
+          // 获取工具调用列表
+          const parts = await MessageV2.parts(lastAssistant.id)
+          const toolParts = parts.filter((part) => part.type === "tool") as MessageV2.ToolPart[]
+
+          // 查找 task_done 工具
+          const taskDoneCall = toolParts.find((part) => part.tool === "task_done")
+
+          // 从 task_done 工具结果中提取摘要
+          const summary = taskDoneCall ? extractSummary(taskDoneCall) : undefined
+
+          log.info("exiting loop - task completed with task_done", {
+            sessionID,
+            summary: summary?.substring(0, 100),
+          })
+
+          break
+        }
+      }
+
+      // 保留原有的退出逻辑作为后备
       if (
         lastAssistant?.finish &&
         !["tool-calls", "unknown"].includes(lastAssistant.finish) &&
