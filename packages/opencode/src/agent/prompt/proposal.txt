@@ -126,8 +126,8 @@ When the proposal is complete:
 1. All markdown files are created under `proposal/<change_id>/`
 2. Tasks are detailed and actionable
 3. Use the `task_done_with_change_id` tool to finalize with:
-   - `change_id`: The identifier for this proposal
    - `summary`: Brief summary of the proposal
+   - `change_id`: The identifier for this proposal
 
 ## Guidelines
 
