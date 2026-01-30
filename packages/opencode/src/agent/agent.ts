@@ -14,6 +14,7 @@ import PROMPT_COMPACTION from "./prompt/compaction.txt"
 import PROMPT_EXPLORE from "./prompt/explore.txt"
 import PROMPT_SUMMARY from "./prompt/summary.txt"
 import PROMPT_TITLE from "./prompt/title.txt"
+import PROMPT_PROPOSAL from "./prompt/proposal.txt"
 import { PermissionNext } from "@/permission/next"
 import { mergeDeep, pipe, sortBy, values } from "remeda"
 import { Global } from "@/global"
@@ -109,6 +110,33 @@ export namespace Agent {
         ),
         mode: "primary",
         native: true,
+      },
+      proposal: {
+        name: "proposal",
+        description: "Creates detailed technical change proposals and architectural designs. Researches codebase, designs solutions, and produces structured proposal documents without implementing code.",
+        options: {},
+        permission: PermissionNext.merge(
+          defaults,
+          PermissionNext.fromConfig({
+            question: "allow",
+            plan_enter: "allow",
+            edit: {
+              "*": "deny",
+              "**/*.md": "allow",
+              "**/proposal/**/*.md": "allow",
+              "proposal/**/*.md": "allow",
+            },
+            write: {
+              "*": "deny",
+              "**/*.md": "allow",
+              "proposal/**": "allow",
+            },
+          }),
+          user,
+        ),
+        mode: "primary",
+        native: true,
+        prompt: PROMPT_PROPOSAL,
       },
       general: {
         name: "general",

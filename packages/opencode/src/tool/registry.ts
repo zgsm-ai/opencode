@@ -30,6 +30,7 @@ import { SequentialThinkingTool } from "../costrict/tool/sequential-thinking"
 import { FileOutlineTool } from "../costrict/tool/file-outline"
 import { CheckpointTool } from "../costrict/tool/checkpoint"
 import { ApplyPatchTool } from "./apply_patch"
+import { TaskDoneWithChangeIdTool } from "./task_done_with_change_id"
 
 export namespace ToolRegistry {
   const log = Log.create({ service: "tool.registry" })
@@ -121,6 +122,7 @@ export namespace ToolRegistry {
       ApplyPatchTool,
       ...(config.experimental?.batch_tool === true ? [BatchTool] : []),
       ...(Flag.COSTRICT_EXPERIMENTAL_PLAN_MODE && Flag.COSTRICT_CLIENT === "cli" ? [PlanExitTool, PlanEnterTool] : []),
+      TaskDoneWithChangeIdTool,
       ...custom,
     ]
   }
@@ -150,6 +152,11 @@ export namespace ToolRegistry {
             model.modelID.includes("gpt-") && !model.modelID.includes("oss") && !model.modelID.includes("gpt-4")
           if (t.id === "apply_patch") return usePatch
           if (t.id === "edit" || t.id === "write") return !usePatch
+
+          // task_done_with_change_id is only available to proposal agent
+          if (t.id === "task_done_with_change_id") {
+            return agent?.name === "proposal"
+          }
 
           return true
         })
