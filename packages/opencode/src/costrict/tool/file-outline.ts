@@ -6,9 +6,11 @@
 import { Tool } from '@/tool/tool';
 import { z } from 'zod';
 import { readFileSync } from 'fs';
+import path from 'path';
 import { treeSitterService } from './service/tree-sitter';
 import { loadScmQuery, detectLanguageFromFilename } from './util/scm-loader';
 import { Query } from 'web-tree-sitter';
+import type { Tree } from 'web-tree-sitter';
 import { Log } from '@/util/log';
 
 const log = Log.create({ service: 'file-outline' });
@@ -71,7 +73,12 @@ const DOCSTRING_PATTERNS: Record<string, DocstringPattern> = {
   },
   java: {
     docstringTypes: new Set(['block_comment', 'line_comment']),
-    definitionTypes: new Set(['class_declaration', 'method_declaration', 'constructor_declaration']),
+    definitionTypes: new Set([
+      'class_declaration',
+      'method_declaration',
+      'constructor_declaration',
+      'interface_declaration',
+    ]),
     position: 'preceding',
     docPrefix: '/**',
   },
@@ -85,71 +92,286 @@ const DOCSTRING_PATTERNS: Record<string, DocstringPattern> = {
     definitionTypes: new Set(['function_definition', 'class_specifier', 'struct_specifier']),
     position: 'preceding',
   },
+  rust: {
+    docstringTypes: new Set(['line_comment', 'block_comment']),
+    definitionTypes: new Set(['function_item', 'impl_item', 'struct_item', 'enum_item']),
+    position: 'preceding',
+    docPrefix: '///',
+  },
+  ruby: {
+    docstringTypes: new Set(['comment']),
+    definitionTypes: new Set(['method', 'class', 'module']),
+    position: 'preceding',
+  },
+  php: {
+    docstringTypes: new Set(['comment']),
+    definitionTypes: new Set(['function_definition', 'method_declaration', 'class_declaration']),
+    position: 'preceding',
+  },
 };
 
-/**
- * 提取文档字符串
- */
-function extractDocstring(
-  node: any,
-  sourceCode: string,
-  pattern: DocstringPattern
-): string | undefined {
-  if (pattern.position === 'first_child') {
-    // Python风格：文档字符串是函数/类体的第一个子节点
-    const body = node.childForFieldName('body');
-    if (!body) return undefined;
+type SyntaxNode = Tree['rootNode'];
 
-    const firstChild = body.firstChild;
-    if (!firstChild) return undefined;
+const COMMENT_TYPES = new Set(['comment', 'block_comment', 'line_comment']);
+const PYTHON_DOCSTRING_SKIP = new Set(['comment', 'NEWLINE', 'INDENT', 'DEDENT', 'pass_statement']);
 
-    if (pattern.docstringTypes.has(firstChild.type)) {
-      return sourceCode.substring(firstChild.startIndex, firstChild.endIndex);
+function getNodeText(node: SyntaxNode, sourceCode: string): string {
+  return sourceCode.substring(node.startIndex, node.endIndex);
+}
+
+function cleanDocstring(value: string): string {
+  const text = value.trim();
+  if (!text) return text;
+
+  const triples = ['"""', "'''"];
+  for (const quote of triples) {
+    if (text.startsWith(quote) && text.endsWith(quote) && text.length >= quote.length * 2) {
+      return text.slice(quote.length, -quote.length).trim();
     }
-  } else if (pattern.position === 'preceding') {
-    // JavaScript/Go风格：文档注释在定义之前
-    let prevSibling = node.previousSibling;
-
-    // 跳过空白节点
-    while (prevSibling && prevSibling.type === 'comment' && !prevSibling.text.trim()) {
-      prevSibling = prevSibling.previousSibling;
-    }
-
-    if (prevSibling && pattern.docstringTypes.has(prevSibling.type)) {
-      const text = sourceCode.substring(prevSibling.startIndex, prevSibling.endIndex);
-
-      // 如果指定了前缀，检查是否匹配
-      if (pattern.docPrefix && !text.startsWith(pattern.docPrefix)) {
-        return undefined;
+    if (text.startsWith(quote)) {
+      const trimmed = text.slice(quote.length);
+      if (trimmed.endsWith(quote) && trimmed.length >= quote.length) {
+        return trimmed.slice(0, -quote.length).trim();
       }
-
-      return text;
+      return trimmed.trim();
     }
+  }
+
+  for (const quote of ['"', "'"]) {
+    if (text.startsWith(quote) && text.endsWith(quote) && text.length > 1) {
+      return text.slice(1, -1).trim();
+    }
+  }
+
+  return text;
+}
+
+function cleanComment(value: string): string {
+  const lines = value.split('\n');
+  const cleaned: string[] = [];
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    const noBlockStart = trimmed.startsWith('/**')
+      ? trimmed.slice(3)
+      : trimmed.startsWith('/*')
+        ? trimmed.slice(2)
+        : trimmed;
+    const noBlockEnd = noBlockStart.endsWith('*/') ? noBlockStart.slice(0, -2) : noBlockStart;
+    const noPrefix = noBlockEnd.startsWith('///')
+      ? noBlockEnd.slice(3)
+      : noBlockEnd.startsWith('//!')
+        ? noBlockEnd.slice(3)
+        : noBlockEnd.startsWith('//')
+          ? noBlockEnd.slice(2)
+          : noBlockEnd.startsWith('#')
+            ? noBlockEnd.slice(1)
+            : noBlockEnd.startsWith('*')
+              ? noBlockEnd.slice(1)
+              : noBlockEnd;
+    const next = noPrefix.trim();
+    if (next) cleaned.push(next);
+  }
+
+  return cleaned.join('\n').trim();
+}
+
+function normalizeSignatureWhitespace(signature: string): string {
+  const normalized = signature.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  if (!normalized) return normalized;
+
+  const indentMatch = normalized.match(/^[ \t]*/);
+  const indent = indentMatch ? indentMatch[0] : '';
+  const content = normalized.slice(indent.length);
+  const collapsed = content.replace(/\s+/g, ' ').trim();
+  return `${indent}${collapsed}`.trimEnd();
+}
+
+function findDefinitionParent(node: SyntaxNode, definitionTypes: Set<string>): SyntaxNode | undefined {
+  if (definitionTypes.has(node.type)) return node;
+  const parent = node.parent;
+  if (!parent) return undefined;
+  return findDefinitionParent(parent, definitionTypes);
+}
+
+function inferSignatureNodeFromNameNode(node: SyntaxNode): SyntaxNode {
+  const startRow = node.startPosition.row;
+  const climb = (current: SyntaxNode): SyntaxNode => {
+    const parent = current.parent;
+    if (!parent) return current;
+    if (parent.startPosition.row !== startRow) return current;
+    return climb(parent);
+  };
+  const candidate = climb(node);
+  if (!candidate.parent) return node;
+  if (['program', 'source_file', 'translation_unit', 'module'].includes(candidate.type)) {
+    return node;
+  }
+  return candidate;
+}
+
+function findDefinitionBodyChild(node: SyntaxNode, language: string): SyntaxNode | undefined {
+  const common = new Set([
+    'block',
+    'body',
+    'statement_block',
+    'compound_statement',
+    'class_body',
+    'declaration_list',
+    'field_declaration_list',
+    'body_statement',
+  ]);
+  const specific = new Set(
+    language === 'python'
+      ? ['block', 'body']
+      : language === 'javascript' || language === 'typescript'
+        ? ['statement_block', 'class_body']
+        : language === 'go'
+          ? ['block']
+          : language === 'java'
+            ? ['block', 'class_body']
+            : language === 'cpp'
+              ? ['compound_statement', 'declaration_list', 'field_declaration_list', 'class_body']
+              : language === 'c'
+                ? ['compound_statement']
+                : []
+  );
+
+  const types = new Set([...common, ...specific]);
+  for (const child of node.children) {
+    if (!child) continue;
+    if (types.has(child.type)) return child;
+  }
+  return undefined;
+}
+
+function extractDefinitionSignature(
+  node: SyntaxNode,
+  sourceCode: string,
+  language: string
+): string {
+  const start = node.startIndex;
+  const body = findDefinitionBodyChild(node, language);
+  const limit = body ? Math.min(node.endIndex, body.startIndex) : node.endIndex;
+  const cap = 4096;
+  const end = limit - start > cap ? start + cap : limit;
+  const raw = sourceCode.substring(start, end);
+  const tail = sourceCode.slice(end);
+  const withBrace = body && /^[ \t]*\{/.test(tail) ? `${raw} {` : raw;
+  return normalizeSignatureWhitespace(withBrace);
+}
+
+function collectComments(
+  node: SyntaxNode,
+  docTypes: Set<string>,
+  out: SyntaxNode[]
+): void {
+  if (docTypes.has(node.type) && COMMENT_TYPES.has(node.type)) {
+    out.push(node);
+  }
+  for (const child of node.children) {
+    if (!child) continue;
+    collectComments(child, docTypes, out);
+  }
+}
+
+function extractPythonDocstring(node: SyntaxNode, sourceCode: string): string | undefined {
+  const body = node.childForFieldName('body') ?? findDefinitionBodyChild(node, 'python');
+  if (!body) return undefined;
+
+  for (const child of body.children) {
+    if (!child) continue;
+    if (child.type === 'expression_statement') {
+      for (const sub of child.children) {
+        if (!sub) continue;
+        if (sub.type === 'string' || sub.type === 'concatenated_string') {
+          return cleanDocstring(getNodeText(sub, sourceCode));
+        }
+      }
+      continue;
+    }
+
+    if (child.type === 'string' || child.type === 'concatenated_string') {
+      return cleanDocstring(getNodeText(child, sourceCode));
+    }
+
+    if (!PYTHON_DOCSTRING_SKIP.has(child.type)) return undefined;
   }
 
   return undefined;
 }
 
+function extractPrecedingComment(
+  node: SyntaxNode,
+  comments: SyntaxNode[],
+  sourceCode: string,
+  pattern: DocstringPattern
+): string | undefined {
+  const defLine = node.startPosition.row;
+  const nearby = comments.filter((comment) => {
+    const endLine = comment.endPosition.row;
+    if (endLine === defLine || endLine === defLine - 1) return true;
+    if (endLine < defLine - 1) {
+      const gap = defLine - endLine - 1;
+      return gap <= 1;
+    }
+    return false;
+  });
+
+  if (nearby.length === 0) return undefined;
+
+  const closest = nearby.reduce((best, item) =>
+    item.endPosition.row >= best.endPosition.row ? item : best
+  );
+  const text = getNodeText(closest, sourceCode);
+
+  if (pattern.docPrefix && !text.trim().startsWith(pattern.docPrefix)) {
+    return undefined;
+  }
+
+  return cleanComment(text);
+}
+
+
 /**
  * 格式化定义列表
  */
 function formatDefinitions(definitions: Definition[], filePath: string): string {
+  const filename = path.basename(filePath);
+
   if (definitions.length === 0) {
-    return `# ${filePath}\n\nNo definitions found.`;
+    return `${filename}:\n\n  (No definitions found)`;
   }
 
-  const lines: string[] = [`# ${filePath}\n`];
+  const lines: string[] = [`${filename}:`, ''];
 
   for (const def of definitions) {
-    lines.push(`## Line ${def.line}: ${def.name}`);
-    lines.push(`\`\`\`\n${def.signature}\n\`\`\``);
+    const line = String(def.line).padStart(4, ' ');
+    lines.push(`  ${line}: ${def.signature}`);
 
     if (def.docstring) {
-      lines.push(`\n${def.docstring}`);
+      const lead = def.signature.match(/^[ \t]*/)?.[0] ?? '';
+      const indent = ' '.repeat(8 + lead.length);
+      const docs = def.docstring.split('\n');
+
+      if (docs.length === 1 && def.docstring.length <= 70) {
+        lines.push(`${indent}"""${def.docstring}"""`);
+      } else {
+        lines.push(`${indent}"""`);
+        for (const doc of docs) {
+          const text = doc.trim();
+          if (text) {
+            lines.push(`${indent}${text}`);
+          }
+        }
+        lines.push(`${indent}"""`);
+      }
     }
 
-    lines.push(''); // 空行分隔
+    lines.push('');
   }
+
+  lines.push(`── ${definitions.length} definitions found ──`);
 
   return lines.join('\n');
 }
@@ -177,6 +399,9 @@ export const FileOutlineTool = Tool.define('file-outline', async (ctx) => {
 - Java (.java)
 - C (.c, .h)
 - C++ (.cpp, .hpp)
+- Rust (.rs)
+- Ruby (.rb)
+- PHP (.php)
 
 输出包含：
 - 定义的行号
@@ -243,54 +468,73 @@ export const FileOutlineTool = Tool.define('file-outline', async (ctx) => {
 
         // 提取定义
         const definitions: Definition[] = [];
-        const docstringPattern = DOCSTRING_PATTERNS[language];
+        const pattern = DOCSTRING_PATTERNS[language];
+        const docTypes = pattern ? pattern.docstringTypes : new Set<string>();
+        const defTypes = pattern ? pattern.definitionTypes : new Set<string>();
+        const comments: SyntaxNode[] = [];
+        if (include_docstrings && pattern?.position === 'preceding') {
+          collectComments(tree.rootNode, docTypes, comments);
+        }
+        const lines = sourceCode.split('\n');
 
         for (const capture of captures) {
           const node = capture.node;
           const captureName = capture.name;
+          if (!captureName.includes('name.definition')) continue;
 
-          // 只处理定义类型的捕获
-          if (captureName === 'name.definition.class' || captureName === 'name.definition.function') {
-            const line = node.startPosition.row + 1;
-            const name = node.text;
-
-            // 获取完整签名（父节点）
-            const defNode = node.parent;
-            const signature = defNode ? sourceCode.substring(defNode.startIndex, defNode.endIndex).split('\n')[0] : name;
-
-            // 提取文档字符串
-            let docstring: string | undefined;
-            if (include_docstrings && docstringPattern && defNode) {
-              docstring = extractDocstring(defNode, sourceCode, docstringPattern);
+          const name = getNodeText(node, sourceCode);
+          const defNode = pattern ? findDefinitionParent(node, defTypes) : undefined;
+          const sigNode = defNode ?? inferSignatureNodeFromNameNode(node);
+          const line = sigNode.startPosition.row + 1;
+          const sig = extractDefinitionSignature(sigNode, sourceCode, language);
+          const signature =
+            sig || (line >= 1 && line <= lines.length ? lines[line - 1].trimEnd() : name);
+          const docstring = (() => {
+            if (!include_docstrings || !pattern || !defNode) return undefined;
+            if (pattern.position === 'first_child' && language === 'python') {
+              return extractPythonDocstring(defNode, sourceCode);
             }
+            if (pattern.position === 'preceding') {
+              return extractPrecedingComment(defNode, comments, sourceCode, pattern);
+            }
+            return undefined;
+          })();
 
-            definitions.push({
-              line,
-              name,
-              signature,
-              docstring,
-            });
-          }
+          definitions.push({
+            line,
+            name,
+            signature,
+            docstring,
+          });
+        }
+
+        const seen = new Set<string>();
+        const unique: Definition[] = [];
+        for (const def of definitions) {
+          const key = `${def.name}:${def.line}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          unique.push(def);
         }
 
         // 按行号排序
-        definitions.sort((a, b) => a.line - b.line);
+        unique.sort((a, b) => a.line - b.line);
 
         log.info('File outline extraction completed', {
           filePath: file_path,
           language,
-          definitionCount: definitions.length
+          definitionCount: unique.length
         });
 
         // 格式化输出
-        const output = formatDefinitions(definitions, file_path);
+        const output = formatDefinitions(unique, file_path);
 
         return {
           title: `File Outline: ${file_path}`,
           metadata: {
             file_path,
             language,
-            definition_count: definitions.length,
+            definition_count: unique.length,
             error: '',
           },
           output,

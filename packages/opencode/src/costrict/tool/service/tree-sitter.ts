@@ -35,6 +35,9 @@ export const LANGUAGE_EXTENSIONS: Record<string, string[]> = {
   go: ['.go'],
   cpp: ['.cpp', '.cc', '.cxx', '.hpp', '.h', '.hh', '.hxx'],
   c: ['.c', '.h'],
+  rust: ['.rs'],
+  ruby: ['.rb', '.rake', '.gemspec'],
+  php: ['.php', '.phtml', '.php5', '.php7', '.phps'],
 };
 
 /**
@@ -118,6 +121,38 @@ const loadCpp = lazy(async () => {
 });
 
 /**
+ * 延迟加载Rust语言
+ */
+const loadRust = lazy(async () => {
+  const { default: rustWasm } = await import('tree-sitter-rust/tree-sitter-rust.wasm' as string, {
+    with: { type: 'wasm' },
+  });
+  return await Language.load(resolveWasm(rustWasm));
+});
+
+/**
+ * 延迟加载Ruby语言
+ */
+const loadRuby = lazy(async () => {
+  const { default: rubyWasm } = await import('tree-sitter-ruby/tree-sitter-ruby.wasm' as string, {
+    with: { type: 'wasm' },
+  });
+  return await Language.load(resolveWasm(rubyWasm));
+});
+
+/**
+ * 延迟加载PHP语言
+ */
+const loadPhp = lazy(async () => {
+  const { default: phpWasm } = await import('tree-sitter-php/tree-sitter-php.wasm' as string, {
+    with: { type: 'wasm' },
+  });
+  return await Language.load(resolveWasm(phpWasm));
+});
+
+
+
+/**
  * 延迟初始化Parser
  */
 const initParser = lazy(async () => {
@@ -166,6 +201,12 @@ export class TreeSitterService {
         return await loadC();
       case 'cpp':
         return await loadCpp();
+      case 'rust':
+        return await loadRust();
+      case 'ruby':
+        return await loadRuby();
+      case 'php':
+        return await loadPhp();
       default:
         log.error('Unsupported language', { language });
         throw new Error(`Unsupported language: ${language}`);

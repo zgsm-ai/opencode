@@ -12,6 +12,9 @@ import goQuery from '../query/go-tags';
 import javaQuery from '../query/java-tags';
 import cQuery from '../query/c-tags';
 import cppQuery from '../query/cpp-tags';
+import rustQuery from '../query/rust-tags';
+import rubyQuery from '../query/ruby-tags';
+import phpQuery from '../query/php-tags';
 
 /**
  * 支持的语言列表
@@ -24,6 +27,9 @@ export const SUPPORTED_LANGUAGES = [
   'java',
   'c',
   'cpp',
+  'rust',
+  'ruby',
+  'php',
 ] as const;
 
 export type SupportedLanguage = typeof SUPPORTED_LANGUAGES[number];
@@ -50,6 +56,12 @@ export function loadScmQuery(language: string): string {
       return cQuery;
     case 'cpp':
       return cppQuery;
+    case 'rust':
+      return rustQuery;
+    case 'ruby':
+      return rubyQuery;
+    case 'php':
+      return phpQuery;
     default:
       throw new Error(`Unsupported language: ${language}`);
   }
@@ -97,6 +109,18 @@ export function detectLanguageFromFilename(filename: string): SupportedLanguage 
     case 'hh':
     case 'hxx':
       return 'cpp';
+    case 'rs':
+      return 'rust';
+    case 'rb':
+    case 'rake':
+    case 'gemspec':
+      return 'ruby';
+    case 'php':
+    case 'phtml':
+    case 'php5':
+    case 'php7':
+    case 'phps':
+      return 'php';
     default:
       return null;
   }
