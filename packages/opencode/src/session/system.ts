@@ -7,21 +7,26 @@ import PROMPT_ANTHROPIC_WITHOUT_TODO from "./prompt/qwen.txt"
 import PROMPT_BEAST from "./prompt/beast.txt"
 import PROMPT_GEMINI from "./prompt/gemini.txt"
 
+import PROMPT_MEMORY_BANK from "./prompt/memory-bank-guidelines.txt"
+
 import PROMPT_CODEX from "./prompt/codex_header.txt"
 import type { Provider } from "@/provider/provider"
 
 export namespace SystemPrompt {
   export function instructions() {
-    return PROMPT_CODEX.trim()
+    const memory = PROMPT_MEMORY_BANK.trim()
+    return [PROMPT_CODEX.trim(), memory].filter((item) => item).join("\n\n")
   }
 
   export function provider(model: Provider.Model) {
-    if (model.api.id.includes("gpt-5")) return [PROMPT_CODEX]
+    const memory = PROMPT_MEMORY_BANK.trim()
+    const bundle = (text: string) => (memory ? [text, memory] : [text])
+    if (model.api.id.includes("gpt-5")) return bundle(PROMPT_CODEX)
     if (model.api.id.includes("gpt-") || model.api.id.includes("o1") || model.api.id.includes("o3"))
-      return [PROMPT_BEAST]
-    if (model.api.id.includes("gemini-")) return [PROMPT_GEMINI]
-    if (model.api.id.includes("claude")) return [PROMPT_ANTHROPIC]
-    return [PROMPT_ANTHROPIC_WITHOUT_TODO]
+      return bundle(PROMPT_BEAST)
+    if (model.api.id.includes("gemini-")) return bundle(PROMPT_GEMINI)
+    if (model.api.id.includes("claude")) return bundle(PROMPT_ANTHROPIC)
+    return bundle(PROMPT_ANTHROPIC_WITHOUT_TODO)
   }
 
   export async function environment(model: Provider.Model) {

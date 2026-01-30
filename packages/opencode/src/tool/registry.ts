@@ -30,6 +30,7 @@ import { SequentialThinkingTool } from "../costrict/tool/sequential-thinking"
 import { FileOutlineTool } from "../costrict/tool/file-outline"
 import { CheckpointTool } from "../costrict/tool/checkpoint"
 import { ApplyPatchTool } from "./apply_patch"
+import { MemoryBankTool } from "./memory-bank"
 
 export namespace ToolRegistry {
   const log = Log.create({ service: "tool.registry" })
@@ -108,6 +109,7 @@ export namespace ToolRegistry {
       TaskTool,
       WebFetchTool,
       TodoWriteTool,
+      MemoryBankTool,
       TodoReadTool,
       WebSearchTool,
       CodeSearchTool,
