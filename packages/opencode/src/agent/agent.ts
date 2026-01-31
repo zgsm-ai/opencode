@@ -167,6 +167,7 @@ export namespace Agent {
         ),
         mode: "primary",
         native: true,
+        hidden: true,
         prompt: PROMPT_TASKCHECK,
       },
       general: {
