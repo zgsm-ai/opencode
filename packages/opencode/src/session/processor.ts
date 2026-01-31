@@ -16,13 +16,24 @@ import { SessionCompaction } from "./compaction"
 import { PermissionNext } from "@/permission/next"
 import { Question } from "@/question"
 import { toolInputFormatter, toolNameFormatter } from "@/costrict/utils/tool-transform-v2" // costrict change
+import { ToolExecution } from "./tool-execution"
+import { Storage } from "@/storage/storage"
 import { Instance } from "@/project/instance"
+import { SystemPrompt } from "./system"
 import path from "path"
 import fs from "fs/promises"
 
 export namespace SessionProcessor {
   const DOOM_LOOP_THRESHOLD = 3
   const log = Log.create({ service: "session.processor" })
+
+  // 重试机制相关类型和常量
+  type RetrySnapshot = {
+    messagePartIds: string[]  // 快照时的所有 part IDs
+    temperature: number        // 当前尝试的温度
+  }
+  const MAX_RETRY_ATTEMPTS = 5
+  const TEMPERATURE_SEQUENCE = [0.2, 0.4, 0.6, 0.8, 1.0]
 
   export type Info = Awaited<ReturnType<typeof create>>
   export type Result = Awaited<ReturnType<Info["process"]>>
@@ -39,6 +50,47 @@ export namespace SessionProcessor {
     let attempt = 0
     let needsCompaction = false
 
+    // 重试机制相关状态
+    let retrySnapshot: RetrySnapshot | undefined
+    let retryAttemptCount = 0
+    let isSilentMode = false  // Silent 模式：重试时不发布事件
+
+    // 快照管理函数
+    async function createSnapshot(messageId: string): Promise<RetrySnapshot> {
+      const parts = await MessageV2.parts(messageId)
+      return {
+        messagePartIds: parts.map(p => p.id),
+        temperature: 0
+      }
+    }
+
+    async function rollbackToSnapshot(
+      snapshot: RetrySnapshot,
+      messageId: string,
+      sessionId: string
+    ) {
+      const currentParts = await MessageV2.parts(messageId)
+      const snapshotPartIds = new Set(snapshot.messagePartIds)
+
+      // 删除快照后创建的所有 parts
+      for (const part of currentParts) {
+        if (!snapshotPartIds.has(part.id)) {
+          await Storage.remove(["part", messageId, part.id])
+        }
+      }
+
+      log.info("rolled back to snapshot", {
+        sessionID: sessionId,
+        messageID: messageId,
+        removedParts: currentParts.length - snapshot.messagePartIds.length
+      })
+    }
+
+    // 包装 Session.updatePart，在 silent 模式下不发布事件
+    async function updatePart(input: any) {
+      return Session.updatePart({ ...input, silent: isSilentMode })
+    }
+
     const result = {
       get message() {
         return input.assistantMessage
@@ -53,9 +105,21 @@ export namespace SessionProcessor {
         // Extract available tool names for alias resolution with custom tool priority
         const availableTools = new Set(Object.keys(streamInput.tools))
         while (true) {
+          // 在调用 LLM 之前保存快照（用于零工具调用重试）
+          if (!retrySnapshot) {
+            retrySnapshot = await createSnapshot(input.assistantMessage.id)
+            log.info("created pre-llm snapshot", {
+              sessionID: input.sessionID,
+              messageID: input.assistantMessage.id,
+              partCount: retrySnapshot.messagePartIds.length
+            })
+          }
+
           try {
             let currentText: MessageV2.TextPart | undefined
             let reasoningMap: Record<string, MessageV2.ReasoningPart> = {}
+            // 在 silent 模式下，将参数传递给 LLM.stream
+            streamInput.silent = isSilentMode
             const stream = await LLM.stream(streamInput)
 
             for await (const value of stream.fullStream) {
@@ -87,7 +151,7 @@ export namespace SessionProcessor {
                     const part = reasoningMap[value.id]
                     part.text += value.text
                     if (value.providerMetadata) part.metadata = value.providerMetadata
-                    if (part.text) await Session.updatePart({ part, delta: value.text })
+                    if (part.text) await updatePart({ part, delta: value.text })
                   }
                   break
 
@@ -101,13 +165,13 @@ export namespace SessionProcessor {
                       end: Date.now(),
                     }
                     if (value.providerMetadata) part.metadata = value.providerMetadata
-                    await Session.updatePart(part)
+                    await updatePart(part)
                     delete reasoningMap[value.id]
                   }
                   break
 
                 case "tool-input-start":
-                  const part = await Session.updatePart({
+                  const part = await updatePart({
                     id: toolcalls[value.id]?.id ?? Identifier.ascending("part"),
                     messageID: input.assistantMessage.id,
                     sessionID: input.assistantMessage.sessionID,
@@ -135,7 +199,7 @@ export namespace SessionProcessor {
                     const cleanedToolName = toolNameFormatter(value.toolName, availableTools) // costrict change
                     const cleanedInput = toolInputFormatter(value.input, value.toolCallId) // costrict change
                     
-                    const part = await Session.updatePart({
+                    const part = await updatePart({
                       ...match,
                       tool: cleanedToolName, // costrict change
                       state: {
@@ -181,7 +245,7 @@ export namespace SessionProcessor {
                 case "tool-result": {
                   const match = toolcalls[value.toolCallId]
                   if (match && match.state.status === "running") {
-                    await Session.updatePart({
+                    await updatePart({
                       ...match,
                       state: {
                         status: "completed",
@@ -205,7 +269,7 @@ export namespace SessionProcessor {
                 case "tool-error": {
                   const match = toolcalls[value.toolCallId]
                   if (match && match.state.status === "running") {
-                    await Session.updatePart({
+                    await updatePart({
                       ...match,
                       state: {
                         status: "error",
@@ -233,7 +297,7 @@ export namespace SessionProcessor {
 
                 case "start-step":
                   snapshot = await Snapshot.track()
-                  await Session.updatePart({
+                  await updatePart({
                     id: Identifier.ascending("part"),
                     messageID: input.assistantMessage.id,
                     sessionID: input.sessionID,
@@ -251,7 +315,7 @@ export namespace SessionProcessor {
                   input.assistantMessage.finish = value.finishReason
                   input.assistantMessage.cost += usage.cost
                   input.assistantMessage.tokens = usage.tokens
-                  await Session.updatePart({
+                  await updatePart({
                     id: Identifier.ascending("part"),
                     reason: value.finishReason,
                     snapshot: await Snapshot.track(),
@@ -265,7 +329,7 @@ export namespace SessionProcessor {
                   if (snapshot) {
                     const patch = await Snapshot.patch(snapshot)
                     if (patch.files.length) {
-                      await Session.updatePart({
+                      await updatePart({
                         id: Identifier.ascending("part"),
                         messageID: input.assistantMessage.id,
                         sessionID: input.sessionID,
@@ -304,7 +368,7 @@ export namespace SessionProcessor {
                     currentText.text += value.text
                     if (value.providerMetadata) currentText.metadata = value.providerMetadata
                     if (currentText.text)
-                      await Session.updatePart({
+                      await updatePart({
                         part: currentText,
                         delta: value.text,
                       })
@@ -329,7 +393,7 @@ export namespace SessionProcessor {
                       end: Date.now(),
                     }
                     if (value.providerMetadata) currentText.metadata = value.providerMetadata
-                    await Session.updatePart(currentText)
+                    await updatePart(currentText)
                   }
                   currentText = undefined
                   break
@@ -385,7 +449,7 @@ export namespace SessionProcessor {
           if (snapshot) {
             const patch = await Snapshot.patch(snapshot)
             if (patch.files.length) {
-              await Session.updatePart({
+              await updatePart({
                 id: Identifier.ascending("part"),
                 messageID: input.assistantMessage.id,
                 sessionID: input.sessionID,
@@ -399,7 +463,7 @@ export namespace SessionProcessor {
           const p = await MessageV2.parts(input.assistantMessage.id)
           for (const part of p) {
             if (part.type === "tool" && part.state.status !== "completed" && part.state.status !== "error") {
-              await Session.updatePart({
+              await updatePart({
                 ...part,
                 state: {
                   ...part.state,
@@ -424,7 +488,61 @@ export namespace SessionProcessor {
           }).catch((err) => {
             log.error("failed to save context", { error: err })
           })
-          
+
+          // 调用封装的工具执行验证函数
+          const executionResult = await ToolExecution.executeToolsWithValidation({
+            assistantMessage: input.assistantMessage,
+            sessionID: input.sessionID,
+            retryAttempt: retryAttemptCount,
+            maxRetryAttempts: MAX_RETRY_ATTEMPTS
+          })
+
+          // 根据返回结果决定下一步操作
+          if (executionResult.shouldRetry) {
+            // 需要重试 - 执行快照回溯和温度调节
+            // 快照已经在 LLM 调用前保存，直接回溯
+            if (retrySnapshot) {
+              await rollbackToSnapshot(retrySnapshot, input.assistantMessage.id, input.sessionID)
+              retryAttemptCount++
+              const newTemperature = TEMPERATURE_SEQUENCE[retryAttemptCount - 1]
+              streamInput.temperatureOverride = newTemperature
+
+              // 进入 silent 模式，重试时不发布事件
+              isSilentMode = true
+
+              log.info("retrying with adjusted temperature", {
+                sessionID: input.sessionID,
+                attempt: retryAttemptCount,
+                temperature: newTemperature,
+                maxAttempts: MAX_RETRY_ATTEMPTS,
+                silentMode: true
+              })
+
+              continue  // 继续 while 循环
+            }
+          }
+
+          if (executionResult.needsReminder) {
+            // 已插入提醒消息，重置重试状态
+            // 提醒消息和不合格的 assistant 保留在上下文中
+            // 退出 processor，让外层循环创建新的 assistant message
+            retrySnapshot = undefined
+            retryAttemptCount = 0
+            isSilentMode = false  // 退出 silent 模式
+
+            // 标记当前 assistant message 为完成状态
+            input.assistantMessage.time.completed = Date.now()
+            await Session.updateMessage(input.assistantMessage)
+
+            // 返回 "continue" 让外层循环创建新的 assistant message
+            return "continue"
+          }
+
+          // 正常情况 - 有工具调用，重置重试状态
+          retrySnapshot = undefined
+          retryAttemptCount = 0
+          isSilentMode = false  // 退出 silent 模式
+
           if (needsCompaction) return "compact"
           if (blocked) return "stop"
           if (input.assistantMessage.error) return "stop"
@@ -442,37 +560,56 @@ export namespace SessionProcessor {
   }) {
     const historyDir = path.join(Instance.worktree, "history_message")
     await fs.mkdir(historyDir, { recursive: true })
-    
+
     // 每次保存都获取当前的完整历史记录上下文
     const allMessages: MessageV2.WithParts[] = []
     for await (const msg of MessageV2.stream(input.sessionID)) {
       allMessages.push(msg)
     }
     allMessages.reverse()
-    
+
     // 获取模型信息以转换消息格式
     const model = await Provider.getModel(
       input.assistantMessage.providerID,
       input.assistantMessage.modelID,
     )
-    
+
+    // 重建完整的 system 数组（与 llm.ts 中的逻辑一致）
+    // 这样可以确保 toolRequirements 被包含在保存的上下文中
+    const fullSystem = [
+      ...(input.streamInput.agent.prompt ? [input.streamInput.agent.prompt] : SystemPrompt.provider(model)),
+      ...SystemPrompt.toolRequirements(),
+      ...input.streamInput.system,
+      ...(input.streamInput.user.system ? [input.streamInput.user.system] : []),
+    ].filter((x) => x)
+
     // 构建完整的请求消息（包括system和所有消息）
     // 这代表了发送给模型的完整上下文
     const requestMessages = [
-      ...input.streamInput.system.map((x) => ({
+      ...fullSystem.map((x) => ({
         role: "system" as const,
         content: x,
       })),
       ...MessageV2.toModelMessages(allMessages, model),
     ]
-    
+
+    // 获取可用的工具列表
+    const availableTools = Object.keys(input.streamInput.tools).map(toolName => {
+      const tool = input.streamInput.tools[toolName]
+      return {
+        name: toolName,
+        description: tool.description || "",
+      }
+    })
+
     // 构建完整的上下文对象
     const context = {
       timestamp: Date.now(),
       sessionID: input.sessionID,
       request: {
         messages: requestMessages,
-        system: input.streamInput.system,
+        system: fullSystem,
+        availableTools,
       },
       allMessages: allMessages.map((msg) => ({
         info: msg.info,

@@ -43,6 +43,8 @@ export namespace LLM {
     small?: boolean
     tools: Record<string, Tool>
     retries?: number
+    temperatureOverride?: number  // 用于重试时覆盖温度
+    silent?: boolean  // 用于在重试时抑制事件发布
   }
 
   export type StreamOutput = StreamTextResult<ToolSet, unknown>
@@ -74,6 +76,8 @@ export namespace LLM {
         // use agent prompt otherwise provider prompt
         // For Codex sessions, skip SystemPrompt.provider() since it's sent via options.instructions
         ...(input.agent.prompt ? [input.agent.prompt] : isCodex ? [] : SystemPrompt.provider(input.model)),
+        // Add tool requirements for ALL agents (including subagents)
+        ...SystemPrompt.toolRequirements(),
         // any custom prompt passed into this call
         ...input.system,
         // any custom prompt from last user message
@@ -129,9 +133,11 @@ export namespace LLM {
         message: input.user,
       },
       {
-        temperature: input.model.capabilities.temperature
-          ? (input.agent.temperature ?? ProviderTransform.temperature(input.model))
-          : undefined,
+        temperature: input.temperatureOverride ?? (
+          input.model.capabilities.temperature
+            ? (input.agent.temperature ?? ProviderTransform.temperature(input.model))
+            : undefined
+        ),
         topP: input.agent.topP ?? ProviderTransform.topP(input.model),
         topK: ProviderTransform.topK(input.model),
         options,

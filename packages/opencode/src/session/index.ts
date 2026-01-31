@@ -426,16 +426,35 @@ export namespace Session {
     }),
   ])
 
-  export const updatePart = fn(UpdatePartInput, async (input) => {
+  export type UpdatePartInputType = z.infer<typeof UpdatePartInput> & { silent?: boolean }
+
+  // 内部实现函数，不做schema验证
+  async function updatePartImpl(input: UpdatePartInputType) {
+    const silent = input.silent ?? false
     const part = "delta" in input ? input.part : input
     const delta = "delta" in input ? input.delta : undefined
     await Storage.write(["part", part.messageID, part.id], part)
-    Bus.publish(MessageV2.Event.PartUpdated, {
-      part,
-      delta,
-    })
+    if (!silent) {
+      Bus.publish(MessageV2.Event.PartUpdated, {
+        part,
+        delta,
+      })
+    }
     return part
-  })
+  }
+
+  // 导出的函数，包装schema验证并支持silent参数
+  export const updatePart = Object.assign(
+    async (input: UpdatePartInputType) => {
+      const silent = input.silent ?? false
+      const parsed = UpdatePartInput.parse(input)
+      return updatePartImpl({ ...parsed, silent })
+    },
+    {
+      schema: UpdatePartInput,
+      force: updatePartImpl
+    }
+  )
 
   export const getUsage = fn(
     z.object({
