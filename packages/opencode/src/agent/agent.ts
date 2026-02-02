@@ -21,6 +21,51 @@ import path from "path"
 import { Plugin } from "@/plugin"
 
 export namespace Agent {
+  /**
+   * Agent options 类型定义
+   * 可以通过扩展此接口来添加自定义选项
+   */
+  export interface Options {
+    /**
+     * 指定用于标记任务完成的工具名称
+     * 默认为 "task_done"
+     *
+     * 示例：对于 build agent，可以设置为 "new_task_done"
+     */
+    exitToolName?: string
+
+    /**
+     * 强制思考检查函数
+     * 用于判断是否需要强制只使用 sequential-thinking 工具
+     *
+     * @param context - 包含当前会话的所有上下文信息
+     * @returns 如果需要强制思考，返回提醒消息；否则返回 null
+     *
+     * 示例：
+     * ```typescript
+     * forcedSequentialThinking: (context) => {
+     *   if (context.consecutiveToolFailures > 3) {
+     *     return "检测到连续工具调用失败，请先使用 sequential-thinking 工具重新分析问题。"
+     *   }
+     *   return null
+     * }
+     * ```
+     */
+    forcedSequentialThinking?: (context: ForcedThinkingContext) => string | null
+
+    [key: string]: any
+  }
+
+  /**
+   * 强制思考检查的上下文信息
+   */
+  export interface ForcedThinkingContext {
+    sessionID: string
+    messages: any[]  // 完整的消息历史
+    lastAssistant?: any  // 最后一条 assistant 消息
+    toolParts: any[]  // 当前的工具调用列表
+  }
+
   export const Info = z
     .object({
       name: z.string(),

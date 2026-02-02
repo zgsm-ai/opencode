@@ -56,16 +56,19 @@ async function extractTextContent(message: MessageV2.Assistant): Promise<string 
   return textPart?.text
 }
 
-async function llmIndicatesTaskCompleted(message: MessageV2.Assistant): Promise<boolean> {
+async function llmIndicatesTaskCompleted(
+  message: MessageV2.Assistant,
+  exitToolName: string = "task_done"
+): Promise<boolean> {
   // 获取工具调用列表
   const parts = await MessageV2.parts(message.id)
   const toolParts = parts.filter((part) => part.type === "tool") as MessageV2.ToolPart[]
 
-  // 检查是否调用了 task_done 工具
-  const taskDoneCall = toolParts.find((part) => part.tool === "task_done")
+  // 检查是否调用了退出工具（支持自定义退出工具名）
+  const exitToolCall = toolParts.find((part) => part.tool === exitToolName)
 
-  // 只有当调用了 task_done 工具且工具执行完成时，才认为任务完成
-  return taskDoneCall !== undefined && taskDoneCall.state.status === "completed"
+  // 只有当调用了退出工具且工具执行完成时，才认为任务完成
+  return exitToolCall !== undefined && exitToolCall.state.status === "completed"
 }
 
 function extractSummary(toolPart: MessageV2.ToolPart): string | undefined {
@@ -329,23 +332,29 @@ export namespace SessionPrompt {
 
       if (!lastUser) throw new Error("No user message found in stream. This should never happen.")
       
-      // 检查是否有 task 完成指示（通过 task_done 工具）
+      // 检查是否有 task 完成指示（通过退出工具）
       if (lastAssistant && lastUser.id < lastAssistant.id) {
-        const isTaskCompleted = await llmIndicatesTaskCompleted(lastAssistant)
+        // 从 agent.options 获取退出工具名，默认为 "task_done"
+        const currentAgent = await Agent.get(lastAssistant.agent)
+        const exitToolName = (currentAgent.options?.exitToolName as string | undefined) || "task_done"
+
+        // 使用动态的退出工具名检查任务是否完成
+        const isTaskCompleted = await llmIndicatesTaskCompleted(lastAssistant, exitToolName)
 
         if (isTaskCompleted) {
           // 获取工具调用列表
           const parts = await MessageV2.parts(lastAssistant.id)
           const toolParts = parts.filter((part) => part.type === "tool") as MessageV2.ToolPart[]
 
-          // 查找 task_done 工具
-          const taskDoneCall = toolParts.find((part) => part.tool === "task_done")
+          // 查找退出工具
+          const exitToolCall = toolParts.find((part) => part.tool === exitToolName)
 
-          // 从 task_done 工具结果中提取摘要
-          const summary = taskDoneCall ? extractSummary(taskDoneCall) : undefined
+          // 从退出工具结果中提取摘要
+          const summary = exitToolCall ? extractSummary(exitToolCall) : undefined
 
-          log.info("exiting loop - task completed with task_done", {
+          log.info("exiting loop - task completed with exit tool", {
             sessionID,
+            exitToolName,
             summary: summary?.substring(0, 100),
           })
 

@@ -35,6 +35,29 @@ export namespace SessionProcessor {
   const MAX_RETRY_ATTEMPTS = 5
   const TEMPERATURE_SEQUENCE = [0.2, 0.4, 0.6, 0.8, 1.0]
 
+  /**
+   * 检查是否需要强制使用 sequential-thinking 工具
+   *
+   * @param agent - 当前 agent 配置
+   * @param context - 强制思考检查的上下文
+   * @returns 如果需要强制思考，返回提醒消息；否则返回 null
+   */
+  async function checkForcedSequentialThinking(
+    agent: Agent.Info,
+    context: Agent.ForcedThinkingContext
+  ): Promise<string | null> {
+    // 如果 agent.options 中定义了 forcedSequentialThinking 函数，调用它
+    const forcedThinkingFn = agent.options?.forcedSequentialThinking as
+      ((ctx: Agent.ForcedThinkingContext) => string | null) | undefined
+
+    if (typeof forcedThinkingFn === 'function') {
+      return forcedThinkingFn(context)
+    }
+
+    // 默认返回 null，不强制思考
+    return null
+  }
+
   export type Info = Awaited<ReturnType<typeof create>>
   export type Result = Awaited<ReturnType<Info["process"]>>
 
@@ -104,13 +127,74 @@ export namespace SessionProcessor {
         // Extract available tool names for alias resolution with custom tool priority
         const availableTools = new Set(Object.keys(streamInput.tools))
         while (true) {
+          // 强制思考检查：判断是否需要强制只使用 sequential-thinking 工具
+          // 必须在快照创建之前执行，以便强制思考消息被包含在快照中
+          const agent = await Agent.get(streamInput.agent.name)
+          const allMessages = await Array.fromAsync(MessageV2.stream(input.sessionID))
+          const lastAssistant = allMessages.reverse().find(m => m.info.role === "assistant")
+          const currentToolParts = lastAssistant
+            ? (await MessageV2.parts(lastAssistant.info.id)).filter(p => p.type === "tool")
+            : []
+
+          const forcedThinkingMessage = await checkForcedSequentialThinking(agent, {
+            sessionID: input.sessionID,
+            messages: allMessages,
+            lastAssistant: lastAssistant?.info,
+            toolParts: currentToolParts
+          })
+
+          // 如果需要强制思考，插入提醒消息并修改工具权限
+          let originalPermission: PermissionNext.Ruleset | undefined
+          if (forcedThinkingMessage) {
+            log.info("forced sequential thinking triggered", {
+              sessionID: input.sessionID,
+              agent: agent.name,
+              message: forcedThinkingMessage.substring(0, 100)
+            })
+
+            // 插入强制思考提醒消息（作为 user 消息的一部分）
+            // 注意：这个消息会在快照创建前插入，因此回溯时会被保留
+            const reminderPart: MessageV2.TextPart = {
+              id: Identifier.ascending("part"),
+              messageID: streamInput.user.id,
+              sessionID: input.sessionID,
+              type: "text",
+              text: forcedThinkingMessage,
+              synthetic: true
+            }
+
+            await Session.updatePart(reminderPart)
+
+            log.info("inserted forced thinking reminder", {
+              sessionID: input.sessionID,
+              partID: reminderPart.id
+            })
+
+            // 保存原始权限
+            originalPermission = streamInput.agent.permission
+
+            // 创建强制思考权限：只允许 sequential-thinking 工具
+            const forcedPermission = PermissionNext.fromConfig({
+              "*": "deny",
+              "sequential-thinking": "allow"
+            })
+
+            // 临时覆盖权限
+            streamInput.agent = {
+              ...streamInput.agent,
+              permission: forcedPermission
+            }
+          }
+
           // 在调用 LLM 之前保存快照（用于零工具调用重试）
+          // 快照会包含强制思考消息（如果有的话）
           if (!retrySnapshot) {
             retrySnapshot = await createSnapshot(input.assistantMessage.id)
             log.info("created pre-llm snapshot", {
               sessionID: input.sessionID,
               messageID: input.assistantMessage.id,
-              partCount: retrySnapshot.messagePartIds.length
+              partCount: retrySnapshot.messagePartIds.length,
+              hasForcedThinking: !!forcedThinkingMessage
             })
           }
 
@@ -120,6 +204,14 @@ export namespace SessionProcessor {
             // 在 silent 模式下，将参数传递给 LLM.stream
             streamInput.silent = isSilentMode
             const stream = await LLM.stream(streamInput)
+
+            // 如果修改了权限，在流式处理后恢复
+            if (originalPermission) {
+              streamInput.agent = {
+                ...streamInput.agent,
+                permission: originalPermission
+              }
+            }
 
             for await (const value of stream.fullStream) {
               input.abort.throwIfAborted()
