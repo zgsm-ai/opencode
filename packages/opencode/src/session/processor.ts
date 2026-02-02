@@ -24,7 +24,6 @@ import path from "path"
 import fs from "fs/promises"
 
 export namespace SessionProcessor {
-  const DOOM_LOOP_THRESHOLD = 3
   const log = Log.create({ service: "session.processor" })
 
   // 重试机制相关类型和常量
@@ -46,7 +45,6 @@ export namespace SessionProcessor {
   }) {
     const toolcalls: Record<string, MessageV2.ToolPart> = {}
     let snapshot: string | undefined
-    let blocked = false
     let attempt = 0
     let needsCompaction = false
 
@@ -198,7 +196,7 @@ export namespace SessionProcessor {
                   if (match) {
                     const cleanedToolName = toolNameFormatter(value.toolName, availableTools) // costrict change
                     const cleanedInput = toolInputFormatter(value.input, value.toolCallId) // costrict change
-                    
+
                     const part = await updatePart({
                       ...match,
                       tool: cleanedToolName, // costrict change
@@ -213,32 +211,8 @@ export namespace SessionProcessor {
                     })
                     toolcalls[value.toolCallId] = part as MessageV2.ToolPart
 
-                    const parts = await MessageV2.parts(input.assistantMessage.id)
-                    const lastThree = parts.slice(-DOOM_LOOP_THRESHOLD)
-
-                    if (
-                      lastThree.length === DOOM_LOOP_THRESHOLD &&
-                      lastThree.every(
-                        (p) =>
-                          p.type === "tool" &&
-                          p.tool === cleanedToolName && // costrict change
-                          p.state.status !== "pending" &&
-                          JSON.stringify(p.state.input) === JSON.stringify(cleanedInput), // costrict change
-                      )
-                    ) {
-                      const agent = await Agent.get(input.assistantMessage.agent)
-                      await PermissionNext.ask({
-                        permission: "doom_loop",
-                        patterns: [cleanedToolName], // costrict change
-                        sessionID: input.assistantMessage.sessionID,
-                        metadata: {
-                          tool: cleanedToolName, // costrict change
-                          input: cleanedInput, // costrict change
-                        },
-                        always: [cleanedToolName], // costrict change
-                        ruleset: agent.permission,
-                      })
-                    }
+                    // Doom loop检查已移至tool-execution.ts中的executeToolsWithValidation
+                    // 不再在这里询问用户权限
                   }
                   break
                 }
@@ -282,12 +256,8 @@ export namespace SessionProcessor {
                       },
                     })
 
-                    if (
-                      value.error instanceof PermissionNext.RejectedError ||
-                      value.error instanceof Question.RejectedError
-                    ) {
-                      blocked = shouldBreak
-                    }
+                    // 工具被拒绝的检查已移至tool-execution.ts中的executeToolsWithValidation
+                    // 不再在这里设置blocked状态，而是通过插入user消息让模型调整策略
                     delete toolcalls[value.toolCallId]
                   }
                   break
@@ -500,12 +470,10 @@ export namespace SessionProcessor {
           // 根据返回结果决定下一步操作
           if (executionResult.shouldRetry) {
             // 需要重试 - 执行快照回溯和温度调节
-            // 快照已经在 LLM 调用前保存，直接回溯
             if (retrySnapshot) {
               await rollbackToSnapshot(retrySnapshot, input.assistantMessage.id, input.sessionID)
               retryAttemptCount++
-              const newTemperature = TEMPERATURE_SEQUENCE[retryAttemptCount - 1]
-              streamInput.temperatureOverride = newTemperature
+              streamInput.temperatureOverride = TEMPERATURE_SEQUENCE[retryAttemptCount - 1]
 
               // 进入 silent 模式，重试时不发布事件
               isSilentMode = true
@@ -513,7 +481,7 @@ export namespace SessionProcessor {
               log.info("retrying with adjusted temperature", {
                 sessionID: input.sessionID,
                 attempt: retryAttemptCount,
-                temperature: newTemperature,
+                temperature: streamInput.temperatureOverride,
                 maxAttempts: MAX_RETRY_ATTEMPTS,
                 silentMode: true
               })
@@ -522,8 +490,8 @@ export namespace SessionProcessor {
             }
           }
 
-          if (executionResult.needsReminder) {
-            // 已插入提醒消息，重置重试状态
+          if (executionResult.needsReminder || executionResult.blocked) {
+            // 已插入提醒/拒绝/doom loop消息，重置重试状态
             // 提醒消息和不合格的 assistant 保留在上下文中
             // 退出 processor，让外层循环创建新的 assistant message
             retrySnapshot = undefined
@@ -544,7 +512,6 @@ export namespace SessionProcessor {
           isSilentMode = false  // 退出 silent 模式
 
           if (needsCompaction) return "compact"
-          if (blocked) return "stop"
           if (input.assistantMessage.error) return "stop"
           return "continue"
         }
