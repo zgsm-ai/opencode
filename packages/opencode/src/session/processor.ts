@@ -9,13 +9,16 @@ import { Bus } from "@/bus"
 import { SessionRetry } from "./retry"
 import { SessionStatus } from "./status"
 import { Plugin } from "@/plugin"
-import type { Provider } from "@/provider/provider"
+import { Provider } from "@/provider/provider"
 import { LLM } from "./llm"
 import { Config } from "@/config/config"
 import { SessionCompaction } from "./compaction"
 import { PermissionNext } from "@/permission/next"
 import { Question } from "@/question"
 import { toolInputFormatter, toolNameFormatter } from "@/costrict/utils/tool-transform-v2" // costrict change
+import { Instance } from "@/project/instance"
+import path from "path"
+import fs from "fs/promises"
 
 export namespace SessionProcessor {
   const DOOM_LOOP_THRESHOLD = 3
@@ -412,6 +415,16 @@ export namespace SessionProcessor {
           }
           input.assistantMessage.time.completed = Date.now()
           await Session.updateMessage(input.assistantMessage)
+
+          // 保存完整的上下文历史
+          await saveContext({
+            sessionID: input.sessionID,
+            streamInput,
+            assistantMessage: input.assistantMessage,
+          }).catch((err) => {
+            log.error("failed to save context", { error: err })
+          })
+
           if (needsCompaction) return "compact"
           if (blocked) return "stop"
           if (input.assistantMessage.error) return "stop"
@@ -420,5 +433,70 @@ export namespace SessionProcessor {
       },
     }
     return result
+  }
+
+  async function saveContext(input: {
+    sessionID: string
+    streamInput: LLM.StreamInput
+    assistantMessage: MessageV2.Assistant
+  }) {
+    const historyDir = path.join(Instance.worktree, "history_message")
+    await fs.mkdir(historyDir, { recursive: true })
+
+    // 获取当前的完整历史记录
+    const allMessages: MessageV2.WithParts[] = []
+    for await (const msg of MessageV2.stream(input.sessionID)) {
+      allMessages.push(msg)
+    }
+    allMessages.reverse()
+
+    // 获取模型信息以转换消息格式
+    const model = await Provider.getModel(
+      input.assistantMessage.providerID,
+      input.assistantMessage.modelID,
+    )
+
+    // 构建完整的请求消息(包括 system 和所有消息)
+    const requestMessages = [
+      ...input.streamInput.system.map((x) => ({
+        role: "system" as const,
+        content: x,
+      })),
+      ...MessageV2.toModelMessages(allMessages, model),
+    ]
+
+    // 构建完整的上下文对象
+    const context = {
+      timestamp: Date.now(),
+      sessionID: input.sessionID,
+      request: {
+        messages: requestMessages,
+        system: input.streamInput.system,
+      },
+      allMessages: allMessages.map((msg) => ({
+        info: msg.info,
+        parts: msg.parts,
+      })),
+    }
+
+    // 文件名格式: context-{sessionID}-{timestamp}.json
+    const timestamp = Date.now()
+    const filename = `context-${input.sessionID}-${timestamp}.json`
+    const contextFile = path.join(historyDir, filename)
+
+    // 删除旧的 context 文件(同一会话内只保留最新的)
+    try {
+      const files = await fs.readdir(historyDir)
+      for (const file of files) {
+        if (file.startsWith(`context-${input.sessionID}-`) && file.endsWith(".json") && file !== filename) {
+          await fs.unlink(path.join(historyDir, file)).catch(() => {})
+        }
+      }
+    } catch {
+      // 忽略错误(目录可能不存在)
+    }
+
+    // 保存完整历史记录到文件
+    await Bun.write(contextFile, JSON.stringify(context, null, 2))
   }
 }

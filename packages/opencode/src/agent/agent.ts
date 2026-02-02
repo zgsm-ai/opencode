@@ -16,6 +16,7 @@ import PROMPT_SUMMARY from "./prompt/summary.txt"
 import PROMPT_TITLE from "./prompt/title.txt"
 import PROMPT_PROPOSAL from "./prompt/proposal.txt"
 import PROMPT_TASKCHECK from "./prompt/taskcheck.txt"
+import PROMPT_CODING from "./prompt/coding.txt"
 import { PermissionNext } from "@/permission/next"
 import { mergeDeep, pipe, sortBy, values } from "remeda"
 import { Global } from "@/global"
@@ -169,6 +170,38 @@ export namespace Agent {
         native: true,
         hidden: true,
         prompt: PROMPT_TASKCHECK,
+      },
+      coding: {
+        name: "coding",
+        description: "软件开发团队的项目管理者和技术架构师。负责理解任务规划(tasks.md),将开发任务分发给 SubCodingAgent 执行,审查代码提交,追踪进度。不直接修改代码,通过分发任务推动项目进展。",
+        options: {},
+        permission: PermissionNext.merge(
+          defaults,
+          PermissionNext.fromConfig({
+            question: "allow",
+            // Only allow editing tasks.md
+            edit: {
+              "*": "deny",
+              "**/proposal/*/tasks.md": "allow",
+              "proposal/*/tasks.md": "allow",
+            },
+            // Deny write
+            write: {
+              "*": "deny",
+            },
+            // Allow bash for agent-git operations
+            bash: "allow",
+            // Allow reading any file
+            read: "allow",
+            // Allow starting sub agents
+            task: "allow",
+          }),
+          user,
+        ),
+        mode: "primary",
+        native: true,
+        prompt: PROMPT_CODING,
+        steps: 100,
       },
       general: {
         name: "general",

@@ -44,3 +44,7 @@ venv/
 agent-git
 agent-git.bat
 .tmp-bash-tool-test/
+
+#project file
+history_message/
+sanguosha/
