@@ -1,5 +1,6 @@
 import { MessageV2 } from "./message-v2"
 import { Log } from "@/util/log"
+import { Token } from "@/util/token"
 import { Identifier } from "@/id/id"
 import { Session } from "."
 import { Agent } from "@/agent/agent"
@@ -219,12 +220,28 @@ export namespace SessionProcessor {
                 case "tool-result": {
                   const match = toolcalls[value.toolCallId]
                   if (match && match.state.status === "running") {
+                    // 工具结果拦截机制：检查输出大小
+                    const outputTokenCount = Token.estimate(value.output.output)
+                    const MAX_OUTPUT_TOKENS = 10000
+
+                    let finalOutput = value.output.output
+                    if (outputTokenCount > MAX_OUTPUT_TOKENS) {
+                      finalOutput = "工具返回内容过长（超过 10000 tokens），已被拦截并省略。请尝试调整工具参数以缩小范围（例如：增加过滤条件/限定文件或行范围/分页等）后重试。"
+
+                      log.info("tool result intercepted due to size", {
+                        sessionID: input.sessionID,
+                        tool: match.tool,
+                        originalTokens: outputTokenCount,
+                        threshold: MAX_OUTPUT_TOKENS
+                      })
+                    }
+
                     await updatePart({
                       ...match,
                       state: {
                         status: "completed",
                         input: value.input ?? match.state.input,
-                        output: value.output.output,
+                        output: finalOutput,
                         metadata: value.output.metadata,
                         title: value.output.title,
                         time: {
