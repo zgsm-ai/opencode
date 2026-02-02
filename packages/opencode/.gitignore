@@ -3,3 +3,8 @@ dist
 gen
 app.log
 src/provider/models-snapshot.ts
+
+# Lint tools - extracted binaries (bundles are committed)
+resources/lint/*/
+!resources/lint/bundles/
+resources/lint/bundles/*.tmp

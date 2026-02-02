@@ -31,6 +31,7 @@ import { FileOutlineTool } from "../costrict/tool/file-outline"
 import { CheckpointTool } from "../costrict/tool/checkpoint"
 import { ApplyPatchTool } from "./apply_patch"
 import { MemoryBankTool } from "./memory-bank"
+import { LintTool } from "./lint"
 
 export namespace ToolRegistry {
   const log = Log.create({ service: "tool.registry" })
@@ -123,6 +124,7 @@ export namespace ToolRegistry {
       ApplyPatchTool,
       ...(config.experimental?.batch_tool === true ? [BatchTool] : []),
       ...(Flag.COSTRICT_EXPERIMENTAL_PLAN_MODE && Flag.COSTRICT_CLIENT === "cli" ? [PlanExitTool, PlanEnterTool] : []),
+      LintTool,
       ...custom,
     ]
   }

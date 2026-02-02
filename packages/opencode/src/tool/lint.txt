@@ -1,0 +1,26 @@
+对文件运行静态代码分析（linting）以检测代码质量问题、潜在 bug、风格违规和其他问题。
+
+支持多种编程语言和文件类型：
+- Go（.go）：revive
+- JavaScript/TypeScript/JSON/CSS（.js, .ts, .jsx, .tsx, .cjs, .mjs, .d.cts, .d.mts, .json, .jsonc, .css）：biome
+- Python（.py）：ruff
+- C/C++（.c, .cpp, .cc, .cxx, .h, .hpp, .hxx, .c++, .h++）：clang-tidy
+- Rust（.rs）：cargo clippy（需 Cargo.toml）
+- Java（.java）：PMD
+- Ruby（.rb）：RuboCop
+
+工具会根据文件扩展名自动选择合适的 lint 工具。
+language 参数是可选的 - 如果未提供，将从文件扩展名自动推断。
+当文件没有扩展名时，允许通过 language 指定要使用的 linter。
+
+返回详细的 lint 结果，包括文件路径、行号、问题类型和消息。
+
+使用示例：
+- Go：file_path="/path/to/file.go"（自动推断 language="go"，使用 revive）
+- JavaScript/TypeScript：file_path="/path/to/file.ts"（自动推断 language="js"，使用 biome；也支持 .js/.tsx/.jsx/.json/.jsonc/.css 等）
+- Python：file_path="/path/to/file.py"（自动推断 language="py"，使用 ruff）
+- C/C++：file_path="/path/to/file.cpp"（自动推断 language="cpp"，使用 clang-tidy；也支持 .c/.h/.hpp 等）
+- Rust：file_path="/path/to/src/lib.rs"（自动推断 language="rust"，使用 cargo clippy；需要项目内存在 Cargo.toml）
+- Java：file_path="/path/to/Foo.java"（自动推断 language="java"，使用 PMD）
+- Ruby：file_path="/path/to/foo.rb"（自动推断 language="ruby"，使用 RuboCop）
+- 无扩展名文件：file_path="/path/to/Makefile"，language="py"（允许通过 language 指定 linter）
