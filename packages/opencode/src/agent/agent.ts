@@ -121,6 +121,7 @@ export namespace Agent {
         name: "build",
         description: "The default agent. Executes tools based on configured permissions.",
         options: {},
+        steps: 60,  // 默认预算60次工具调用
         permission: PermissionNext.merge(
           defaults,
           PermissionNext.fromConfig({
@@ -172,6 +173,7 @@ export namespace Agent {
       },
       explore: {
         name: "explore",
+        steps: 10,
         permission: PermissionNext.merge(
           defaults,
           PermissionNext.fromConfig({

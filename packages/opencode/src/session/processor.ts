@@ -21,6 +21,7 @@ import { ToolExecution } from "./tool-execution"
 import { Storage } from "@/storage/storage"
 import { Instance } from "@/project/instance"
 import { SystemPrompt } from "./system"
+import { Budget } from "./budget"
 import path from "path"
 import fs from "fs/promises"
 
@@ -66,6 +67,7 @@ export namespace SessionProcessor {
     sessionID: string
     model: Provider.Model
     abort: AbortSignal
+    budgetState?: Budget.BudgetState  // 接受外部传入的预算状态
   }) {
     const toolcalls: Record<string, MessageV2.ToolPart> = {}
     let snapshot: string | undefined
@@ -76,6 +78,13 @@ export namespace SessionProcessor {
     let retrySnapshot: RetrySnapshot | undefined
     let retryAttemptCount = 0
     let isSilentMode = false  // Silent 模式：重试时不发布事件
+
+    // 预算机制相关状态（从参数传入，如果没有则初始化为无预算）
+    let budgetState: Budget.BudgetState = input.budgetState ?? {
+      total: undefined,
+      used: 0,
+      remaining: undefined
+    }
 
     // 快照管理函数
     async function createSnapshot(messageId: string): Promise<RetrySnapshot> {
@@ -117,13 +126,22 @@ export namespace SessionProcessor {
       get message() {
         return input.assistantMessage
       },
+      get budgetState() {
+        return budgetState
+      },
       partFromToolCall(toolCallID: string) {
         return toolcalls[toolCallID]
       },
       async process(streamInput: LLM.StreamInput) {
-        log.info("process")
+        log.info("process", {
+          sessionID: input.sessionID,
+          budgetTotal: budgetState.total,
+          budgetUsed: budgetState.used,
+          budgetRemaining: budgetState.remaining
+        })
         needsCompaction = false
         const shouldBreak = (await Config.get()).experimental?.continue_loop_on_deny !== true
+
         // Extract available tool names for alias resolution with custom tool priority
         const availableTools = new Set(Object.keys(streamInput.tools))
         while (true) {
@@ -568,6 +586,46 @@ export namespace SessionProcessor {
             log.error("failed to save context", { error: err })
           })
 
+          // 【预算前置检查】- 在工具执行之前检查预算是否充足
+          const toolParts = await MessageV2.parts(input.assistantMessage.id)
+          const toolPartsOnly = toolParts.filter(p => p.type === "tool") as MessageV2.ToolPart[]
+
+          const budgetCheck = Budget.checkBudget(toolPartsOnly, budgetState)
+
+          if (!budgetCheck.allowed && budgetCheck.guardMessage) {
+            // 预算不足，拦截工具调用
+            log.warn("budget guard triggered", {
+              sessionID: input.sessionID,
+              requested: budgetCheck.consumeCount,
+              remaining: budgetCheck.state.remaining,
+              total: budgetCheck.state.total
+            })
+
+            // 将所有工具调用标记为 completed（拦截状态）
+            for (const part of toolPartsOnly) {
+              if (part.state.status === "running") {
+                await updatePart({
+                  ...part,
+                  state: {
+                    ...part.state,
+                    status: "completed",
+                    output: budgetCheck.guardMessage,
+                    time: {
+                      start: Date.now(),
+                      end: Date.now()
+                    }
+                  }
+                })
+              }
+            }
+
+            // 扣减预算（作为惩罚机制，即使拦截了也要扣减）
+            budgetState = Budget.deductBudget(toolPartsOnly, budgetState, isSilentMode)
+
+            // 返回 continue 让外层循环创建新的 assistant message
+            return "continue"
+          }
+
           // 调用封装的工具执行验证函数
           const executionResult = await ToolExecution.executeToolsWithValidation({
             assistantMessage: input.assistantMessage,
@@ -619,6 +677,48 @@ export namespace SessionProcessor {
           retrySnapshot = undefined
           retryAttemptCount = 0
           isSilentMode = false  // 退出 silent 模式
+
+          // 【预算扣减】- 在工具执行成功后扣减预算
+          if (executionResult.hasToolCalls) {
+            const toolPartsAfterExecution = await MessageV2.parts(input.assistantMessage.id)
+            const toolsExecuted = toolPartsAfterExecution.filter(p => p.type === "tool") as MessageV2.ToolPart[]
+
+            // 扣减预算（重试模式下不扣减）
+            budgetState = Budget.deductBudget(toolsExecuted, budgetState, false)
+
+            // 【预算通知】- 附加到最后一个工具结果
+            if (toolsExecuted.length > 0) {
+              // 找到最后一个工具调用
+              const lastTool = toolsExecuted[toolsExecuted.length - 1]
+
+              if (lastTool.state.status === "completed" && lastTool.state.output) {
+                // 构建预算通知
+                const budgetNotice = Budget.buildBudgetNotice(
+                  lastTool.state.output,
+                  budgetState
+                )
+
+                // 更新最后一个工具的输出（包含预算通知）
+                // fullContent 包含预算通知，会被 LLM 看到
+                // displayContent 在前端展示时过滤预算通知标签
+                await updatePart({
+                  ...lastTool,
+                  state: {
+                    ...lastTool.state,
+                    output: budgetNotice.fullContent
+                  }
+                })
+
+                log.info("budget notice attached", {
+                  sessionID: input.sessionID,
+                  toolName: lastTool.tool,
+                  remaining: budgetState.remaining,
+                  used: budgetState.used,
+                  total: budgetState.total
+                })
+              }
+            }
+          }
 
           if (needsCompaction) return "compact"
           if (input.assistantMessage.error) return "stop"

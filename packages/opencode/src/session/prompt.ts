@@ -46,6 +46,7 @@ import { LLM } from "./llm"
 import { iife } from "@/util/iife"
 import { Shell } from "@/shell/shell"
 import { Truncate } from "@/tool/truncation"
+import { Budget } from "./budget"
 
 // @ts-ignore
 globalThis.AI_SDK_LOG_WARNINGS = false
@@ -307,6 +308,10 @@ export namespace SessionPrompt {
 
     let step = 0
     const session = await Session.get(sessionID)
+
+    // 预算状态（整个 session 生命周期内保持）
+    let sessionBudgetState: Budget.BudgetState | undefined = undefined
+
     while (true) {
       SessionStatus.set(sessionID, { type: "busy" })
       log.info("loop", { step, sessionID })
@@ -584,6 +589,18 @@ export namespace SessionPrompt {
 
       // normal processing
       const agent = await Agent.get(lastUser.agent)
+
+      // 初始化预算状态（仅在第一次执行时）
+      if (sessionBudgetState === undefined) {
+        sessionBudgetState = Budget.calculateState(agent.steps, 0)
+        log.info("session budget initialized", {
+          sessionID,
+          agent: agent.name,
+          total: sessionBudgetState.total,
+          enabled: sessionBudgetState.total !== undefined
+        })
+      }
+
       const maxSteps = agent.steps ?? Infinity
       const isLastStep = step >= maxSteps
       msgs = await insertReminders({
@@ -620,6 +637,7 @@ export namespace SessionPrompt {
         sessionID: sessionID,
         model,
         abort,
+        budgetState: sessionBudgetState,  // 传入 session 级别的预算状态
       })
 
       // Check if user explicitly invoked an agent via @ in this turn
@@ -689,6 +707,17 @@ export namespace SessionPrompt {
         tools,
         model,
       })
+
+      // 更新 session 级别的预算状态
+      sessionBudgetState = processor.budgetState
+
+      log.info("budget state updated after process", {
+        sessionID,
+        used: sessionBudgetState.used,
+        remaining: sessionBudgetState.remaining,
+        total: sessionBudgetState.total
+      })
+
       if (result === "stop") break
       if (result === "compact") {
         await SessionCompaction.create({
