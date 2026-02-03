@@ -11,6 +11,7 @@ import { Instance } from "@/project/instance"
 import { defer } from "@/util/defer"
 import path from "path"
 import { Log } from "@/util/log"
+import { Bus } from "../bus"
 
 // Logger for SubCodingTool - writes to file instead of console
 const subCodingLogger = Log.create({ service: "sub_coding" })
@@ -169,7 +170,6 @@ export const SubCodingTool = Tool.define("sub_coding", async (ctx) => {
         string,
         { id: string; tool: string; state: { status: string; title?: string } }
       > = {}
-      const { Bus } = await import("../bus")
       const unsub = Bus.subscribe(MessageV2.Event.PartUpdated, async (evt) => {
         if (evt.properties.part.sessionID !== session.id) return
         if (evt.properties.part.messageID === messageID) return

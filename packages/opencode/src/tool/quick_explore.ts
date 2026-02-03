@@ -8,6 +8,7 @@ import { Agent } from "../agent/agent"
 import { SessionPrompt } from "../session/prompt"
 import { defer } from "@/util/defer"
 import { Log } from "@/util/log"
+import { Bus } from "../bus"
 
 // Logger for QuickExploreTool - writes to file instead of console
 const quickExploreLogger = Log.create({ service: "quick_explore" })
@@ -135,7 +136,6 @@ export const QuickExploreTool = Tool.define("quick_explore", async (ctx) => {
         string,
         { id: string; tool: string; state: { status: string; title?: string } }
       > = {}
-      const { Bus } = await import("../bus")
       const unsub = Bus.subscribe(MessageV2.Event.PartUpdated, async (evt) => {
         if (evt.properties.part.sessionID !== session.id) return
         if (evt.properties.part.messageID === messageID) return
@@ -196,13 +196,30 @@ export const QuickExploreTool = Tool.define("quick_explore", async (ctx) => {
 
         unsub()
 
-        // 7. Extract result
+        // 7. Get final messages to summarize what was done
+        const messages = await Session.messages({ sessionID: session.id })
+        const summary = messages
+          .filter((x) => x.info.role === "assistant")
+          .flatMap(
+            (msg) => msg.parts.filter((x: any) => x.type === "tool") as MessageV2.ToolPart[],
+          )
+          .map((part) => ({
+            id: part.id,
+            tool: part.tool,
+            state: {
+              status: part.state.status,
+              title: part.state.status === "completed" ? part.state.title : undefined,
+            },
+          }))
+
+        // 8. Extract result
         const text = result.parts.findLast((x) => x.type === "text")?.text ?? ""
 
         return {
           title: "QuickExploreAgent",
           metadata: {
             description: params.exploration_target.substring(0, 100),
+            summary,
             sessionId: session.id,
             model,
           },
