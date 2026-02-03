@@ -195,6 +195,8 @@ export namespace Agent {
             read: "allow",
             // Allow starting sub agents
             task: "allow",
+            // Allow using sub_coding tool (new structured way)
+            sub_coding: "allow",
           }),
           user,
         ),

@@ -11,6 +11,7 @@ import { WebFetchTool } from "./webfetch"
 import { WriteTool } from "./write"
 import { InvalidTool } from "./invalid"
 import { SkillTool } from "./skill"
+import { SubCodingTool } from "./sub_coding"
 import type { Agent } from "../agent/agent"
 import { Tool } from "./tool"
 import { Instance } from "../project/instance"
@@ -107,7 +108,7 @@ export namespace ToolRegistry {
       GrepTool,
       EditTool,
       WriteTool,
-      TaskTool,
+      // TaskTool,
       WebFetchTool,
       TodoWriteTool,
       TodoReadTool,
@@ -125,6 +126,7 @@ export namespace ToolRegistry {
       ...(Flag.COSTRICT_EXPERIMENTAL_PLAN_MODE && Flag.COSTRICT_CLIENT === "cli" ? [PlanExitTool, PlanEnterTool] : []),
       TaskDoneWithChangeIdTool,
       AskForTaskDoneOrContinueTool,
+      SubCodingTool,
       ...custom,
     ]
   }

@@ -8,6 +8,7 @@ tools:
   todoread: true
   webfetch: false
   task: true
+  sub_coding: true
 ---
 # CodingAgent - 开发任务管理与协调
 
@@ -37,7 +38,7 @@ tools:
 
 ### 禁止直接修改代码
 - 禁止使用 `edit` 修改项目代码文件
-- 所有代码修改必须通过 `task` 分发给 SubCodingAgent 执行
+- 所有代码修改必须通过 `sub_coding` 工具或 `task` 工具分发给 SubCodingAgent 执行
 - 唯一例外：可使用 `edit` 修改 task.md
 
 ### 合理的任务粒度
@@ -83,7 +84,21 @@ SubCodingAgent 只需理解与其任务直接相关的内容。分发任务时�
 对 task.md 中的每个阶段循环执行以下步骤：
 
 #### 2.1 分发任务
-调用 `task`工具中 SubCodingAgent 分发任务
+
+**推荐方式：使用 `sub_coding` 工具（新方式）**
+调用 `sub_coding` 工具分发任务给 SubCodingAgent，提供结构化参数：
+- **important_note**: 关键补充说明，包括：已知陷阱/bug及如何避免、编码约束、边界情况
+- **previous_work_summary**: 之前 SubCodingAgent 完成的工作摘要（第一个使用："None - this is the first SubCodingAgent"）
+- **sub_tasks**: 结构化任务数组，每项包含 `id`、`title`、`detail`
+- **agent_code**: SubCodingAgent 唯一标识符（如："SubCodingAgent-1"，必须递增）
+
+**兼容方式：使用 `task` 工具（旧方式）**
+调用 `task` 工具，参数：
+- `description`: 任务描述
+- `subagent_type`: "sub-coding"
+- `prompt`: 任务上下文
+
+**重要提示**：推荐使用 `sub_coding` 工具，它提供严格的参数验证和更好的结构化任务定义。
 
 #### 2.2 审查代码
 SubCodingAgent 完成后，审查其代码提交：
