@@ -20,10 +20,7 @@ import { toolInputFormatter, toolNameFormatter } from "@/costrict/utils/tool-tra
 import { ToolExecution } from "./tool-execution"
 import { Storage } from "@/storage/storage"
 import { Instance } from "@/project/instance"
-import { SystemPrompt } from "./system"
 import { Budget } from "./budget"
-import path from "path"
-import fs from "fs/promises"
 
 export namespace SessionProcessor {
   const log = Log.create({ service: "session.processor" })
@@ -576,15 +573,6 @@ export namespace SessionProcessor {
           }
           input.assistantMessage.time.completed = Date.now()
           await Session.updateMessage(input.assistantMessage)
-          
-          // 保存完整的上下文历史
-          await saveContext({
-            sessionID: input.sessionID,
-            streamInput,
-            assistantMessage: input.assistantMessage,
-          }).catch((err) => {
-            log.error("failed to save context", { error: err })
-          })
 
           // 【预算前置检查】- 在工具执行之前检查预算是否充足
           const toolParts = await MessageV2.parts(input.assistantMessage.id)
@@ -727,90 +715,5 @@ export namespace SessionProcessor {
       },
     }
     return result
-  }
-
-  async function saveContext(input: {
-    sessionID: string
-    streamInput: LLM.StreamInput
-    assistantMessage: MessageV2.Assistant
-  }) {
-    const historyDir = path.join(Instance.worktree, "history_message")
-    await fs.mkdir(historyDir, { recursive: true })
-
-    // 每次保存都获取当前的完整历史记录上下文
-    const allMessages: MessageV2.WithParts[] = []
-    for await (const msg of MessageV2.stream(input.sessionID)) {
-      allMessages.push(msg)
-    }
-    allMessages.reverse()
-
-    // 获取模型信息以转换消息格式
-    const model = await Provider.getModel(
-      input.assistantMessage.providerID,
-      input.assistantMessage.modelID,
-    )
-
-    // 重建完整的 system 数组（与 llm.ts 中的逻辑一致）
-    // 这样可以确保 toolRequirements 被包含在保存的上下文中
-    const fullSystem = [
-      ...(input.streamInput.agent.prompt ? [input.streamInput.agent.prompt] : SystemPrompt.provider(model)),
-      ...SystemPrompt.toolRequirements(),
-      ...input.streamInput.system,
-      ...(input.streamInput.user.system ? [input.streamInput.user.system] : []),
-    ].filter((x) => x)
-
-    // 构建完整的请求消息（包括system和所有消息）
-    // 这代表了发送给模型的完整上下文
-    const requestMessages = [
-      ...fullSystem.map((x) => ({
-        role: "system" as const,
-        content: x,
-      })),
-      ...MessageV2.toModelMessages(allMessages, model),
-    ]
-
-    // 获取可用的工具列表
-    const availableTools = Object.keys(input.streamInput.tools).map(toolName => {
-      const tool = input.streamInput.tools[toolName]
-      return {
-        name: toolName,
-        description: tool.description || "",
-      }
-    })
-
-    // 构建完整的上下文对象
-    const context = {
-      timestamp: Date.now(),
-      sessionID: input.sessionID,
-      request: {
-        messages: requestMessages,
-        system: fullSystem,
-        availableTools,
-      },
-      allMessages: allMessages.map((msg) => ({
-        info: msg.info,
-        parts: msg.parts,
-      })),
-    }
-    
-    // 文件名格式：context-{sessionID}-{timestamp}.json
-    const timestamp = Date.now()
-    const filename = `context-${input.sessionID}-${timestamp}.json`
-    const contextFile = path.join(historyDir, filename)
-    
-    // 删除旧的context文件（同一会话内只保留最新的）
-    try {
-      const files = await fs.readdir(historyDir)
-      for (const file of files) {
-        if (file.startsWith(`context-${input.sessionID}-`) && file.endsWith(".json") && file !== filename) {
-          await fs.unlink(path.join(historyDir, file)).catch(() => {})
-        }
-      }
-    } catch {
-      // 忽略错误
-    }
-    
-    // 每次都重写整个文件，保存当前的完整历史记录上下文
-    await Bun.write(contextFile, JSON.stringify(context, null, 2))
   }
 }
