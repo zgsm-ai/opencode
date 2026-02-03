@@ -161,6 +161,9 @@ export const SubCodingTool = Tool.define("sub_coding", async (ctx) => {
         },
       })
 
+      // Define messageID before subscribing to events
+      const messageID = Identifier.ascending("message")
+
       // Track tool execution progress
       const parts: Record<
         string,
@@ -169,6 +172,7 @@ export const SubCodingTool = Tool.define("sub_coding", async (ctx) => {
       const { Bus } = await import("../bus")
       const unsub = Bus.subscribe(MessageV2.Event.PartUpdated, async (evt) => {
         if (evt.properties.part.sessionID !== session.id) return
+        if (evt.properties.part.messageID === messageID) return
         if (evt.properties.part.type !== "tool") return
         const part = evt.properties.part
         parts[part.id] = {
@@ -202,7 +206,6 @@ export const SubCodingTool = Tool.define("sub_coding", async (ctx) => {
       // Execute the SubCodingAgent
       subCodingLogger.info(`Executing SessionPrompt.prompt for session: ${session.id}`)
       try {
-        const messageID = Identifier.ascending("message")
         const result = await SessionPrompt.prompt({
           messageID,
           sessionID: session.id,

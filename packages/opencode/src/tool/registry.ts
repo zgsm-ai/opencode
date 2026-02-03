@@ -12,6 +12,7 @@ import { WriteTool } from "./write"
 import { InvalidTool } from "./invalid"
 import { SkillTool } from "./skill"
 import { SubCodingTool } from "./sub_coding"
+import { QuickExploreTool } from "./quick_explore"
 import type { Agent } from "../agent/agent"
 import { Tool } from "./tool"
 import { Instance } from "../project/instance"
@@ -127,6 +128,7 @@ export namespace ToolRegistry {
       TaskDoneWithChangeIdTool,
       AskForTaskDoneOrContinueTool,
       SubCodingTool,
+      QuickExploreTool,
       ...custom,
     ]
   }

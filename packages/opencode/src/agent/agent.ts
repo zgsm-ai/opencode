@@ -122,6 +122,7 @@ export namespace Agent {
           PermissionNext.fromConfig({
             question: "allow",
             plan_enter: "allow",
+            quick_explore: "allow",
             edit: {
               "*": "deny",
               "**/*.md": "allow",
@@ -148,6 +149,7 @@ export namespace Agent {
           defaults,
           PermissionNext.fromConfig({
             question: "allow",
+            quick_explore: "allow",
             // Only allow editing tasks.md
             edit: {
               "*": "deny",

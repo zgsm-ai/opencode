@@ -31,10 +31,17 @@ Based on the user's selection, follow the corresponding clarifications workflow 
 - Identify key objectives, constraints, and success criteria
 
 ### Phase 2: Codebase Exploration
-- Use `glob`, `grep`, `read` tools to explore relevant parts of the codebase
-- Understand existing architecture, design patterns, and conventions
-- Identify similar implementations that can be referenced
-- Document your findings for later reference
+
+**Choose exploration approach based on complexity:**
+- **Simple exploration** (few known files, local issues): Use `read`, `grep`, `glob` tools directly
+- **Complex exploration** (cross-module tracing, large-scale filtering, understanding complex relationships): Use `quick_explore` tool to launch QuickExploreAgent for in-depth exploration
+
+When using `quick_explore`:
+- Provide a single, specific exploration target in the `exploration_target` parameter
+- The agent will perform read-only exploration and return findings
+- Use this for: understanding project structure, tracing code relationships, finding similar implementations
+
+Document your findings for later reference
 
 ### Phase 3: Requirement Clarification (clarify.md)
 
