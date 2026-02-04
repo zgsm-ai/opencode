@@ -33,7 +33,7 @@ import { Locale } from "@/util/locale"
 import type { Tool } from "@/tool/tool"
 import type { ReadTool } from "@/tool/read"
 import type { WriteTool } from "@/tool/write"
-import { BashTool } from "@/plugin/tdd/tools/bash"
+import { BashTool } from "@/tool/bash"
 import type { GlobTool } from "@/tool/glob"
 import { TodoWriteTool } from "@/tool/todo"
 import type { GrepTool } from "@/tool/grep"
@@ -1577,39 +1577,19 @@ function BlockTool(props: { title: string; children: JSX.Element; onClick?: () =
 
 function Bash(props: ToolProps<typeof BashTool>) {
   const { theme } = useTheme()
-  const sync = useSync()
   const output = createMemo(() => stripAnsi(props.metadata.output?.trim() ?? ""))
   const [expanded, setExpanded] = createSignal(false)
   const lines = createMemo(() => output().split("\n"))
   const overflow = createMemo(() => lines().length > 10)
+  const command = createMemo(() => props.input.command ?? "bash")
   const limited = createMemo(() => {
     if (expanded() || !overflow()) return output()
     return [...lines().slice(0, 10), "…"].join("\n")
   })
 
-  const workdirDisplay = createMemo(() => {
-    const workdir = props.input.workdir
-    if (!workdir || workdir === ".") return undefined
-
-    const base = sync.data.path.directory
-    if (!base) return undefined
-
-    const absolute = path.resolve(base, workdir)
-    if (absolute === base) return undefined
-
-    const home = Global.Path.home
-    if (!home) return absolute
-
-    const match = absolute === home || absolute.startsWith(home + path.sep)
-    return match ? absolute.replace(home, "~") : absolute
-  })
-
   const title = createMemo(() => {
-    const desc = props.input.description ?? "Shell"
-    const wd = workdirDisplay()
-    if (!wd) return `# ${desc}`
-    if (desc.includes(wd)) return `# ${desc}`
-    return `# ${desc} in ${wd}`
+    const desc = props.metadata.description ?? command()
+    return `# ${desc}`
   })
 
   return (
@@ -1621,7 +1601,7 @@ function Bash(props: ToolProps<typeof BashTool>) {
           onClick={overflow() ? () => setExpanded((prev) => !prev) : undefined}
         >
           <box gap={1}>
-            <text fg={theme.text}>$ {props.input.command}</text>
+            <text fg={theme.text}>$ {command()}</text>
             <text fg={theme.text}>{limited()}</text>
             <Show when={overflow()}>
               <text fg={theme.textMuted}>{expanded() ? "Click to collapse" : "Click to expand"}</text>
@@ -1630,8 +1610,8 @@ function Bash(props: ToolProps<typeof BashTool>) {
         </BlockTool>
       </Match>
       <Match when={true}>
-        <InlineTool icon="$" pending="Writing command..." complete={props.input.command} part={props.part}>
-          {props.input.command}
+        <InlineTool icon="$" pending="Writing command..." complete={command()} part={props.part}>
+          {command()}
         </InlineTool>
       </Match>
     </Switch>
