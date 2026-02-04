@@ -6,6 +6,9 @@ import { GrepTool } from "./grep"
 import { BatchTool } from "./batch"
 import { ReadTool } from "./read"
 import { TaskTool } from "./task"
+import { TaskDoneTool } from "./task_done"
+import { SubAgentTaskDoneTool } from "./sub_agent_task_done"
+import { TaskDoneWithChangeIdTool } from "./task_done_with_change_id"
 import { TodoWriteTool, TodoReadTool } from "./todo"
 import { WebFetchTool } from "./webfetch"
 import { WriteTool } from "./write"
@@ -100,6 +103,9 @@ export namespace ToolRegistry {
 
     return [
       InvalidTool,
+      TaskDoneTool,
+      SubAgentTaskDoneTool,
+      TaskDoneWithChangeIdTool,
       ...(["app", "cli", "desktop"].includes(Flag.COSTRICT_CLIENT) ? [QuestionTool] : []),
       BashTool,
       ReadTool,

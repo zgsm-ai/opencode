@@ -46,9 +46,48 @@ import { LLM } from "./llm"
 import { iife } from "@/util/iife"
 import { Shell } from "@/shell/shell"
 import { Truncate } from "@/tool/truncation"
+import { Budget } from "./budget"
 
 // @ts-ignore
 globalThis.AI_SDK_LOG_WARNINGS = false
+
+async function extractTextContent(message: MessageV2.Assistant): Promise<string | undefined> {
+  const parts = await MessageV2.parts(message.id)
+  const textPart = parts.find((part): part is MessageV2.TextPart => part.type === "text")
+  return textPart?.text
+}
+
+async function llmIndicatesTaskCompleted(
+  message: MessageV2.Assistant,
+  exitToolName: string = "task_done"
+): Promise<boolean> {
+  // 获取工具调用列表
+  const parts = await MessageV2.parts(message.id)
+  const toolParts = parts.filter((part) => part.type === "tool") as MessageV2.ToolPart[]
+
+  // 检查是否调用了退出工具（支持自定义退出工具名）
+  const exitToolCall = toolParts.find((part) => part.tool === exitToolName)
+
+  // 只有当调用了退出工具且工具执行完成时，才认为任务完成
+  return exitToolCall !== undefined && exitToolCall.state.status === "completed"
+}
+
+function extractSummary(toolPart: MessageV2.ToolPart): string | undefined {
+  if (toolPart.state.status !== "completed") {
+    return undefined
+  }
+
+  const resultText = toolPart.state.output || ""
+  // 工具结果格式是 "Task done.\n\nSummary:\n{summary}"
+  if (resultText.includes("Summary:")) {
+    const parts = resultText.split("Summary:")
+    if (parts.length > 1) {
+      return parts[1].trim()
+    }
+  }
+
+  return resultText || undefined
+}
 
 export namespace SessionPrompt {
   const log = Log.create({ service: "session.prompt" })
@@ -269,6 +308,10 @@ export namespace SessionPrompt {
 
     let step = 0
     const session = await Session.get(sessionID)
+
+    // 预算状态（整个 session 生命周期内保持）
+    let sessionBudgetState: Budget.BudgetState | undefined = undefined
+
     while (true) {
       SessionStatus.set(sessionID, { type: "busy" })
       log.info("loop", { step, sessionID })
@@ -293,6 +336,38 @@ export namespace SessionPrompt {
       }
 
       if (!lastUser) throw new Error("No user message found in stream. This should never happen.")
+      
+      // 检查是否有 task 完成指示（通过退出工具）
+      if (lastAssistant && lastUser.id < lastAssistant.id) {
+        // 从 agent.options 获取退出工具名，默认为 "task_done"
+        const currentAgent = await Agent.get(lastAssistant.agent)
+        const exitToolName = (currentAgent.options?.exitToolName as string | undefined) || "task_done"
+
+        // 使用动态的退出工具名检查任务是否完成
+        const isTaskCompleted = await llmIndicatesTaskCompleted(lastAssistant, exitToolName)
+
+        if (isTaskCompleted) {
+          // 获取工具调用列表
+          const parts = await MessageV2.parts(lastAssistant.id)
+          const toolParts = parts.filter((part) => part.type === "tool") as MessageV2.ToolPart[]
+
+          // 查找退出工具
+          const exitToolCall = toolParts.find((part) => part.tool === exitToolName)
+
+          // 从退出工具结果中提取摘要
+          const summary = exitToolCall ? extractSummary(exitToolCall) : undefined
+
+          log.info("exiting loop - task completed with exit tool", {
+            sessionID,
+            exitToolName,
+            summary: summary?.substring(0, 100),
+          })
+
+          break
+        }
+      }
+
+      // 保留原有的退出逻辑作为后备
       if (
         lastAssistant?.finish &&
         !["tool-calls", "unknown"].includes(lastAssistant.finish) &&
@@ -514,6 +589,18 @@ export namespace SessionPrompt {
 
       // normal processing
       const agent = await Agent.get(lastUser.agent)
+
+      // 初始化预算状态（仅在第一次执行时）
+      if (sessionBudgetState === undefined) {
+        sessionBudgetState = Budget.calculateState(agent.steps, 0)
+        log.info("session budget initialized", {
+          sessionID,
+          agent: agent.name,
+          total: sessionBudgetState.total,
+          enabled: sessionBudgetState.total !== undefined
+        })
+      }
+
       const maxSteps = agent.steps ?? Infinity
       const isLastStep = step >= maxSteps
       msgs = await insertReminders({
@@ -550,6 +637,7 @@ export namespace SessionPrompt {
         sessionID: sessionID,
         model,
         abort,
+        budgetState: sessionBudgetState,  // 传入 session 级别的预算状态
       })
 
       // Check if user explicitly invoked an agent via @ in this turn
@@ -601,7 +689,10 @@ export namespace SessionPrompt {
         agent,
         abort,
         sessionID,
-        system: [...(await SystemPrompt.environment(model)), ...(await InstructionPrompt.system())],
+        system: [
+          ...(await SystemPrompt.environment(model)),
+          ...(await InstructionPrompt.system()),
+        ],
         messages: [
           ...MessageV2.toModelMessages(sessionMessages, model),
           ...(isLastStep
@@ -616,6 +707,17 @@ export namespace SessionPrompt {
         tools,
         model,
       })
+
+      // 更新 session 级别的预算状态
+      sessionBudgetState = processor.budgetState
+
+      log.info("budget state updated after process", {
+        sessionID,
+        used: sessionBudgetState.used,
+        remaining: sessionBudgetState.remaining,
+        total: sessionBudgetState.total
+      })
+
       if (result === "stop") break
       if (result === "compact") {
         await SessionCompaction.create({

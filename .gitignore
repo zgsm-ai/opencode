@@ -1,5 +1,6 @@
 .DS_Store
 node_modules
+history_message
 .worktrees
 .sst
 .env
@@ -16,7 +17,6 @@ ts-dist
 /result
 refs
 Session.vim
-opencode.json
 a.out
 target
 .scripts

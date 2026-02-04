@@ -18,6 +18,28 @@ export namespace SystemPrompt {
     return [PROMPT_CODEX.trim(), memory].filter((item) => item).join("\n\n")
   }
 
+  export function toolRequirements() {
+    return [
+      `# Critical Tool Usage Requirements
+
+**You MUST call at least one tool per response.** Text-only replies are strictly forbidden. Every response must include tool usage to make progress on the task.
+
+**When the task is completed, you MUST call the task_done tool** to properly finish the task. This tool requires a summary parameter (minimum 10 characters) that includes:
+- What was completed
+- Verification results (e.g., tests passed, build succeeded)
+- Key changes made
+
+Example:
+\`\`\`
+task_done(summary="Implemented user authentication feature. All tests pass (15/15). Key changes: Added login/logout endpoints, JWT token generation, password hashing with bcrypt.")
+\`\`\`
+
+If you believe the task is complete and there is nothing more to do, you MUST call task_done to signal completion.
+
+Failure to use tools or call task_done when appropriate will result in the conversation being terminated and restarted.`,
+    ]
+  }
+
   export function provider(model: Provider.Model) {
     const memory = PROMPT_MEMORY_BANK.trim()
     const bundle = (text: string) => (memory ? [text, memory] : [text])

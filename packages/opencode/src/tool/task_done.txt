@@ -1,0 +1,12 @@
+用摘要标记任务完成。仅在验证后（测试/脚本）调用。摘要应包括：完成了什么、验证结果、关键更改。
+
+Usage:
+- Call this tool only after you have verified that the task is complete (e.g., tests pass, scripts run successfully)
+- The summary parameter must be at least 10 characters long
+- The summary should include:
+  * What was completed
+  * Verification results (e.g., tests passed, no errors)
+  * Key changes made
+
+Example:
+task_done(summary="Implemented user authentication feature. All tests pass (15/15). Key changes: Added login/logout endpoints, JWT token generation, password hashing with bcrypt, and user session management.")

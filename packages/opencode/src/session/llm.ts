@@ -26,6 +26,8 @@ import { SystemPrompt } from "./system"
 import { Flag } from "@/flag/flag"
 import { PermissionNext } from "@/permission/next"
 import { Auth } from "@/auth"
+import path from "path"
+import fs from "fs/promises"
 
 export namespace LLM {
   const log = Log.create({ service: "llm" })
@@ -43,6 +45,8 @@ export namespace LLM {
     small?: boolean
     tools: Record<string, Tool>
     retries?: number
+    temperatureOverride?: number  // 用于重试时覆盖温度
+    silent?: boolean  // 用于在重试时抑制事件发布
   }
 
   export type StreamOutput = StreamTextResult<ToolSet, unknown>
@@ -74,6 +78,8 @@ export namespace LLM {
         // use agent prompt otherwise provider prompt
         // For Codex sessions, skip SystemPrompt.provider() since it's sent via options.instructions
         ...(input.agent.prompt ? [input.agent.prompt] : isCodex ? [] : SystemPrompt.provider(input.model)),
+        // Add tool requirements for ALL agents (including subagents)
+        ...SystemPrompt.toolRequirements(),
         // any custom prompt passed into this call
         ...input.system,
         // any custom prompt from last user message
@@ -129,9 +135,11 @@ export namespace LLM {
         message: input.user,
       },
       {
-        temperature: input.model.capabilities.temperature
-          ? (input.agent.temperature ?? ProviderTransform.temperature(input.model))
-          : undefined,
+        temperature: input.temperatureOverride ?? (
+          input.model.capabilities.temperature
+            ? (input.agent.temperature ?? ProviderTransform.temperature(input.model))
+            : undefined
+        ),
         topP: input.agent.topP ?? ProviderTransform.topP(input.model),
         topK: ProviderTransform.topK(input.model),
         options,
@@ -236,6 +244,20 @@ export namespace LLM {
       messages: requestMessages,
       maxRetries: input.retries ?? 0,
     }
+
+    // 保存实际发送给LLM的请求上下文
+    await saveActualContext({
+      sessionID: input.sessionID,
+      requestMessages,
+      requestHeaders,
+      requestBody,
+      system,
+      isCodex,
+      agent: input.agent,
+      model: input.model,
+    }).catch((err) => {
+      l.error("failed to save actual context", { error: err })
+    })
 
     return streamText({
       onError(error) {
@@ -350,5 +372,149 @@ export namespace LLM {
       }
     }
     return false
+  }
+
+  /**
+   * 保存实际发送给LLM的请求上下文
+   * 这个函数保存的是真正发送给LLM的消息，包含所有provider特殊处理
+   */
+  async function saveActualContext(input: {
+    sessionID: string
+    requestMessages: ModelMessage[]
+    requestHeaders: Record<string, any>
+    requestBody: Record<string, any>
+    system: string[]
+    isCodex: boolean
+    agent: Agent.Info
+    model: Provider.Model
+  }) {
+    const historyDir = path.join(Instance.worktree, "history_message")
+    await fs.mkdir(historyDir, { recursive: true })
+
+    // 转换消息格式为 OpenAI 标准格式
+    const convertedMessages = input.requestMessages.map((msg) => {
+      if (msg.role === "assistant" && Array.isArray(msg.content)) {
+        return {
+          ...msg,
+          content: msg.content.map((part: any) => {
+            if (part.type === "tool-call") {
+              // toolName -> name, input -> arguments
+              const { toolName, input: toolInput, ...rest } = part
+              return {
+                ...rest,
+                name: toolName,
+                arguments: toolInput,
+              }
+            }
+            return part
+          }),
+        }
+      }
+      return msg
+    })
+
+    // 提取工具信息并转换为 OpenAI 格式
+    const availableTools = input.requestBody.activeTools.map((toolName: string) => {
+      const toolDef = input.requestBody.tools[toolName]
+      if (!toolDef) {
+        return {
+          type: "function",
+          function: {
+            name: toolName,
+            description: "",
+            parameters: {
+              type: "object",
+              properties: {},
+              required: [],
+            },
+          },
+        }
+      }
+
+      // 从 AI SDK 的 Tool 对象中提取 inputSchema
+      let schema = toolDef.inputSchema || toolDef.parameters || {}
+
+      // 如果 inputSchema 包含 jsonSchema 字段，提取它
+      if (schema.jsonSchema) {
+        schema = schema.jsonSchema
+      }
+
+      // 删除不需要的字段
+      if (schema.$schema || schema.additionalProperties !== undefined) {
+        const { $schema, additionalProperties, ...rest } = schema
+        schema = rest
+      }
+
+      return {
+        type: "function",
+        function: {
+          name: toolName,
+          description: toolDef.description || "",
+          parameters: schema,
+        },
+      }
+    })
+
+    // 构建完整的上下文对象
+    const context = {
+      timestamp: Date.now(),
+      sessionID: input.sessionID,
+
+      // 元信息
+      meta: {
+        agent: input.agent.name,
+        agentMode: input.agent.mode,
+        modelID: input.model.id,
+        providerID: input.model.providerID,
+        isCodex: input.isCodex,
+      },
+
+      // 实际发送的请求（这是最关键的部分）
+      actualRequest: {
+        messages: convertedMessages,  // 转换后的消息（OpenAI格式）
+        headers: input.requestHeaders,    // 包含provider特殊headers
+        parameters: {
+          temperature: input.requestBody.temperature,
+          topP: input.requestBody.topP,
+          topK: input.requestBody.topK,
+          maxOutputTokens: input.requestBody.maxOutputTokens,
+          providerOptions: input.requestBody.providerOptions,
+        },
+        tools: availableTools,  // OpenAI格式的工具定义
+      },
+
+      // System消息的原始形式（用于对比）
+      systemPrompts: {
+        array: input.system,  // 可能是拼接前的数组
+        isCodexFormat: input.isCodex,  // 标记是否使用Codex格式
+      },
+    }
+
+    // 文件名格式：context-{sessionID}-{timestamp}.json
+    const timestamp = Date.now()
+    const filename = `context-${input.sessionID}-${timestamp}.json`
+    const contextFile = path.join(historyDir, filename)
+
+    // 删除旧的context文件（同一会话内只保留最新的）
+    try {
+      const files = await fs.readdir(historyDir)
+      for (const file of files) {
+        if (file.startsWith(`context-${input.sessionID}-`) && file.endsWith(".json") && file !== filename) {
+          await fs.unlink(path.join(historyDir, file)).catch(() => {})
+        }
+      }
+    } catch {
+      // 忽略错误
+    }
+
+    // 保存context到文件
+    await fs.writeFile(contextFile, JSON.stringify(context, null, 2), "utf-8")
+
+    log.info("saved actual LLM request context", {
+      sessionID: input.sessionID,
+      file: contextFile,
+      messageCount: input.requestMessages.length,
+      isCodex: input.isCodex,
+    })
   }
 }
