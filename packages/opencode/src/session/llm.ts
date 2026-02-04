@@ -12,6 +12,7 @@ import {
   type ToolSet,
   tool,
   jsonSchema,
+  generateText,
 } from "ai"
 import { clone, mergeDeep, pipe } from "remeda"
 import { ProviderTransform } from "@/provider/transform"
@@ -106,10 +107,10 @@ export namespace LLM {
     const base = input.small
       ? ProviderTransform.smallOptions(input.model)
       : ProviderTransform.options({
-          model: input.model,
-          sessionID: input.sessionID,
-          providerOptions: { ...provider.options, ...input.providerOptions },
-        })
+        model: input.model,
+        sessionID: input.sessionID,
+        providerOptions: { ...provider.options, ...input.providerOptions },
+      })
     const options: Record<string, any> = pipe(
       base,
       mergeDeep(input.model.options),
@@ -197,18 +198,18 @@ export namespace LLM {
     const requestHeaders = {
       ...(isCodex
         ? {
-            originator: "costrict",
-            "User-Agent": `costrict-cli/${Installation.VERSION} (${os.platform()} ${os.release()}; ${os.arch()})`,
-            session_id: input.sessionID,
-          }
+          originator: "costrict",
+          "User-Agent": `costrict-cli/${Installation.VERSION} (${os.platform()} ${os.release()}; ${os.arch()})`,
+          session_id: input.sessionID,
+        }
         : undefined),
       ...(input.model.providerID.startsWith("opencode")
         ? {
-            "x-opencode-project": Instance.project.id,
-            "x-opencode-session": input.sessionID,
-            "x-opencode-request": input.user.id,
-            "x-opencode-client": Flag.COSTRICT_CLIENT,
-          }
+          "x-opencode-project": Instance.project.id,
+          "x-opencode-session": input.sessionID,
+          "x-opencode-request": input.user.id,
+          "x-opencode-client": Flag.COSTRICT_CLIENT,
+        }
         : undefined),
       ...input.model.headers,
     }
@@ -216,17 +217,17 @@ export namespace LLM {
     const requestMessages = [
       ...(isCodex
         ? [
-            {
-              role: "user",
-              content: system.join("\n\n"),
-            } as ModelMessage,
-          ]
+          {
+            role: "user",
+            content: system.join("\n\n"),
+          } as ModelMessage,
+        ]
         : system.map(
-            (x): ModelMessage => ({
-              role: "system",
-              content: x,
-            }),
-          )),
+          (x): ModelMessage => ({
+            role: "system",
+            content: x,
+          }),
+        )),
       ...input.messages,
     ]
 
@@ -265,12 +266,80 @@ export namespace LLM {
       async experimental_repairToolCall(failed) {
         const lower = failed.toolCall.toolName.toLowerCase()
         let toolCall = failed.toolCall
-        if (lower === "todowrite" || lower === "question") {
-          let input = toolCall.input.replace(/'/g, '"').replace(/\b(False|True)\b/g, (match) => match.toLowerCase())
-          toolCall.input = input
-          return {
-            ...failed.toolCall,
-            toolName: lower,
+        let args = toolCall.input
+        try {
+          JSON.parse(args)
+        } catch {
+          if (lower === "todowrite" || lower === "question" || lower === "sequential-thinking") {
+            args = args.replace(/'/g, '"').replace(/\b(False|True)\b/g, (match) => match.toLowerCase());
+            try {
+              JSON.parse(args)
+              toolCall.input = args;
+              failed.toolCall = toolCall;
+              return {
+                ...failed.toolCall,
+                toolName: lower,
+              }
+            } catch (repairError) {
+              l.warn("failed to repair tool call input", {
+                toolName: failed.toolCall.toolName,
+                input: failed.toolCall.input,
+                error: failed.error.message,
+                repairError: repairError instanceof Error ? repairError.message : String(repairError),
+              })
+            }
+          }
+          const repairPrompt = `The following text is supposed to be a JSON object but has syntax errors. Please fix it and return ONLY the valid JSON object, nothing else.
+Input to fix:
+${args}
+
+Error: ${failed.error.message}
+
+Rules:
+1. Return ONLY the fixed JSON object
+2. Do not include any explanations, markdown formatting, or code blocks
+3. Ensure the output is valid JSON that can be parsed by JSON.parse()
+4. Preserve all data fields and values as much as possible`
+          const { text: repairedJson } = await generateText({
+            prompt: repairPrompt,
+            temperature: 0.1,
+            model: wrapLanguageModel({
+              model: language,
+              middleware: [
+                {
+                  async transformParams(args) {
+                    if (args.type === "stream") {
+                      // @ts-expect-error
+                      args.params.prompt = ProviderTransform.message(args.params.prompt, input.model, options)
+                    }
+                    return args.params
+                  },
+                },
+                extractReasoningMiddleware({ tagName: "think", startWithReasoning: false }),
+              ],
+            }),
+            experimental_telemetry: { isEnabled: cfg.experimental?.openTelemetry },
+          })
+
+          let cleanedJson = repairedJson.trim()
+          if (cleanedJson.startsWith('```')) {
+            cleanedJson = cleanedJson.replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '')
+          }
+          try {
+            JSON.parse(cleanedJson)
+            toolCall.input = cleanedJson;
+            failed.toolCall = toolCall;
+            return {
+              ...failed.toolCall,
+              toolName: lower,
+            }
+          } catch (repairError) {
+            l.warn("failed to repair tool call input", {
+              toolName: failed.toolCall.toolName,
+              input: failed.toolCall.input,
+              error: failed.error.message,
+              repairError: repairError instanceof Error ? repairError.message : String(repairError),
+            })
           }
         }
         if (lower !== failed.toolCall.toolName && tools[lower]) {
@@ -303,22 +372,22 @@ export namespace LLM {
       headers: {
         ...(isCodex
           ? {
-              originator: "costrict",
-              "User-Agent": `costrict-cli/${Installation.VERSION} (${os.platform()} ${os.release()}; ${os.arch()})`,
-              session_id: input.sessionID,
-            }
+            originator: "costrict",
+            "User-Agent": `costrict-cli/${Installation.VERSION} (${os.platform()} ${os.release()}; ${os.arch()})`,
+            session_id: input.sessionID,
+          }
           : undefined),
         ...(input.model.providerID.startsWith("opencode")
           ? {
-              "x-opencode-project": Instance.project.id,
-              "x-opencode-session": input.sessionID,
-              "x-opencode-request": input.user.id,
-              "x-opencode-client": Flag.COSTRICT_CLIENT,
-            }
+            "x-opencode-project": Instance.project.id,
+            "x-opencode-session": input.sessionID,
+            "x-opencode-request": input.user.id,
+            "x-opencode-client": Flag.COSTRICT_CLIENT,
+          }
           : input.model.providerID !== "anthropic"
             ? {
-                "User-Agent": `opencode/${Installation.VERSION}`,
-              }
+              "User-Agent": `opencode/${Installation.VERSION}`,
+            }
             : undefined),
         ...input.model.headers,
         ...headers,
@@ -371,3 +440,4 @@ export namespace LLM {
     return false
   }
 }
+
