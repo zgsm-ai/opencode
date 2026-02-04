@@ -56,6 +56,7 @@ const call = async (dir: string, params: { command: string; timeout?: number; re
     messageID: "test",
     agent: "test",
     abort: new AbortController().signal,
+    messages: [],
     metadata(input: { title?: string; metadata?: { output?: string; description?: string } }) {
       if (input.metadata?.output !== undefined) meta.output = input.metadata.output
       if (input.metadata?.description !== undefined) meta.description = input.metadata.description
