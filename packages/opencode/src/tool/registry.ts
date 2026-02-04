@@ -1,8 +1,8 @@
 import { QuestionTool } from "./question"
 import { BashTool } from "./bash"
 import { EditTool } from "./edit"
-import { GlobTool } from "./glob"
-import { GrepTool } from "./grep"
+// import { GlobTool } from "./glob"
+// import { GrepTool } from "./grep"
 import { BatchTool } from "./batch"
 import { ReadTool } from "./read"
 import { TaskTool } from "./task"
@@ -112,8 +112,8 @@ export namespace ToolRegistry {
       ...(["app", "cli", "desktop"].includes(Flag.COSTRICT_CLIENT) ? [QuestionTool] : []),
       BashTool,
       ReadTool,
-      GlobTool,
-      GrepTool,
+      // GlobTool,
+      // GrepTool,
       EditTool,
       WriteTool,
       // Temporoly disable task tool for testing sub agent tool 
