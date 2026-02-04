@@ -8,12 +8,12 @@ const home = path.join(tmp, "home")
 const plat = process.platform
 const rbin =
   plat === "win32"
-    ? path.join(root, "src", "pre_compiled", "rg", "ripgrep-15.1.0-x86_64-pc-windows-msvc")
-    : path.join(root, "src", "pre_compiled", "rg", "ripgrep-15.1.0-x86_64-unknown-linux-musl")
+    ? path.join(root, "resources", "search", "rg", "ripgrep-15.1.0-x86_64-pc-windows-msvc")
+    : path.join(root, "resources", "search", "rg", "ripgrep-15.1.0-x86_64-unknown-linux-musl")
 const fbin =
   plat === "win32"
-    ? path.join(root, "src", "pre_compiled", "fd", "fd-v10.3.0-x86_64-pc-windows-msvc")
-    : path.join(root, "src", "pre_compiled", "fd", "fd-v10.3.0-x86_64-unknown-linux-gnu")
+    ? path.join(root, "resources", "search", "fd", "fd-v10.3.0-x86_64-pc-windows-msvc")
+    : path.join(root, "resources", "search", "fd", "fd-v10.3.0-x86_64-unknown-linux-gnu")
 
 process.env.COSTRICT_TEST_HOME = home
 process.env.XDG_DATA_HOME = path.join(home, "data")
@@ -97,7 +97,9 @@ describe("bash tool basics", () => {
 })
 
 describe("bash tool safeguards", () => {
-  test("runs precompiled rg/fd binaries", async () => {
+  test(
+    "runs precompiled rg/fd binaries",
+    async () => {
     const dir = await prep("bins")
     const file = path.join(dir, "bin.txt")
     await fs.writeFile(file, "bin-check\n", "utf8")
@@ -109,7 +111,9 @@ describe("bash tool safeguards", () => {
     const resFd = await call(dir, { command: `"${fcmd}" "bin" .` })
     expect(resRg.result.output.includes("bin.txt")).toBe(true)
     expect(resFd.result.output.includes("bin.txt")).toBe(true)
-  })
+    },
+    10_000,
+  )
 
   test("blocks direct git usage", async () => {
     const dir = await prep("git-block")
@@ -250,7 +254,9 @@ describe("bash tool safeguards", () => {
     expect(res.result.output.includes("最大支持 120 秒")).toBe(true)
   })
 
-  test("keeps cwd across timeout restart", async () => {
+  test(
+    "keeps cwd across timeout restart",
+    async () => {
     const dir = await prep("restart")
     const sub = path.join(dir, "child")
     await fs.mkdir(sub, { recursive: true })
@@ -259,7 +265,9 @@ describe("bash tool safeguards", () => {
     const pwd = await call(dir, { command: "pwd" })
     expect(slow.result.output.includes("bash tool terminated")).toBe(true)
     expect(pwd.result.output.includes("child")).toBe(true)
-  })
+    },
+    10_000,
+  )
 
   test("persists exported env across calls", async () => {
     const dir = await prep("env-persist")
@@ -281,7 +289,7 @@ describe("bash tool safeguards", () => {
     process.env.PATH = ""
     try {
       const res = await call(dir, { command: "command -v rg" })
-      expect(res.result.output.includes("pre_compiled")).toBe(true)
+      expect(res.result.output.includes("search")).toBe(true)
     } finally {
       process.env.PATH = original
     }

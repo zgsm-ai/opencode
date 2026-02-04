@@ -8,3 +8,8 @@ src/provider/models-snapshot.ts
 resources/lint/*/
 !resources/lint/bundles/
 resources/lint/bundles/*.tmp
+
+# Search tools - extracted binaries (bundles are committed)
+resources/search/*/
+!resources/search/bundles/
+resources/search/bundles/*.tmp

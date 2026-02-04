@@ -51,7 +51,7 @@ const state = Instance.state(() => ({
 }))
 
 const precompiled = () => {
-  const baseDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "pre_compiled")
+  const baseDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "resources", "search")
   const rgDir =
     process.platform === "win32"
       ? path.join(baseDir, "rg", "ripgrep-15.1.0-x86_64-pc-windows-msvc")
