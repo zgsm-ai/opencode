@@ -14,6 +14,9 @@ import PROMPT_COMPACTION from "./prompt/compaction.txt"
 import PROMPT_EXPLORE from "./prompt/explore.txt"
 import PROMPT_SUMMARY from "./prompt/summary.txt"
 import PROMPT_TITLE from "./prompt/title.txt"
+import PROMPT_PROPOSAL from "./prompt/proposal.txt"
+import PROMPT_TASKCHECK from "./prompt/taskcheck.txt"
+import PROMPT_CODING from "./prompt/coding.txt"
 import { PermissionNext } from "@/permission/next"
 import { mergeDeep, pipe, sortBy, values } from "remeda"
 import { Global } from "@/global"
@@ -155,6 +158,100 @@ export namespace Agent {
         ),
         mode: "primary",
         native: true,
+      },
+      proposal: {
+        name: "proposal",
+        description: "Creates detailed technical change proposals and architectural designs. Researches codebase, designs solutions, and produces structured proposal documents without implementing code.",
+        options: {},
+        permission: PermissionNext.merge(
+          defaults,
+          PermissionNext.fromConfig({
+            question: "allow",
+            plan_enter: "allow",
+            quick_explore: "allow",
+            edit: {
+              "*": "deny",
+              "**/*.md": "allow",
+              "**/proposal/**/*.md": "allow",
+              "proposal/**/*.md": "allow",
+            },
+            write: {
+              "*": "deny",
+              "**/*.md": "allow",
+              "proposal/**": "allow",
+            },
+          }),
+          user,
+        ),
+        mode: "primary",
+        native: true,
+        prompt: PROMPT_PROPOSAL,
+      },
+      taskcheck: {
+        name: "taskcheck",
+        description: "Task quality checking and improvement agent. Checks if tasks in tasks.md are clear, precise, and complete. Verifies requirements coverage, code location precision, and style consistency. Can only modify tasks.md, not code files.",
+        options: {},
+        permission: PermissionNext.merge(
+          defaults,
+          PermissionNext.fromConfig({
+            question: "allow",
+            quick_explore: "allow",
+            // Only allow editing tasks.md
+            edit: {
+              "*": "deny",
+              "**/proposal/*/tasks.md": "allow",
+              "proposal/*/tasks.md": "allow",
+            },
+            write: {
+              "*": "deny",
+            },
+            // Allow bash for verification and exploration
+            bash: "allow",
+            // Allow reading any file for code exploration
+            read: "allow",
+            // Disable other edit tools
+            apply_patch: "deny",
+          }),
+          user,
+        ),
+        mode: "primary",
+        native: true,
+        hidden: true,
+        prompt: PROMPT_TASKCHECK,
+      },
+      coding: {
+        name: "coding",
+        description: "软件开发团队的项目管理者和技术架构师。负责理解任务规划(tasks.md),将开发任务分发给 SubCodingAgent 执行,审查代码提交,追踪进度。不直接修改代码,通过分发任务推动项目进展。",
+        options: {},
+        permission: PermissionNext.merge(
+          defaults,
+          PermissionNext.fromConfig({
+            question: "allow",
+            // Only allow editing tasks.md
+            edit: {
+              "*": "deny",
+              "**/proposal/*/tasks.md": "allow",
+              "proposal/*/tasks.md": "allow",
+            },
+            // Deny write
+            write: {
+              "*": "deny",
+            },
+            // Allow bash for agent-git operations
+            bash: "allow",
+            // Allow reading any file
+            read: "allow",
+            // Allow starting sub agents
+            task: "allow",
+            // Allow using sub_coding tool (new structured way)
+            sub_coding: "allow",
+          }),
+          user,
+        ),
+        mode: "primary",
+        native: true,
+        prompt: PROMPT_CODING,
+        steps: 100,
       },
       general: {
         name: "general",

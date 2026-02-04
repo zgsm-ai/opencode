@@ -1,0 +1,21 @@
+### checkpoint 工具使用说明
+
+checkpoint 工具用于管理代码变更的检查点。
+
+**常用命令**：
+```bash
+# 查看所有检查点
+checkpoint (action: list)
+
+# 查看具体变更
+checkpoint (action: show_diff, commit_hash: "abc123")
+
+# 创建检查点
+checkpoint (action: commit, message: "完成功能X")
+```
+
+**注意事项**：
+- 如果 checkpoint 工具不可用，跳过该步骤
+- 禁止直接使用 git 命令操作
+- 使用 list 时，如果存在重复记录，以最新的一条为准
+- 使用 show_diff 查看与问题最相关的提交内容

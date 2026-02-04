@@ -1,0 +1,289 @@
+import { Tool } from "./tool"
+import DESCRIPTION from "./sub_coding.txt"
+import z from "zod"
+import { Session } from "../session"
+import { MessageV2 } from "../session/message-v2"
+import { Identifier } from "../id/id"
+import { Agent } from "../agent/agent"
+import { SessionPrompt } from "../session/prompt"
+import { PermissionNext } from "@/permission/next"
+import { Instance } from "@/project/instance"
+import { defer } from "@/util/defer"
+import path from "path"
+import { Log } from "@/util/log"
+import { Bus } from "../bus"
+
+// Logger for SubCodingTool - writes to file instead of console
+const subCodingLogger = Log.create({ service: "sub_coding" })
+
+// Sub-task schema for structured task definition
+const SubTaskSchema = z.object({
+  id: z.string().describe("Task identifier, e.g., '1.2'"),
+  title: z.string().describe("One-line summary of the task"),
+  detail: z.string().describe("Detailed description of what needs to be done"),
+})
+
+// Main parameters schema with strict validation
+const parameters = z.object({
+  important_note: z
+    .string()
+    .describe(
+      "来自主 CodingAgent 给 SubCodingAgent 的关键补充说明。" +
+        "用于传递在编码过程中发现的高价值、执行关键信息，例如：" +
+        "之前遇到的已知陷阱/bug以及如何避免、编码约束、边界情况、已知的环境缺失情况。" +
+        "与其他字段的关系：important_note是'编码过程中学到的、不能遗漏的重要事项'，" +
+        "previous_work_summary是'之前的SubCodingAgent已更改的内容'。保持简洁但明确。"
+    ),
+  previous_work_summary: z
+    .string()
+    .describe(
+      "之前 SubCodingAgent 完成的工作摘要。仅包含影响当前任务的内容：" +
+        "已完成的内容及位置（文件/模块）、当前任务依赖的关键 API/行为更改。" +
+        "不要添加新的推测性想法（将其放入 important_note）。" +
+        "如果这是第一个 SubCodingAgent，使用：'None - this is the first SubCodingAgent'。"
+    ),
+  sub_tasks: z
+    .array(SubTaskSchema)
+    .describe(
+      "分配给此 SubCodingAgent 的结构化任务列表。格式：array<{id, title, detail}>。" +
+        "当任务来源于 task.md 时，detail 必须包含原始任务条目中的所有具体信息（修改对象/目的/内容等），" +
+        "不得压缩、删减或改写导致信息丢失。"
+    ),
+  agent_code: z
+    .string()
+    .describe(
+      "此 SubCodingAgent 的唯一标识符（例如 'SubCodingAgent-1'）。" +
+      "用作 checkpoint 提交作者。每次新的 SubCodingAgent 调用必须递增。" +
+      "格式：SubCodingAgent-N，其中 N 从 1 开始递增。"
+    ),
+})
+
+// Format sub-tasks into markdown checklist
+function formatSubTasks(subTasks: z.infer<typeof parameters>["sub_tasks"]): string {
+  return subTasks
+    .map((task) => {
+      const header = `- [ ] ${task.id} ${task.title}`
+      const detailLines = task.detail
+        .split("\n")
+        .map((line) => `  - ${line}`)
+        .join("\n")
+      return `${header}\n${detailLines}`
+    })
+    .join("\n")
+}
+
+// Build the structured prompt for SubCodingAgent
+function buildPrompt(params: z.infer<typeof parameters>): string {
+  const subTasksMarkdown = formatSubTasks(params.sub_tasks)
+
+  return `## Task Context
+
+Project path: \`${Instance.worktree}\`
+
+Your agent code: \`${params.agent_code}\`
+
+### Critical Supplemental Notes (important_note)
+${params.important_note}
+
+### Previous Work Summary
+${params.previous_work_summary}
+
+### Assigned Tasks
+${subTasksMarkdown}
+
+Please complete the coding tasks with high quality. Follow the work principles and workflow defined in your system prompt.`
+}
+
+export const SubCodingTool = Tool.define("sub_coding", async (ctx) => {
+  return {
+    description: DESCRIPTION,
+    parameters,
+    async execute(params: z.infer<typeof parameters>, ctx) {
+      subCodingLogger.info(`Starting ${params.agent_code}`)
+      
+      // Get the SubCodingAgent configuration
+      const agent = await Agent.get("SubCodingAgent")
+      if (!agent) {
+        throw new Error(
+          'SubCodingAgent not found. Make sure the agent is properly configured.',
+        )
+      }
+      subCodingLogger.info(`Agent config loaded: ${agent.name}`)
+
+      // Create a child session for SubCodingAgent
+      subCodingLogger.info(`Creating child session with parent: ${ctx.sessionID}`)
+      const session = await Session.create({
+        parentID: ctx.sessionID,
+        title: `${params.agent_code}: ${params.sub_tasks.map((t) => t.title).join(", ")}`,
+        permission: [
+          {
+            permission: "todowrite",
+            pattern: "*",
+            action: "deny",
+          },
+          {
+            permission: "todoread",
+            pattern: "*",
+            action: "deny",
+          },
+          {
+            permission: "task" as const,
+            pattern: "*" as const,
+            action: "deny" as const,
+          },
+        ],
+      })
+      subCodingLogger.info(`Session created: ${session.id}`)
+
+      // Build the structured prompt
+      const prompt = buildPrompt(params)
+
+      // Get the current message to extract model info
+      const msg = await MessageV2.get({ sessionID: ctx.sessionID, messageID: ctx.messageID })
+      if (msg.info.role !== "assistant") {
+        throw new Error("Not an assistant message")
+      }
+
+      // Use agent's configured model or fallback to parent's model
+      const model = agent.model ?? {
+        modelID: msg.info.modelID,
+        providerID: msg.info.providerID,
+      }
+
+      // Report metadata about the sub-agent session
+      ctx.metadata({
+        title: params.agent_code,
+        metadata: {
+          description: `${params.agent_code} - ${params.sub_tasks.length} tasks`,
+          sessionId: session.id,
+          agentCode: params.agent_code,
+          taskCount: params.sub_tasks.length,
+          model,
+        },
+      })
+
+      // Define messageID before subscribing to events
+      const messageID = Identifier.ascending("message")
+
+      // Track tool execution progress
+      const parts: Record<
+        string,
+        { id: string; tool: string; state: { status: string; title?: string } }
+      > = {}
+      const unsub = Bus.subscribe(MessageV2.Event.PartUpdated, async (evt) => {
+        if (evt.properties.part.sessionID !== session.id) return
+        if (evt.properties.part.messageID === messageID) return
+        if (evt.properties.part.type !== "tool") return
+        const part = evt.properties.part
+        parts[part.id] = {
+          id: part.id,
+          tool: part.tool,
+          state: {
+            status: part.state.status,
+            title: part.state.status === "completed" ? part.state.title : undefined,
+          },
+        }
+        ctx.metadata({
+          title: params.agent_code,
+          metadata: {
+            description: `${params.agent_code} - ${params.sub_tasks.length} tasks`,
+            summary: Object.values(parts).sort((a, b) => a.id.localeCompare(b.id)),
+            sessionId: session.id,
+            agentCode: params.agent_code,
+            taskCount: params.sub_tasks.length,
+            model,
+          },
+        })
+      })
+
+      // Handle cancellation
+      function cancel() {
+        SessionPrompt.cancel(session.id)
+      }
+      ctx.abort.addEventListener("abort", cancel)
+      using _ = defer(() => ctx.abort.removeEventListener("abort", cancel))
+
+      // Execute the SubCodingAgent
+      subCodingLogger.info(`Executing SessionPrompt.prompt for session: ${session.id}`)
+      try {
+        const result = await SessionPrompt.prompt({
+          messageID,
+          sessionID: session.id,
+          agent: agent.name,
+          model: {
+            modelID: model.modelID,
+            providerID: model.providerID,
+          },
+          tools: {
+            todowrite: false,
+            todoread: false,
+            task: false,
+          },
+          parts: [
+            {
+              type: "text",
+              text: prompt,
+            },
+          ],
+        })
+        subCodingLogger.info(`SessionPrompt.prompt completed, result parts: ${result.parts.length}`)
+
+        unsub()
+
+        // Get final messages to summarize what was done
+        const messages = await Session.messages({ sessionID: session.id })
+        const summary = messages
+          .filter((x) => x.info.role === "assistant")
+          .flatMap(
+            (msg) => msg.parts.filter((x: any) => x.type === "tool") as MessageV2.ToolPart[],
+          )
+          .map((part) => ({
+            id: part.id,
+            tool: part.tool,
+            state: {
+              status: part.state.status,
+              title: part.state.status === "completed" ? part.state.title : undefined,
+            },
+          }))
+
+        // Extract the final text response
+        const text = result.parts.findLast((x) => x.type === "text")?.text ?? ""
+
+        // Build output with metadata
+        const output =
+          text +
+          "\n\n" +
+          ["<task_metadata>", `session_id: ${session.id}`, `agent_code: ${params.agent_code}`, "</task_metadata>"].join(
+            "\n",
+          )
+
+        return {
+          title: params.agent_code,
+          metadata: {
+            description: `${params.agent_code} - ${params.sub_tasks.length} tasks`,
+            summary,
+            sessionId: session.id,
+            agentCode: params.agent_code,
+            taskCount: params.sub_tasks.length,
+            model,
+          },
+          output,
+        }
+      } catch (error) {
+        unsub()
+        throw error
+      }
+    },
+    // Custom error formatter for Zod validation errors
+    formatValidationError(error: z.ZodError): string {
+      const issues = error.issues
+        .map((issue) => {
+          const path = issue.path.length > 0 ? issue.path.join(".") : "root"
+          return `  - ${path}: ${issue.message}`
+        })
+        .join("\n")
+
+      return `SubCoding tool validation failed. Please provide all required parameters:\n${issues}\n\nRequired parameters:\n  - important_note: Critical notes from CodingAgent\n  - previous_work_summary: Summary of previous work\n  - sub_tasks: Array of tasks with id, title, and detail\n  - agent_code: Unique identifier (e.g., "SubCodingAgent-1")`
+    },
+  }
+})

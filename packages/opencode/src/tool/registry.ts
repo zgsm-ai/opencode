@@ -9,11 +9,14 @@ import { TaskTool } from "./task"
 import { TaskDoneTool } from "./task_done"
 import { SubAgentTaskDoneTool } from "./sub_agent_task_done"
 import { TaskDoneWithChangeIdTool } from "./task_done_with_change_id"
+import { AskForTaskDoneOrContinueTool } from "./ask_for_task_done_or_continue"
 import { TodoWriteTool, TodoReadTool } from "./todo"
 import { WebFetchTool } from "./webfetch"
 import { WriteTool } from "./write"
 import { InvalidTool } from "./invalid"
 import { SkillTool } from "./skill"
+import { SubCodingTool } from "./sub_coding"
+import { QuickExploreTool } from "./quick_explore"
 import type { Agent } from "../agent/agent"
 import { Tool } from "./tool"
 import { Instance } from "../project/instance"
@@ -113,7 +116,8 @@ export namespace ToolRegistry {
       GrepTool,
       EditTool,
       WriteTool,
-      TaskTool,
+      // Temporoly disable task tool for testing sub agent tool 
+      // TaskTool,
       WebFetchTool,
       TodoWriteTool,
       MemoryBankTool,
@@ -131,6 +135,10 @@ export namespace ToolRegistry {
       ...(config.experimental?.batch_tool === true ? [BatchTool] : []),
       ...(Flag.COSTRICT_EXPERIMENTAL_PLAN_MODE && Flag.COSTRICT_CLIENT === "cli" ? [PlanExitTool, PlanEnterTool] : []),
       LintTool,
+      TaskDoneWithChangeIdTool,
+      AskForTaskDoneOrContinueTool,
+      SubCodingTool,
+      QuickExploreTool,
       ...custom,
     ]
   }
@@ -160,6 +168,16 @@ export namespace ToolRegistry {
             model.modelID.includes("gpt-") && !model.modelID.includes("oss") && !model.modelID.includes("gpt-4")
           if (t.id === "apply_patch") return usePatch
           if (t.id === "edit" || t.id === "write") return !usePatch
+
+          // task_done_with_change_id is only available to proposal agent
+          if (t.id === "task_done_with_change_id") {
+            return agent?.name === "proposal"
+          }
+
+          // ask_for_task_done_or_continue is only available to taskcheck agent
+          if (t.id === "ask_for_task_done_or_continue") {
+            return agent?.name === "taskcheck"
+          }
 
           return true
         })

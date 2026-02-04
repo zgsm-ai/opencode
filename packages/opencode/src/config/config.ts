@@ -287,11 +287,25 @@ export namespace Config {
   const AGENT_GLOB = new Bun.Glob("{agent,agents}/**/*.{md,txt}")
   async function loadAgent(dir: string) {
     const result: Record<string, Agent> = {}
+    const componentsDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../costrict/agent")
 
     // Load built-in agents from imported modules
     for (const agentContent of BUILTIN_AGENTS) {
       try {
-        const md = await ConfigMarkdown.parseString(agentContent)
+        // Prepare context variables for template rendering
+        const context = {
+          // Global context variables can be added here
+          version: "1.0.0",
+          // Runtime variables will be passed when creating sessions
+        }
+
+        const md = await ConfigMarkdown.parseString(agentContent, {
+          context,
+          baseDir: componentsDir,
+          enableIncludes: true,
+          enableVariables: true,
+          enableConditionals: true,
+        })
         if (!md.data) continue
 
         const config = {
