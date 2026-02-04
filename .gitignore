@@ -44,3 +44,9 @@ venv/
 agent-git
 agent-git.bat
 .tmp-bash-tool-test/
+
+
+
+
+docs/
+test-project/
