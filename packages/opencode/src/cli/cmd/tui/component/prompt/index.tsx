@@ -535,6 +535,12 @@ export function Prompt(props: PromptProps) {
         })()
     const messageID = Identifier.ascending("message")
     let inputText = store.prompt.input
+    const helperPrefix = "@helper"
+    const helperNext = inputText.slice(helperPrefix.length, helperPrefix.length + 1)
+    const helperMatch = inputText.startsWith(helperPrefix) && (helperNext === "" || /\s/.test(helperNext))
+    if (helperMatch) {
+      inputText = "/" + inputText.slice(1)
+    }
 
     // Expand pasted text inline before submitting
     const allExtmarks = input.extmarks.getAllForTypeId(promptPartTypeId)

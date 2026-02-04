@@ -30,6 +30,7 @@ import { Bus } from "@/bus"
 import { GlobalBus } from "@/bus/global"
 import { Event } from "../server/event"
 import { PackageRegistry } from "@/bun/registry"
+import { State } from "../project/state"
 
 export namespace Config {
   const log = Log.create({ service: "config" })
@@ -61,7 +62,7 @@ export namespace Config {
     return merged
   }
 
-  export const state = Instance.state(async () => {
+  const init = async () => {
     const auth = await Auth.all()
 
     // Config loading order (low -> high precedence): https://opencode.ai/docs/config#precedence-order
@@ -315,7 +316,9 @@ export namespace Config {
       config: result,
       directories,
     }
-  })
+  }
+
+  export const state = Instance.state(init)
 
   export async function installDependencies(dir: string) {
     const pkg = path.join(dir, "package.json")
@@ -1478,6 +1481,18 @@ export namespace Config {
 
   export async function getGlobal() {
     return global()
+  }
+
+  export async function invalidate() {
+    global.reset()
+    opencodeGlobal.reset()
+    await State.invalidate(Instance.directory, init)
+  }
+
+  export async function invalidateAll() {
+    global.reset()
+    opencodeGlobal.reset()
+    await State.invalidateAll(init)
   }
 
   export async function update(config: Info) {

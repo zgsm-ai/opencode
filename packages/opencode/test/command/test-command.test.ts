@@ -2,6 +2,9 @@ import { test, expect, describe } from "bun:test"
 import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
 import { Command } from "../../src/command/index"
+import { Config } from "../../src/config/config"
+import path from "path"
+import fs from "fs/promises"
 
 describe("/test command", () => {
   test("is registered as built-in command", async () => {
@@ -136,6 +139,46 @@ describe("command system", () => {
       fn: async () => {
         const cmd = await Command.get("does_not_exist")
         expect(cmd).toBeUndefined()
+      },
+    })
+  })
+
+  test("reloads commands after invalidate", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const dir = path.join(tmp.path, "..costrict", "command")
+        await fs.mkdir(dir, { recursive: true })
+        const file = path.join(dir, "foo.md")
+
+        await Bun.write(
+          file,
+          `---
+description: First command.
+---
+echo one
+`,
+        )
+
+        const first = await Command.get("foo")
+        expect(first?.description).toBe("First command.")
+
+        await Bun.write(
+          file,
+          `---
+description: Second command.
+---
+echo two
+`,
+        )
+
+        await Config.invalidate()
+        await Command.invalidate()
+
+        const next = await Command.get("foo")
+        expect(next?.description).toBe("Second command.")
       },
     })
   })

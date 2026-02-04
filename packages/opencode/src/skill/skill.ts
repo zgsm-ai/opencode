@@ -11,6 +11,8 @@ import { Filesystem } from "@/util/filesystem"
 import { Flag } from "@/flag/flag"
 import { Bus } from "@/bus"
 import { Session } from "@/session"
+import { FileWatcher } from "@/file/watcher"
+import { State } from "@/project/state"
 
 export namespace Skill {
   const log = Log.create({ service: "skill" })
@@ -49,7 +51,7 @@ export namespace Skill {
   const OPENCODE_SKILL_GLOB = new Bun.Glob("{skill,skills}/**/SKILL.md")
   const SKILL_GLOB = new Bun.Glob("**/SKILL.md")
 
-  export const state = Instance.state(async () => {
+  const init = async () => {
     const skills: Record<string, Info> = {}
     const dirs = new Set<string>()
 
@@ -156,13 +158,81 @@ export namespace Skill {
       skills,
       dirs: Array.from(dirs),
     }
-  })
+  }
+
+  export const state = Instance.state(init)
+
+  const watch = Instance.state(
+    () => {
+      const delay = 200
+      const clock = {
+        timer: undefined as ReturnType<typeof setTimeout> | undefined,
+      }
+      const schedule = () => {
+        if (clock.timer) clearTimeout(clock.timer)
+        clock.timer = setTimeout(() => {
+          clock.timer = undefined
+          void Skill.invalidateAll()
+        }, delay)
+      }
+
+      const sub = Bus.subscribe(FileWatcher.Event.Updated, (evt) => {
+        const file = Filesystem.normalizePath(evt.properties.file)
+        if (!file.endsWith("SKILL.md")) return
+
+        const gclaude = path.join(Global.Path.home, ".claude", "skills")
+        const gbase = [
+          Global.Path.config,
+          path.join(Global.Path.home, ".costrict"),
+          path.join(Global.Path.home, ".opencode"),
+        ]
+        const gskill = gbase.some((dir) => {
+          const one = path.join(dir, "skill")
+          const two = path.join(dir, "skills")
+          return Filesystem.contains(one, file) || Filesystem.contains(two, file)
+        })
+        const ghit = gskill || Filesystem.contains(gclaude, file)
+        if (ghit) {
+          schedule()
+          return
+        }
+
+        if (!Instance.containsPath(file)) return
+
+        const c1 = `${path.sep}.claude${path.sep}skills${path.sep}`
+        const c2 = `${path.sep}.costrict${path.sep}skill${path.sep}`
+        const c3 = `${path.sep}.costrict${path.sep}skills${path.sep}`
+        const c4 = `${path.sep}.opencode${path.sep}skill${path.sep}`
+        const c5 = `${path.sep}.opencode${path.sep}skills${path.sep}`
+        const hit = file.includes(c1) || file.includes(c2) || file.includes(c3) || file.includes(c4) || file.includes(c5)
+        if (!hit) return
+
+        schedule()
+      })
+
+      return { sub, clock }
+    },
+    async (item) => {
+      item.sub?.()
+      if (item.clock?.timer) clearTimeout(item.clock.timer)
+    },
+  )
+
+  export async function invalidate() {
+    await State.invalidate(Instance.directory, init)
+  }
+
+  export async function invalidateAll() {
+    await State.invalidateAll(init)
+  }
 
   export async function get(name: string) {
+    watch()
     return state().then((x) => x.skills[name])
   }
 
   export async function all() {
+    watch()
     return state().then((x) => Object.values(x.skills))
   }
 

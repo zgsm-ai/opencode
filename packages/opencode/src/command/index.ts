@@ -1,4 +1,5 @@
 import { BusEvent } from "@/bus/bus-event"
+import path from "path"
 import z from "zod"
 import { Config } from "../config/config"
 import { Instance } from "../project/instance"
@@ -6,8 +7,14 @@ import { Identifier } from "../id/id"
 import PROMPT_INITIALIZE from "../costrict/command/template/enhanced-initialize.txt" // costrict change
 import PROMPT_REVIEW from "./template/review.txt"
 import PROMPT_PROJECT_WIKI from "../costrict/command/template/project-wiki.txt" // project-wiki command
+import PROMPT_HELPER from "./template/helper.txt"
 import { MCP } from "../mcp"
 import { getCommands } from "../plugin/tdd"
+import { Global } from "@/global"
+import { Bus } from "@/bus"
+import { FileWatcher } from "@/file/watcher"
+import { Filesystem } from "@/util/filesystem"
+import { State } from "@/project/state"
 
 export namespace Command {
   export const Event = {
@@ -58,9 +65,10 @@ export namespace Command {
     REVIEW: "review",
     TEST: "test",
     PROJECT_WIKI: "project-wiki",
+    HELPER: "helper",
   } as const
 
-  const state = Instance.state(async () => {
+  const init = async () => {
     const cfg = await Config.get()
 
     const result: Record<string, Info> = {
@@ -90,6 +98,14 @@ export namespace Command {
           return PROMPT_PROJECT_WIKI.replace(/\$\{path\}/g, Instance.worktree)
         },
         hints: hints(PROMPT_PROJECT_WIKI),
+      },
+      [Default.HELPER]: {
+        name: Default.HELPER,
+        description: "generate a skill and command in config",
+        get template() {
+          return PROMPT_HELPER.replace("${project}", Instance.worktree).replace("${global}", Global.Path.config)
+        },
+        hints: hints(PROMPT_HELPER),
       },
     }
 
@@ -140,13 +156,79 @@ export namespace Command {
     }
 
     return result
-  })
+  }
+
+  const state = Instance.state(init)
+
+  const watch = Instance.state(
+    () => {
+      const delay = 200
+      const clock = {
+        timer: undefined as ReturnType<typeof setTimeout> | undefined,
+      }
+      const schedule = () => {
+        if (clock.timer) clearTimeout(clock.timer)
+        clock.timer = setTimeout(() => {
+          clock.timer = undefined
+          void Config.invalidateAll()
+          void Command.invalidateAll()
+        }, delay)
+      }
+
+      const sub = Bus.subscribe(FileWatcher.Event.Updated, (evt) => {
+        const file = Filesystem.normalizePath(evt.properties.file)
+        if (!file.endsWith(".md")) return
+
+        const gbase = [
+          Global.Path.config,
+          path.join(Global.Path.home, ".costrict"),
+          path.join(Global.Path.home, ".opencode"),
+        ]
+        const gcmd = gbase.some((dir) => {
+          const one = path.join(dir, "command")
+          const two = path.join(dir, "commands")
+          return Filesystem.contains(one, file) || Filesystem.contains(two, file)
+        })
+        if (gcmd) {
+          schedule()
+          return
+        }
+
+        if (!Instance.containsPath(file)) return
+
+        const c1 = `${path.sep}.costrict${path.sep}command${path.sep}`
+        const c2 = `${path.sep}.costrict${path.sep}commands${path.sep}`
+        const c3 = `${path.sep}.opencode${path.sep}command${path.sep}`
+        const c4 = `${path.sep}.opencode${path.sep}commands${path.sep}`
+        const hit = file.includes(c1) || file.includes(c2) || file.includes(c3) || file.includes(c4)
+        if (!hit) return
+
+        schedule()
+      })
+
+      return { sub, clock }
+    },
+    async (item) => {
+      item.sub?.()
+      if (item.clock?.timer) clearTimeout(item.clock.timer)
+    },
+  )
+
+  export async function invalidate() {
+    await State.invalidate(Instance.directory, init)
+  }
+
+  export async function invalidateAll() {
+    await State.invalidateAll(init)
+  }
 
   export async function get(name: string) {
+    watch()
     return state().then((x) => x[name])
   }
 
   export async function list() {
+    watch()
     return state().then((x) => Object.values(x))
   }
 }

@@ -28,6 +28,32 @@ export namespace State {
     }
   }
 
+  export async function invalidate(key: string, init: any) {
+    const entries = recordsByKey.get(key)
+    if (!entries) return
+    const entry = entries.get(init)
+    if (!entry) return
+
+    if (entry.dispose) {
+      const label = typeof init === "function" ? init.name : String(init)
+      await Promise.resolve(entry.state)
+        .then((state) => entry.dispose!(state))
+        .catch((error) => {
+          log.error("Error while disposing state:", { error, key, init: label })
+        })
+    }
+
+    entries.delete(init)
+    if (entries.size === 0) recordsByKey.delete(key)
+  }
+
+  export async function invalidateAll(init: any) {
+    const keys = [...recordsByKey.keys()]
+    for (const key of keys) {
+      await invalidate(key, init)
+    }
+  }
+
   export async function dispose(key: string) {
     const entries = recordsByKey.get(key)
     if (!entries) return

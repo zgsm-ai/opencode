@@ -104,9 +104,46 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
 
     const sdk = useSDK()
 
+    const clock = {
+      timer: undefined as ReturnType<typeof setTimeout> | undefined,
+    }
+
+    const isCommandFile = (file: string) => {
+      const value = file.replaceAll("\\", "/")
+      if (!value.endsWith(".md")) return false
+      const hits = [
+        "/.costrict/command/",
+        "/.costrict/commands/",
+        "/.opencode/command/",
+        "/.opencode/commands/",
+        "/.config/costrict/command/",
+        "/.config/costrict/commands/",
+      ]
+      for (const hit of hits) {
+        if (value.includes(hit)) return true
+      }
+      return false
+    }
+
+    const refreshCommands = () => sdk.client.command.list().then((x) => setStore("command", reconcile(x.data ?? [])))
+
+    const scheduleCommands = () => {
+      if (clock.timer) clearTimeout(clock.timer)
+      clock.timer = setTimeout(() => {
+        clock.timer = undefined
+        refreshCommands()
+      }, 200)
+    }
+
     sdk.event.listen((e) => {
       const event = e.details
       switch (event.type) {
+        case "file.watcher.updated": {
+          const file = event.properties.file
+          if (!isCommandFile(file)) break
+          scheduleCommands()
+          break
+        }
         case "server.instance.disposed":
           bootstrap()
           break

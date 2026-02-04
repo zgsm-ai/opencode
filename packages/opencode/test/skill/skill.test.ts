@@ -208,6 +208,49 @@ test("discovers global skills from ~/.claude/skills/ directory", async () => {
   }
 })
 
+test("reloads skills after invalidate", async () => {
+  await using tmp = await tmpdir({ git: true })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const oneDir = path.join(tmp.path, "..costrict", "skill", "one")
+      await fs.mkdir(oneDir, { recursive: true })
+      await Bun.write(
+        path.join(oneDir, "SKILL.md"),
+        `---
+name: one
+description: First skill.
+---
+
+# One
+`,
+      )
+
+      const first = await Skill.all()
+      expect(first.length).toBe(1)
+
+      const twoDir = path.join(tmp.path, "..costrict", "skill", "two")
+      await fs.mkdir(twoDir, { recursive: true })
+      await Bun.write(
+        path.join(twoDir, "SKILL.md"),
+        `---
+name: two
+description: Second skill.
+---
+
+# Two
+`,
+      )
+
+      await Skill.invalidate()
+      const next = await Skill.all()
+      expect(next.length).toBe(2)
+      expect(next.find((s) => s.name === "two")).toBeDefined()
+    },
+  })
+})
+
 test("returns empty array when no skills exist", async () => {
   await using tmp = await tmpdir({ git: true })
 

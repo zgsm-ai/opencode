@@ -1,0 +1,78 @@
+You are creating or improving a skill/command for this project based on the user's request.
+
+User request: $ARGUMENTS
+
+You MUST follow these rules:
+1) Determine the action:
+   - If the user asks to improve/optimize/refine an existing skill or command, perform an update (do NOT create new files).
+   - Otherwise, perform creation.
+2) Determine what to create/update:
+   - If the user explicitly asks for a skill, create/update only the skill.
+   - If the user explicitly asks for a command, create/update only the command.
+   - If the user asks for both, create/update both.
+   - If it is unclear, ask the user using the question tool.
+3) Ask the user where to write or search for the files using the question tool.
+   - Options:
+     - "Project (Recommended)" => base directory: ${project}/.costrict
+     - "Global" => base directory: ${global}
+4) After the user answers, set base = chosen base directory.
+5) If updating:
+   - Use the glob tool to find matching files under base.
+     - Skills: <base>/skill/**/SKILL.md or <base>/skills/**/SKILL.md
+     - Commands: <base>/command/**/*.md or <base>/commands/**/*.md
+   - If multiple matches, ask the user to select the target file.
+   - Use read tool on the target file.
+   - Make the improvements requested, preserving the frontmatter keys unless the user asked to change them.
+   - Show a brief preview of the updated file (frontmatter + first few lines) and ask for confirmation using the question tool.
+   - Only proceed to write if the user confirms.
+   - Use absolute paths when calling the write tool.
+6) If creating, create outputs based on the selected type(s):
+   - Skill: <base>/skill/<slug>/SKILL.md
+   - Command: <base>/command/<slug>.md
+7) Slug rules:
+   - Short, lowercase, words separated by "-"
+   - Derived from the user request
+   - If either output already exists, append "-2", "-3", etc. until unique
+   - Use the glob tool to check for conflicts before writing
+8) Show a brief preview (frontmatter + first few lines) of the file(s) and ask for confirmation using the question tool.
+9) Only proceed to write if the user confirms.
+10) Use absolute paths when calling the write tool.
+11) If a target file exists, use the read tool first (write tool requirement).
+12) Ensure parent directories exist (use bash tool: mkdir -p).
+13) Do NOT create any other files. No emojis.
+
+Command locations:
+- Per-project commands: .costrict/commands/
+- Global commands: ~/.config/costrict/commands/
+
+File contents:
+
+SKILL.md (only if creating a skill)
+---
+name: <slug>
+description: <one sentence>
+---
+# <Title>
+<2-6 short sections: purpose, inputs, steps, guardrails, examples>
+
+command markdown (only if creating a command)
+---
+description: <one sentence>
+---
+<prompt template that uses $ARGUMENTS when appropriate>
+
+command example (only if creating a command)
+Example file: .costrict/commands/test.md
+---
+description: Run tests with coverage
+agent: build
+model: anthropic/claude-3-5-sonnet-20241022
+---
+Run the full test suite with coverage and report failures.
+Then suggest fixes for failing tests.
+Command name = filename, so /test runs this.
+
+After writing, tell the user:
+- The paths written
+- How to use the command (if created): /<slug>
+- How to use the skill (if created): /skill <slug> or select it from skills
