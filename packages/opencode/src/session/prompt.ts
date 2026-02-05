@@ -51,6 +51,8 @@ import { Budget } from "./budget"
 // @ts-ignore
 globalThis.AI_SDK_LOG_WARNINGS = false
 
+const ENABLE_HISTORY_PRUNE = false
+
 async function extractTextContent(message: MessageV2.Assistant): Promise<string | undefined> {
   const parts = await MessageV2.parts(message.id)
   const textPart = parts.find((part): part is MessageV2.TextPart => part.type === "text")
@@ -729,7 +731,7 @@ export namespace SessionPrompt {
       }
       continue
     }
-    SessionCompaction.prune({ sessionID })
+    if (ENABLE_HISTORY_PRUNE) SessionCompaction.prune({ sessionID })
     for await (const item of MessageV2.stream(sessionID)) {
       if (item.info.role === "user") continue
       const queued = state()[sessionID]?.callbacks ?? []
