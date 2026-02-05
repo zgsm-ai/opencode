@@ -68,10 +68,10 @@ export namespace SessionCompaction {
             if (PRUNE_PROTECTED_TOOLS.includes(part.tool)) continue
 
             if (part.state.time.compacted) break loop
-            const estimate = Token.estimate(part.state.output)
-            total += estimate
+            const size = await Token.count(part.state.output)
+            total += size
             if (total > PRUNE_PROTECT) {
-              pruned += estimate
+              pruned += size
               toPrune.push(part)
             }
           }

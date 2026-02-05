@@ -307,7 +307,6 @@ export const FileImportanceTool = Tool.define('file-importance', async (initCtx)
             weights_used: mergedWeights,
             truncated: truncated.truncated,
             error: '',
-            ...(truncated.truncated && { outputPath: truncated.outputPath }),
           },
           output: truncated.content,
         };

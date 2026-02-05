@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import path from "path"
+import { Tiktoken } from "js-tiktoken/lite"
 import { SessionCompaction } from "../../src/session/compaction"
 import { Token } from "../../src/util/token"
 import { Instance } from "../../src/project/instance"
@@ -146,19 +147,19 @@ describe("session.compaction.isOverflow", () => {
   })
 })
 
-describe("util.token.estimate", () => {
-  test("estimates tokens from text (4 chars per token)", () => {
-    const text = "x".repeat(4000)
-    expect(Token.estimate(text)).toBe(1000)
+describe("util.token.count", () => {
+  test("counts tokens using local ranks", async () => {
+    const file = path.resolve(import.meta.dir, "..", "..", "resources", "tokenizer", "o200k_base.json")
+    const data = await Bun.file(file).json()
+    const enc = new Tiktoken(data)
+    const text = "hello world"
+    const size = enc.encode(text).length
+    if (enc.free) enc.free()
+    expect(await Token.count(text)).toBe(size)
   })
 
-  test("estimates tokens from larger text", () => {
-    const text = "y".repeat(20_000)
-    expect(Token.estimate(text)).toBe(5000)
-  })
-
-  test("returns 0 for empty string", () => {
-    expect(Token.estimate("")).toBe(0)
+  test("returns 0 for empty string", async () => {
+    expect(await Token.count("")).toBe(0)
   })
 })
 

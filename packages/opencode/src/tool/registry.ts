@@ -80,8 +80,8 @@ export namespace ToolRegistry {
           const out = await Truncate.output(result, {}, initCtx?.agent)
           return {
             title: "",
-            output: out.truncated ? out.content : result,
-            metadata: { truncated: out.truncated, outputPath: out.truncated ? out.outputPath : undefined },
+            output: out.content,
+            metadata: { truncated: out.truncated },
           }
         },
       }),

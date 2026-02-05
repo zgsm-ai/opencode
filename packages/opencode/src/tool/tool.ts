@@ -67,18 +67,15 @@ export namespace Tool {
             )
           }
           const result = await execute(args, ctx)
-          // skip truncation for tools that handle it themselves
-          if (result.metadata.truncated !== undefined) {
-            return result
-          }
           const truncated = await Truncate.output(result.output, {}, initCtx?.agent)
+          const flagged = result.metadata.truncated === true
+          const merged = flagged || truncated.truncated
           return {
             ...result,
             output: truncated.content,
             metadata: {
               ...result.metadata,
-              truncated: truncated.truncated,
-              ...(truncated.truncated && { outputPath: truncated.outputPath }),
+              truncated: merged,
             },
           }
         }

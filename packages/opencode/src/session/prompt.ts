@@ -906,10 +906,10 @@ export namespace SessionPrompt {
         }
 
         const truncated = await Truncate.output(textParts.join("\n\n"), {}, input.agent)
+        const flagged = result.metadata?.truncated === true
         const metadata = {
           ...(result.metadata ?? {}),
-          truncated: truncated.truncated,
-          ...(truncated.truncated && { outputPath: truncated.outputPath }),
+          truncated: flagged || truncated.truncated,
         }
 
         return {

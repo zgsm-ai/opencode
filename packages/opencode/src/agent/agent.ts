@@ -4,7 +4,6 @@ import { Provider } from "../provider/provider"
 import { generateObject, streamObject, type ModelMessage } from "ai"
 import { SystemPrompt } from "../session/system"
 import { Instance } from "../project/instance"
-import { Truncate } from "../tool/truncation"
 import { TestGuide } from "../util/testGuideDiscovery"
 import { Auth } from "../auth"
 import { ProviderTransform } from "../provider/transform"
@@ -103,8 +102,6 @@ export namespace Agent {
       doom_loop: "ask",
       external_directory: {
         "*": "ask",
-        [Truncate.DIR]: "allow",
-        [Truncate.GLOB]: "allow",
       },
       question: "deny",
       plan_enter: "deny",
@@ -283,10 +280,6 @@ export namespace Agent {
             websearch: "allow",
             codesearch: "allow",
             read: "allow",
-            external_directory: {
-              [Truncate.DIR]: "allow",
-              [Truncate.GLOB]: "allow",
-            },
           }),
           user,
         ),
@@ -370,22 +363,6 @@ export namespace Agent {
       item.steps = value.steps ?? item.steps
       item.options = mergeDeep(item.options, value.options ?? {})
       item.permission = PermissionNext.merge(item.permission, PermissionNext.fromConfig(value.permission ?? {}))
-    }
-
-    // Ensure Truncate.DIR is allowed unless explicitly configured
-    for (const name in result) {
-      const agent = result[name]
-      const explicit = agent.permission.some((r) => {
-        if (r.permission !== "external_directory") return false
-        if (r.action !== "deny") return false
-        return r.pattern === Truncate.DIR || r.pattern === Truncate.GLOB
-      })
-      if (explicit) continue
-
-      result[name].permission = PermissionNext.merge(
-        result[name].permission,
-        PermissionNext.fromConfig({ external_directory: { [Truncate.DIR]: "allow", [Truncate.GLOB]: "allow" } }),
-      )
     }
 
     return result
