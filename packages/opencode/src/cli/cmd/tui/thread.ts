@@ -99,12 +99,34 @@ export const TuiThreadCommand = cmd({
       Log.Default.error(e)
     }
     const client = Rpc.client<typeof rpc>(worker)
+    const state = { done: false }
+    const shutdown = async () => {
+      if (state.done) return
+      state.done = true
+      await client.call("shutdown", undefined).catch(() => {})
+      await Promise.resolve(worker.terminate()).catch(() => {})
+    }
+    const exit = async () => {
+      await shutdown()
+      process.exit(0)
+    }
     process.on("uncaughtException", (e) => {
       Log.Default.error(e)
     })
     process.on("unhandledRejection", (e) => {
       Log.Default.error(e)
     })
+    process.once("SIGINT", () => {
+      void exit()
+    })
+    process.once("SIGTERM", () => {
+      void exit()
+    })
+    if (process.platform === "win32") {
+      process.once("SIGBREAK", () => {
+        void exit()
+      })
+    }
     process.on("SIGUSR2", async () => {
       await client.call("reload", undefined)
     })
@@ -152,7 +174,7 @@ export const TuiThreadCommand = cmd({
         prompt,
       },
       onExit: async () => {
-        await client.call("shutdown", undefined)
+        await shutdown()
       },
     })
 
