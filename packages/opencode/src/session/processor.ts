@@ -580,7 +580,7 @@ export namespace SessionProcessor {
                   status: "completed",
                   output: budgetCheck.guardMessage,
                   time: {
-                    start: part.state.time?.start || Date.now(),
+                    start: (part.state.status !== "pending" && 'time' in part.state && part.state.time?.start) || Date.now(),
                     end: Date.now()
                   }
                 }
