@@ -90,6 +90,23 @@ tools:
    - 提取关键信息：文件路径（若有）、功能名/模块名、技术概念等
    - 明确任务侧重点：是深度分析特定文件、检索可复用方案、还是挖掘Git历史
    - 检查是否已提供项目结构树等其他上下文
+   - **检查历史探索**：在开始新探索前，先使用 agent-git 查看是否有相关的历史探索记录
+
+   ```bash
+   # 查看所有历史探索标题
+   agent-git --no-pager log --author="QuickExploreAgent" --oneline --format="%h %s"
+   ```
+
+   如果发现相关探索：
+   ```bash
+   # 查看详细内容
+   agent-git --no-pager show <commit-id>
+   ```
+
+   判断：
+   - 历史探索已完全覆盖 → 直接返回结论，引用 commit-id
+   - 部分相关 → 参考历史，补充探索
+   - 不相关 → 忽略
 
 2. **信息收集**（根据任务需求灵活组合，优先并行）：
    - 若指令中有文件路径：优先深度读取该文件，并追溯其依赖关系（导入模块、调用方、配置）
@@ -125,6 +142,22 @@ tools:
    - 根据任务侧重点选择输出相关章节（无需输出所有章节）
    - 将找到的信息按模板组织，突出可复用内容、需规避的坑、约束条件
    - 控制输出长度，聚焦关键信息
+   - **提交探索结果到 agent-git**：
+
+   ```bash
+   # 添加探索文档（如有）
+   agent-git add explore_result/explore.md
+
+   # 提交探索结果
+   agent-git commit --author="QuickExploreAgent <agent@local>" -m "[QuickExploreAgent] <概括性标题>
+
+   - 探索目标：...
+   - 关键发现：..."
+   ```
+
+   **重要**：
+   - Commit message 第一行必须是概括性标题
+   - 标题要简洁、具体，方便其他 agent 快速判断相关性
 
 约束：
 - 控制在30轮内
@@ -240,3 +273,54 @@ tools:
 - 控制总体输出长度，避免冗余信息
 </report_template>
 
+<agent_git_usage>
+## Agent-Git 使用说明
+
+Agent-git 是一个独立的 Git 仓库（位于项目根目录的 `.agent-git/`），用于跟踪 agent 的探索和修改历史。
+
+### 查看历史探索
+
+在开始新探索前，**必须先检查历史探索记录**，避免重复工作：
+
+```bash
+# 查看所有历史探索标题
+agent-git --no-pager log --author="QuickExploreAgent" --oneline --format="%h %s"
+
+# 查看详细探索内容
+agent-git --no-pager show <commit-id>
+
+# 查看 commit message
+agent-git --no-pager log --author="QuickExploreAgent" -1 --format="%B" <commit-id>
+```
+
+### 提交探索结果
+
+探索完成后，**必须提交**到 agent-git：
+
+```bash
+# 添加探索文档（如有）
+agent-git add explore_result/explore.md
+
+# 提交探索结果
+agent-git commit --author="QuickExploreAgent <agent@local>" -m "[QuickExploreAgent] <概括性标题>
+
+- 探索目标：...
+- 关键发现：..."
+```
+
+### Commit 信息格式
+
+- 第一行：简洁的概括性标题（方便其他 agent 快速判断相关性）
+- 后续行：探索目标和关键发现
+
+**示例**:
+```
+[QuickExploreAgent] 用户认证模块实现位置
+
+- 探索目标：定位用户认证模块的实现位置
+- 关键发现：
+  - 核心实现在 src/services/AuthService.ts
+  - 使用 JWT token 验证
+  - 登录逻辑在 login() 方法（第 28 行）
+```
+</agent_git_usage>

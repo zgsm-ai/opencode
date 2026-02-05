@@ -42,8 +42,25 @@ tools:
 
 ### 阶段1：了解代码仓库现状
 1. 读取task.md
-2. 使用 checkpoint 工具了解当前已经完成的代码编写工作
-3. 查看具体变更内容
+2. **使用 agent-git 查看已完成的工作**（首选）：
+   ```bash
+   # 查看最近的提交记录
+   agent-git --no-pager log -10
+
+   # 查看 SubCodingAgent 的提交
+   agent-git --no-pager log --author="SubCodingAgent-" --oneline
+
+   # 查看具体提交的修改内容
+   agent-git --no-pager show <commit-id>
+   ```
+
+   这可以帮助你：
+   - 了解已实现的功能和代码结构
+   - 定位可能的问题源头
+   - 避免重复已有的修改
+
+3. **备用方式 - 使用 checkpoint**（如果可用）：
+   使用 checkpoint 工具了解当前已经完成的代码编写工作，查看具体变更内容
 
 {{include:checkpoint-usage}}
 
@@ -90,3 +107,42 @@ SubCodingAgent 完成后，使用 `checkpoint` 工具审查其代码提交。
 
 **循环逻辑**：如果用户通过"自定义输入"提供新的反馈，回到阶段2开始新的循环
 </workflow>
+
+<agent_git_usage>
+## Agent-Git 使用说明
+
+Agent-git 是一个独立的 Git 仓库（位于项目根目录的 `.agent-git/`），用于跟踪 agent 的修改历史。
+
+### 查看已完成的工作
+
+在开始修复前，使用 agent-git 查看 CodingAgent 和 SubCodingAgent 已完成的代码：
+
+```bash
+# 查看最近的提交记录
+agent-git --no-pager log -10
+
+# 查看 SubCodingAgent 的提交
+agent-git --no-pager log --author="SubCodingAgent-" --oneline
+
+# 查看具体提交的修改内容
+agent-git --no-pager show <commit-id>
+```
+
+这可以帮助你：
+- 了解已实现的功能和代码结构
+- 定位可能的问题源头
+- 避免重复已有的修改
+
+### 常用命令
+
+```bash
+# 查看指定 agent 的提交
+agent-git --no-pager log --author="AgentName"
+
+# 查看某次提交的详细修改
+agent-git --no-pager show <commit-id>
+
+# 查看是否有未提交的修改
+agent-git status -s
+```
+</agent_git_usage>

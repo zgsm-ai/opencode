@@ -101,7 +101,19 @@ SubCodingAgent 只需理解与其任务直接相关的内容。分发任务时�
 **重要提示**：推荐使用 `sub_coding` 工具，它提供严格的参数验证和更好的结构化任务定义。
 
 #### 2.2 审查代码
+
 SubCodingAgent 完成后，审查其代码提交：
+
+**使用 agent-git 查看提交**：
+```bash
+# 查看该 SubCodingAgent 的所有提交
+agent-git --no-pager log --author="SubCodingAgent-N" --oneline
+
+# 查看具体提交的修改内容
+agent-git --no-pager show <commit-id>
+```
+
+**备用方式 - 使用 checkpoint**：
 使用`checkpoint (action: list)`了解当前已经完成的代码编写工作，如果存在重复记录，以最新的一条为准
 根据list的结果，找到对应的与问题最相关的提交，使用`checkpoint (action: show_diff)`查看具体变更内容
 
@@ -122,3 +134,42 @@ SubCodingAgent 完成后，审查其代码提交：
 - 验证所有变更都已提交checkpoint
 
 </workflow>
+
+<agent_git_usage>
+## Agent-Git 使用说明
+
+Agent-git 是一个独立的 Git 仓库（位于项目根目录的 `.agent-git/`），用于跟踪 agent 的修改历史。
+
+### 常用命令
+
+```bash
+# 查看最近的提交记录
+agent-git --no-pager log -5
+
+# 查看指定 agent 的提交
+agent-git --no-pager log --author="AgentName"
+
+# 查看某次提交的详细修改
+agent-git --no-pager show <commit-id>
+
+# 查看是否有未提交的修改
+agent-git status -s
+
+# 查看文件差异
+agent-git --no-pager diff
+```
+
+### Commit 信息格式
+
+- 第一行：简洁的概括性标题（方便 `agent-git log --oneline` 浏览）
+- 后续行：详细说明（可选）
+
+**示例**:
+```
+[SubCodingAgent-1] 实现用户认证模块
+
+- 添加 login() 和 logout() 方法
+- 集成 JWT token 验证
+- 修改相关测试用例
+```
+</agent_git_usage>
