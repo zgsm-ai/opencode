@@ -41,7 +41,7 @@ function createModel(opts: {
 }
 
 describe("session.compaction.isOverflow", () => {
-  test("returns true when token count exceeds usable context", async () => {
+  test("returns true when token count reaches threshold", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({
       directory: tmp.path,
@@ -53,7 +53,7 @@ describe("session.compaction.isOverflow", () => {
     })
   })
 
-  test("returns false when token count within usable context", async () => {
+  test("returns false when token count below threshold", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({
       directory: tmp.path,
@@ -71,43 +71,55 @@ describe("session.compaction.isOverflow", () => {
       directory: tmp.path,
       fn: async () => {
         const model = createModel({ context: 100_000, output: 32_000 })
-        const tokens = { input: 50_000, output: 10_000, reasoning: 0, cache: { read: 10_000, write: 0 } }
+        const tokens = { input: 60_000, output: 10_000, reasoning: 0, cache: { read: 10_000, write: 0 } }
         expect(await SessionCompaction.isOverflow({ tokens, model })).toBe(true)
       },
     })
   })
 
-  test("respects input limit for input caps", async () => {
+  test("caps threshold at 150000 for large contexts", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const model = createModel({ context: 400_000, input: 272_000, output: 128_000 })
-        const tokens = { input: 271_000, output: 1_000, reasoning: 0, cache: { read: 2_000, write: 0 } }
+        const tokens = { input: 149_000, output: 1_000, reasoning: 0, cache: { read: 0, write: 0 } }
         expect(await SessionCompaction.isOverflow({ tokens, model })).toBe(true)
       },
     })
   })
 
-  test("returns false when input/output are within input caps", async () => {
+  test("returns false when below 150000 cap for large contexts", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const model = createModel({ context: 400_000, input: 272_000, output: 128_000 })
-        const tokens = { input: 200_000, output: 20_000, reasoning: 0, cache: { read: 10_000, write: 0 } }
+        const tokens = { input: 100_000, output: 20_000, reasoning: 0, cache: { read: 10_000, write: 0 } }
         expect(await SessionCompaction.isOverflow({ tokens, model })).toBe(false)
       },
     })
   })
 
-  test("returns false when output within limit with input caps", async () => {
+  test("uses 80% threshold for smaller contexts", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const model = createModel({ context: 200_000, input: 120_000, output: 10_000 })
-        const tokens = { input: 50_000, output: 9_999, reasoning: 0, cache: { read: 0, write: 0 } }
+        const tokens = { input: 160_000, output: 0, reasoning: 0, cache: { read: 0, write: 0 } }
+        expect(await SessionCompaction.isOverflow({ tokens, model })).toBe(true)
+      },
+    })
+  })
+
+  test("returns false when below 80% threshold for smaller contexts", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const model = createModel({ context: 200_000, input: 120_000, output: 10_000 })
+        const tokens = { input: 159_999, output: 0, reasoning: 0, cache: { read: 0, write: 0 } }
         expect(await SessionCompaction.isOverflow({ tokens, model })).toBe(false)
       },
     })
@@ -154,7 +166,6 @@ describe("util.token.count", () => {
     const enc = new Tiktoken(data)
     const text = "hello world"
     const size = enc.encode(text).length
-    if (enc.free) enc.free()
     expect(await Token.count(text)).toBe(size)
   })
 
