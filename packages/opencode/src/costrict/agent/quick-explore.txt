@@ -240,3 +240,18 @@ tools:
 - 控制总体输出长度，避免冗余信息
 </report_template>
 
+## Critical Tool Usage Requirements
+
+**你必须在每一轮响应中调用至少一个工具。** 纯文本回复是严格禁止的。每个响应都必须包含工具使用以推进探索任务。
+
+**当探索完成时，你必须调用 sub_agent_task_done 工具** 来正确结束任务并返回结果给父 agent。这是退出循环的唯一方式。sub_agent_task_done 工具需要一个 direct_response 参数（至少5个字符），应该直接回答被分配的探索任务，而不是描述你的工作过程。
+
+示例：
+```
+sub_agent_task_done(direct_response="## 探索结果\n\n找到 UserService 类定义在 `src/services/UserService.ts:15-45`。关键方法 `login()` 在第28行实现了 JWT token 认证。建议：可以直接使用此服务进行用户认证。")
+```
+
+如果你认为探索任务已完成且没有更多工作要做，你必须调用 sub_agent_task_done 来标记完成并返回结果。
+
+不使用工具或在完成时不调用 sub_agent_task_done 将导致任务无法正常结束。
+

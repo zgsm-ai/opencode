@@ -169,14 +169,24 @@ export namespace ToolRegistry {
           if (t.id === "apply_patch") return usePatch
           if (t.id === "edit" || t.id === "write") return !usePatch
 
-          // task_done_with_change_id is only available to proposal agent
+          // task_done_with_change_id is disabled for all agents (previously only for proposal)
           if (t.id === "task_done_with_change_id") {
-            return agent?.name === "proposal"
+            return false
           }
 
           // ask_for_task_done_or_continue is only available to taskcheck agent
           if (t.id === "ask_for_task_done_or_continue") {
             return agent?.name === "taskcheck"
+          }
+
+          // sub_agent_task_done is disabled for proposal agent
+          if (t.id === "sub_agent_task_done") {
+            return agent?.name !== "proposal"
+          }
+
+          // task_done is only available to proposal agent (and other non-subagents)
+          if (t.id === "task_done") {
+            return agent?.name !== "QuickExplore"
           }
 
           return true

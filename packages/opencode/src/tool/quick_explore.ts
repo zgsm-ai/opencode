@@ -212,8 +212,36 @@ export const QuickExploreTool = Tool.define("quick_explore", async (ctx) => {
             },
           }))
 
-        // 8. Extract result
-        const text = result.parts.findLast((x) => x.type === "text")?.text ?? ""
+        // 8. Extract result from sub_agent_task_done tool
+        // Find the sub_agent_task_done tool call in the result parts
+        const subAgentTaskDonePart = result.parts.find(
+          (part) => part.type === "tool" && part.tool === "sub_agent_task_done" && part.state?.status === "completed"
+        ) as MessageV2.ToolPart | undefined
+
+        let directResponse = ""
+        if (subAgentTaskDonePart && subAgentTaskDonePart.state.status === "completed") {
+          // Extract direct_response from the tool output
+          const output = subAgentTaskDonePart.state.output || ""
+          // The output format is: "Task done.\n\nDirect Response:\n{direct_response}"
+          const match = output.match(/Direct Response:\s*\n([\s\S]*)/)
+          if (match && match[1]) {
+            directResponse = match[1].trim()
+          } else {
+            // Fallback: use the entire output if pattern doesn't match
+            directResponse = output
+          }
+
+          // 清理不需要的内容：移除 budget_notice 和其他系统标签
+          directResponse = directResponse
+            .replace(/<tool_results_end\/>\s*/g, '')
+            .replace(/<budget_notice>[\s\S]*?<\/budget_notice>/g, '')
+            .trim()
+        }
+
+        // If no sub_agent_task_done found, fall back to text content
+        if (!directResponse) {
+          directResponse = result.parts.findLast((x) => x.type === "text")?.text ?? ""
+        }
 
         return {
           title: "QuickExploreAgent",
@@ -223,10 +251,7 @@ export const QuickExploreTool = Tool.define("quick_explore", async (ctx) => {
             sessionId: session.id,
             model,
           },
-          output:
-            text +
-            "\n\n" +
-            ["<task_metadata>", `session_id: ${session.id}`, "</task_metadata>"].join("\n"),
+          output: directResponse,
         }
       } catch (error) {
         unsub()

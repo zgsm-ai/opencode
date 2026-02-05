@@ -20,7 +20,7 @@ import { ProviderTransform } from "@/provider/transform"
 import { Config } from "@/config/config"
 import { Instance } from "@/project/instance"
 import type { Agent } from "@/agent/agent"
-import type { MessageV2 } from "./message-v2"
+import { MessageV2 } from "./message-v2"
 import { Plugin } from "@/plugin"
 import { SystemPrompt } from "./system"
 import { Flag } from "@/flag/flag"
@@ -378,7 +378,7 @@ export namespace LLM {
    * 保存实际发送给LLM的请求上下文
    * 这个函数保存的是真正发送给LLM的消息，包含所有provider特殊处理
    */
-  async function saveActualContext(input: {
+  export async function saveActualContext(input: {
     sessionID: string
     requestMessages: ModelMessage[]
     requestHeaders: Record<string, any>
@@ -387,6 +387,7 @@ export namespace LLM {
     isCodex: boolean
     agent: Agent.Info
     model: Provider.Model
+    responseMessage?: ModelMessage  // 可选：LLM 的响应消息
   }) {
     const historyDir = path.join(Instance.worktree, "history_message")
     await fs.mkdir(historyDir, { recursive: true })
@@ -412,6 +413,11 @@ export namespace LLM {
       }
       return msg
     })
+
+    // 如果有响应消息，添加到消息列表中
+    const messagesWithResponse = input.responseMessage
+      ? [...convertedMessages, input.responseMessage]
+      : convertedMessages
 
     // 提取工具信息并转换为 OpenAI 格式
     const availableTools = input.requestBody.activeTools.map((toolName: string) => {
@@ -471,7 +477,7 @@ export namespace LLM {
 
       // 实际发送的请求（这是最关键的部分）
       actualRequest: {
-        messages: convertedMessages,  // 转换后的消息（OpenAI格式）
+        messages: messagesWithResponse,  // 转换后的消息（OpenAI格式），包含响应
         headers: input.requestHeaders,    // 包含provider特殊headers
         parameters: {
           temperature: input.requestBody.temperature,
@@ -515,6 +521,213 @@ export namespace LLM {
       file: contextFile,
       messageCount: input.requestMessages.length,
       isCodex: input.isCodex,
+      hasResponse: !!input.responseMessage,
     })
+  }
+
+  /**
+   * 保存包含 LLM 响应的完整上下文
+   * 在 LLM 响应完成后调用此函数
+   * 这个函数会读取当前 session 的所有消息，并保存完整的上下文
+   */
+  export async function saveContextAfterResponse(input: {
+    sessionID: string
+    agent: Agent.Info
+    model: Provider.Model
+    tools: Record<string, any>  // AI SDK 工具对象
+    system: string[]  // 系统提示词数组
+  }) {
+    try {
+      log.info("saveContextAfterResponse called", {
+        sessionID: input.sessionID,
+        agent: input.agent.name,
+      })
+
+      // 读取当前 session 的所有消息
+      const messages = await Session.messages({ sessionID: input.sessionID })
+      log.info("messages read from DB", {
+        count: messages.length,
+      })
+
+      // 检查最后一条消息
+      const lastMessage = messages[messages.length - 1]
+      if (lastMessage?.info.role === "assistant") {
+        log.info("last message is assistant", {
+          partsCount: lastMessage.parts.length,
+          parts: lastMessage.parts.map((p: any) => ({
+            type: p.type,
+            tool: p.type === "tool" ? p.tool : undefined,
+            status: p.type === "tool" ? p.state?.status : undefined,
+          })),
+        })
+      }
+
+      // 转换为 ModelMessage 格式
+      const modelMessages = MessageV2.toModelMessages(messages, input.model)
+      log.info("converted to ModelMessages", {
+        count: modelMessages.length,
+      })
+
+      // 检查最后一条 ModelMessage
+      const lastModelMsg = modelMessages[modelMessages.length - 1]
+      if (lastModelMsg?.role === "assistant") {
+        log.info("last ModelMessage details", {
+          role: lastModelMsg.role,
+          contentType: Array.isArray(lastModelMsg.content) ? "array" : typeof lastModelMsg.content,
+          contentParts: Array.isArray(lastModelMsg.content)
+            ? lastModelMsg.content.map((p: any) => ({
+                type: p.type,
+                toolName: p.type === "tool-call" ? p.toolName : undefined,
+              }))
+            : undefined,
+        })
+      }
+
+      // 转换消息格式为 OpenAI 标准格式（与 saveActualContext 一致）
+      const convertedMessages = modelMessages.map((msg) => {
+        if (msg.role === "assistant" && Array.isArray(msg.content)) {
+          return {
+            ...msg,
+            content: msg.content.map((part: any) => {
+              if (part.type === "tool-call") {
+                // toolName -> name, input -> arguments
+                const { toolName, input: toolInput, ...rest } = part
+                return {
+                  ...rest,
+                  name: toolName,
+                  arguments: toolInput,
+                }
+              }
+              return part
+            }),
+          }
+        }
+        return msg
+      })
+
+      log.info("converted to OpenAI format", {
+        count: convertedMessages.length,
+      })
+
+      const lastConvertedMsg = convertedMessages[convertedMessages.length - 1]
+      if (lastConvertedMsg?.role === "assistant" && Array.isArray(lastConvertedMsg.content)) {
+        log.info("last converted message details", {
+          role: lastConvertedMsg.role,
+          contentParts: lastConvertedMsg.content.map((p: any) => ({
+            type: p.type,
+            name: p.type === "tool-call" ? p.name : undefined,
+          })),
+        })
+      }
+
+      // 构建与 saveActualContext 一致的 context 对象
+      const historyDir = path.join(Instance.worktree, "history_message")
+      await fs.mkdir(historyDir, { recursive: true })
+
+      // 将系统提示词转换为 system 消息（与 saveActualContext 一致）
+      const systemMessages = input.system.map(
+        (x): ModelMessage => ({
+          role: "system",
+          content: x,
+        }),
+      )
+
+      // 合并系统提示词和对话消息
+      const messagesWithSystem = [...systemMessages, ...convertedMessages]
+
+      // 提取工具信息并转换为 OpenAI 格式（与 saveActualContext 一致）
+      const activeToolNames = Object.keys(input.tools).filter((x) => x !== "invalid")
+      const availableTools = activeToolNames.map((toolName: string) => {
+        const toolDef = input.tools[toolName]
+        if (!toolDef) {
+          return {
+            type: "function",
+            function: {
+              name: toolName,
+              description: "",
+              parameters: {
+                type: "object",
+                properties: {},
+                required: [],
+              },
+            },
+          }
+        }
+
+        // 从 AI SDK 的 Tool 对象中提取 inputSchema
+        let schema = toolDef.inputSchema || toolDef.parameters || {}
+
+        // 如果 inputSchema 包含 jsonSchema 字段，提取它
+        if (schema.jsonSchema) {
+          schema = schema.jsonSchema
+        }
+
+        // 删除不需要的字段
+        if (schema.$schema || schema.additionalProperties !== undefined) {
+          const { $schema, additionalProperties, ...rest } = schema
+          schema = rest
+        }
+
+        return {
+          type: "function",
+          function: {
+            name: toolName,
+            description: toolDef.description || "",
+            parameters: schema,
+          },
+        }
+      })
+
+      const context = {
+        timestamp: Date.now(),
+        sessionID: input.sessionID,
+        meta: {
+          agent: input.agent.name,
+          agentMode: input.agent.mode,
+          modelID: input.model.id,
+          providerID: input.model.providerID,
+        },
+        // 使用 actualRequest 格式，与 saveActualContext 保持一致
+        actualRequest: {
+          messages: messagesWithSystem,  // 包含系统提示词和 LLM 响应的完整消息历史
+          tools: availableTools,  // OpenAI格式的工具定义
+        },
+        // System消息的原始形式（用于对比）
+        systemPrompts: {
+          array: input.system,  // 系统提示词数组
+        },
+      }
+
+      // 文件名格式：context-{sessionID}-{timestamp}.json
+      const timestamp = Date.now()
+      const filename = `context-${input.sessionID}-${timestamp}.json`
+      const contextFile = path.join(historyDir, filename)
+
+      // 删除旧的context文件（同一会话内只保留最新的）
+      try {
+        const files = await fs.readdir(historyDir)
+        for (const file of files) {
+          if (file.startsWith(`context-${input.sessionID}-`) && file.endsWith(".json") && file !== filename) {
+            await fs.unlink(path.join(historyDir, file)).catch(() => {})
+          }
+        }
+      } catch {
+        // 忽略错误
+      }
+
+      // 保存context到文件
+      await fs.writeFile(contextFile, JSON.stringify(context, null, 2), "utf-8")
+      log.info("context file saved successfully", {
+        file: contextFile,
+      })
+
+      log.info("saved context with LLM response", {
+        sessionID: input.sessionID,
+        file: contextFile,
+        messageCount: convertedMessages.length,
+      })
+    } catch (error) {
+      log.error("failed to save context after response", { error, sessionID: input.sessionID })
+    }
   }
 }

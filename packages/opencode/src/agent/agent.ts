@@ -17,6 +17,7 @@ import PROMPT_TITLE from "./prompt/title.txt"
 import PROMPT_PROPOSAL from "./prompt/proposal.txt"
 import PROMPT_TASKCHECK from "./prompt/taskcheck.txt"
 import PROMPT_CODING from "./prompt/coding.txt"
+import PROMPT_QUICK_EXPLORE from "../costrict/agent/quick-explore.txt"
 import { PermissionNext } from "@/permission/next"
 import { mergeDeep, pipe, sortBy, values } from "remeda"
 import { Global } from "@/global"
@@ -162,7 +163,10 @@ export namespace Agent {
       proposal: {
         name: "proposal",
         description: "Creates detailed technical change proposals and architectural designs. Researches codebase, designs solutions, and produces structured proposal documents without implementing code.",
-        options: {},
+        options: {
+          exitToolName: "task_done",
+        },
+        // No steps limit for proposal agent
         permission: PermissionNext.merge(
           defaults,
           PermissionNext.fromConfig({
@@ -341,6 +345,44 @@ export namespace Agent {
           user,
         ),
         prompt: PROMPT_SUMMARY,
+      },
+      QuickExplore: {
+        name: "QuickExplore",
+        description: "Fast agent specialized for exploring codebases and locating code. Used by other agents via quick_explore tool to find specific implementations, registrations, or call chains.",
+        options: {
+          exitToolName: "sub_agent_task_done",
+        },
+        steps: 8,  // Budget limit for QuickExplore agent
+        permission: PermissionNext.merge(
+          defaults,
+          PermissionNext.fromConfig({
+            // Read-only permissions
+            read: "allow",
+            bash: "allow",
+            // Disable write operations
+            edit: {
+              "*": "deny",
+            },
+            write: {
+              "*": "deny",
+            },
+            apply_patch: "deny",
+            // Disable todo tools
+            todowrite: "deny",
+            todoread: "deny",
+            // Disable spawning sub-agents
+            task: "deny",
+            sub_coding: "deny",
+            quick_explore: "deny",
+            // Disable question tool
+            question: "deny",
+          }),
+          user,
+        ),
+        mode: "subagent",
+        native: true,
+        hidden: true,
+        prompt: PROMPT_QUICK_EXPLORE,
       },
     }
 
