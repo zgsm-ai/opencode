@@ -537,6 +537,54 @@ export namespace SessionProcessor {
             }
             snapshot = undefined
           }
+
+          // 【预算前置检查】- 在工具执行之前检查预算是否充足
+          // 必须在工具被标记为error之前执行
+          const toolParts = await MessageV2.parts(input.assistantMessage.id)
+          const toolPartsOnly = toolParts.filter(p => p.type === "tool") as MessageV2.ToolPart[]
+
+          const budgetCheck = Budget.checkBudget(toolPartsOnly, budgetState)
+
+          if (!budgetCheck.allowed && budgetCheck.guardMessage) {
+            // 预算不足，所有工具都不执行，直接返回拦截消息
+            log.warn("budget guard triggered", {
+              sessionID: input.sessionID,
+              requested: budgetCheck.consumeCount,
+              remaining: budgetCheck.state.remaining,
+              total: budgetCheck.state.total
+            })
+
+            // 将所有工具调用（包括白名单工具）标记为 completed，输出拦截消息
+            for (const part of toolPartsOnly) {
+              await updatePart({
+                ...part,
+                state: {
+                  ...part.state,
+                  status: "completed",
+                  output: budgetCheck.guardMessage,
+                  time: {
+                    start: (part.state.status !== "pending" && 'time' in part.state && part.state.time?.start) || Date.now(),
+                    end: Date.now()
+                  }
+                }
+              })
+
+              log.info("tool blocked by budget guard", {
+                sessionID: input.sessionID,
+                tool: part.tool,
+                callID: part.callID
+              })
+            }
+
+            // 标记 assistant message 为完成状态
+            input.assistantMessage.time.completed = Date.now()
+            await Session.updateMessage(input.assistantMessage)
+
+            // 不扣减预算（因为没有实际执行任何工具）
+            // 返回 continue 让外层循环创建新的 assistant message
+            return "continue"
+          }
+
           const p = await MessageV2.parts(input.assistantMessage.id)
           for (const part of p) {
             if (part.type === "tool" && part.state.status !== "completed" && part.state.status !== "error") {
@@ -556,46 +604,6 @@ export namespace SessionProcessor {
           }
           input.assistantMessage.time.completed = Date.now()
           await Session.updateMessage(input.assistantMessage)
-
-          // 【预算前置检查】- 在工具执行之前检查预算是否充足
-          const toolParts = await MessageV2.parts(input.assistantMessage.id)
-          const toolPartsOnly = toolParts.filter(p => p.type === "tool") as MessageV2.ToolPart[]
-
-          const budgetCheck = Budget.checkBudget(toolPartsOnly, budgetState)
-
-          if (!budgetCheck.allowed && budgetCheck.guardMessage) {
-            // 预算不足，拦截工具调用
-            log.warn("budget guard triggered", {
-              sessionID: input.sessionID,
-              requested: budgetCheck.consumeCount,
-              remaining: budgetCheck.state.remaining,
-              total: budgetCheck.state.total
-            })
-
-            // 将所有工具调用标记为 completed（拦截状态）
-            for (const part of toolPartsOnly) {
-              if (part.state.status === "running") {
-                await updatePart({
-                  ...part,
-                  state: {
-                    ...part.state,
-                    status: "completed",
-                    output: budgetCheck.guardMessage,
-                    time: {
-                      start: Date.now(),
-                      end: Date.now()
-                    }
-                  }
-                })
-              }
-            }
-
-            // 扣减预算（作为惩罚机制，即使拦截了也要扣减）
-            budgetState = Budget.deductBudget(toolPartsOnly, budgetState, isSilentMode)
-
-            // 返回 continue 让外层循环创建新的 assistant message
-            return "continue"
-          }
 
           // 调用封装的工具执行验证函数
           const executionResult = await ToolExecution.executeToolsWithValidation({
@@ -657,37 +665,36 @@ export namespace SessionProcessor {
             // 扣减预算（重试模式下不扣减）
             budgetState = Budget.deductBudget(toolsExecuted, budgetState, false)
 
-            // 【预算通知】- 附加到最后一个工具结果
-            if (toolsExecuted.length > 0) {
-              // 找到最后一个工具调用
-              const lastTool = toolsExecuted[toolsExecuted.length - 1]
-
-              if (lastTool.state.status === "completed" && lastTool.state.output) {
+            // 【预算通知】- 附加到每个工具结果
+            for (const tool of toolsExecuted) {
+              if (tool.state.status === "completed" && tool.state.output) {
                 // 构建预算通知
                 const budgetNotice = Budget.buildBudgetNotice(
-                  lastTool.state.output,
+                  tool.state.output,
                   budgetState
                 )
 
-                // 更新最后一个工具的输出（包含预算通知）
+                // 更新工具的输出（包含预算通知）
                 // fullContent 包含预算通知，会被 LLM 看到
                 // displayContent 在前端展示时过滤预算通知标签
                 await updatePart({
-                  ...lastTool,
+                  ...tool,
                   state: {
-                    ...lastTool.state,
+                    ...tool.state,
                     output: budgetNotice.fullContent
                   }
                 })
-
-                log.info("budget notice attached", {
-                  sessionID: input.sessionID,
-                  toolName: lastTool.tool,
-                  remaining: budgetState.remaining,
-                  used: budgetState.used,
-                  total: budgetState.total
-                })
               }
+            }
+
+            if (toolsExecuted.length > 0) {
+              log.info("budget notice attached to all tools", {
+                sessionID: input.sessionID,
+                toolCount: toolsExecuted.length,
+                remaining: budgetState.remaining,
+                used: budgetState.used,
+                total: budgetState.total
+              })
             }
           }
 

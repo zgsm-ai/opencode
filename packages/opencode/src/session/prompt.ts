@@ -369,6 +369,10 @@ export const OUTPUT_TOKEN_MAX = Flag.COSTRICT_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 1
     // 预算状态（整个 session 生命周期内保持）
     let sessionBudgetState: Budget.BudgetState | undefined = undefined
 
+    // 保存最后一次的 system 提示词和 tools，用于轨迹存储
+    let lastSystem: string[] = []
+    let lastTools: Record<string, any> = {}
+
     while (true) {
       SessionStatus.set(sessionID, { type: "busy" })
       log.info("loop", { step, sessionID })
@@ -418,6 +422,19 @@ export const OUTPUT_TOKEN_MAX = Flag.COSTRICT_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 1
             sessionID,
             exitToolName,
             summary: summary?.substring(0, 100),
+          })
+
+          // 保存包含 LLM 响应的完整上下文（在 break 之前）
+          const finalAgent = await Agent.get(lastUser.agent)
+          const finalModel = await Provider.getModel(lastUser.model.providerID, lastUser.model.modelID)
+          LLM.saveContextAfterResponse({
+            sessionID,
+            agent: finalAgent,
+            model: finalModel,
+            tools: lastTools,
+            system: lastSystem,
+          }).catch((err) => {
+            log.error("failed to save context after response", { error: err, sessionID })
           })
 
           break
@@ -740,6 +757,16 @@ export const OUTPUT_TOKEN_MAX = Flag.COSTRICT_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 1
       }
 
       await Plugin.trigger("experimental.chat.messages.transform", {}, { messages: sessionMessages })
+
+      // 构建 system 提示词并保存
+      const systemPrompts = [
+        ...(await SystemPrompt.environment(model)),
+        ...(await InstructionPrompt.system()),
+      ]
+      lastSystem = systemPrompts
+
+      // 保存 tools 对象
+      lastTools = tools
 
       const result = await processor.process({
         user: lastUser,

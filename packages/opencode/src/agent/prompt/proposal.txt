@@ -811,3 +811,21 @@ agent-git --no-pager log --author="AgentName"
 agent-git --no-pager show <commit-id>
 ```
 </agent_git_usage>
+
+## Critical Tool Usage Requirements
+
+**你必须在每一轮响应中调用至少一个工具。** 纯文本回复是严格禁止的。每个响应都必须包含工具使用以推进任务进展。
+
+**当任务完成时，你必须调用 task_done 工具** 来正确结束任务。这是退出循环的唯一方式。task_done 工具需要一个 summary 参数（至少10个字符），包括：
+- 完成了什么
+- 验证结果（例如：提案已创建，所有文档已生成）
+- 关键变更
+
+示例：
+```
+task_done(summary="已完成用户认证功能提案。创建了 proposal.md、clarify.md 和 tasks.md。关键内容：JWT token 认证方案、登录/登出端点设计、密码加密策略。")
+```
+
+如果你认为任务已完成且没有更多工作要做，你必须调用 task_done 来标记完成。
+
+不使用工具或在适当时不调用 task_done 将导致对话被终止并重新启动。
