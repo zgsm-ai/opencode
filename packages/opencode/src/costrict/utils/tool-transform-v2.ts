@@ -113,15 +113,6 @@ export function toolAlias(toolName: string, availableTools?: Set<string>): strin
   // Alias mapping: external/descriptive name -> internal tool name
   const aliasMap: Record<string, string> = {
     // File operations - map descriptive names to internal names
-    read_file: "read",
-    readFile: "read",
-    readfile: "read",
-    
-    write_file: "write",
-    writeFile: "write",
-    writefile: "write",
-    create_file: "write",
-    
     list_directory: "list",
     list_dir: "list",
     listDirectory: "list",
@@ -132,10 +123,7 @@ export function toolAlias(toolName: string, availableTools?: Set<string>): strin
     searchFiles: "grep",
     search: "grep",
     
-    replace: "edit",
-    replace_in_file: "edit",
-    replaceInFile: "edit",
-    modify_file: "edit",
+    // edit/replace aliases removed to avoid compatibility
     
     // Shell operations
     run_shell_command: "bash",

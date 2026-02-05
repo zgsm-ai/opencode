@@ -1,10 +1,9 @@
 import { QuestionTool } from "./question"
 import { BashTool } from "./bash"
-import { EditTool } from "./edit"
+import { StrReplaceBasedEditTool } from "./str_replace_based_edit_tool"
 // import { GlobTool } from "./glob"
 // import { GrepTool } from "./grep"
 import { BatchTool } from "./batch"
-import { ReadTool } from "./read"
 import { TaskTool } from "./task"
 import { TaskDoneTool } from "./task_done"
 import { SubAgentTaskDoneTool } from "./sub_agent_task_done"
@@ -12,7 +11,6 @@ import { TaskDoneWithChangeIdTool } from "./task_done_with_change_id"
 import { AskForTaskDoneOrContinueTool } from "./ask_for_task_done_or_continue"
 import { TodoWriteTool, TodoReadTool } from "./todo"
 import { WebFetchTool } from "./webfetch"
-import { WriteTool } from "./write"
 import { InvalidTool } from "./invalid"
 import { SkillTool } from "./skill"
 import { SubCodingTool } from "./sub_coding"
@@ -111,11 +109,9 @@ export namespace ToolRegistry {
       TaskDoneWithChangeIdTool,
       ...(["app", "cli", "desktop"].includes(Flag.COSTRICT_CLIENT) ? [QuestionTool] : []),
       BashTool,
-      ReadTool,
+      StrReplaceBasedEditTool,
       // GlobTool,
       // GrepTool,
-      EditTool,
-      WriteTool,
       // Temporoly disable task tool for testing sub agent tool 
       // TaskTool,
       WebFetchTool,
