@@ -48,6 +48,20 @@ tools:
 ### 阶段 1：读取输入
 1. 阅读用户原始需求（可能包含文件）和 `proposal.md` ，作为开发任务的覆盖基准，当有冲突时，遵循用户原始需求
 2. 阅读 `task.md`：理解现有开发任务
+3. **查看历史探索**（可选）：使用 agent-git 查看 QuickExploreAgent 已完成的代码探索，了解已有发现
+
+   ```bash
+   # 查看所有探索历史
+   agent-git --no-pager log --author="QuickExploreAgent" --oneline
+
+   # 查看具体探索内容
+   agent-git --no-pager show <commit-id>
+   ```
+
+   这可以帮助你：
+   - 了解已经探索过的代码区域
+   - 复用已有的发现
+   - 避免重复探索工作
 
 ### 阶段 2：生成问题清单（issues），逐项修复直到全通过
 对 `task.md` 的检查维度：
@@ -134,3 +148,42 @@ tools:
 
 任务顺序必须遵循依赖关系：被依赖的文件先创建。
 </task_format_specification>
+
+<agent_git_usage>
+## Agent-Git 使用说明
+
+Agent-git 是一个独立的 Git 仓库（位于项目根目录的 `.agent-git/`），用于跟踪 agent 的探索和修改历史。
+
+### 查看历史探索
+
+在验证任务位置精确性时，可以使用 agent-git 查看 QuickExploreAgent 的历史探索：
+
+```bash
+# 查看所有探索历史
+agent-git --no-pager log --author="QuickExploreAgent" --oneline
+
+# 查看具体探索内容
+agent-git --no-pager show <commit-id>
+
+# 查看 commit message
+agent-git --no-pager log --author="QuickExploreAgent" -1 --format="%B" <commit-id>
+```
+
+这可以帮助你：
+- 了解已经探索过的代码区域
+- 复用已有的文件路径和函数定位
+- 避免重复探索工作
+
+### 常用命令
+
+```bash
+# 查看最近的提交记录
+agent-git --no-pager log -5
+
+# 查看指定 agent 的提交
+agent-git --no-pager log --author="AgentName"
+
+# 查看某次提交的详细修改
+agent-git --no-pager show <commit-id>
+```
+</agent_git_usage>

@@ -47,6 +47,7 @@ import { iife } from "@/util/iife"
 import { Shell } from "@/shell/shell"
 import { Truncate } from "@/tool/truncation"
 import { Budget } from "./budget"
+import { AgentGitInitializer } from "@/util/agentGitInitializer"
 
 // @ts-ignore
 globalThis.AI_SDK_LOG_WARNINGS = false
@@ -92,6 +93,24 @@ function extractSummary(toolPart: MessageV2.ToolPart): string | undefined {
 export namespace SessionPrompt {
   const log = Log.create({ service: "session.prompt" })
   export const OUTPUT_TOKEN_MAX = Flag.COSTRICT_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 32_000
+
+  // Agents that CREATE new agent-git (continue_run=false)
+  const AGENTS_CREATING_GIT = ["proposal", "StrictPlan"]
+
+  // Agents that REUSE existing agent-git (continue_run=true)
+  const AGENTS_REUSING_GIT = [
+    "coding",
+    "PlanApply",
+    "taskcheck",
+    "TaskCheck",
+    "explore",
+    "quick-explore",
+    "QuickExplore",
+    "sub-coding",
+    "SubCodingAgent",
+    "fix-agent",
+    "Fix",
+  ]
 
   const state = Instance.state(
     () => {
@@ -194,6 +213,42 @@ export namespace SessionPrompt {
 
     const message = await createUserMessage(input)
     await Session.touch(input.sessionID)
+
+    // Initialize agent-git if needed
+    const agentName = input.agent ?? (await Agent.defaultAgent())
+    const shouldCreateGit = AGENTS_CREATING_GIT.includes(agentName)
+    const shouldReuseGit = AGENTS_REUSING_GIT.includes(agentName)
+
+    if (shouldCreateGit || shouldReuseGit) {
+      try {
+        const gitInit = new AgentGitInitializer.AgentGitInitializer({
+          project_path: Instance.worktree,
+          agent_name: agentName,
+          continue_run: shouldReuseGit, // Create agents use false, reuse agents use true
+        })
+        const success = await gitInit.initializeAgentGit()
+
+        if (!success) {
+          if (shouldCreateGit) {
+            // Create agent failure should warn (this is unusual)
+            log.warn("Failed to create agent-git", { agent: agentName })
+          } else {
+            // Reuse agent failure is normal (may not have run proposal first)
+            log.debug("Agent-git not available (no previous .agent-git), continuing without it", {
+              agent: agentName,
+            })
+          }
+        } else {
+          log.info("Agent-git initialized successfully", {
+            agent: agentName,
+            mode: shouldCreateGit ? "create" : "reuse",
+          })
+        }
+      } catch (error) {
+        log.error("Agent-git initialization error", { error, agent: agentName })
+        // Don't block agent execution on agent-git failure
+      }
+    }
 
     // this is backwards compatibility for allowing `tools` to be specified when
     // prompting
