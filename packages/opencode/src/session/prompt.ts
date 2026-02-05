@@ -745,8 +745,14 @@ export namespace SessionPrompt {
         abort,
         sessionID,
         system: [
-          ...(await SystemPrompt.environment(model)),
-          ...(await InstructionPrompt.system()),
+          // Environment info (可通过 COSTRICT_DISABLE_ENVIRONMENT=true 或 OPENCODE_DISABLE_ENVIRONMENT=true 禁用)
+          ...(!Flag.COSTRICT_DISABLE_ENVIRONMENT && !Flag.OPENCODE_DISABLE_ENVIRONMENT
+            ? await SystemPrompt.environment(model)
+            : []),
+          // Custom rules from files/URLs (可通过 COSTRICT_DISABLE_CUSTOM_RULES=true 或 OPENCODE_DISABLE_CUSTOM_RULES=true 禁用)
+          ...(!Flag.COSTRICT_DISABLE_CUSTOM_RULES && !Flag.OPENCODE_DISABLE_CUSTOM_RULES
+            ? await InstructionPrompt.system()
+            : []),
         ],
         messages: [
           ...MessageV2.toModelMessages(sessionMessages, model),
