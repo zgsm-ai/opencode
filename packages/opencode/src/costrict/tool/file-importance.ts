@@ -21,6 +21,15 @@ import type { FileScore, AnalysisStats } from './file-importance/types';
 
 const log = Log.create({ tool: 'file-importance' });
 
+type Meta = {
+  root_directory: string;
+  files_analyzed: number;
+  error: string;
+  files_returned?: number;
+  weights_used?: typeof DEFAULT_WEIGHTS;
+  truncated?: boolean;
+};
+
 declare global {
   const COSTRICT_FILE_IMPORTANCE_WORKER_PATH: string;
 }
@@ -227,26 +236,28 @@ export const FileImportanceTool = Tool.define('file-importance', async (initCtx)
       const resolvedPath = resolve(process.cwd(), root_directory);
       if (!existsSync(resolvedPath)) {
         log.error('Directory not found', { path: resolvedPath });
+        const metadata: Meta = {
+          root_directory,
+          files_analyzed: 0,
+          error: 'directory_not_found',
+        };
         return {
           title: '目录不存在',
-          metadata: {
-            root_directory,
-            files_analyzed: 0,
-            error: 'directory_not_found',
-          },
+          metadata,
           output: `错误: 目录不存在: ${resolvedPath}`,
         };
       }
 
       if (!statSync(resolvedPath).isDirectory()) {
         log.error('Not a directory', { path: resolvedPath });
+        const metadata: Meta = {
+          root_directory,
+          files_analyzed: 0,
+          error: 'not_a_directory',
+        };
         return {
           title: '路径不是目录',
-          metadata: {
-            root_directory,
-            files_analyzed: 0,
-            error: 'not_a_directory',
-          },
+          metadata,
           output: `错误: 路径不是目录: ${resolvedPath}`,
         };
       }
@@ -261,13 +272,14 @@ export const FileImportanceTool = Tool.define('file-importance', async (initCtx)
 
       if (files.length === 0) {
         log.warn('No source files found');
+        const metadata: Meta = {
+          root_directory,
+          files_analyzed: 0,
+          error: 'no_files_found',
+        };
         return {
           title: '未找到源文件',
-          metadata: {
-            root_directory,
-            files_analyzed: 0,
-            error: 'no_files_found',
-          },
+          metadata,
           output: '未找到符合条件的源文件',
         };
       }
@@ -298,16 +310,17 @@ export const FileImportanceTool = Tool.define('file-importance', async (initCtx)
         // 6. 输出截断
         const truncated = await Truncate.output(output, {}, initCtx?.agent);
 
+        const metadata: Meta = {
+          root_directory,
+          files_analyzed: files.length,
+          files_returned: topFiles.length,
+          weights_used: mergedWeights,
+          truncated: truncated.truncated,
+          error: '',
+        };
         return {
           title: `File Importance Analysis: ${root_directory}`,
-          metadata: {
-            root_directory,
-            files_analyzed: files.length,
-            files_returned: topFiles.length,
-            weights_used: mergedWeights,
-            truncated: truncated.truncated,
-            error: '',
-          },
+          metadata,
           output: truncated.content,
         };
       } catch (error) {
@@ -315,13 +328,14 @@ export const FileImportanceTool = Tool.define('file-importance', async (initCtx)
           error: error instanceof Error ? error.message : String(error),
           filesCount: files.length
         });
+        const metadata: Meta = {
+          root_directory,
+          files_analyzed: files.length,
+          error: error instanceof Error ? error.message : String(error),
+        };
         return {
           title: '分析失败',
-          metadata: {
-            root_directory,
-            files_analyzed: files.length,
-            error: error instanceof Error ? error.message : String(error),
-          },
+          metadata,
           output: `Error: ${error instanceof Error ? error.message : String(error)}`,
         };
       }

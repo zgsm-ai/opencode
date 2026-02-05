@@ -25,7 +25,6 @@ describe("Truncate", () => {
 
       expect(size).toBeGreaterThan(Truncate.LIMIT)
       const result = await Truncate.output(content)
-      if (enc.free) enc.free()
 
       expect(result.truncated).toBe(true)
       expect(result.content).toContain("8192")
