@@ -29,6 +29,8 @@ import { BUILTIN_AGENTS } from "../costrict/agent/builtin"
 import { Bus } from "@/bus"
 import { GlobalBus } from "@/bus/global"
 import { Event } from "../server/event"
+import { AgentToolsConfig } from "../costrict/agent/config"
+import { PermissionNext } from "@/permission/next"
 
 export namespace Config {
   const log = Log.create({ service: "config" })
@@ -325,6 +327,25 @@ export namespace Config {
           ...(md.data as Record<string, any>),
           prompt: md.content.trim(),
         }
+
+        // 应用工具配置
+        const agentName = config.name
+        const toolConfig = AgentToolsConfig.getConfig(agentName)
+        if (toolConfig) {
+          // 设置退出工具
+          config.options = config.options || {}
+          config.options.exitToolName = toolConfig.exitToolName
+
+          // 应用工具权限配置
+          const toolPermission = AgentToolsConfig.createToolPermission(toolConfig.tools)
+          // 保留原有的文件级权限配置，与工具权限合并
+          if (config.permission) {
+            config.permission = PermissionNext.merge(toolPermission, config.permission)
+          } else {
+            config.permission = toolPermission
+          }
+        }
+
         const parsed = Agent.safeParse(config)
         if (parsed.success) {
           result[config.name] = parsed.data

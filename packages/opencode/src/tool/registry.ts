@@ -110,28 +110,27 @@ export namespace ToolRegistry {
       ...(["app", "cli", "desktop"].includes(Flag.COSTRICT_CLIENT) ? [QuestionTool] : []),
       BashTool,
       StrReplaceBasedEditTool,
-      // GlobTool,
-      // GrepTool,
-      // Temporoly disable task tool for testing sub agent tool 
-      // TaskTool,
-      WebFetchTool,
-      TodoWriteTool,
+      // GlobTool,  // 已注释
+      // GrepTool,  // 已注释
+      // TaskTool,  // 已注释
+      // WebFetchTool,  // 不需要
+      // TodoWriteTool,  // 不需要
       MemoryBankTool,
-      TodoReadTool,
-      WebSearchTool,
-      CodeSearchTool,
-      SkillTool,
+      // TodoReadTool,  // 不需要
+      // WebSearchTool,  // 不需要
+      // CodeSearchTool,  // 不需要
+      // SkillTool,  // 不需要
       SequentialThinkingTool,
       FileOutlineTool,
-      // CallGraphTool, // deprecate
-      // FileImportanceTool, // deprecate
-      ...(config.experimental?.checkpoint !== false ? [CheckpointTool] : []),
-      ...(Flag.COSTRICT_EXPERIMENTAL_LSP_TOOL ? [LspTool] : []),
-      ApplyPatchTool,
-      ...(config.experimental?.batch_tool === true ? [BatchTool] : []),
-      ...(Flag.COSTRICT_EXPERIMENTAL_PLAN_MODE && Flag.COSTRICT_CLIENT === "cli" ? [PlanExitTool, PlanEnterTool] : []),
+      // CallGraphTool,  // 已废弃
+      // FileImportanceTool,  // 已废弃
+      // ...(config.experimental?.checkpoint !== false ? [CheckpointTool] : []),  // 不需要
+      // ...(Flag.COSTRICT_EXPERIMENTAL_LSP_TOOL ? [LspTool] : []),  // 不需要
+      // ApplyPatchTool,  // 不需要
+      // ...(config.experimental?.batch_tool === true ? [BatchTool] : []),  // 不需要
+      // ...(Flag.COSTRICT_EXPERIMENTAL_PLAN_MODE && Flag.COSTRICT_CLIENT === "cli" ? [PlanExitTool, PlanEnterTool] : []),  // 不需要
       LintTool,
-      TaskDoneWithChangeIdTool,
+      // TaskDoneWithChangeIdTool,  // 已在第109行注册，删除重复
       AskForTaskDoneOrContinueTool,
       SubCodingTool,
       QuickExploreTool,
@@ -151,49 +150,17 @@ export namespace ToolRegistry {
     agent?: Agent.Info,
   ) {
     const tools = await all()
+
+    // 工具过滤现在完全由 agent 的 permission 配置控制
+    // 不再需要硬编码的过滤逻辑
     const result = await Promise.all(
-      tools
-        .filter((t) => {
-          // Enable websearch/codesearch for zen users OR via enable flag
-          if (t.id === "codesearch" || t.id === "websearch") {
-            return model.providerID === "opencode" || Flag.COSTRICT_ENABLE_EXA
-          }
-
-          // use apply tool in same format as codex
-          const usePatch =
-            model.modelID.includes("gpt-") && !model.modelID.includes("oss") && !model.modelID.includes("gpt-4")
-          if (t.id === "apply_patch") return usePatch
-          if (t.id === "edit" || t.id === "write") return !usePatch
-
-          // task_done_with_change_id is disabled for all agents (previously only for proposal)
-          if (t.id === "task_done_with_change_id") {
-            return false
-          }
-
-          // ask_for_task_done_or_continue is only available to taskcheck agent
-          if (t.id === "ask_for_task_done_or_continue") {
-            return agent?.name === "taskcheck"
-          }
-
-          // sub_agent_task_done is disabled for proposal agent
-          if (t.id === "sub_agent_task_done") {
-            return agent?.name !== "proposal"
-          }
-
-          // task_done is only available to proposal agent (and other non-subagents)
-          if (t.id === "task_done") {
-            return agent?.name !== "QuickExplore"
-          }
-
-          return true
-        })
-        .map(async (t) => {
-          using _ = log.time(t.id)
-          return {
-            id: t.id,
-            ...(await t.init({ agent })),
-          }
-        }),
+      tools.map(async (t) => {
+        using _ = log.time(t.id)
+        return {
+          id: t.id,
+          ...(await t.init({ agent })),
+        }
+      }),
     )
     return result
   }

@@ -42,8 +42,17 @@ venv/
 .fdignore
 .rgignore
 agent-git
+explore_result/
 agent-git.bat
 .tmp-bash-tool-test/
 
 docs/
 test-project/
+.agent-git
+.agent-worktrees
+proposal/
+.memory_bank.md
+__pycache__/
+.pytest_cache/
+.venv/
+venv/
