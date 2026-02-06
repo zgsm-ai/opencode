@@ -6,6 +6,7 @@ import { MessageV2 } from "../session/message-v2"
 import { Identifier } from "../id/id"
 import { Agent } from "../agent/agent"
 import { SessionPrompt } from "../session/prompt"
+import { Instance } from "@/project/instance"
 import { defer } from "@/util/defer"
 import { Log } from "@/util/log"
 import { Bus } from "../bus"
@@ -95,17 +96,10 @@ export const QuickExploreTool = Tool.define("quick_explore", async (ctx) => {
       quickExploreLogger.info(`Session created: ${session.id}`)
 
       // 3. Build exploration prompt
-      const prompt = `## 探索任务
-
+      const prompt = `项目路径: ${Instance.worktree}
 探索目标: ${params.exploration_target}
 
-请完成本次探索任务，提供结构化的探索结果。
-
-重要提醒：
-- 如果你连续 10 轮仅使用 bash 执行 rg/fd 搜索，必须使用 sequentialthinking 工具进行反思
-- 如果你连续 6 轮使用 view 工具查看同一文件，必须使用 sequentialthinking 工具进行反思
-- 只读不写，禁止修改任何代码
-- 完成探索后，调用 sub_agent_task_done 工具返回结果`
+请认真完成本次探索`
 
       // 4. Get model info from current message
       const msg = await MessageV2.get({ sessionID: ctx.sessionID, messageID: ctx.messageID })

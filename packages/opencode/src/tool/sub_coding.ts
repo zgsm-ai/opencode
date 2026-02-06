@@ -76,22 +76,20 @@ function formatSubTasks(subTasks: z.infer<typeof parameters>["sub_tasks"]): stri
 function buildPrompt(params: z.infer<typeof parameters>): string {
   const subTasksMarkdown = formatSubTasks(params.sub_tasks)
 
-  return `## Task Context
+  return `## 任务上下文
 
-Project path: \`${Instance.worktree}\`
+项目路径: \`${Instance.worktree}\`
 
-Your agent code: \`${params.agent_code}\`
-
-### Critical Supplemental Notes (important_note)
+### 关键补充说明
 ${params.important_note}
 
-### Previous Work Summary
+### 历史工作摘要
 ${params.previous_work_summary}
 
-### Assigned Tasks
+### 你被分配的任务
 ${subTasksMarkdown}
 
-Please complete the coding tasks with high quality. Follow the work principles and workflow defined in your system prompt.`
+请认真完成本次编码任务，编写高质量的代码`
 }
 
 export const SubCodingTool = Tool.define("sub_coding", async (ctx) => {
