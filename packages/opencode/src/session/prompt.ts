@@ -737,6 +737,33 @@ export const OUTPUT_TOKEN_MAX = Flag.COSTRICT_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 1
 
       const sessionMessages = clone(msgs)
 
+      if (agent.name === "proposal") {
+        const users = sessionMessages.filter((msg) => msg.info.role === "user")
+        const first = users.length
+          ? users.reduce((best, msg) => (best.info.time.created <= msg.info.time.created ? best : msg))
+          : undefined
+        const text = first?.parts.find(
+          (part): part is MessageV2.TextPart => part.type === "text" && !part.ignored && !part.synthetic,
+        )
+        if (text && text.text.trim()) {
+          const hasTemplate = text.text.includes("## 项目信息") && text.text.includes("## 用户需求")
+          if (!hasTemplate) {
+            text.text = [
+              "## 项目信息",
+              `- 项目路径：\`${Instance.worktree}\``,
+              `- 提案目录: \`${Instance.worktree}/proposal\`（如果proposal文件夹不存在，需要由你创建）`,
+              "",
+              "## 用户需求",
+              "```",
+              text.text,
+              "```",
+              "",
+              "请你认真分析用户需求，完成需求提案和任务规划",
+            ].join("\n")
+          }
+        }
+      }
+
       // Ephemerally wrap queued user messages with a reminder to stay on track
       if (step > 1 && lastFinished) {
         for (const msg of sessionMessages) {
