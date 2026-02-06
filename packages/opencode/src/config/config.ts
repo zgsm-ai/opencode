@@ -322,7 +322,7 @@ export namespace Config {
         })
         if (!md.data) continue
 
-        const config = {
+        const config: Record<string, any> = {
           name: "unknown",
           ...(md.data as Record<string, any>),
           prompt: md.content.trim(),
