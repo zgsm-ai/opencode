@@ -88,3 +88,28 @@ describe("session.llm.hasToolCalls", () => {
     expect(LLM.hasToolCalls(messages)).toBe(true)
   })
 })
+
+describe("session.llm.repairToolInput", () => {
+  test("returns undefined for non-string input", () => {
+    const out = LLM.repairToolInput({ a: 1 })
+    expect(out).toBeUndefined()
+  })
+
+  test("repairs fenced json input", () => {
+    const raw = "```json\n{\"command\":\"create\",\"path\":\"/a\",\"file_text\":\"ok\"}\n```"
+    const out = LLM.repairToolInput(raw)
+    expect(out).toBeDefined()
+    const data = JSON.parse(out as string)
+    expect(data.command).toBe("create")
+    expect(data.file_text).toBe("ok")
+  })
+
+  test("repairs common json mistakes", () => {
+    const raw = "{command: 'create', path: '/a', file_text: 'ok',}"
+    const out = LLM.repairToolInput(raw)
+    expect(out).toBeDefined()
+    const data = JSON.parse(out as string)
+    expect(data.command).toBe("create")
+    expect(data.path).toBe("/a")
+  })
+})

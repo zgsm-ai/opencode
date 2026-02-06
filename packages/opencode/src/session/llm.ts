@@ -16,6 +16,7 @@ import {
   jsonSchema,
 } from "ai"
 import { clone, mergeDeep, pipe } from "remeda"
+import { jsonrepair } from "jsonrepair"
 import { ProviderTransform } from "@/provider/transform"
 import { Config } from "@/config/config"
 import { Instance } from "@/project/instance"
@@ -53,6 +54,37 @@ export namespace LLM {
   }
 
   export type StreamOutput = StreamTextResult<ToolSet, unknown>
+
+  function parse(text: string) {
+    try {
+      const data = JSON.parse(text)
+      if (!data || typeof data !== "object" || Array.isArray(data)) return
+      return data
+    } catch {
+      return
+    }
+  }
+
+  function repair(text: string) {
+    try {
+      return jsonrepair(text)
+    } catch {
+      return
+    }
+  }
+
+  export function repairToolInput(input: unknown) {
+    if (typeof input !== "string") return
+    const raw = input.trim()
+    if (!raw) return
+    const direct = parse(raw)
+    if (direct) return JSON.stringify(direct)
+    const fixed = repair(raw)
+    if (!fixed) return
+    const parsed = parse(fixed)
+    if (!parsed) return
+    return JSON.stringify(parsed)
+  }
 
   export async function stream(input: StreamInput) {
     const l = log
@@ -285,14 +317,25 @@ export namespace LLM {
       },
       async experimental_repairToolCall(failed) {
         const lower = failed.toolCall.toolName.toLowerCase()
-        if (lower !== failed.toolCall.toolName && tools[lower]) {
+        const name = lower !== failed.toolCall.toolName && tools[lower] ? lower : failed.toolCall.toolName
+        if (name !== failed.toolCall.toolName) {
           l.info("repairing tool call", {
             tool: failed.toolCall.toolName,
-            repaired: lower,
+            repaired: name,
           })
+        }
+        const input = repairToolInput(failed.toolCall.input)
+        if (input) {
           return {
             ...failed.toolCall,
-            toolName: lower,
+            toolName: name,
+            input,
+          }
+        }
+        if (name !== failed.toolCall.toolName) {
+          return {
+            ...failed.toolCall,
+            toolName: name,
           }
         }
         return {
