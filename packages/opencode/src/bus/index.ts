@@ -46,9 +46,9 @@ export namespace Bus {
       type: def.type,
       properties,
     }
-    log.info("publishing", {
-      type: def.type,
-    })
+    // log.info("publishing", {
+    //   type: def.type,
+    // })
     const pending = []
     for (const key of [def.type, "*"]) {
       const match = state().subscriptions.get(key)

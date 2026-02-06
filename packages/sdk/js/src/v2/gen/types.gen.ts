@@ -183,7 +183,13 @@ export type AssistantMessage = {
     created: number
     completed?: number
   }
-  error?: ProviderAuthError | UnknownError | MessageOutputLengthError | MessageAbortedError | ApiError | MessageReasoningOnlyError
+  error?:
+    | ProviderAuthError
+    | UnknownError
+    | MessageOutputLengthError
+    | MessageAbortedError
+    | ApiError
+    | MessageReasoningOnlyError
   parentID: string
   modelID: string
   providerID: string
@@ -899,6 +905,26 @@ export type EventWorktreeFailed = {
   }
 }
 
+export type EventWorkerRestart = {
+  type: "worker.restart"
+  properties: {
+    reason: "memory" | "manual"
+    rssMB: string
+    heapMB: string
+    threshold?: number
+  }
+}
+
+export type EventWorkerRestartSuggested = {
+  type: "worker.restart.suggested"
+  properties: {
+    reason: "memory"
+    rssMB: string
+    heapMB: string
+    threshold: number
+  }
+}
+
 export type Event =
   | EventInstallationUpdated
   | EventInstallationUpdateAvailable
@@ -943,6 +969,8 @@ export type Event =
   | EventPtyDeleted
   | EventWorktreeReady
   | EventWorktreeFailed
+  | EventWorkerRestart
+  | EventWorkerRestartSuggested
 
 export type GlobalEvent = {
   directory: string
@@ -1817,11 +1845,11 @@ export type Config = {
   experimental?: {
     disable_paste_summary?: boolean
     /**
-     * Enable the batch tool
+     * Enable batch tool
      */
     batch_tool?: boolean
     /**
-     * Enable OpenTelemetry spans for AI SDK calls (using the 'experimental_telemetry' flag)
+     * Enable OpenTelemetry spans for AI SDK calls (using 'experimental_telemetry' flag)
      */
     openTelemetry?: boolean
     /**

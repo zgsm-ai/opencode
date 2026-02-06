@@ -234,7 +234,7 @@ export namespace PermissionNext {
       return { action: "allow", permission, pattern }
     }
     const merged = merge(...rulesets)
-    log.info("evaluate", { permission, pattern, ruleset: merged })
+    // log.info("evaluate", { permission, pattern, ruleset: merged })
     const match = merged.findLast(
       (rule) => Wildcard.match(permission, rule.permission) && Wildcard.match(pattern, rule.pattern),
     )

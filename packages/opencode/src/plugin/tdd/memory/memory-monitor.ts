@@ -1,9 +1,12 @@
 import { Logger } from "../utils/logger"
 import { Global } from "@/global"
+import { GlobalBus } from "@/bus/global"
 import { heapStats } from "bun:jsc"
 import * as v8 from "node:v8"
 import path from "path"
 import fs from "fs/promises"
+import { Event } from "@/server/event"
+import { Bus } from "@/bus"
 
 const log = Logger.clone().tag("scope", "memory")
 
@@ -30,6 +33,8 @@ export interface MemoryMonitorConfig {
   snapshotRetainCount: number
   /** 内存阈值（GB），RSS 和 Heap 共用同一套阈值 */
   thresholds: number[]
+  /** 重启阈值（GB），超过此阈值时触发重启，为 0 时不触发重启 */
+  restartThreshold: number
 }
 
 export interface MemorySnapshotData {
@@ -50,6 +55,7 @@ const DEFAULT_CONFIG: MemoryMonitorConfig = {
   checkInterval: 60000,
   snapshotRetainCount: 5,
   thresholds: [4, 6, 10, 15],
+  restartThreshold: 2,
 }
 
 export class MemoryMonitor {
@@ -59,9 +65,20 @@ export class MemoryMonitor {
   private lastTriggeredRssThreshold = new Set<number>()
   private lastMemoryLogAt = 0
   private lastMemoryMb = 0
+  private _shouldRestart = false
+  private restartSuggestionEmitted = false
 
   constructor(config: Partial<MemoryMonitorConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config }
+  }
+
+  shouldRestart(): boolean {
+    return this._shouldRestart
+  }
+
+  clearRestartFlag(): void {
+    this._shouldRestart = false
+    this.restartSuggestionEmitted = false
   }
 
   start() {
@@ -116,6 +133,27 @@ export class MemoryMonitor {
       )
       this.lastMemoryLogAt = now
       this.lastMemoryMb = rssMB
+    }
+
+    // 检查重启阈值
+    if (this.config.restartThreshold > 0 && !this.restartSuggestionEmitted) {
+      const restartThresholdMB = this.config.restartThreshold * 1024
+      if (rssMB >= restartThresholdMB || heapMB >= restartThresholdMB) {
+        log.info("Restart threshold reached, flagging for restart", {
+          rssMB: rssMB.toFixed(2),
+          heapMB: heapMB.toFixed(2),
+          threshold: this.config.restartThreshold,
+        })
+        this._shouldRestart = true
+        this.restartSuggestionEmitted = true
+        Bus.publish(Event.WorkerRestartSuggested, {
+          reason: "memory" as const,
+          rssMB: rssMB.toFixed(2),
+          heapMB: heapMB.toFixed(2),
+          threshold: this.config.restartThreshold,
+        })
+        return
+      }
     }
 
     // 检查阈值
