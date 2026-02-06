@@ -1,15 +1,14 @@
-## Agent-Git 使用说明
+<agent_git_usage>
 
-Agent-git 是一个独立的 Git 仓库（位于项目根目录的 `.agent-git/`），用于跟踪 agent 的修改历史。
-
-### 常用命令
+<common_commands>
+### agent-git 常用命令
 
 ```bash
 # 查看最近的提交记录
 agent-git --no-pager log -5
 
 # 查看指定 agent 的提交
-agent-git --no-pager log --author="AgentName"
+agent-git --no-pager log --author="{{author_example}}"
 
 # 查看某次提交的详细修改
 agent-git --no-pager show <commit-id>
@@ -20,32 +19,37 @@ agent-git status -s
 # 查看文件差异
 agent-git --no-pager diff
 ```
+</common_commands>
+{% if show_revert_commands %}
 
-### 提交代码
+<revert_commands>
+### 回退操作
 
 ```bash
-# 添加修改的文件
-agent-git add <file-path>   # 或 agent-git add -A
-
-# 提交（使用你的 agent 代号作为 author）
-agent-git commit --author="{{AGENT_NAME}} <agent@local>" -m "<简要描述>
-
-<详细说明>"
-
-# 检查提交是否成功
-agent-git status --porcelain
+# 回退某次提交
+agent-git revert <commit-id>
 ```
+</revert_commands>
+{% endif %}
+{% if show_commit_rules %}
 
+<commit_rules>
 ### Commit 信息格式
-
-- 第一行：简洁的概括性标题（方便 `agent-git log --oneline` 浏览）
-- 后续行：详细说明（可选）
-
-**示例**:
 ```
-[SubCodingAgent-1] 实现用户认证模块
-
-- 添加 login() 和 logout() 方法
-- 集成 JWT token 验证
-- 修改相关测试用例
+{% if require_subtask_id_in_commit %}
+<sub_task_id>,<sub_task_id>,...: <简要描述>
+<具体内容说明>
 ```
+例如`agent-git commit --author="{{agent_code}} <agent@local>" -m "1.2,1.3: 修改 dispatch_request 方法以支持并发请求`
+为每个被修改的文件单独提交一个commit；若多个任务的修改涉及同一文件，则将这些修改合并到一次提交中。
+{% else %}
+```
+<简要描述>
+<具体内容说明>
+{% endif %}
+```
+
+</commit_rules>
+{% endif %}
+
+</agent_git_usage>

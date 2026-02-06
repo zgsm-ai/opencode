@@ -1,0 +1,38 @@
+<analyze_code_structure_guidelines>
+
+<critical_rule>
+### analyze_code_structure cheatsheet（代码结构分析）
+
+**核心规则**：
+1. target_name 必须从代码中**实际看到**，禁止猜测或推断
+2. root_directory 必须使用项目根目录的绝对路径
+3. 区分函数和类，避免 analysis_type 写错
+</critical_rule>
+
+<result_usage>
+### 如何利用返回结果
+
+调用工具后，使用 `sequential-thinking` 分析结果：
+
+**incoming_calls（谁调用了目标函数）**
+- 检查调用点：查看调用方上下文，判断修改是否会破坏现有调用
+- 评估影响范围：调用点越多，修改风险越高
+- 识别关键调用路径：找到核心调用链，确保修改不会破坏关键流程
+
+**outgoing_calls（目标函数调用了哪些函数）**
+- 了解函数依赖：查看函数内部调用了哪些其他函数
+- 分析调用链：理解函数的执行流程
+- 识别副作用：发现可能的副作用调用
+
+**class_children（哪些子类继承了目标类）**
+- 评估修改影响：修改父类时，子类可能受影响，需要逐个检查
+- 识别覆盖方法：子类可能覆盖了父类方法，修改父类时需要考虑
+- 发现设计模式：通过子类结构识别设计模式（如策略模式、工厂模式）
+
+**class_parents（目标类继承了哪些父类）**
+- 理解接口契约：父类定义了接口和行为，子类必须遵守
+- 追溯实现源头：找到方法的实际实现位置，避免在子类中重复实现
+- 发现多态行为：通过父类接口理解多态调用机制
+</result_usage>
+
+</analyze_code_structure_guidelines>

@@ -1,0 +1,21 @@
+### quick_explore
+- 在调用 `quick_explore` 之前，必须先使用 agent-git 了解之前的探索结果，然后判断是否需要继续探索新的内容。
+```bash
+# 查看所有 QuickExploreAgent 的提交标题（只显示第一行，即 commit message 的标题）
+agent-git --no-pager log --author="QuickExploreAgent" --oneline --format="%h %s"
+# 这会列出所有历史探索的概括性标题，帮助你快速判断是否有相关探索已完成
+
+# 选择性查看具体探索结果
+# 查看某个 commit 的完整内容（包括修改的文件和 commit message）
+agent-git --no-pager show <commit-id>
+# 或者只查看 commit message（了解探索目标）
+agent-git --no-pager log --author="QuickExploreAgent" -1 --format="%B" <commit-id>
+```
+- 在调用 `quick_explore` 工具之后，必须通过 agent-git 查看探索结果，了解获得了哪些新信息。
+- **任务原则**：每次给 Quick Explore Agent 的探索任务必须是**只处理一个专精的探索任务**，严禁一次性给多个不相关的任务，以确保探索深度和准确性。
+- **任务传达格式**：`exploration_target` 参数应遵循标准的传达格式：
+  `我现在需要 [具体背景/任务目标]，需要你帮我定位 [明确的探索范围/逻辑节点]。输出要求：[具体的输出格式要求]`
+- **优质示例**：
+  1. 我现在需要为项目添加配置管理模块，需要你帮我定位：1) 现有配置文件的存储位置和格式；2) 配置加载的实现逻辑；3) 配置项在项目中的使用方式。输出要求：repo 相对路径 + 行号范围。
+  2. 我现在需要扩展 API 接口支持新的数据格式，需要你帮我定位：1) 现有 API 路由的定义位置；2) 数据序列化/反序列化的处理逻辑；3) API 版本管理的实现方式。输出要求：repo 相对路径 + 行号范围。
+  3. 我现在需要优化数据处理流程性能，需要你帮我定位：1) 数据处理的核心实现位置；2) 性能瓶颈点的核心代码段；3) 现有的优化手段和缓存机制。输出要求：repo 相对路径 + 行号范围。

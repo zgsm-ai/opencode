@@ -1,0 +1,45 @@
+<rg_usage>
+
+<critical_rule>
+### rg cheatsheet（内容搜索）
+
+**核心规则**：所有 `rg` 命令必须显式指定搜索目录（如 `<project_path>` 或其子目录）。禁止执行不带目录参数的 `rg "pattern"`。
+```
+</critical_rule>
+
+<basic_usage>
+### 常用命令模板（直接替换 PATTERN/LITERAL/目录）
+
+```bash
+# 1) 默认：正则内容搜索
+rg "PATTERN" <project_path>
+
+# 2) 字面量搜索（禁用正则；需要精确匹配时优先）
+rg -F "LITERAL" <project_path>
+
+# 3) 缩小范围：只搜某个子目录
+rg -n "PATTERN" <project_path>/src/
+
+# 4) 按语言类型过滤（优先用于收敛范围）
+rg "PATTERN" -t py <project_path>
+
+# 5) 只搜匹配 glob 的文件：包含/排除
+rg "PATTERN" -g "*.py" <project_path>
+rg "PATTERN" -g "!**/node_modules/**" -g "!**/.git/**" <project_path>
+
+# 6) 只列文件名（先定位候选文件，再读具体代码）
+rg -l "PATTERN" <project_path>
+
+# 7) 展示上下文（查看调用/条件/返回）
+rg -C 3 "PATTERN" <project_path>  # 前后各 3 行
+rg -A 5 "PATTERN" <project_path>  # 后 5 行
+rg -B 5 "PATTERN" <project_path>  # 前 5 行
+
+# 8) 常用匹配选项：忽略大小写/全词/智能大小写
+rg -i "PATTERN" <project_path>   # 忽略大小写
+rg -w "PATTERN" <project_path>   # 全词匹配
+rg -S "pattern" <project_path>   # 智能大小写（pattern 全小写时忽略大小写）
+```
+</basic_usage>
+
+</rg_usage>
