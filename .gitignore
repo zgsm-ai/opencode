@@ -47,3 +47,11 @@ agent-git.bat
 
 docs/
 test-project/
+.agent-git
+.agent-worktrees
+proposal/
+.memory_bank.md
+__pycache__/
+.pytest_cache/
+.venv/
+venv/
