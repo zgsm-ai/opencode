@@ -104,7 +104,7 @@ export namespace Project {
 
           id = roots[0]
           if (id) {
-            void Bun.file(path.join(git, "costrict"))
+            await Bun.file(path.join(git, "costrict"))
               .write(id)
               .catch(() => undefined)
           }

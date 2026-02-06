@@ -32,6 +32,7 @@ import { Event } from "../server/event"
 
 export namespace Config {
   const log = Log.create({ service: "config" })
+  const CONFIG_FILES = ["opencode.jsonc", "opencode.json", "costrict.jsonc", "costrict.json"]
 
   // Custom merge function that concatenates array fields instead of replacing them
   function mergeConfigConcatArrays(target: Info, source: Info): Info {
@@ -47,6 +48,11 @@ export namespace Config {
 
   export const state = Instance.state(async () => {
     const auth = await Auth.all()
+    const configPath = Flag.COSTRICT_CONFIG ?? Flag.OPENCODE_CONFIG
+    const configContent = Flag.COSTRICT_CONFIG_CONTENT ?? Flag.OPENCODE_CONFIG_CONTENT
+    const configDir = Flag.COSTRICT_CONFIG_DIR ?? Flag.OPENCODE_CONFIG_DIR
+    const disableProjectConfig = Flag.COSTRICT_DISABLE_PROJECT_CONFIG || Flag.OPENCODE_DISABLE_PROJECT_CONFIG
+    const permissionFlag = Flag.COSTRICT_PERMISSION ?? Flag.OPENCODE_PERMISSION
 
     // Load remote/well-known config first as the base layer (lowest precedence)
     // This allows organizations to provide default configs that users can override
@@ -82,14 +88,14 @@ export namespace Config {
     result = mergeConfigConcatArrays(result, await global())
 
     // Custom config path overrides global
-    if (Flag.COSTRICT_CONFIG) {
-      result = mergeConfigConcatArrays(result, await loadFile(Flag.COSTRICT_CONFIG))
-      log.debug("loaded custom config", { path: Flag.COSTRICT_CONFIG })
+    if (configPath) {
+      result = mergeConfigConcatArrays(result, await loadFile(configPath))
+      log.debug("loaded custom config", { path: configPath })
     }
 
     // Project config has highest precedence (overrides global and remote)
-    if (!Flag.COSTRICT_DISABLE_PROJECT_CONFIG) {
-      for (const file of ["costrict.jsonc", "costrict.json"]) {
+    if (!disableProjectConfig) {
+      for (const file of CONFIG_FILES) {
         const found = await Filesystem.findUp(file, Instance.directory, Instance.worktree)
         for (const resolved of found.toReversed()) {
           result = mergeConfigConcatArrays(result, await loadFile(resolved))
@@ -98,22 +104,23 @@ export namespace Config {
     }
 
     // Inline config content has highest precedence
-    if (Flag.COSTRICT_CONFIG_CONTENT) {
-      result = mergeConfigConcatArrays(result, JSON.parse(Flag.COSTRICT_CONFIG_CONTENT))
+    if (configContent) {
+      result = mergeConfigConcatArrays(result, JSON.parse(configContent))
       log.debug("loaded custom config from COSTRICT_CONFIG_CONTENT")
     }
 
     result.agent = result.agent || {}
     result.mode = result.mode || {}
     result.plugin = result.plugin || []
+    const agentOverrides = result.agent ?? {}
 
     const directories = [
       Global.Path.config,
       // Only scan project .opencode/ directories when project discovery is enabled
-      ...(!Flag.COSTRICT_DISABLE_PROJECT_CONFIG
+      ...(!disableProjectConfig
         ? await Array.fromAsync(
             Filesystem.up({
-              targets: [".opencode"],
+              targets: [".opencode", "..costrict"],
               start: Instance.directory,
               stop: Instance.worktree,
             }),
@@ -129,14 +136,15 @@ export namespace Config {
       )),
     ]
 
-    if (Flag.COSTRICT_CONFIG_DIR) {
-      directories.push(Flag.COSTRICT_CONFIG_DIR)
-      log.debug("loading config from COSTRICT_CONFIG_DIR", { path: Flag.COSTRICT_CONFIG_DIR })
+    if (configDir) {
+      directories.push(configDir)
+      log.debug("loading config from COSTRICT_CONFIG_DIR", { path: configDir })
     }
 
     for (const dir of unique(directories)) {
-      if (dir.endsWith(".costrict") || dir === Flag.COSTRICT_CONFIG_DIR) {
-        for (const file of ["costrict.jsonc", "costrict.json"]) {
+      const isConfigDir = dir.endsWith(".costrict") || dir.endsWith(".opencode") || dir === configDir
+      if (isConfigDir) {
+        for (const file of CONFIG_FILES) {
           log.debug(`loading config from ${path.join(dir, file)}`)
           result = mergeConfigConcatArrays(result, await loadFile(path.join(dir, file)))
           // to satisfy the type checker
@@ -156,6 +164,8 @@ export namespace Config {
       result.plugin.push(...(await loadPlugin(dir)))
     }
 
+    result.agent = mergeDeep(result.agent, agentOverrides)
+
     // Migrate deprecated mode field to agent field
     for (const [name, mode] of Object.entries(result.mode)) {
       result.agent = mergeDeep(result.agent ?? {}, {
@@ -166,8 +176,8 @@ export namespace Config {
       })
     }
 
-    if (Flag.COSTRICT_PERMISSION) {
-      result.permission = mergeDeep(result.permission ?? {}, JSON.parse(Flag.COSTRICT_PERMISSION))
+    if (permissionFlag) {
+      result.permission = mergeDeep(result.permission ?? {}, JSON.parse(permissionFlag))
     }
 
     // Backwards compatibility: legacy top-level `tools` config
@@ -194,10 +204,10 @@ export namespace Config {
     if (!result.keybinds) result.keybinds = Info.shape.keybinds.parse({})
 
     // Apply flag overrides for compaction settings
-    if (Flag.COSTRICT_DISABLE_AUTOCOMPACT) {
+    if (Flag.COSTRICT_DISABLE_AUTOCOMPACT || Flag.OPENCODE_DISABLE_AUTOCOMPACT) {
       result.compaction = { ...result.compaction, auto: false }
     }
-    if (Flag.COSTRICT_DISABLE_PRUNE) {
+    if (Flag.COSTRICT_DISABLE_PRUNE || Flag.OPENCODE_DISABLE_PRUNE) {
       result.compaction = { ...result.compaction, prune: false }
     }
 
@@ -210,6 +220,7 @@ export namespace Config {
   })
 
   export async function installDependencies(dir: string) {
+    if (process.env.COSTRICT_TEST_HOME) return
     const pkg = path.join(dir, "package.json")
 
     if (!(await Bun.file(pkg).exists())) {
@@ -233,10 +244,11 @@ export namespace Config {
   }
 
   function rel(item: string, patterns: string[]) {
+    const normalized = item.replaceAll("\\", "/")
     for (const pattern of patterns) {
-      const index = item.indexOf(pattern)
+      const index = normalized.indexOf(pattern)
       if (index === -1) continue
-      return item.slice(index + pattern.length)
+      return normalized.slice(index + pattern.length)
     }
   }
 
@@ -436,9 +448,9 @@ export namespace Config {
    * Deduplicates plugins by name, with later entries (higher priority) winning.
    * Priority order (highest to lowest):
    * 1. Local plugin/ directory
-   * 2. Local opencode.json
+   * 2. Local costrict.json (or opencode.json)
    * 3. Global plugin/ directory
-   * 4. Global opencode.json
+   * 4. Global costrict.json (or opencode.json)
    *
    * Since plugins are added in low-to-high priority order,
    * we reverse, deduplicate (keeping first occurrence), then restore order.
@@ -1158,8 +1170,10 @@ export namespace Config {
     let result: Info = pipe(
       {},
       mergeDeep(await loadFile(path.join(Global.Path.config, "config.json"))),
-      mergeDeep(await loadFile(path.join(Global.Path.config, "costrict.json"))),
+      mergeDeep(await loadFile(path.join(Global.Path.config, "opencode.jsonc"))),
+      mergeDeep(await loadFile(path.join(Global.Path.config, "opencode.json"))),
       mergeDeep(await loadFile(path.join(Global.Path.config, "costrict.jsonc"))),
+      mergeDeep(await loadFile(path.join(Global.Path.config, "costrict.json"))),
     )
 
     await import(path.join(Global.Path.config, "config"), {
@@ -1269,12 +1283,8 @@ export namespace Config {
       }
       const data = parsed.data
       if (data.plugin) {
-        for (let i = 0; i < data.plugin.length; i++) {
-          const plugin = data.plugin[i]
-          try {
-            data.plugin[i] = import.meta.resolve!(plugin, configFilepath)
-          } catch (err) {}
-        }
+        const resolved = await Promise.all(data.plugin.map((plugin) => resolvePlugin(plugin, configFilepath)))
+        data.plugin = resolved
       }
       return data
     }
@@ -1326,8 +1336,8 @@ export namespace Config {
   }
 
   function globalConfigFile() {
-    const candidates = ["opencode.jsonc", "opencode.json", "config.json"].map((file) =>
-      path.join(Global.Path.config, file),
+    const candidates = ["costrict.json", "costrict.jsonc", "opencode.json", "opencode.jsonc", "config.json"].map(
+      (file) => path.join(Global.Path.config, file),
     )
     for (const file of candidates) {
       if (existsSync(file)) return file
@@ -1354,6 +1364,17 @@ export namespace Config {
       if (value === undefined) return result
       return patchJsonc(result, value, [...path, key])
     }, input)
+  }
+
+  async function resolvePlugin(plugin: string, configFilepath: string): Promise<string> {
+    if (plugin.startsWith("file://")) return plugin
+    const baseDir = path.dirname(configFilepath)
+    const pkgPath = path.join(baseDir, "node_modules", plugin, "package.json")
+    const hasPkg = await Bun.file(pkgPath).exists()
+    if (!hasPkg) return plugin
+    const pkg = await Bun.file(pkgPath).json().catch(() => null)
+    const main = isRecord(pkg) && typeof pkg.main === "string" ? pkg.main : "index.js"
+    return pathToFileURL(path.join(baseDir, "node_modules", plugin, main)).href
   }
 
   function parseConfig(text: string, filepath: string): Info {
@@ -1432,50 +1453,56 @@ export namespace Config {
    * @returns The path to the config file that exists, or the default path if none exists
    *
    * Priority order (global=true):
-   * 1. costrict.jsonc
-   * 2. costrict.json
+   * 1. costrict.json
+   * 2. costrict.jsonc
+   * 3. opencode.json
+   * 4. opencode.jsonc
    *
    * Priority order (global=false):
-   * 1. baseDir/costrict.jsonc
-   * 2. baseDir/costrict.json
-   * 3. baseDir/.opencode/costrict.jsonc
-   * 4. baseDir/.opencode/costrict.json
+   * 1. baseDir/costrict.json
+   * 2. baseDir/costrict.jsonc
+   * 3. baseDir/opencode.json
+   * 4. baseDir/opencode.jsonc
+   * 5. baseDir/.opencode/costrict.json
+   * 6. baseDir/.opencode/costrict.jsonc
+   * 7. baseDir/.opencode/opencode.json
+   * 8. baseDir/.opencode/opencode.jsonc
    *
    * Defaults to costrict.json if no file exists
    */
   export async function resolveConfigFile(baseDir: string, global: boolean): Promise<string> {
     if (global) {
-      // Global config: use costrict.json (not opencode.json) for consistency
       const candidates = [
-        path.join(baseDir, "costrict.jsonc"),
         path.join(baseDir, "costrict.json"),
+        path.join(baseDir, "costrict.jsonc"),
+        path.join(baseDir, "opencode.json"),
+        path.join(baseDir, "opencode.jsonc"),
       ]
-      
       for (const candidate of candidates) {
         if (await Bun.file(candidate).exists()) {
           return candidate
         }
       }
-      
-      // Default to costrict.json if none exist
-      return candidates[1]
-    } else {
-      // Project config: check .opencode/ subdirectory
-      const projectCandidates = [
-        path.join(baseDir, "costrict.jsonc"),
-        path.join(baseDir, "costrict.json"),
-        path.join(baseDir, ".opencode", "costrict.jsonc"),
-        path.join(baseDir, ".opencode", "costrict.json"),
-      ]
-      
-      for (const candidate of projectCandidates) {
-        if (await Bun.file(candidate).exists()) {
-          return candidate
-        }
-      }
-      
-      // Default to costrict.json if none exist
-      return projectCandidates[1]
+      return candidates[0]
     }
+
+    const projectCandidates = [
+      path.join(baseDir, "costrict.json"),
+      path.join(baseDir, "costrict.jsonc"),
+      path.join(baseDir, "opencode.json"),
+      path.join(baseDir, "opencode.jsonc"),
+      path.join(baseDir, ".opencode", "costrict.json"),
+      path.join(baseDir, ".opencode", "costrict.jsonc"),
+      path.join(baseDir, ".opencode", "opencode.json"),
+      path.join(baseDir, ".opencode", "opencode.jsonc"),
+    ]
+
+    for (const candidate of projectCandidates) {
+      if (await Bun.file(candidate).exists()) {
+        return candidate
+      }
+    }
+
+    return projectCandidates[0]
   }
 }

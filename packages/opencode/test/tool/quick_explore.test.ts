@@ -120,13 +120,13 @@ describe("tool.quick_explore integration", () => {
     })
   })
 
-  test("Fix Agent should exist", async () => {
+  test("Coding Agent should exist", async () => {
     await Instance.provide({
       directory: path.join(__dirname, "../.."),
       fn: async () => {
         const { Agent } = await import("../../src/agent/agent")
-        const fixAgent = await Agent.get("Fix")
-        expect(fixAgent).toBeDefined()
+        const codingAgent = await Agent.get("coding")
+        expect(codingAgent).toBeDefined()
       },
     })
   })

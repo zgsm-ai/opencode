@@ -80,7 +80,7 @@ export namespace Question {
     ),
   }
 
-  const state = Instance.state(async () => {
+  const state = Instance.state(() => {
     const pending: Record<
       string,
       {
@@ -100,10 +100,30 @@ export namespace Question {
     questions: Info[]
     tool?: { messageID: string; callID: string }
   }): Promise<Answer[]> {
-    const s = await state()
+    const s = state()
     const id = Identifier.ascending("question")
 
     log.info("asking", { id, questions: input.questions.length })
+
+    const info: Request = {
+      id,
+      sessionID: input.sessionID,
+      questions: input.questions,
+      tool: input.tool,
+    }
+    const pending = {
+      resolve: (_answers: Answer[]) => {},
+      reject: (_error: unknown) => {},
+    }
+    const promise = new Promise<Answer[]>((resolve, reject) => {
+      pending.resolve = resolve
+      pending.reject = reject
+    })
+    s.pending[id] = {
+      info,
+      resolve: pending.resolve,
+      reject: pending.reject,
+    }
 
     // Check if auto-select mode is enabled
     const configState = await Config.state()
@@ -118,27 +138,17 @@ export namespace Question {
         }
         return []
       })
-      return autoAnswers
+      delete s.pending[id]
+      pending.resolve(autoAnswers)
+      return promise
     }
 
-    return new Promise<Answer[]>((resolve, reject) => {
-      const info: Request = {
-        id,
-        sessionID: input.sessionID,
-        questions: input.questions,
-        tool: input.tool,
-      }
-      s.pending[id] = {
-        info,
-        resolve,
-        reject,
-      }
-      Bus.publish(Event.Asked, info)
-    })
+    Bus.publish(Event.Asked, info)
+    return promise
   }
 
   export async function reply(input: { requestID: string; answers: Answer[] }): Promise<void> {
-    const s = await state()
+    const s = state()
     const existing = s.pending[input.requestID]
     if (!existing) {
       log.warn("reply for unknown request", { requestID: input.requestID })
@@ -158,7 +168,7 @@ export namespace Question {
   }
 
   export async function reject(requestID: string): Promise<void> {
-    const s = await state()
+    const s = state()
     const existing = s.pending[requestID]
     if (!existing) {
       log.warn("reject for unknown request", { requestID })
@@ -183,6 +193,7 @@ export namespace Question {
   }
 
   export async function list() {
-    return state().then((x) => Object.values(x.pending).map((x) => x.info))
+    const s = state()
+    return Object.values(s.pending).map((x) => x.info)
   }
 }

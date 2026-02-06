@@ -210,19 +210,23 @@ endlocal
                     await Bun.write(batPath, batContent)
 
                     // Create agent-git for Git Bash
-                    const bashContent = `#!/bin/bash
+                    const bashContent = `#!/usr/bin/env bash
+set -e
 SCRIPT_DIR="$(cd "$(dirname "\${BASH_SOURCE[0]}")" && pwd)"
 GIT_DIR="$SCRIPT_DIR/.agent-git"
 GIT_WORK_TREE="$SCRIPT_DIR"
+export GIT_DIR GIT_WORK_TREE
 exec git "$@"
 `
                     await Bun.write(agentGitPath, bashContent)
                 } else {
                     // Create agent-git for Unix systems
-                    const bashContent = `#!/bin/bash
+                    const bashContent = `#!/usr/bin/env bash
+set -e
 SCRIPT_DIR="$(cd "$(dirname "\${BASH_SOURCE[0]}")" && pwd)"
 GIT_DIR="$SCRIPT_DIR/.agent-git"
 GIT_WORK_TREE="$SCRIPT_DIR"
+export GIT_DIR GIT_WORK_TREE
 exec git "$@"
 `
                     await Bun.write(agentGitPath, bashContent)

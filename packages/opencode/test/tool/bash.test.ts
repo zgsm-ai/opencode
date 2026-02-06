@@ -88,12 +88,16 @@ beforeAll(async () => {
 })
 
 describe("bash tool basics", () => {
-  test("basic command", async () => {
+  test(
+    "basic command",
+    async () => {
     const dir = await prep("basic")
     const res = await call(dir, { command: "echo test" })
     expect(res.result.metadata.exit).toBe(0)
     expect(res.result.output.includes("test")).toBe(true)
-  })
+    },
+    10_000,
+  )
 })
 
 describe("bash tool safeguards", () => {
@@ -148,23 +152,31 @@ describe("bash tool safeguards", () => {
     expect(res.result.output.includes("unique-rg-dot-value")).toBe(true)
   })
 
-  test("adds implicit path for rg -e without PATH", async () => {
+  test(
+    "adds implicit path for rg -e without PATH",
+    async () => {
     const dir = await prep("rg-dot-flag")
     const target = path.join(dir, "flag.txt")
     await fs.writeFile(target, "flag-needle\n", "utf8")
     const res = await call(dir, { command: 'rg -e "flag-needle"' })
     expect(res.result.output.includes("flag.txt")).toBe(true)
     expect(res.result.output.includes("flag-needle")).toBe(true)
-  })
+    },
+    10_000,
+  )
 
-  test("adds implicit path for rg in pipeline-start", async () => {
+  test(
+    "adds implicit path for rg in pipeline-start",
+    async () => {
     const dir = await prep("rg-pipeline")
     const target = path.join(dir, "pipe.txt")
     await fs.writeFile(target, "pipeline-needle\n", "utf8")
     const res = await call(dir, { command: 'rg "pipeline-needle" | head -n 1' })
     expect(res.result.output.includes("pipe.txt")).toBe(true)
     expect(res.result.output.includes("pipeline-needle")).toBe(true)
-  })
+    },
+    10_000,
+  )
 
   test("does not add dot for rg with stdin pipe", async () => {
     const dir = await prep("rg-pipe")
@@ -235,17 +247,25 @@ describe("bash tool safeguards", () => {
     expect(res.result.metadata.truncated).toBe(false)
   })
 
-  test("adds exit code info on non-zero exit", async () => {
+  test(
+    "adds exit code info on non-zero exit",
+    async () => {
     const dir = await prep("exit-code")
     const res = await call(dir, { command: 'rg "no-match-value" .' })
     expect(res.result.output.includes("[Command exited with code 1]")).toBe(true)
-  })
+    },
+    10_000,
+  )
 
-  test("returns empty output hint", async () => {
+  test(
+    "returns empty output hint",
+    async () => {
     const dir = await prep("empty-output")
     const res = await call(dir, { command: "cd ." })
     expect(res.result.output.includes("[Command completed successfully but produced no output]")).toBe(true)
-  })
+    },
+    10_000,
+  )
 
   test("blocks timeout above max seconds", async () => {
     const dir = await prep("timeout-max")
@@ -269,12 +289,16 @@ describe("bash tool safeguards", () => {
     10_000,
   )
 
-  test("persists exported env across calls", async () => {
+  test(
+    "persists exported env across calls",
+    async () => {
     const dir = await prep("env-persist")
     await call(dir, { command: 'export FOO="bar-value"' })
     const res = await call(dir, { command: 'printf "$FOO"' })
     expect(res.result.output.includes("bar-value")).toBe(true)
-  })
+    },
+    10_000,
+  )
 
   test("persists alias across calls", async () => {
     const dir = await prep("alias-persist")

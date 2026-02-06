@@ -5,6 +5,8 @@ import path from "path"
 import DESCRIPTION from "./bash.txt"
 import { Log } from "../util/log"
 import { Instance } from "../project/instance"
+import { Bus } from "../bus"
+import { Session } from "../session"
 import { lazy } from "@/util/lazy"
 import { Language } from "web-tree-sitter"
 
@@ -12,6 +14,8 @@ import { $ } from "bun"
 import { Filesystem } from "@/util/filesystem"
 import { fileURLToPath } from "url"
 import { Shell } from "@/shell/shell"
+import { Flag } from "@/flag/flag"
+import { existsSync } from "fs"
 
 import { BashArity } from "@/permission/arity"
 import { Lock } from "@/util/lock"
@@ -42,13 +46,75 @@ const sentinelAfter = sentinelParts[1] || ""
 const sentinelBeforeBytes = Buffer.from(sentinelBefore)
 const sentinelAfterBytes = Buffer.from(sentinelAfter)
 
-const state = Instance.state(() => ({
-  cwd: Instance.directory,
-  prev: Instance.directory,
-  shell: Shell.acceptable(),
-  session: undefined as BashSession | undefined,
-  restarts: 0,
-}))
+const isBashShell = (value: string | undefined) => {
+  if (!value) return false
+  return /bash/i.test(path.basename(value))
+}
+
+const resolveShell = () => {
+  if (process.platform !== "win32") return Shell.acceptable()
+  const flagged = Flag.COSTRICT_GIT_BASH_PATH ?? Flag.OPENCODE_GIT_BASH_PATH
+  if (flagged && existsSync(flagged)) return flagged
+  const shellEnv = process.env.SHELL
+  if (shellEnv && isBashShell(shellEnv) && existsSync(shellEnv)) return shellEnv
+  const gitBin = Bun.which("git")
+  if (gitBin) {
+    const fromGit = path.join(gitBin, "..", "..", "bin", "bash.exe")
+    if (existsSync(fromGit)) return fromGit
+  }
+  const candidates = [
+    "C:\\Program Files\\Git\\bin\\bash.exe",
+    "C:\\Program Files (x86)\\Git\\bin\\bash.exe",
+  ]
+  const found = candidates.find((value) => existsSync(value))
+  if (found) return found
+  const bash = Bun.which("bash")
+  if (bash) return bash
+  return Shell.acceptable()
+}
+
+type BashState = {
+  cwd: string
+  prev: string
+  shell: string
+  session: BashSession | undefined
+  restarts: number
+}
+
+const sessionStateStore = Instance.state(
+  () => {
+    const sessions = new Map<string, BashState>()
+    const unsub = Bus.subscribe(Session.Event.Deleted, (event) => {
+      const sessionID = event.properties.info.id
+      const state = sessions.get(sessionID)
+      if (!state) return
+      void state.session?.stop().catch(() => {})
+      sessions.delete(sessionID)
+    })
+    return { sessions, unsub }
+  },
+  async (entry) => {
+    entry.unsub()
+    const tasks = Array.from(entry.sessions.values()).map((value) => value.session?.stop().catch(() => {}) ?? Promise.resolve())
+    await Promise.all(tasks)
+    entry.sessions.clear()
+  },
+)
+
+const getSessionState = (sessionID: string) => {
+  const store = sessionStateStore()
+  const existing = store.sessions.get(sessionID)
+  if (existing) return existing
+  const next: BashState = {
+    cwd: Instance.directory,
+    prev: Instance.directory,
+    shell: resolveShell(),
+    session: undefined,
+    restarts: 0,
+  }
+  store.sessions.set(sessionID, next)
+  return next
+}
 
 const precompiled = () => {
   const baseDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "resources", "search")
@@ -69,9 +135,17 @@ const precompiled = () => {
   return { rgDir, fdDir, rgBin, fdBin }
 }
 
+const projectRoot = () => {
+  const root = Instance.worktree
+  if (!root) return ""
+  if (root === "/") return ""
+  return root
+}
+
 const withPath = (envPath: string | undefined) => {
   const { rgDir, fdDir } = precompiled()
-  const baseEntries = [rgDir, fdDir]
+  const root = projectRoot()
+  const baseEntries = [root, rgDir, fdDir]
   const split = envPath ? envPath.split(path.delimiter) : []
   const entries = [...baseEntries, ...split].filter((value) => value && value.length > 0)
   if (process.platform !== "win32") return entries.join(path.delimiter)
@@ -81,7 +155,8 @@ const withPath = (envPath: string | undefined) => {
 
 const pathPrefix = () => {
   const { rgDir, fdDir } = precompiled()
-  const entries = [rgDir, fdDir].filter((value) => value && value.length > 0)
+  const root = projectRoot()
+  const entries = [root, rgDir, fdDir].filter((value) => value && value.length > 0)
   if (entries.length === 0) return ""
   if (process.platform !== "win32") return entries.join(":")
   return entries.map((value) => bashPath(value)).join(":")
@@ -803,13 +878,13 @@ export const BashTool = Tool.define("bash", async () => {
         .optional(),
     }),
     async execute(params, ctx) {
-      const lock = await Lock.write(`bash:${Instance.directory}`)
+      const lock = await Lock.write(`bash:${ctx.sessionID}`)
       try {
         const restart = params.restart === true
         const command = typeof params.command === "string" ? params.command : ""
         const detail = command || "bash"
         const value = typeof params.timeout === "number" ? params.timeout : undefined
-        const sessionState = state()
+        const sessionState = getSessionState(ctx.sessionID)
         const cwd = sessionState.cwd || Instance.directory
         if (value !== undefined && value < 0) {
           throw new Error(`Invalid timeout value: ${value}. Timeout must be a positive number.`)
@@ -846,7 +921,7 @@ export const BashTool = Tool.define("bash", async () => {
           if (current) {
             await current.stop().catch(() => {})
           }
-          const shell = Shell.acceptable()
+          const shell = resolveShell()
           sessionState.shell = shell
           const next = new BashSession(shell, env)
           sessionState.session = next
@@ -1071,7 +1146,7 @@ export const BashTool = Tool.define("bash", async () => {
           if (current) {
             await current.stop().catch(() => {})
           }
-          const shell = Shell.acceptable()
+          const shell = resolveShell()
           sessionState.shell = shell
           const next = new BashSession(shell, env)
           sessionState.session = next

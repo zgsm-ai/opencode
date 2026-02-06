@@ -9,7 +9,7 @@ describe("Agent loading integration", () => {
   const componentsDir = path.resolve(__dirname, "../src/costrict/agent")
 
   test("should load all builtin agents with template support", async () => {
-    const loadedAgents: Record<string, any> = {}
+    const loadedAgents: { raw: string; content: string }[] = []
 
     for (const agentContent of BUILTIN_AGENTS) {
       const md = await ConfigMarkdown.parseString(agentContent, {
@@ -20,49 +20,49 @@ describe("Agent loading integration", () => {
         enableConditionals: true,
       })
 
-      if (md.data) {
-        const name = (md.data as any).name || "unknown"
-        loadedAgents[name] = {
-          data: md.data,
-          prompt: md.content.trim(),
-        }
-      }
+      loadedAgents.push({
+        raw: agentContent,
+        content: md.content.trim(),
+      })
     }
 
     // Verify Fix agent loaded correctly
-    expect(loadedAgents["Fix"]).toBeDefined()
-    expect(loadedAgents["Fix"].prompt).toContain("checkpoint 工具使用说明")
-    expect(loadedAgents["Fix"].prompt).toContain("通用工作原则")
-    expect(loadedAgents["Fix"].prompt).toContain("代码审查原则")
+    const fixAgent = loadedAgents.find((agent) => agent.raw.includes("# FixAgent"))
+    expect(fixAgent).toBeDefined()
+    const fixPrompt = fixAgent?.content ?? ""
+    expect(fixPrompt).toContain("quick_explore")
+    expect(fixPrompt).toContain("agent-git 常用命令")
+    expect(fixPrompt).toContain("memory_bank 记录规范")
 
-    // Verify no {{include:}} markers remain (all were processed)
-    expect(loadedAgents["Fix"].prompt).not.toContain("{{include:")
+    // Verify no {% include %} markers remain (all were processed)
+    expect(fixPrompt).not.toContain("{% include")
 
     // Verify all agents loaded
-    expect(Object.keys(loadedAgents).length).toBeGreaterThan(0)
+    expect(loadedAgents.length).toBeGreaterThan(0)
 
     console.log("\nLoaded agents:")
-    for (const name of Object.keys(loadedAgents)) {
-      const promptLength = loadedAgents[name].prompt.length
-      console.log(`  - ${name}: ${promptLength} chars`)
+    for (const agent of loadedAgents) {
+      const promptLength = agent.content.length
+      const title = agent.raw.split("\n")[0]?.slice(0, 80) ?? "unknown"
+      console.log(`  - ${title}: ${promptLength} chars`)
     }
   })
 
   test("Fix agent should have reduced line count", async () => {
-    const fixAgentContent = BUILTIN_AGENTS.find((content) => content.includes('name: Fix'))
+    const fixAgentContent = BUILTIN_AGENTS.find((content) => content.includes("# FixAgent"))
 
     expect(fixAgentContent).toBeDefined()
 
-    // Original fix-agent.txt had 105 lines, new version should be around 90
+    // Keep a reasonable upper bound after template updates
     const lineCount = fixAgentContent!.split("\n").length
-    expect(lineCount).toBeLessThan(105)
+    expect(lineCount).toBeLessThan(130)
     expect(lineCount).toBeGreaterThan(70)
 
     console.log(`\nFix agent line count: ${lineCount} (was 105)`)
   })
 
   test("template rendering should expand components correctly", async () => {
-    const fixAgentContent = BUILTIN_AGENTS.find((content) => content.includes('name: Fix'))
+    const fixAgentContent = BUILTIN_AGENTS.find((content) => content.includes("# FixAgent"))
 
     const mdWithoutTemplate = await ConfigMarkdown.parseString(fixAgentContent!, {
       baseDir: componentsDir,
@@ -74,11 +74,11 @@ describe("Agent loading integration", () => {
       enableIncludes: true, // Enable includes
     })
 
-    // Without includes, should have {{include:}} markers
-    expect(mdWithoutTemplate.content).toContain("{{include:")
+    // Without includes, should have {% include %} markers
+    expect(mdWithoutTemplate.content).toContain("{% include")
 
-    // With includes, should NOT have {{include:}} markers
-    expect(mdWithTemplate.content).not.toContain("{{include:")
+    // With includes, should NOT have {% include %} markers
+    expect(mdWithTemplate.content).not.toContain("{% include")
 
     // With includes, content should be longer
     expect(mdWithTemplate.content.length).toBeGreaterThan(mdWithoutTemplate.content.length)

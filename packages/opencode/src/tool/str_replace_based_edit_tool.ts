@@ -286,6 +286,16 @@ function normalizeLineEndings(text: string): string {
   return text.replaceAll("\r\n", "\n")
 }
 
+function normalizeInputPath(target: string): string {
+  if (process.platform !== "win32") return target
+  const cleaned = target.replace(/\\/g, "/")
+  const match = cleaned.match(/^\/([a-zA-Z])\/(.*)/)
+  if (!match) return target
+  const drive = match[1]?.toUpperCase()
+  const rest = match[2] ?? ""
+  return `${drive}:\\${rest.replace(/\//g, "\\")}`
+}
+
 export const StrReplaceBasedEditTool = Tool.define<typeof Parameters, Meta>("str_replace_based_edit_tool", {
   description: DESCRIPTION,
   parameters: Parameters,
@@ -340,7 +350,7 @@ export const StrReplaceBasedEditTool = Tool.define<typeof Parameters, Meta>("str
     ].join("\n")
   },
   async execute(params: Params, ctx) {
-    const target = params.path
+    const target = normalizeInputPath(params.path)
 
     if (!path.isAbsolute(target)) {
       const root = path.parse(Instance.directory).root || "/"

@@ -134,10 +134,14 @@ export namespace Budget {
 
   /**
    * 构建预算通知
+   * @param originalOutput - 原始输出内容
+   * @param budgetState - 预算状态
+   * @param warningThreshold - 自定义预警阈值（默认为全局 WARNING_THRESHOLD）
    */
   export function buildBudgetNotice(
     originalOutput: string,
-    budgetState: BudgetState
+    budgetState: BudgetState,
+    warningThreshold: number = WARNING_THRESHOLD
   ): BudgetNotice {
     // 如果没有预算限制，直接返回原始内容
     if (budgetState.total === undefined) {
@@ -162,8 +166,8 @@ export namespace Budget {
     // 根据剩余预算添加警告
     if (remaining <= 0) {
       noticeText += `\n【关键】预算已耗尽：禁止再调用任何外部工具。请基于现有证据给出最终总结（已发现证据/缺失信息/建议下一步），然后调用完成工具结束任务。`
-    } else if (remaining <= WARNING_THRESHOLD) {
-      noticeText += `\n【注意】预算较低（≤${WARNING_THRESHOLD}次）：请停止盲目搜索，开始收敛并准备总结结束。`
+    } else if (remaining <= warningThreshold) {
+      noticeText += `\n【注意】预算较低（≤${warningThreshold}次）：请停止盲目搜索，开始收敛并准备总结结束。`
     }
 
     noticeText += `\n</budget_notice>`

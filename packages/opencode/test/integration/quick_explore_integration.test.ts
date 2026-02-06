@@ -100,7 +100,7 @@ describe("quick_explore integration", () => {
     })
   }, 30000)
 
-  test("All main agents have quick_explore permission", async () => {
+  test("Proposal and TaskCheck agents are available", async () => {
     await Instance.provide({
       directory: path.join(__dirname, "../.."),
       fn: async () => {
@@ -112,11 +112,7 @@ describe("quick_explore integration", () => {
         const taskcheckAgent = await Agent.get("taskcheck")
         expect(taskcheckAgent).toBeDefined()
 
-        // Check Fix Agent
-        const fixAgent = await Agent.get("Fix")
-        expect(fixAgent).toBeDefined()
-
-        console.log("✅ 所有主 Agent (Proposal/TaskCheck/Fix) 都已配置")
+        console.log("✅ Proposal/TaskCheck 主 Agent 已配置")
       },
     })
   }, 30000)

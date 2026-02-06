@@ -69,5 +69,6 @@ describe("Scheduler.register", () => {
       },
     })
     expect(runs.count).toBe(1)
+    Scheduler.clear(id, "global")
   })
 })

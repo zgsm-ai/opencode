@@ -118,8 +118,8 @@ describe("session.compaction.isOverflow", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const model = createModel({ context: 200_000, input: 120_000, output: 10_000 })
-        const tokens = { input: 159_999, output: 0, reasoning: 0, cache: { read: 0, write: 0 } }
+        const model = createModel({ context: 180_000, input: 120_000, output: 10_000 })
+        const tokens = { input: 143_999, output: 0, reasoning: 0, cache: { read: 0, write: 0 } }
         expect(await SessionCompaction.isOverflow({ tokens, model })).toBe(false)
       },
     })
@@ -141,7 +141,7 @@ describe("session.compaction.isOverflow", () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
         await Bun.write(
-          path.join(dir, "opencode.json"),
+          path.join(dir, "costrict.json"),
           JSON.stringify({
             compaction: { auto: false },
           }),

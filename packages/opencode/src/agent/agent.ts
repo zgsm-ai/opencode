@@ -1,4 +1,5 @@
 import { Config } from "../config/config"
+import { ConfigMarkdown } from "../config/markdown"
 import z from "zod"
 import { Provider } from "../provider/provider"
 import { generateObject, streamObject, type ModelMessage } from "ai"
@@ -13,15 +14,16 @@ import PROMPT_COMPACTION from "./prompt/compaction.txt"
 import PROMPT_EXPLORE from "./prompt/explore.txt"
 import PROMPT_SUMMARY from "./prompt/summary.txt"
 import PROMPT_TITLE from "./prompt/title.txt"
-import PROMPT_PROPOSAL from "./prompt/proposal.txt"
-import PROMPT_TASKCHECK from "./prompt/taskcheck.txt"
-import PROMPT_CODING from "./prompt/coding.txt"
+import PROMPT_PROPOSAL from "../costrict/agent/proposal.txt"
+import PROMPT_TASKCHECK from "../costrict/agent/task-check.txt"
+import PROMPT_CODING from "../costrict/agent/coding.txt"
 import PROMPT_QUICK_EXPLORE from "../costrict/agent/quick-explore.txt"
 import { PermissionNext } from "@/permission/next"
 import { mergeDeep, pipe, sortBy, values } from "remeda"
 import { Global } from "@/global"
 import path from "path"
 import { Plugin } from "@/plugin"
+import { fileURLToPath } from "url"
 
 export namespace Agent {
   /**
@@ -89,6 +91,7 @@ export namespace Agent {
       prompt: z.string().optional(),
       options: z.record(z.string(), z.any()),
       steps: z.number().int().positive().optional(),
+      warningThreshold: z.number().int().nonnegative().optional(),
     })
     .meta({
       ref: "Agent",
@@ -97,6 +100,36 @@ export namespace Agent {
 
   const state = Instance.state(async () => {
     const cfg = await Config.get()
+    const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../costrict/agent")
+    const promptContext = (options?: Record<string, unknown>) => {
+      const base = options ?? {}
+      const levelRaw = base["interaction_level"]
+      const level = typeof levelRaw === "string" ? levelRaw : undefined
+      const detailed = base["interaction_level_detailed"] === true || level === "detailed"
+      const minimal = base["interaction_level_minimal"] === true || level === "minimal"
+      const moderate = base["interaction_level_moderate"] === true || level === "moderate" || (!detailed && !minimal)
+      return {
+        ...base,
+        interaction_level_detailed: detailed,
+        interaction_level_moderate: moderate,
+        interaction_level_minimal: minimal,
+      }
+    }
+    const render = async (text: string, options?: Record<string, unknown>) => {
+      const md = await ConfigMarkdown.parseString(text, {
+        context: promptContext(options),
+        baseDir: root,
+        enableIncludes: true,
+        enableVariables: true,
+        enableConditionals: true,
+      }).catch(() => undefined)
+      if (!md) return text
+      return md.content.trim()
+    }
+    const proposal = await render(PROMPT_PROPOSAL, cfg.agent?.proposal?.options)
+    const taskcheck = await render(PROMPT_TASKCHECK, cfg.agent?.taskcheck?.options)
+    const coding = await render(PROMPT_CODING, cfg.agent?.coding?.options)
+    const quick = await render(PROMPT_QUICK_EXPLORE, cfg.agent?.QuickExplore?.options)
 
     const defaults = PermissionNext.fromConfig({
       "*": "allow",
@@ -122,7 +155,7 @@ export namespace Agent {
         name: "build",
         description: "The default agent. Executes tools based on configured permissions.",
         options: {},
-        steps: 60,  // 默认预算60次工具调用
+        steps: 200,  // 默认预算60次工具调用
         permission: PermissionNext.merge(
           defaults,
           PermissionNext.fromConfig({
@@ -186,7 +219,7 @@ export namespace Agent {
         ),
         mode: "primary",
         native: true,
-        prompt: PROMPT_PROPOSAL,
+        prompt: proposal,
       },
       taskcheck: {
         name: "taskcheck",
@@ -218,7 +251,7 @@ export namespace Agent {
         mode: "primary",
         native: true,
         hidden: true,
-        prompt: PROMPT_TASKCHECK,
+        prompt: taskcheck,
       },
       coding: {
         name: "coding",
@@ -251,8 +284,8 @@ export namespace Agent {
         ),
         mode: "primary",
         native: true,
-        prompt: PROMPT_CODING,
-        steps: 100,
+        prompt: coding,
+        steps: 200,
       },
       general: {
         name: "general",
@@ -271,7 +304,7 @@ export namespace Agent {
       },
       explore: {
         name: "explore",
-        steps: 10,
+        steps: 200,
         permission: PermissionNext.merge(
           defaults,
           PermissionNext.fromConfig({
@@ -345,7 +378,8 @@ export namespace Agent {
         options: {
           exitToolName: "sub_agent_task_done",
         },
-        steps: 8,  // Budget limit for QuickExplore agent
+        steps: 50,  // Budget limit for QuickExplore agent
+        warningThreshold: 10,  // Warn when budget is low (≤10)
         permission: PermissionNext.merge(
           defaults,
           PermissionNext.fromConfig({
@@ -376,7 +410,7 @@ export namespace Agent {
         mode: "subagent",
         native: true,
         hidden: true,
-        prompt: PROMPT_QUICK_EXPLORE,
+        prompt: quick,
       },
     }
 
@@ -404,8 +438,44 @@ export namespace Agent {
       item.hidden = value.hidden ?? item.hidden
       item.name = value.name ?? item.name
       item.steps = value.steps ?? item.steps
+      item.warningThreshold = value.warningThreshold ?? item.warningThreshold
       item.options = mergeDeep(item.options, value.options ?? {})
       item.permission = PermissionNext.merge(item.permission, PermissionNext.fromConfig(value.permission ?? {}))
+    }
+
+    // Ensure SubCodingAgent is defined with proper budget settings
+    if (!result["SubCodingAgent"]) {
+      result["SubCodingAgent"] = {
+        name: "SubCodingAgent",
+        description: "Sub-agent for executing coding tasks. Distributed by CodingAgent to implement specific code changes.",
+        options: {
+          exitToolName: "sub_agent_task_done",
+        },
+        steps: 70,  // Budget limit for SubCodingAgent
+        warningThreshold: 20,  // Warn when budget is low (≤20)
+        permission: PermissionNext.merge(
+          defaults,
+          PermissionNext.fromConfig({
+            // Allow editing tools for code implementation
+            read: "allow",
+            bash: "allow",
+            edit: "allow",
+            write: "allow",
+            apply_patch: "allow",
+            str_replace_based_edit_tool: "allow",
+            // Disable spawning sub-agents (prevent infinite recursion)
+            task: "deny",
+            sub_coding: "deny",
+            quick_explore: "deny",
+            // Disable question tool
+            question: "deny",
+          }),
+          user,
+        ),
+        mode: "subagent",
+        native: true,
+        hidden: true,
+      }
     }
 
     return result
@@ -436,7 +506,9 @@ export namespace Agent {
       return agent.name
     }
 
-    const primaryVisible = Object.values(agents).find((a) => a.mode !== "subagent" && a.hidden !== true)
+    const primaryVisible = Object.values(agents).find(
+      (a) => a.mode !== "subagent" && a.hidden !== true && a.native === true,
+    )
     if (!primaryVisible) throw new Error("no primary visible agent found")
     return primaryVisible.name
   }

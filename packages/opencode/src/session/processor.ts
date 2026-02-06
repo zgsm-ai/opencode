@@ -668,10 +668,11 @@ export namespace SessionProcessor {
             // 【预算通知】- 附加到每个工具结果
             for (const tool of toolsExecuted) {
               if (tool.state.status === "completed" && tool.state.output) {
-                // 构建预算通知
+                // 构建预算通知（使用 agent 自定义的预警阈值）
                 const budgetNotice = Budget.buildBudgetNotice(
                   tool.state.output,
-                  budgetState
+                  budgetState,
+                  streamInput.agent.warningThreshold
                 )
 
                 // 更新工具的输出（包含预算通知）

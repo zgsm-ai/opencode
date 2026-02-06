@@ -2,7 +2,8 @@ import { NamedError } from "@opencode-ai/util/error"
 import matter from "gray-matter"
 import { z } from "zod"
 import path from "path"
-import fs from "fs/promises"
+import fs from "fs"
+import nunjucks from "nunjucks"
 
 export namespace ConfigMarkdown {
   export const FILE_REGEX = /(?<![\w`])@(\.?[^\s`,.]*(?:\.[^\s`,.]+)*)/g
@@ -67,93 +68,112 @@ export namespace ConfigMarkdown {
     return content.replace(frontmatter, () => processed)
   }
 
-  /**
-   * Process {{include:path}} syntax to include external component files
-   * @param content - The content with include directives
-   * @param baseDir - The base directory for resolving component paths
-   * @param maxDepth - Maximum recursion depth to prevent circular references
-   * @returns Processed content with includes resolved
-   */
-  async function processIncludes(
+  const VARIABLE_REGEX = /\{\{\s*([a-zA-Z_][\w.]*?)\s*\}\}/g
+  const INCLUDE_REGEX = /\{%\s*include\s+["'][^"']+["']\s*%\}/g
+  const CONDITIONAL_REGEX = /\{%\s*(?:if|elif|else|endif)[^%]*%\}/g
+
+  function getNestedValue(obj: Record<string, unknown>, valuePath: string) {
+    const next = (current: unknown, key: string) => {
+      if (!current || typeof current !== "object") return undefined
+      if (!(key in current)) return undefined
+      return (current as Record<string, unknown>)[key]
+    }
+    return valuePath.split(".").reduce<unknown>(next, obj)
+  }
+
+  function stash(tokens: Map<string, string>, value: string) {
+    const token = `__OC_TEMPLATE_${tokens.size}__`
+    tokens.set(token, value)
+    return token
+  }
+
+  function restore(content: string, tokens: Map<string, string>) {
+    return Array.from(tokens.entries()).reduce(
+      (current, entry) => current.replaceAll(entry[0], entry[1]),
+      content,
+    )
+  }
+
+  function maskTemplate(
     content: string,
-    baseDir: string,
-    maxDepth: number = 5,
-  ): Promise<string> {
-    if (maxDepth <= 0) {
-      throw new Error("Include depth exceeded (possible circular reference)")
-    }
+    options: {
+      context?: Record<string, unknown>
+      enableIncludes: boolean
+      enableVariables: boolean
+      enableConditionals: boolean
+    },
+    tokens: Map<string, string>,
+  ) {
+    const withoutIncludes = options.enableIncludes
+      ? content
+      : content.replace(INCLUDE_REGEX, (match) => stash(tokens, match))
+    const withoutConditionals = options.enableConditionals
+      ? withoutIncludes
+      : withoutIncludes.replace(CONDITIONAL_REGEX, (match) => stash(tokens, match))
+    const withoutVariables = options.enableVariables
+      ? withoutConditionals
+      : withoutConditionals.replace(VARIABLE_REGEX, (match) => stash(tokens, match))
 
-    const includeRegex = /\{\{include:([\w\-\/\.]+)\}\}/g
-    let result = content
-    const matches = Array.from(content.matchAll(includeRegex))
+    if (!options.enableVariables) return withoutVariables
 
-    for (const match of matches) {
-      const includePath = match[1]
-      const fullPath = path.join(baseDir, "components", `${includePath}.txt`)
-
-      try {
-        const includeContent = await fs.readFile(fullPath, "utf-8")
-        // Recursively process nested includes
-        const processed = await processIncludes(includeContent, baseDir, maxDepth - 1)
-        result = result.replace(match[0], processed)
-      } catch (err) {
-        console.warn(`Failed to include ${includePath}:`, err)
-        // Keep original marker for debugging
-        result = result.replace(match[0], `[ERROR: Cannot include ${includePath}]`)
-      }
-    }
-
-    return result
-  }
-
-  /**
-   * Replace ${variable} and {{variable}} syntax with context values
-   * @param content - The content with variable placeholders
-   * @param context - The context object with variable values
-   * @returns Content with variables replaced
-   */
-  function replaceVariables(content: string, context: Record<string, any>): string {
-    let result = content
-
-    // Support ${variable} syntax
-    for (const [key, value] of Object.entries(context)) {
-      const regex = new RegExp(`\\$\\{${key}\\}`, "g")
-      result = result.replace(regex, String(value))
-    }
-
-    // Support {{variable}} syntax (but not {{include:...}} or {{#if ...}})
-    for (const [key, value] of Object.entries(context)) {
-      const regex = new RegExp(`\\{\\{${key}\\}\\}`, "g")
-      result = result.replace(regex, String(value))
-    }
-
-    return result
-  }
-
-  /**
-   * Get nested value from object using dot notation
-   * @param obj - The object to query
-   * @param path - The dot-separated path (e.g., "user.name")
-   * @returns The value at the path, or undefined if not found
-   */
-  function getNestedValue(obj: any, path: string): any {
-    return path.split(".").reduce((current, key) => current?.[key], obj)
-  }
-
-  /**
-   * Process {{#if variable}}...{{/if}} conditional syntax
-   * @param content - The content with conditional directives
-   * @param context - The context object with variable values
-   * @returns Content with conditionals processed
-   */
-  function processConditionals(content: string, context: Record<string, any>): string {
-    // Support {{#if variable}}...{{/if}} syntax
-    const ifRegex = /\{\{#if\s+([\w\.]+)\}\}([\s\S]*?)\{\{\/if\}\}/g
-
-    return content.replace(ifRegex, (match, variable, body) => {
+    const context = options.context ?? {}
+    return withoutVariables.replace(VARIABLE_REGEX, (match, variable) => {
       const value = getNestedValue(context, variable)
-      return value ? body : ""
+      if (typeof value === "undefined") {
+        return stash(tokens, match)
+      }
+      return match
     })
+  }
+
+  function normalizeIncludeName(name: string) {
+    return name.endsWith(".txt") ? name : `${name}.txt`
+  }
+
+  function createLoader(
+    baseDir: string,
+    options: {
+      context?: Record<string, unknown>
+      enableIncludes: boolean
+      enableVariables: boolean
+      enableConditionals: boolean
+    },
+    tokens: Map<string, string>,
+  ) {
+    const root = path.join(baseDir, "components")
+    return {
+      getSource(name: string) {
+        const file = path.join(root, normalizeIncludeName(name))
+        if (!fs.existsSync(file)) {
+          const label = name.replace(/\.txt$/, "")
+          const missing = `[ERROR: Cannot include ${label}]`
+          const masked = maskTemplate(missing, options, tokens)
+          return { src: masked, path: file, noCache: true }
+        }
+        const raw = fs.readFileSync(file, "utf-8")
+        const masked = maskTemplate(raw, options, tokens)
+        return { src: masked, path: file, noCache: true }
+      },
+    }
+  }
+
+  function renderNunjucks(
+    template: string,
+    options: {
+      context?: Record<string, unknown>
+      baseDir?: string
+      enableIncludes: boolean
+      enableVariables: boolean
+      enableConditionals: boolean
+    },
+  ) {
+    const tokens = new Map<string, string>()
+    const masked = maskTemplate(template, options, tokens)
+    const loader = options.baseDir ? createLoader(options.baseDir, options, tokens) : undefined
+    const env = new nunjucks.Environment(loader, { autoescape: false })
+    const context = options.context ?? {}
+    const rendered = env.renderString(masked, context)
+    return restore(rendered, tokens)
   }
 
   /**
@@ -172,31 +192,22 @@ export namespace ConfigMarkdown {
       enableConditionals?: boolean
     },
   ) {
-    let processed = template
     const opts = {
       enableIncludes: true,
       enableVariables: true,
       enableConditionals: true,
       ...options,
     }
+    const includeEnabled = Boolean(opts.enableIncludes && opts.baseDir)
+    const rendered = renderNunjucks(template, {
+      context: opts.context,
+      baseDir: includeEnabled ? opts.baseDir : undefined,
+      enableIncludes: includeEnabled,
+      enableVariables: opts.enableVariables,
+      enableConditionals: opts.enableConditionals,
+    })
 
-    // 1. Process includes (first, because components may contain variables)
-    if (opts.enableIncludes && opts.baseDir) {
-      processed = await processIncludes(processed, opts.baseDir)
-    }
-
-    // 2. Process conditionals
-    if (opts.enableConditionals && opts.context) {
-      processed = processConditionals(processed, opts.context)
-    }
-
-    // 3. Replace variables (last)
-    if (opts.enableVariables && opts.context) {
-      processed = replaceVariables(processed, opts.context)
-    }
-
-    // 4. Parse YAML frontmatter
-    processed = preprocessFrontmatter(processed)
+    const processed = preprocessFrontmatter(rendered)
 
     try {
       const md = matter(processed)
@@ -220,15 +231,12 @@ export namespace ConfigMarkdown {
    * @returns Rendered template string
    */
   export function renderTemplate(template: string, context: Record<string, any>): string {
-    let result = template
-
-    // Process conditionals
-    result = processConditionals(result, context)
-
-    // Replace variables
-    result = replaceVariables(result, context)
-
-    return result
+    return renderNunjucks(template, {
+      context,
+      enableIncludes: false,
+      enableVariables: true,
+      enableConditionals: true,
+    })
   }
 
   export async function parse(filePath: string) {

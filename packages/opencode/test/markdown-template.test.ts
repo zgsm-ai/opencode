@@ -12,22 +12,22 @@ describe("ConfigMarkdown template engine", () => {
     const template = `---
 name: Test
 ---
-{{include:checkpoint-usage}}`
+{% include "agent-git-usage.txt" %}`
 
     const result = await ConfigMarkdown.parseString(template, {
       baseDir: componentsDir,
     })
 
-    expect(result.content).toContain("checkpoint 工具使用说明")
-    expect(result.content).toContain("checkpoint (action: list)")
+    expect(result.content).toContain("agent-git 常用命令")
+    expect(result.content).toContain("agent-git --no-pager log -5")
   })
 
   test("should replace variables", async () => {
     const template = `---
 name: Test
 ---
-Project: \${projectPath}
-Task: \${taskPath}`
+Project: {{ projectPath }}
+Task: {{ taskPath }}`
 
     const result = await ConfigMarkdown.parseString(template, {
       context: {
@@ -44,7 +44,7 @@ Task: \${taskPath}`
     const template = `---
 name: Test
 ---
-{{#if showRevert}}Revert command available{{/if}}`
+{% if showRevert %}Revert command available{% endif %}`
 
     const result = await ConfigMarkdown.parseString(template, {
       context: { showRevert: true },
@@ -57,7 +57,7 @@ name: Test
     const template = `---
 name: Test
 ---
-{{#if showRevert}}Revert command available{{/if}}`
+{% if showRevert %}Revert command available{% endif %}`
 
     const result = await ConfigMarkdown.parseString(template, {
       context: { showRevert: false },
@@ -76,7 +76,7 @@ name: Test
     const template = `---
 name: Test
 ---
-{{include:test-component-a}}`
+{% include "test-component-a.txt" %}`
 
     const result = await ConfigMarkdown.parseString(template, {
       baseDir: componentsDir,
@@ -92,7 +92,7 @@ name: Test
     const template = `---
 name: Test
 ---
-{{include:non-existent-component}}`
+{% include "non-existent-component.txt" %}`
 
     const result = await ConfigMarkdown.parseString(template, {
       baseDir: componentsDir,
@@ -110,19 +110,15 @@ name: Test
     })
 
     // Verify components were included
-    expect(result.content).toContain("checkpoint 工具使用说明")
-    expect(result.content).toContain("通用工作原则")
-    expect(result.content).toContain("代码审查原则")
-    expect(result.content).toContain("任务分发指南")
-
-    // Verify frontmatter was parsed
-    expect(result.data).toHaveProperty("name", "Fix")
-    expect(result.data).toHaveProperty("mode", "all")
+    expect(result.content).toContain("quick_explore")
+    expect(result.content).toContain("agent-git 常用命令")
+    expect(result.content).toContain("memory_bank 记录规范")
+    expect(result.content).toContain("analyze_code_structure cheatsheet")
   })
 
   test("renderTemplate should only process variables and conditionals", () => {
-    const template = `Project: \${projectPath}
-{{#if enabled}}Feature enabled{{/if}}`
+    const template = `Project: {{ projectPath }}
+{% if enabled %}Feature enabled{% endif %}`
 
     const rendered = ConfigMarkdown.renderTemplate(template, {
       projectPath: "/test/path",
@@ -137,7 +133,7 @@ name: Test
     const template = `---
 name: Test
 ---
-{{#if config.enabled}}Enabled{{/if}}`
+{% if config.enabled %}Enabled{% endif %}`
 
     const result = await ConfigMarkdown.parseString(template, {
       context: { config: { enabled: true } },
