@@ -32,6 +32,9 @@ import fs from "fs/promises"
 export namespace LLM {
   const log = Log.create({ service: "llm" })
 
+  // 存储每个 session 的最新 system 提示词（经过 Plugin 处理后的完整版本）
+  const sessionSystemCache = new Map<string, string[]>()
+
   export const OUTPUT_TOKEN_MAX = Flag.COSTRICT_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 10_240
 
   export type StreamInput = {
@@ -103,6 +106,9 @@ export namespace LLM {
       system.length = 0
       system.push(header, rest.join("\n"))
     }
+
+    // 保存经过 Plugin 处理后的完整 system 数组，供 saveContextAfterResponse 使用
+    sessionSystemCache.set(input.sessionID, clone(system))
 
     const variant =
       !input.small && input.model.variants && input.user.variant ? input.model.variants[input.user.variant] : {}
@@ -533,13 +539,27 @@ export namespace LLM {
     agent: Agent.Info
     model: Provider.Model
     tools: Record<string, any>  // AI SDK 工具对象
-    system: string[]  // 系统提示词数组
+    system?: string[]  // 可选：系统提示词数组，如果没有提供则从 sessionSystemCache 读取
   }) {
     try {
       log.info("saveContextAfterResponse called", {
         sessionID: input.sessionID,
         agent: input.agent.name,
       })
+
+      // 获取系统提示词：优先使用传入的，否则从缓存读取
+      const systemPrompts = input.system || sessionSystemCache.get(input.sessionID) || []
+      if (!input.system && systemPrompts.length === 0) {
+        log.warn("No system prompts available", {
+          sessionID: input.sessionID,
+        })
+      } else {
+        log.info("Using system prompts", {
+          sessionID: input.sessionID,
+          source: input.system ? "provided" : "cache",
+          count: systemPrompts.length,
+        })
+      }
 
       // 读取当前 session 的所有消息
       const messages = await Session.messages({ sessionID: input.sessionID })
@@ -622,15 +642,15 @@ export namespace LLM {
       const historyDir = path.join(Instance.worktree, "history_message")
       await fs.mkdir(historyDir, { recursive: true })
 
-      // 将系统提示词转换为 system 消息（与 saveActualContext 一致）
-      const systemMessages = input.system.map(
+      // 将系统提示词转换为 system 消息（放在 messages 最开头）
+      const systemMessages = systemPrompts.map(
         (x): ModelMessage => ({
           role: "system",
           content: x,
         }),
       )
 
-      // 合并系统提示词和对话消息
+      // 合并系统提示词和对话消息（system 放在最开头）
       const messagesWithSystem = [...systemMessages, ...convertedMessages]
 
       // 提取工具信息并转换为 OpenAI 格式（与 saveActualContext 一致）
@@ -692,7 +712,7 @@ export namespace LLM {
         },
         // System消息的原始形式（用于对比）
         systemPrompts: {
-          array: input.system,  // 系统提示词数组
+          array: systemPrompts,  // 经过 Plugin 处理后的完整系统提示词数组
         },
       }
 
