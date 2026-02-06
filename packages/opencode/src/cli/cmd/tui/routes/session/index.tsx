@@ -1424,6 +1424,12 @@ function ToolPart(props: { last: boolean; part: ToolPart; message: AssistantMess
         <Match when={props.part.tool === "task"}>
           <Task {...toolprops} />
         </Match>
+        <Match when={props.part.tool === "quick_explore"}>
+          <SubagentTool {...toolprops} />
+        </Match>
+        <Match when={props.part.tool === "sub_coding"}>
+          <SubagentTool {...toolprops} />
+        </Match>
         <Match when={props.part.tool === "apply_patch"}>
           <ApplyPatch {...toolprops} />
         </Match>
@@ -1751,12 +1757,19 @@ function WebSearch(props: ToolProps<any>) {
 }
 
 function Task(props: ToolProps<typeof TaskTool>) {
-  const { theme } = useTheme()
+  const theme = useTheme().theme
   const keybind = useKeybind()
-  const { navigate } = useRoute()
+  const route = useRoute()
   const local = useLocal()
 
   const current = createMemo(() => props.metadata.summary?.findLast((x) => x.state.status !== "pending"))
+  const currentTitle = createMemo(() => {
+    const item = current()
+    if (!item) return ""
+    const value = (item.state as Record<string, unknown>).title
+    if (typeof value === "string") return value
+    return ""
+  })
   const color = createMemo(() => local.agent.color(props.input.subagent_type ?? "unknown"))
 
   return (
@@ -1766,7 +1779,7 @@ function Task(props: ToolProps<typeof TaskTool>) {
           title={"# " + Locale.titlecase(props.input.subagent_type ?? "unknown") + " Task"}
           onClick={
             props.metadata.sessionId
-              ? () => navigate({ type: "session", sessionID: props.metadata.sessionId! })
+              ? () => route.navigate({ type: "session", sessionID: props.metadata.sessionId! })
               : undefined
           }
           part={props.part}
@@ -1778,7 +1791,7 @@ function Task(props: ToolProps<typeof TaskTool>) {
             <Show when={current()}>
               <text style={{ fg: current()!.state.status === "error" ? theme.error : theme.textMuted }}>
                 └ {Locale.titlecase(current()!.tool)}{" "}
-                {current()!.state.status === "completed" ? current()!.state.title : ""}
+                {currentTitle()}
               </text>
             </Show>
           </box>
@@ -1798,6 +1811,90 @@ function Task(props: ToolProps<typeof TaskTool>) {
         >
           <span style={{ fg: theme.text }}>{Locale.titlecase(props.input.subagent_type ?? "unknown")}</span> Task "
           {props.input.description}"
+        </InlineTool>
+      </Match>
+    </Switch>
+  )
+}
+
+type SummaryItem = { id: string; tool: string; state: { status: string; title?: string } }
+
+function SubagentTool(props: ToolProps<any>) {
+  const theme = useTheme().theme
+  const keybind = useKeybind()
+  const route = useRoute()
+  const local = useLocal()
+
+  const meta = createMemo(() => props.metadata as Record<string, unknown>)
+  const summary = createMemo(() => {
+    const list = meta().summary
+    if (!Array.isArray(list)) return [] as SummaryItem[]
+    return list as SummaryItem[]
+  })
+  const current = createMemo(() => summary().findLast((x) => x.state.status !== "pending"))
+  const currentTitle = createMemo(() => {
+    const item = current()
+    if (!item) return ""
+    const value = (item.state as Record<string, unknown>).title
+    if (typeof value === "string") return value
+    return ""
+  })
+  const sessionId = createMemo(() => {
+    const value = meta().sessionId
+    if (typeof value !== "string") return undefined
+    return value
+  })
+  const description = createMemo(() => {
+    const value = meta().description
+    if (typeof value === "string" && value.trim()) return value.trim()
+    const input = props.input as Record<string, unknown>
+    const target = input.exploration_target
+    if (typeof target === "string" && target.trim()) return target.trim()
+    return ""
+  })
+  const label = createMemo(() => {
+    const code = meta().agentCode
+    if (typeof code === "string" && code.trim()) return code.trim()
+    return Locale.titlecase(props.part.tool.replaceAll("_", " "))
+  })
+  const note = createMemo(() => {
+    const text = description()
+    if (!text) return `(${summary().length} toolcalls)`
+    return `${text} (${summary().length} toolcalls)`
+  })
+  const color = createMemo(() => local.agent.color(label()))
+
+  return (
+    <Switch>
+      <Match when={summary().length > 0}>
+        <BlockTool
+          title={"# " + label() + " Task"}
+          onClick={sessionId() ? () => route.navigate({ type: "session", sessionID: sessionId()! }) : undefined}
+          part={props.part}
+        >
+          <box>
+            <text style={{ fg: theme.textMuted }}>{note()}</text>
+            <Show when={current()}>
+              <text style={{ fg: current()!.state.status === "error" ? theme.error : theme.textMuted }}>
+                └ {Locale.titlecase(current()!.tool)}{" "}
+                {currentTitle()}
+              </text>
+            </Show>
+          </box>
+          <Show when={sessionId()}>
+            <text fg={theme.text}>
+              {keybind.print("session_child_cycle")}
+              <span style={{ fg: theme.textMuted }}> view subagents</span>
+            </text>
+          </Show>
+        </BlockTool>
+      </Match>
+      <Match when={true}>
+        <InlineTool icon="◉" iconColor={color()} pending="Delegating..." complete={label()} part={props.part}>
+          <span style={{ fg: theme.text }}>{label()}</span>
+          <Show when={description()}>
+            <span style={{ fg: theme.textMuted }}> "{description()}"</span>
+          </Show>
         </InlineTool>
       </Match>
     </Switch>
