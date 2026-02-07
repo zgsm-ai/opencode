@@ -24,6 +24,7 @@ import { Global } from "@/global"
 import path from "path"
 import { Plugin } from "@/plugin"
 import { fileURLToPath } from "url"
+import { AgentToolsConfig } from "@/costrict/agent/config"
 
 export namespace Agent {
   /**
@@ -132,15 +133,9 @@ export namespace Agent {
     const quick = await render(PROMPT_QUICK_EXPLORE, cfg.agent?.QuickExplore?.options)
 
     const defaults = PermissionNext.fromConfig({
-      "*": "allow",
+      "*": "deny",  // 默认拒绝所有工具
       doom_loop: "ask",
-      external_directory: {
-        "*": "ask",
-      },
-      question: "deny",
-      plan_enter: "deny",
-      plan_exit: "deny",
-      // mirrors github.com/github/gitignore Node.gitignore pattern for .env files
+      external_directory: "ask",
       read: {
         "*": "allow",
         "*.env": "ask",
@@ -194,27 +189,14 @@ export namespace Agent {
         name: "proposal",
         description: "Creates detailed technical change proposals and architectural designs. Researches codebase, designs solutions, and produces structured proposal documents without implementing code.",
         options: {
-          exitToolName: "task_done",
+          exitToolName: "task_done_with_change_id",  // ✅ 正确的退出工具
         },
         // No steps limit for proposal agent
         permission: PermissionNext.merge(
           defaults,
-          PermissionNext.fromConfig({
-            question: "allow",
-            plan_enter: "allow",
-            quick_explore: "allow",
-            edit: {
-              "*": "deny",
-              "**/*.md": "allow",
-              "**/proposal/**/*.md": "allow",
-              "proposal/**/*.md": "allow",
-            },
-            write: {
-              "*": "deny",
-              "**/*.md": "allow",
-              "proposal/**": "allow",
-            },
-          }),
+          AgentToolsConfig.createToolPermission(
+            AgentToolsConfig.AGENT_CONFIGS.proposal.tools
+          ),
           user,
         ),
         mode: "primary",
@@ -224,28 +206,14 @@ export namespace Agent {
       taskcheck: {
         name: "taskcheck",
         description: "Task quality checking and improvement agent. Checks if tasks in tasks.md are clear, precise, and complete. Verifies requirements coverage, code location precision, and style consistency. Can only modify tasks.md, not code files.",
-        options: {},
+        options: {
+          exitToolName: AgentToolsConfig.AGENT_CONFIGS.taskcheck.exitToolName,
+        },
         permission: PermissionNext.merge(
           defaults,
-          PermissionNext.fromConfig({
-            question: "allow",
-            quick_explore: "allow",
-            // Only allow editing tasks.md
-            edit: {
-              "*": "deny",
-              "**/proposal/*/tasks.md": "allow",
-              "proposal/*/tasks.md": "allow",
-            },
-            write: {
-              "*": "deny",
-            },
-            // Allow bash for verification and exploration
-            bash: "allow",
-            // Allow reading any file for code exploration
-            read: "allow",
-            // Disable other edit tools
-            apply_patch: "deny",
-          }),
+          AgentToolsConfig.createToolPermission(
+            AgentToolsConfig.AGENT_CONFIGS.taskcheck.tools
+          ),
           user,
         ),
         mode: "primary",
@@ -256,30 +224,14 @@ export namespace Agent {
       coding: {
         name: "coding",
         description: "软件开发团队的项目管理者和技术架构师。负责理解任务规划(tasks.md),将开发任务分发给 SubCodingAgent 执行,审查代码提交,追踪进度。不直接修改代码,通过分发任务推动项目进展。",
-        options: {},
+        options: {
+          exitToolName: AgentToolsConfig.AGENT_CONFIGS.coding.exitToolName,
+        },
         permission: PermissionNext.merge(
           defaults,
-          PermissionNext.fromConfig({
-            question: "allow",
-            // Only allow editing tasks.md
-            edit: {
-              "*": "deny",
-              "**/proposal/*/tasks.md": "allow",
-              "proposal/*/tasks.md": "allow",
-            },
-            // Deny write
-            write: {
-              "*": "deny",
-            },
-            // Allow bash for agent-git operations
-            bash: "allow",
-            // Allow reading any file
-            read: "allow",
-            // Allow starting sub agents
-            task: "allow",
-            // Allow using sub_coding tool (new structured way)
-            sub_coding: "allow",
-          }),
+          AgentToolsConfig.createToolPermission(
+            AgentToolsConfig.AGENT_CONFIGS.coding.tools
+          ),
           user,
         ),
         mode: "primary",
@@ -382,29 +334,9 @@ export namespace Agent {
         warningThreshold: 10,  // Warn when budget is low (≤10)
         permission: PermissionNext.merge(
           defaults,
-          PermissionNext.fromConfig({
-            // Read-only permissions
-            read: "allow",
-            bash: "allow",
-            str_replace_based_edit_tool: "allow",
-            // Disable write operations
-            edit: {
-              "*": "deny",
-            },
-            write: {
-              "*": "deny",
-            },
-            apply_patch: "deny",
-            // Disable todo tools
-            todowrite: "deny",
-            todoread: "deny",
-            // Disable spawning sub-agents
-            task: "deny",
-            sub_coding: "deny",
-            quick_explore: "deny",
-            // Disable question tool
-            question: "deny",
-          }),
+          AgentToolsConfig.createToolPermission(
+            AgentToolsConfig.AGENT_CONFIGS.QuickExplore.tools
+          ),
           user,
         ),
         mode: "subagent",
@@ -455,21 +387,9 @@ export namespace Agent {
         warningThreshold: 20,  // Warn when budget is low (≤20)
         permission: PermissionNext.merge(
           defaults,
-          PermissionNext.fromConfig({
-            // Allow editing tools for code implementation
-            read: "allow",
-            bash: "allow",
-            edit: "allow",
-            write: "allow",
-            apply_patch: "allow",
-            str_replace_based_edit_tool: "allow",
-            // Disable spawning sub-agents (prevent infinite recursion)
-            task: "deny",
-            sub_coding: "deny",
-            quick_explore: "deny",
-            // Disable question tool
-            question: "deny",
-          }),
+          AgentToolsConfig.createToolPermission(
+            AgentToolsConfig.AGENT_CONFIGS.SubCodingAgent.tools
+          ),
           user,
         ),
         mode: "subagent",
