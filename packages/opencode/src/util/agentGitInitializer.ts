@@ -260,7 +260,8 @@ exec git "$@"
 
             if (exists) {
                 const content = await Bun.file(filePath).text()
-                const existingLines = content.split("\n")
+                // Handle both Unix (\n) and Windows (\r\n) line endings
+                const existingLines = content.split("\n").map((line) => line.replace(/\r$/, ""))
                 const linesToAdd = lines.filter((line) => !existingLines.includes(line))
 
                 if (linesToAdd.length > 0) {
