@@ -17,6 +17,7 @@ import { DialogThemeList } from "@tui/component/dialog-theme-list"
 import { DialogHelp } from "./ui/dialog-help"
 import { CommandProvider, useCommandDialog } from "@tui/component/dialog-command"
 import { DialogAgent } from "@tui/component/dialog-agent"
+import { DialogCodingProposal } from "@tui/component/dialog-coding-proposal"
 import { DialogSessionList } from "@tui/component/dialog-session-list"
 import { KeybindProvider } from "@tui/context/keybind"
 import { ThemeProvider, useTheme } from "@tui/context/theme"
@@ -196,6 +197,34 @@ function App() {
   const exit = useExit()
   const promptRef = usePromptRef()
 
+  function openCodingDialog() {
+    dialog.replace(() => <DialogCodingProposal />)
+  }
+
+  function moveAgent(direction: 1 | -1) {
+    const list = local.agent.list()
+    if (!list.length) return
+    const index = list.findIndex((item) => item.name === local.agent.current().name)
+    if (index === -1) {
+      const first = list[0]
+      if (!first) return
+      if (first.name === "coding") {
+        openCodingDialog()
+        return
+      }
+      local.agent.set(first.name)
+      return
+    }
+    const nextIndex = (index + direction + list.length) % list.length
+    const next = list[nextIndex]
+    if (!next) return
+    if (next.name === "coding") {
+      openCodingDialog()
+      return
+    }
+    local.agent.set(next.name)
+  }
+
   // Wire up console copy-to-clipboard via opentui's onCopySelection callback
   renderer.console.onCopySelection = async (text: string) => {
     if (!text || text.length === 0) return
@@ -236,7 +265,12 @@ function App() {
   const args = useArgs()
   onMount(() => {
     batch(() => {
-      if (args.agent) local.agent.set(args.agent)
+      if (args.agent === "coding") {
+        openCodingDialog()
+      }
+      if (args.agent && args.agent !== "coding") {
+        local.agent.set(args.agent)
+      }
       if (args.model) {
         const { providerID, modelID } = Provider.parseModel(args.model)
         if (!providerID || !modelID)
@@ -384,6 +418,18 @@ function App() {
       },
     },
     {
+      title: "Start coding from proposal",
+      value: "coding.start",
+      category: "Agent",
+      slash: {
+        name: "coding",
+        aliases: ["code"],
+      },
+      onSelect: () => {
+        openCodingDialog()
+      },
+    },
+    {
       title: "Toggle MCPs",
       value: "mcp.list",
       category: "Agent",
@@ -401,7 +447,7 @@ function App() {
       category: "Agent",
       hidden: true,
       onSelect: () => {
-        local.agent.move(1)
+        moveAgent(1)
       },
     },
     {
@@ -421,7 +467,7 @@ function App() {
       category: "Agent",
       hidden: true,
       onSelect: () => {
-        local.agent.move(-1)
+        moveAgent(-1)
       },
     },
     {

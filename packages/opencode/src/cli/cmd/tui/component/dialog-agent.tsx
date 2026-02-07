@@ -2,6 +2,7 @@ import { createMemo } from "solid-js"
 import { useLocal } from "@tui/context/local"
 import { DialogSelect } from "@tui/ui/dialog-select"
 import { useDialog } from "@tui/ui/dialog"
+import { DialogCodingProposal } from "@tui/component/dialog-coding-proposal"
 
 export function DialogAgent() {
   const local = useLocal()
@@ -23,6 +24,10 @@ export function DialogAgent() {
       current={local.agent.current().name}
       options={options()}
       onSelect={(option) => {
+        if (option.value === "coding") {
+          dialog.replace(() => <DialogCodingProposal />)
+          return
+        }
         local.agent.set(option.value)
         dialog.clear()
       }}
