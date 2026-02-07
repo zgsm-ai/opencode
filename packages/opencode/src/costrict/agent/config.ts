@@ -110,7 +110,7 @@ export namespace AgentToolsConfig {
     },
 
     // Fix Agent - 修复代码问题
-    Fix: {
+    FixAgent: {
       tools: [
         "ask_for_task_done_or_continue",
         "question",
