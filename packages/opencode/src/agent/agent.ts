@@ -18,6 +18,7 @@ import PROMPT_PROPOSAL from "../costrict/agent/proposal.txt"
 import PROMPT_TASKCHECK from "../costrict/agent/task-check.txt"
 import PROMPT_CODING from "../costrict/agent/coding.txt"
 import PROMPT_QUICK_EXPLORE from "../costrict/agent/quick-explore.txt"
+import PROMPT_FIX from "../costrict/agent/fix-agent.txt"
 import { PermissionNext } from "@/permission/next"
 import { mergeDeep, pipe, sortBy, values } from "remeda"
 import { Global } from "@/global"
@@ -131,6 +132,7 @@ export namespace Agent {
     const taskcheck = await render(PROMPT_TASKCHECK, cfg.agent?.taskcheck?.options)
     const coding = await render(PROMPT_CODING, cfg.agent?.coding?.options)
     const quick = await render(PROMPT_QUICK_EXPLORE, cfg.agent?.QuickExplore?.options)
+    const fix = await render(PROMPT_FIX, cfg.agent?.FixAgent?.options)
 
     const defaults = PermissionNext.fromConfig({
       "*": "deny",  // 默认拒绝所有工具
@@ -238,6 +240,25 @@ export namespace Agent {
         native: true,
         prompt: coding,
         steps: 200,
+      },
+      FixAgent: {
+        name: "FixAgent",
+        description: "代码修复和改进专家。收集用户反馈，分析问题，制定修改策略，委托SubCodingAgent执行代码修改。",
+        options: {
+          exitToolName: AgentToolsConfig.AGENT_CONFIGS.FixAgent.exitToolName,
+        },
+        permission: PermissionNext.merge(
+          defaults,
+          AgentToolsConfig.createToolPermission(
+            AgentToolsConfig.AGENT_CONFIGS.FixAgent.tools
+          ),
+          user,
+        ),
+        mode: "primary",
+        native: true,
+        prompt: fix,
+        steps: 200,
+        color: "#ff4444",
       },
       general: {
         name: "general",
