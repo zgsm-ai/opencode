@@ -3,6 +3,7 @@ import { useLocal } from "@tui/context/local"
 import { DialogSelect } from "@tui/ui/dialog-select"
 import { useDialog } from "@tui/ui/dialog"
 import { DialogCodingProposal } from "@tui/component/dialog-coding-proposal"
+import { DialogFixProposal } from "@tui/component/dialog-fix-proposal"
 
 export function DialogAgent() {
   const local = useLocal()
@@ -26,6 +27,10 @@ export function DialogAgent() {
       onSelect={(option) => {
         if (option.value === "coding") {
           dialog.replace(() => <DialogCodingProposal />)
+          return
+        }
+        if (option.value === "FixAgent") {
+          dialog.replace(() => <DialogFixProposal />)
           return
         }
         local.agent.set(option.value)

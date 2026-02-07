@@ -10,7 +10,7 @@ import { DialogSelect } from "@tui/ui/dialog-select"
 import { useTheme } from "@tui/context/theme"
 import { Identifier } from "@/id/id"
 import { TextAttributes } from "@opentui/core"
-import { DialogFixProposal } from "@tui/component/dialog-fix-proposal"
+import { DialogCodingProposal } from "@tui/component/dialog-coding-proposal"
 import fs from "fs"
 import path from "path"
 
@@ -44,7 +44,7 @@ async function scanProposals(directory: string) {
   return results.toSorted((a, b) => b.time - a.time)
 }
 
-function DialogCodingStarting(props: { changeId?: string }) {
+function DialogFixStarting(props: { changeId?: string }) {
   const { theme } = useTheme()
   useKeyboard((evt) => {
     if (evt.name !== "escape" && evt.name !== "tab") return
@@ -54,7 +54,7 @@ function DialogCodingStarting(props: { changeId?: string }) {
   return (
     <box paddingLeft={4} paddingRight={4} gap={1} paddingBottom={1}>
       <text fg={theme.text} attributes={TextAttributes.BOLD}>
-        Coding agent 启动中
+        Fix agent 启动中
       </text>
       <text fg={theme.textMuted}>change-id: {props.changeId ?? "-"}</text>
       <text fg={theme.textMuted}>正在创建会话并提交任务，请稍候...</text>
@@ -62,7 +62,7 @@ function DialogCodingStarting(props: { changeId?: string }) {
   )
 }
 
-export function DialogCodingProposal() {
+export function DialogFixProposal() {
   const local = useLocal()
   const sync = useSync()
   const sdk = useSDK()
@@ -78,7 +78,7 @@ export function DialogCodingProposal() {
     const list = local.agent.list()
     const size = list.length
     if (!size) return
-    const currentName = "coding"
+    const currentName = "FixAgent"
     const currentIndex = list.findIndex((item) => item.name === currentName)
     const fallbackIndex = list.findIndex((item) => item.name === local.agent.current().name)
     const start = currentIndex !== -1 ? currentIndex : fallbackIndex
@@ -86,9 +86,9 @@ export function DialogCodingProposal() {
     const nextIndex = (start + direction + size) % size
     const next = list[nextIndex]
     if (!next) return
-    if (next.name === "coding") return
-    if (next.name === "FixAgent") {
-      dialog.replace(() => <DialogFixProposal />)
+    if (next.name === "FixAgent") return
+    if (next.name === "coding") {
+      dialog.replace(() => <DialogCodingProposal />)
       return
     }
     local.agent.set(next.name)
@@ -128,12 +128,12 @@ export function DialogCodingProposal() {
   })
 
   if (busy()) {
-    return <DialogCodingStarting changeId={selected()} />
+    return <DialogFixStarting changeId={selected()} />
   }
 
   return (
     <DialogSelect
-      title="Coding agent: select proposal (change-id)"
+      title="Fix agent: select proposal (change-id)"
       placeholder="Search change-id under proposal/"
       options={options()}
       onSelect={async (option) => {
@@ -153,13 +153,13 @@ export function DialogCodingProposal() {
           return
         }
 
-        local.agent.set("coding")
+        local.agent.set("FixAgent")
 
         const project = directory()
         const tasks = path.join(project, "proposal", option.value, "tasks.md")
         const projectText = project.split(path.sep).join("/")
         const tasksText = tasks.split(path.sep).join("/")
-        const promptText = `项目路径：\`${projectText}\`\ntasks.md路径：\`${tasksText}\`\n\n请确保本次编码任务高质量完成`
+        const promptText = `项目路径：\`${projectText}\`\ntasks.md路径：\`${tasksText}\`\n\n请认真收集用户反馈并进行代码修复和改进`
         const variant = local.model.variant.current()
 
         try {
@@ -171,7 +171,7 @@ export function DialogCodingProposal() {
               sessionID,
               ...model,
               messageID,
-              agent: "coding",
+              agent: "FixAgent",
               model: model,
               variant,
               parts: [
@@ -196,7 +196,7 @@ export function DialogCodingProposal() {
           setSelected(undefined)
           toast.show({
             variant: "error",
-            message: `Failed to start coding session: ${err}`,
+            message: `Failed to start fix session: ${err}`,
             duration: 5000,
           })
         }

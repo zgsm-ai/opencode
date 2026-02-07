@@ -18,6 +18,7 @@ import { DialogHelp } from "./ui/dialog-help"
 import { CommandProvider, useCommandDialog } from "@tui/component/dialog-command"
 import { DialogAgent } from "@tui/component/dialog-agent"
 import { DialogCodingProposal } from "@tui/component/dialog-coding-proposal"
+import { DialogFixProposal } from "@tui/component/dialog-fix-proposal"
 import { DialogSessionList } from "@tui/component/dialog-session-list"
 import { KeybindProvider } from "@tui/context/keybind"
 import { ThemeProvider, useTheme } from "@tui/context/theme"
@@ -201,6 +202,10 @@ function App() {
     dialog.replace(() => <DialogCodingProposal />)
   }
 
+  function openFixDialog() {
+    dialog.replace(() => <DialogFixProposal />)
+  }
+
   function moveAgent(direction: 1 | -1) {
     const list = local.agent.list()
     if (!list.length) return
@@ -212,6 +217,10 @@ function App() {
         openCodingDialog()
         return
       }
+      if (first.name === "FixAgent") {
+        openFixDialog()
+        return
+      }
       local.agent.set(first.name)
       return
     }
@@ -220,6 +229,10 @@ function App() {
     if (!next) return
     if (next.name === "coding") {
       openCodingDialog()
+      return
+    }
+    if (next.name === "FixAgent") {
+      openFixDialog()
       return
     }
     local.agent.set(next.name)
@@ -268,7 +281,10 @@ function App() {
       if (args.agent === "coding") {
         openCodingDialog()
       }
-      if (args.agent && args.agent !== "coding") {
+      if (args.agent === "FixAgent") {
+        openFixDialog()
+      }
+      if (args.agent && args.agent !== "coding" && args.agent !== "FixAgent") {
         local.agent.set(args.agent)
       }
       if (args.model) {
@@ -427,6 +443,17 @@ function App() {
       },
       onSelect: () => {
         openCodingDialog()
+      },
+    },
+    {
+      title: "Start fix from proposal",
+      value: "fix.start",
+      category: "Agent",
+      slash: {
+        name: "fix",
+      },
+      onSelect: () => {
+        openFixDialog()
       },
     },
     {
