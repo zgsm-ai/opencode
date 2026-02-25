@@ -237,7 +237,7 @@ export const dict = {
   "dialog.mcp.empty": "MCPが設定されていません",
 
   "dialog.lsp.empty": "ファイルタイプから自動検出されたLSP",
-  "dialog.plugins.empty": "opencode.jsonで設定されたプラグイン",
+  "dialog.plugins.empty": "costrict.jsonで設定されたプラグイン",
 
   "mcp.status.connected": "接続済み",
   "mcp.status.failed": "失敗",
@@ -354,7 +354,7 @@ export const dict = {
   "toast.session.listFailed.title": "{{project}}のセッション読み込みに失敗しました",
 
   "toast.update.title": "アップデートが利用可能です",
-  "toast.update.description": "OpenCodeの新しいバージョン ({{version}}) がインストール可能です。",
+  "toast.update.description": "CoStrictの新しいバージョン ({{version}}) がインストール可能です。",
   "toast.update.action.installRestart": "インストールして再起動",
   "toast.update.action.notYet": "今はしない",
 
@@ -365,7 +365,7 @@ export const dict = {
   "error.page.action.checking": "確認中...",
   "error.page.action.checkUpdates": "アップデートを確認",
   "error.page.action.updateTo": "{{version}}にアップデート",
-  "error.page.report.prefix": "このエラーをOpenCodeチームに報告してください: ",
+  "error.page.report.prefix": "このエラーをCoStrictチームに報告してください: ",
   "error.page.report.discord": "Discord",
   "error.page.version": "バージョン: {{version}}",
 
@@ -382,8 +382,8 @@ export const dict = {
   "error.chain.responseBody": "レスポンス本文:\n{{body}}",
   "error.chain.didYouMean": "もしかして: {{suggestions}}",
   "error.chain.modelNotFound": "モデルが見つかりません: {{provider}}/{{model}}",
-  "error.chain.checkConfig": "config (opencode.json) のプロバイダー/モデル名を確認してください",
-  "error.chain.mcpFailed": 'MCPサーバー "{{name}}" が失敗しました。注意: OpenCodeはまだMCP認証をサポートしていません。',
+  "error.chain.checkConfig": "config (costrict.json) のプロバイダー/モデル名を確認してください",
+  "error.chain.mcpFailed": 'MCPサーバー "{{name}}" が失敗しました。注意: CoStrictはまだMCP認証をサポートしていません。',
   "error.chain.providerAuthFailed": "プロバイダー認証に失敗しました ({{provider}}): {{message}}",
   "error.chain.providerInitFailed":
     'プロバイダー "{{provider}}" の初期化に失敗しました。認証情報と設定を確認してください。',
@@ -498,7 +498,7 @@ export const dict = {
   "sidebar.project.recentSessions": "最近のセッション",
   "sidebar.project.viewAllSessions": "すべてのセッションを表示",
 
-  "app.name.desktop": "OpenCode Desktop",
+  "app.name.desktop": "CoStrict Desktop",
   "settings.section.desktop": "デスクトップ",
   "settings.section.server": "サーバー",
   "settings.tab.general": "一般",
@@ -510,11 +510,11 @@ export const dict = {
   "settings.general.section.sounds": "効果音",
 
   "settings.general.row.language.title": "言語",
-  "settings.general.row.language.description": "OpenCodeの表示言語を変更します",
+  "settings.general.row.language.description": "CoStrictの表示言語を変更します",
   "settings.general.row.appearance.title": "外観",
-  "settings.general.row.appearance.description": "デバイスでのOpenCodeの表示をカスタマイズします",
+  "settings.general.row.appearance.description": "デバイスでのCoStrictの表示をカスタマイズします",
   "settings.general.row.theme.title": "テーマ",
-  "settings.general.row.theme.description": "OpenCodeのテーマをカスタマイズします。",
+  "settings.general.row.theme.description": "CoStrictのテーマをカスタマイズします。",
   "settings.general.row.font.title": "フォント",
   "settings.general.row.font.description": "コードブロックで使用する等幅フォントをカスタマイズします",
 
@@ -522,13 +522,13 @@ export const dict = {
   "settings.general.row.releaseNotes.description": "アップデート後に「新機能」ポップアップを表示",
 
   "settings.updates.row.startup.title": "起動時にアップデートを確認",
-  "settings.updates.row.startup.description": "OpenCode の起動時に自動でアップデートを確認します",
+  "settings.updates.row.startup.description": "CoStrict の起動時に自動でアップデートを確認します",
   "settings.updates.row.check.title": "アップデートを確認",
   "settings.updates.row.check.description": "手動でアップデートを確認し、利用可能ならインストールします",
   "settings.updates.action.checkNow": "今すぐ確認",
   "settings.updates.action.checking": "確認中...",
   "settings.updates.toast.latest.title": "最新です",
-  "settings.updates.toast.latest.description": "OpenCode は最新バージョンです。",
+  "settings.updates.toast.latest.description": "CoStrict は最新バージョンです。",
 
   "font.option.ibmPlexMono": "IBM Plex Mono",
   "font.option.cascadiaCode": "Cascadia Code",

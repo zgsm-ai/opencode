@@ -145,7 +145,7 @@ export const dict = {
   "provider.connect.toast.connected.description": "現在可以使用 {{provider}} 模型了。",
 
   "provider.custom.title": "自訂提供商",
-  "provider.custom.description.prefix": "設定與 OpenAI 相容的提供商。請參閱",
+  "provider.custom.description.prefix": "設定與 OpenAI 相容的提供商。",
   "provider.custom.description.link": "提供商設定文件",
   "provider.custom.description.suffix": "。",
   "provider.custom.field.providerID.label": "提供商 ID",
@@ -276,7 +276,7 @@ export const dict = {
   "dialog.mcp.empty": "未設定 MCP",
 
   "dialog.lsp.empty": "已從檔案類型自動偵測到 LSPs",
-  "dialog.plugins.empty": "在 opencode.json 中設定的外掛程式",
+  "dialog.plugins.empty": "在 costrict.json 中設定的外掛程式",
 
   "mcp.status.connected": "已連線",
   "mcp.status.failed": "失敗",
@@ -396,7 +396,7 @@ export const dict = {
   "toast.session.listFailed.title": "無法載入 {{project}} 的工作階段",
 
   "toast.update.title": "有可用更新",
-  "toast.update.description": "OpenCode 有新版本 ({{version}}) 可安裝。",
+  "toast.update.description": "CoStrict 有新版本 ({{version}}) 可安裝。",
   "toast.update.action.installRestart": "安裝並重新啟動",
   "toast.update.action.notYet": "稍後",
 
@@ -407,7 +407,7 @@ export const dict = {
   "error.page.action.checking": "檢查中...",
   "error.page.action.checkUpdates": "檢查更新",
   "error.page.action.updateTo": "更新到 {{version}}",
-  "error.page.report.prefix": "請將此錯誤回報給 OpenCode 團隊",
+  "error.page.report.prefix": "請將此錯誤回報給 CoStrict 團隊",
   "error.page.report.discord": "在 Discord 上",
   "error.page.version": "版本: {{version}}",
 
@@ -424,8 +424,8 @@ export const dict = {
   "error.chain.responseBody": "回應內容:\n{{body}}",
   "error.chain.didYouMean": "你是不是想輸入: {{suggestions}}",
   "error.chain.modelNotFound": "找不到模型: {{provider}}/{{model}}",
-  "error.chain.checkConfig": "請檢查你的設定 (opencode.json) 中的 provider/model 名稱",
-  "error.chain.mcpFailed": 'MCP 伺服器 "{{name}}" 啟動失敗。注意: OpenCode 暫不支援 MCP 認證。',
+  "error.chain.checkConfig": "請檢查你的設定 (costrict.json) 中的 provider/model 名稱",
+  "error.chain.mcpFailed": 'MCP 伺服器 "{{name}}" 啟動失敗。注意: CoStrict 暫不支援 MCP 認證。',
   "error.chain.providerAuthFailed": "提供者認證失敗 ({{provider}}): {{message}}",
   "error.chain.providerInitFailed": '無法初始化提供者 "{{provider}}"。請檢查憑證和設定。',
   "error.chain.configJsonInvalid": "設定檔 {{path}} 不是有效的 JSON(C)",
@@ -536,7 +536,7 @@ export const dict = {
   "sidebar.project.recentSessions": "最近工作階段",
   "sidebar.project.viewAllSessions": "查看全部工作階段",
 
-  "app.name.desktop": "OpenCode Desktop",
+  "app.name.desktop": "CoStrict Desktop",
   "settings.section.desktop": "桌面",
   "settings.section.server": "伺服器",
   "settings.tab.general": "一般",
@@ -548,11 +548,11 @@ export const dict = {
   "settings.general.section.sounds": "音效",
 
   "settings.general.row.language.title": "語言",
-  "settings.general.row.language.description": "變更 OpenCode 的顯示語言",
+  "settings.general.row.language.description": "變更 CoStrict 的顯示語言",
   "settings.general.row.appearance.title": "外觀",
-  "settings.general.row.appearance.description": "自訂 OpenCode 在你的裝置上的外觀",
+  "settings.general.row.appearance.description": "自訂 CoStrict 在你的裝置上的外觀",
   "settings.general.row.theme.title": "主題",
-  "settings.general.row.theme.description": "自訂 OpenCode 的主題。",
+  "settings.general.row.theme.description": "自訂 CoStrict 的主題。",
   "settings.general.row.font.title": "字型",
   "settings.general.row.font.description": "自訂程式碼區塊使用的等寬字型",
 
@@ -560,13 +560,13 @@ export const dict = {
   "settings.general.row.releaseNotes.description": "更新後顯示「新功能」彈出視窗",
 
   "settings.updates.row.startup.title": "啟動時檢查更新",
-  "settings.updates.row.startup.description": "在 OpenCode 啟動時自動檢查更新",
+  "settings.updates.row.startup.description": "在 CoStrict 啟動時自動檢查更新",
   "settings.updates.row.check.title": "檢查更新",
   "settings.updates.row.check.description": "手動檢查更新並在有更新時安裝",
   "settings.updates.action.checkNow": "立即檢查",
   "settings.updates.action.checking": "檢查中...",
   "settings.updates.toast.latest.title": "已是最新版本",
-  "settings.updates.toast.latest.description": "你正在使用最新版本的 OpenCode。",
+  "settings.updates.toast.latest.description": "你正在使用最新版本的 CoStrict",
 
   "font.option.ibmPlexMono": "IBM Plex Mono",
   "font.option.cascadiaCode": "Cascadia Code",

@@ -238,7 +238,7 @@ export const dict = {
   "dialog.mcp.empty": "Brak skonfigurowanych MCP",
 
   "dialog.lsp.empty": "LSP wykryte automatycznie na podstawie typów plików",
-  "dialog.plugins.empty": "Wtyczki skonfigurowane w opencode.json",
+  "dialog.plugins.empty": "Wtyczki skonfigurowane w costrict.json",
 
   "mcp.status.connected": "połączono",
   "mcp.status.failed": "niepowodzenie",
@@ -360,7 +360,7 @@ export const dict = {
   "toast.session.listFailed.title": "Nie udało się załadować sesji dla {{project}}",
 
   "toast.update.title": "Dostępna aktualizacja",
-  "toast.update.description": "Nowa wersja OpenCode ({{version}}) jest teraz dostępna do instalacji.",
+  "toast.update.description": "Nowa wersja CoStrict ({{version}}) jest teraz dostępna do instalacji.",
   "toast.update.action.installRestart": "Zainstaluj i zrestartuj",
   "toast.update.action.notYet": "Jeszcze nie",
 
@@ -371,7 +371,7 @@ export const dict = {
   "error.page.action.checking": "Sprawdzanie...",
   "error.page.action.checkUpdates": "Sprawdź aktualizacje",
   "error.page.action.updateTo": "Zaktualizuj do {{version}}",
-  "error.page.report.prefix": "Proszę zgłosić ten błąd do zespołu OpenCode",
+  "error.page.report.prefix": "Proszę zgłosić ten błąd do zespołu CoStrict",
   "error.page.report.discord": "na Discordzie",
   "error.page.version": "Wersja: {{version}}",
 
@@ -388,9 +388,9 @@ export const dict = {
   "error.chain.responseBody": "Treść odpowiedzi:\n{{body}}",
   "error.chain.didYouMean": "Czy miałeś na myśli: {{suggestions}}",
   "error.chain.modelNotFound": "Model nie znaleziony: {{provider}}/{{model}}",
-  "error.chain.checkConfig": "Sprawdź swoją konfigurację (opencode.json) nazwy dostawców/modeli",
+  "error.chain.checkConfig": "Sprawdź swoją konfigurację (costrict.json) nazwy dostawców/modeli",
   "error.chain.mcpFailed":
-    'Serwer MCP "{{name}}" nie powiódł się. Uwaga, OpenCode nie obsługuje jeszcze uwierzytelniania MCP.',
+    'Serwer MCP "{{name}}" nie powiódł się. Uwaga, CoStrict nie obsługuje jeszcze uwierzytelniania MCP.',
   "error.chain.providerAuthFailed": "Uwierzytelnianie dostawcy nie powiodło się ({{provider}}): {{message}}",
   "error.chain.providerInitFailed":
     'Nie udało się zainicjować dostawcy "{{provider}}". Sprawdź poświadczenia i konfigurację.',
@@ -505,7 +505,7 @@ export const dict = {
   "sidebar.project.recentSessions": "Ostatnie sesje",
   "sidebar.project.viewAllSessions": "Zobacz wszystkie sesje",
 
-  "app.name.desktop": "OpenCode Desktop",
+  "app.name.desktop": "CoStrict Desktop",
   "settings.section.desktop": "Pulpit",
   "settings.section.server": "Serwer",
   "settings.tab.general": "Ogólne",
@@ -517,11 +517,11 @@ export const dict = {
   "settings.general.section.sounds": "Efekty dźwiękowe",
 
   "settings.general.row.language.title": "Język",
-  "settings.general.row.language.description": "Zmień język wyświetlania dla OpenCode",
+  "settings.general.row.language.description": "Zmień język wyświetlania dla CoStrict",
   "settings.general.row.appearance.title": "Wygląd",
-  "settings.general.row.appearance.description": "Dostosuj wygląd OpenCode na swoim urządzeniu",
+  "settings.general.row.appearance.description": "Dostosuj wygląd CoStrict na swoim urządzeniu",
   "settings.general.row.theme.title": "Motyw",
-  "settings.general.row.theme.description": "Dostosuj motyw OpenCode.",
+  "settings.general.row.theme.description": "Dostosuj motyw CoStrict.",
   "settings.general.row.font.title": "Czcionka",
   "settings.general.row.font.description": "Dostosuj czcionkę mono używaną w blokach kodu",
 
@@ -529,13 +529,13 @@ export const dict = {
   "settings.general.row.releaseNotes.description": 'Pokazuj wyskakujące okna "Co nowego" po aktualizacjach',
 
   "settings.updates.row.startup.title": "Sprawdzaj aktualizacje przy uruchomieniu",
-  "settings.updates.row.startup.description": "Automatycznie sprawdzaj aktualizacje podczas uruchamiania OpenCode",
+  "settings.updates.row.startup.description": "Automatycznie sprawdzaj aktualizacje podczas uruchamiania CoStrict",
   "settings.updates.row.check.title": "Sprawdź aktualizacje",
   "settings.updates.row.check.description": "Ręcznie sprawdź aktualizacje i zainstaluj, jeśli są dostępne",
   "settings.updates.action.checkNow": "Sprawdź teraz",
   "settings.updates.action.checking": "Sprawdzanie...",
   "settings.updates.toast.latest.title": "Masz najnowszą wersję",
-  "settings.updates.toast.latest.description": "Korzystasz z najnowszej wersji OpenCode.",
+  "settings.updates.toast.latest.description": "Korzystasz z najnowszej wersji CoStrict.",
   "font.option.ibmPlexMono": "IBM Plex Mono",
   "font.option.cascadiaCode": "Cascadia Code",
   "font.option.firaCode": "Fira Code",

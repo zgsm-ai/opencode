@@ -268,7 +268,7 @@ export function DialogConnectProvider(props: { provider: string }) {
                       <Match when={provider().id === "opencode"}>
                         <div class="flex flex-col gap-4">
                           <div class="text-14-regular text-text-base">
-                            CoStrict Zen gives you access to a curated set of reliable optimized models for coding
+                            OpenCode Zen gives you access to a curated set of reliable optimized models for coding
                             agents.
                           </div>
                           <div class="text-14-regular text-text-base">
@@ -276,8 +276,8 @@ export function DialogConnectProvider(props: { provider: string }) {
                           </div>
                           <div class="text-14-regular text-text-base">
                             Visit{" "}
-                            <Link href="https://costrict.ai/zen" tabIndex={-1}>
-                              costrict.ai/zen
+                            <Link href="https://openCode.ai/zen" tabIndex={-1}>
+                              openCode.ai/zen
                             </Link>{" "}
                             to collect your API key.
                           </div>

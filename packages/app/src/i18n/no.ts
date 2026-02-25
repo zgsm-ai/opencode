@@ -241,7 +241,7 @@ export const dict = {
   "dialog.mcp.empty": "Ingen MCP-er konfigurert",
 
   "dialog.lsp.empty": "LSP-er automatisk oppdaget fra filtyper",
-  "dialog.plugins.empty": "Plugins konfigurert i opencode.json",
+  "dialog.plugins.empty": "Plugins konfigurert i costrict.json",
 
   "mcp.status.connected": "tilkoblet",
   "mcp.status.failed": "mislyktes",
@@ -362,7 +362,7 @@ export const dict = {
   "toast.session.listFailed.title": "Kunne ikke laste sesjoner for {{project}}",
 
   "toast.update.title": "Oppdatering tilgjengelig",
-  "toast.update.description": "En ny versjon av OpenCode ({{version}}) er nå tilgjengelig for installasjon.",
+  "toast.update.description": "En ny versjon av CoStrict ({{version}}) er nå tilgjengelig for installasjon.",
   "toast.update.action.installRestart": "Installer og start på nytt",
   "toast.update.action.notYet": "Ikke nå",
 
@@ -373,7 +373,7 @@ export const dict = {
   "error.page.action.checking": "Sjekker...",
   "error.page.action.checkUpdates": "Se etter oppdateringer",
   "error.page.action.updateTo": "Oppdater til {{version}}",
-  "error.page.report.prefix": "Vennligst rapporter denne feilen til OpenCode-teamet",
+  "error.page.report.prefix": "Vennligst rapporter denne feilen til CoStrict-teamet",
   "error.page.report.discord": "på Discord",
   "error.page.version": "Versjon: {{version}}",
 
@@ -390,8 +390,8 @@ export const dict = {
   "error.chain.responseBody": "Responsinnhold:\n{{body}}",
   "error.chain.didYouMean": "Mente du: {{suggestions}}",
   "error.chain.modelNotFound": "Modell ikke funnet: {{provider}}/{{model}}",
-  "error.chain.checkConfig": "Sjekk leverandør-/modellnavnene i konfigurasjonen din (opencode.json)",
-  "error.chain.mcpFailed": 'MCP-server "{{name}}" mislyktes. Merk at OpenCode ikke støtter MCP-autentisering ennå.',
+  "error.chain.checkConfig": "Sjekk leverandør-/modellnavnene i konfigurasjonen din (costrict.json)",
+  "error.chain.mcpFailed": 'MCP-server "{{name}}" mislyktes. Merk at CoStrict ikke støtter MCP-autentisering ennå.',
   "error.chain.providerAuthFailed": "Leverandørautentisering mislyktes ({{provider}}): {{message}}",
   "error.chain.providerInitFailed":
     'Kunne ikke initialisere leverandør "{{provider}}". Sjekk legitimasjon og konfigurasjon.',
@@ -506,7 +506,7 @@ export const dict = {
   "sidebar.project.recentSessions": "Nylige sesjoner",
   "sidebar.project.viewAllSessions": "Vis alle sesjoner",
 
-  "app.name.desktop": "OpenCode Desktop",
+  "app.name.desktop": "CoStrict Desktop",
   "settings.section.desktop": "Skrivebord",
   "settings.section.server": "Server",
   "settings.tab.general": "Generelt",
@@ -518,11 +518,11 @@ export const dict = {
   "settings.general.section.sounds": "Lydeffekter",
 
   "settings.general.row.language.title": "Språk",
-  "settings.general.row.language.description": "Endre visningsspråket for OpenCode",
+  "settings.general.row.language.description": "Endre visningsspråket for CoStrict",
   "settings.general.row.appearance.title": "Utseende",
-  "settings.general.row.appearance.description": "Tilpass hvordan OpenCode ser ut på enheten din",
+  "settings.general.row.appearance.description": "Tilpass hvordan CoStrict ser ut på enheten din",
   "settings.general.row.theme.title": "Tema",
-  "settings.general.row.theme.description": "Tilpass hvordan OpenCode er tematisert.",
+  "settings.general.row.theme.description": "Tilpass hvordan CoStrict er tematisert.",
   "settings.general.row.font.title": "Skrift",
   "settings.general.row.font.description": "Tilpass mono-skriften som brukes i kodeblokker",
 
@@ -530,13 +530,13 @@ export const dict = {
   "settings.general.row.releaseNotes.description": 'Vis "Hva er nytt"-vinduer etter oppdateringer',
 
   "settings.updates.row.startup.title": "Se etter oppdateringer ved oppstart",
-  "settings.updates.row.startup.description": "Se automatisk etter oppdateringer når OpenCode starter",
+  "settings.updates.row.startup.description": "Se automatisk etter oppdateringer når CoStrict starter",
   "settings.updates.row.check.title": "Se etter oppdateringer",
   "settings.updates.row.check.description": "Se etter oppdateringer manuelt og installer hvis tilgjengelig",
   "settings.updates.action.checkNow": "Sjekk nå",
   "settings.updates.action.checking": "Sjekker...",
   "settings.updates.toast.latest.title": "Du er oppdatert",
-  "settings.updates.toast.latest.description": "Du bruker den nyeste versjonen av OpenCode.",
+  "settings.updates.toast.latest.description": "Du bruker den nyeste versjonen av CoStrict.",
 
   "font.option.ibmPlexMono": "IBM Plex Mono",
   "font.option.cascadiaCode": "Cascadia Code",

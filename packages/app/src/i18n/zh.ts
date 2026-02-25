@@ -148,7 +148,7 @@ export const dict = {
   "provider.connect.toast.connected.description": "现在可以使用 {{provider}} 模型了。",
 
   "provider.custom.title": "自定义提供商",
-  "provider.custom.description.prefix": "配置与 OpenAI 兼容的提供商。请查看",
+  "provider.custom.description.prefix": "配置与 OpenAI 兼容的提供商。",
   "provider.custom.description.link": "提供商配置文档",
   "provider.custom.description.suffix": "。",
   "provider.custom.field.providerID.label": "提供商 ID",
@@ -279,7 +279,7 @@ export const dict = {
   "dialog.mcp.empty": "未配置 MCPs",
 
   "dialog.lsp.empty": "已从文件类型自动检测到 LSPs",
-  "dialog.plugins.empty": "在 opencode.json 中配置的插件",
+  "dialog.plugins.empty": "在 costrict.json 中配置的插件",
 
   "mcp.status.connected": "已连接",
   "mcp.status.failed": "失败",
@@ -399,7 +399,7 @@ export const dict = {
   "toast.session.listFailed.title": "无法加载 {{project}} 的会话",
 
   "toast.update.title": "有可用更新",
-  "toast.update.description": "OpenCode 有新版本 ({{version}}) 可安装。",
+  "toast.update.description": "CoStrict 有新版本 ({{version}}) 可安装。",
   "toast.update.action.installRestart": "安装并重启",
   "toast.update.action.notYet": "稍后",
 
@@ -410,7 +410,7 @@ export const dict = {
   "error.page.action.checking": "检查中...",
   "error.page.action.checkUpdates": "检查更新",
   "error.page.action.updateTo": "更新到 {{version}}",
-  "error.page.report.prefix": "请将此错误报告给 OpenCode 团队",
+  "error.page.report.prefix": "请将此错误报告给 CoStrict 团队",
   "error.page.report.discord": "在 Discord 上",
   "error.page.version": "版本：{{version}}",
 
@@ -427,8 +427,8 @@ export const dict = {
   "error.chain.responseBody": "响应内容：\n{{body}}",
   "error.chain.didYouMean": "你是不是想输入：{{suggestions}}",
   "error.chain.modelNotFound": "未找到模型：{{provider}}/{{model}}",
-  "error.chain.checkConfig": "请检查你的配置 (opencode.json) 中的 provider/model 名称",
-  "error.chain.mcpFailed": 'MCP 服务器 "{{name}}" 启动失败。注意: OpenCode 暂不支持 MCP 认证。',
+  "error.chain.checkConfig": "请检查你的配置 (costrict.json) 中的 provider/model 名称",
+  "error.chain.mcpFailed": 'MCP 服务器 "{{name}}" 启动失败。注意: CoStrict 暂不支持 MCP 认证。',
   "error.chain.providerAuthFailed": "提供商认证失败（{{provider}}）：{{message}}",
   "error.chain.providerInitFailed": '无法初始化提供商 "{{provider}}"。请检查凭据和配置。',
   "error.chain.configJsonInvalid": "配置文件 {{path}} 不是有效的 JSON(C)",
@@ -539,7 +539,7 @@ export const dict = {
   "sidebar.project.recentSessions": "最近会话",
   "sidebar.project.viewAllSessions": "查看全部会话",
 
-  "app.name.desktop": "OpenCode Desktop",
+  "app.name.desktop": "CoStrict Desktop",
   "settings.section.desktop": "桌面",
   "settings.section.server": "服务器",
   "settings.tab.general": "通用",
@@ -551,24 +551,24 @@ export const dict = {
   "settings.general.section.sounds": "音效",
 
   "settings.general.row.language.title": "语言",
-  "settings.general.row.language.description": "更改 OpenCode 的显示语言",
+  "settings.general.row.language.description": "更改 CoStrict 的显示语言",
   "settings.general.row.appearance.title": "外观",
-  "settings.general.row.appearance.description": "自定义 OpenCode 在你的设备上的外观",
+  "settings.general.row.appearance.description": "自定义 CoStrict 在你的设备上的外观",
   "settings.general.row.theme.title": "主题",
-  "settings.general.row.theme.description": "自定义 OpenCode 的主题。",
+  "settings.general.row.theme.description": "自定义 CoStrict 的主题。",
   "settings.general.row.font.title": "字体",
   "settings.general.row.font.description": "自定义代码块使用的等宽字体",
   "settings.general.row.releaseNotes.title": "发行说明",
   "settings.general.row.releaseNotes.description": "更新后显示“新功能”弹窗",
 
   "settings.updates.row.startup.title": "启动时检查更新",
-  "settings.updates.row.startup.description": "在 OpenCode 启动时自动检查更新",
+  "settings.updates.row.startup.description": "在 CoStrict 启动时自动检查更新",
   "settings.updates.row.check.title": "检查更新",
   "settings.updates.row.check.description": "手动检查更新并在有更新时安装",
   "settings.updates.action.checkNow": "立即检查",
   "settings.updates.action.checking": "正在检查...",
   "settings.updates.toast.latest.title": "已是最新版本",
-  "settings.updates.toast.latest.description": "你正在使用最新版本的 OpenCode。",
+  "settings.updates.toast.latest.description": "你正在使用最新版本的 CoStrict",
 
   "font.option.ibmPlexMono": "IBM Plex Mono",
   "font.option.cascadiaCode": "Cascadia Code",

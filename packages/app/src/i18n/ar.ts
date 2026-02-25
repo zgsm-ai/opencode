@@ -238,7 +238,7 @@ export const dict = {
   "dialog.mcp.empty": "لم يتم تكوين MCPs",
 
   "dialog.lsp.empty": "تم الكشف تلقائيًا عن LSPs من أنواع الملفات",
-  "dialog.plugins.empty": "الإضافات المكونة في opencode.json",
+  "dialog.plugins.empty": "الإضافات المكونة في costrict.json",
 
   "mcp.status.connected": "متصل",
   "mcp.status.failed": "فشل",
@@ -359,7 +359,7 @@ export const dict = {
   "toast.session.listFailed.title": "فشل تحميل الجلسات لـ {{project}}",
 
   "toast.update.title": "تحديث متاح",
-  "toast.update.description": "نسخة جديدة من OpenCode ({{version}}) متاحة الآن للتثبيت.",
+  "toast.update.description": "نسخة جديدة من CoStrict ({{version}}) متاحة الآن للتثبيت.",
   "toast.update.action.installRestart": "تثبيت وإعادة تشغيل",
   "toast.update.action.notYet": "ليس الآن",
 
@@ -370,7 +370,7 @@ export const dict = {
   "error.page.action.checking": "جارٍ التحقق...",
   "error.page.action.checkUpdates": "التحقق من وجود تحديثات",
   "error.page.action.updateTo": "تحديث إلى {{version}}",
-  "error.page.report.prefix": "يرجى الإبلاغ عن هذا الخطأ لفريق OpenCode",
+  "error.page.report.prefix": "يرجى الإبلاغ عن هذا الخطأ لفريق CoStrict",
   "error.page.report.discord": "على Discord",
   "error.page.version": "الإصدار: {{version}}",
 
@@ -387,8 +387,8 @@ export const dict = {
   "error.chain.responseBody": "نص الاستجابة:\n{{body}}",
   "error.chain.didYouMean": "هل كنت تعني: {{suggestions}}",
   "error.chain.modelNotFound": "النموذج غير موجود: {{provider}}/{{model}}",
-  "error.chain.checkConfig": "تحقق من أسماء الموفر/النموذج في التكوين (opencode.json)",
-  "error.chain.mcpFailed": 'فشل خادم MCP "{{name}}". لاحظ أن OpenCode لا يدعم مصادقة MCP بعد.',
+  "error.chain.checkConfig": "تحقق من أسماء الموفر/النموذج في التكوين (costrict.json)",
+  "error.chain.mcpFailed": 'فشل خادم MCP "{{name}}". لاحظ أن CoStrict لا يدعم مصادقة MCP بعد.',
   "error.chain.providerAuthFailed": "فشلت مصادقة الموفر ({{provider}}): {{message}}",
   "error.chain.providerInitFailed": 'فشل تهيئة الموفر "{{provider}}". تحقق من بيانات الاعتماد والتكوين.',
   "error.chain.configJsonInvalid": "ملف التكوين في {{path}} ليس JSON(C) صالحًا",
@@ -499,7 +499,7 @@ export const dict = {
   "sidebar.project.recentSessions": "الجلسات الحديثة",
   "sidebar.project.viewAllSessions": "عرض جميع الجلسات",
 
-  "app.name.desktop": "OpenCode Desktop",
+  "app.name.desktop": "CoStrict Desktop",
   "settings.section.desktop": "سطح المكتب",
   "settings.section.server": "الخادم",
   "settings.tab.general": "عام",
@@ -511,11 +511,11 @@ export const dict = {
   "settings.general.section.sounds": "المؤثرات الصوتية",
 
   "settings.general.row.language.title": "اللغة",
-  "settings.general.row.language.description": "تغيير لغة العرض لـ OpenCode",
+  "settings.general.row.language.description": "تغيير لغة العرض لـ CoStrict",
   "settings.general.row.appearance.title": "المظهر",
-  "settings.general.row.appearance.description": "تخصيص كيفية ظهور OpenCode على جهازك",
+  "settings.general.row.appearance.description": "تخصيص كيفية ظهور CoStrict على جهازك",
   "settings.general.row.theme.title": "السمة",
-  "settings.general.row.theme.description": "تخصيص سمة OpenCode.",
+  "settings.general.row.theme.description": "تخصيص سمة CoStrict.",
   "settings.general.row.font.title": "الخط",
   "settings.general.row.font.description": "تخصيص الخط الأحادي المستخدم في كتل التعليمات البرمجية",
 
@@ -523,13 +523,13 @@ export const dict = {
   "settings.general.row.releaseNotes.description": 'عرض نوافذ "ما الجديد" المنبثقة بعد التحديثات',
 
   "settings.updates.row.startup.title": "التحقق من التحديثات عند بدء التشغيل",
-  "settings.updates.row.startup.description": "التحقق تلقائيًا من التحديثات عند تشغيل OpenCode",
+  "settings.updates.row.startup.description": "التحقق تلقائيًا من التحديثات عند تشغيل CoStrict",
   "settings.updates.row.check.title": "التحقق من التحديثات",
   "settings.updates.row.check.description": "التحقق يدويًا من التحديثات وتثبيتها إذا كانت متاحة",
   "settings.updates.action.checkNow": "تحقق الآن",
   "settings.updates.action.checking": "جارٍ التحقق...",
   "settings.updates.toast.latest.title": "أنت على آخر إصدار",
-  "settings.updates.toast.latest.description": "أنت تستخدم أحدث إصدار من OpenCode.",
+  "settings.updates.toast.latest.description": "أنت تستخدم أحدث إصدار من CoStrict.",
   "font.option.ibmPlexMono": "IBM Plex Mono",
   "font.option.cascadiaCode": "Cascadia Code",
   "font.option.firaCode": "Fira Code",

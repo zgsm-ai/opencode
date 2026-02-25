@@ -107,8 +107,8 @@ export function StatusPopover() {
 
   const lspItems = createMemo(() => sync.data.lsp ?? [])
   const lspCount = createMemo(() => lspItems().length)
-  const plugins = createMemo(() => sync.data.config.plugin ?? [])
-  const pluginCount = createMemo(() => plugins().length)
+  // const plugins = createMemo(() => sync.data.config.plugin ?? [])
+  // const pluginCount = createMemo(() => plugins().length)
 
   const overallHealthy = createMemo(() => {
     const serverHealthy = server.healthy() === true
@@ -184,10 +184,10 @@ export function StatusPopover() {
               {lspCount() > 0 ? `${lspCount()} ` : ""}
               {language.t("status.popover.tab.lsp")}
             </Tabs.Trigger>
-            <Tabs.Trigger value="plugins" data-slot="tab" class="text-12-regular">
+            {/* <Tabs.Trigger value="plugins" data-slot="tab" class="text-12-regular">
               {pluginCount() > 0 ? `${pluginCount()} ` : ""}
               {language.t("status.popover.tab.plugins")}
-            </Tabs.Trigger>
+            </Tabs.Trigger> */}
           </Tabs.List>
 
           <Tabs.Content value="servers">
@@ -329,7 +329,7 @@ export function StatusPopover() {
             </div>
           </Tabs.Content>
 
-          <Tabs.Content value="plugins">
+          {/* <Tabs.Content value="plugins">
             <div class="flex flex-col px-2 pb-2">
               <div class="flex flex-col p-3 bg-background-base rounded-sm min-h-14">
                 <Show
@@ -363,7 +363,7 @@ export function StatusPopover() {
                 </Show>
               </div>
             </div>
-          </Tabs.Content>
+          </Tabs.Content> */}
         </Tabs>
       </div>
     </Popover>

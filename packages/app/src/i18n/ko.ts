@@ -241,7 +241,7 @@ export const dict = {
   "dialog.mcp.empty": "구성된 MCP 없음",
 
   "dialog.lsp.empty": "파일 유형에서 자동 감지된 LSP",
-  "dialog.plugins.empty": "opencode.json에 구성된 플러그인",
+  "dialog.plugins.empty": "costrict.json에 구성된 플러그인",
 
   "mcp.status.connected": "연결됨",
   "mcp.status.failed": "실패",
@@ -362,7 +362,7 @@ export const dict = {
   "toast.session.listFailed.title": "{{project}}에 대한 세션을 로드하지 못했습니다",
 
   "toast.update.title": "업데이트 가능",
-  "toast.update.description": "OpenCode의 새 버전({{version}})을 설치할 수 있습니다.",
+  "toast.update.description": "CoStrict의 새 버전({{version}})을 설치할 수 있습니다.",
   "toast.update.action.installRestart": "설치 및 다시 시작",
   "toast.update.action.notYet": "나중에",
 
@@ -373,7 +373,7 @@ export const dict = {
   "error.page.action.checking": "확인 중...",
   "error.page.action.checkUpdates": "업데이트 확인",
   "error.page.action.updateTo": "{{version}} 버전으로 업데이트",
-  "error.page.report.prefix": "이 오류를 OpenCode 팀에 제보해 주세요: ",
+  "error.page.report.prefix": "이 오류를 CoStrict 팀에 제보해 주세요: ",
   "error.page.report.discord": "Discord",
   "error.page.version": "버전: {{version}}",
 
@@ -390,8 +390,8 @@ export const dict = {
   "error.chain.responseBody": "응답 본문:\n{{body}}",
   "error.chain.didYouMean": "혹시 {{suggestions}}을(를) 의미하셨나요?",
   "error.chain.modelNotFound": "모델을 찾을 수 없음: {{provider}}/{{model}}",
-  "error.chain.checkConfig": "구성(opencode.json)의 공급자/모델 이름을 확인하세요",
-  "error.chain.mcpFailed": 'MCP 서버 "{{name}}" 실패. 참고: OpenCode는 아직 MCP 인증을 지원하지 않습니다.',
+  "error.chain.checkConfig": "구성(costrict.json)의 공급자/모델 이름을 확인하세요",
+  "error.chain.mcpFailed": 'MCP 서버 "{{name}}" 실패. 참고: CoStrict는 아직 MCP 인증을 지원하지 않습니다.',
   "error.chain.providerAuthFailed": "공급자 인증 실패 ({{provider}}): {{message}}",
   "error.chain.providerInitFailed": '공급자 "{{provider}}" 초기화 실패. 자격 증명과 구성을 확인하세요.',
   "error.chain.configJsonInvalid": "{{path}}의 구성 파일이 유효한 JSON(C)가 아닙니다",
@@ -504,7 +504,7 @@ export const dict = {
   "sidebar.project.recentSessions": "최근 세션",
   "sidebar.project.viewAllSessions": "모든 세션 보기",
 
-  "app.name.desktop": "OpenCode Desktop",
+  "app.name.desktop": "CoStrict Desktop",
   "settings.section.desktop": "데스크톱",
   "settings.section.server": "서버",
   "settings.tab.general": "일반",
@@ -516,11 +516,11 @@ export const dict = {
   "settings.general.section.sounds": "효과음",
 
   "settings.general.row.language.title": "언어",
-  "settings.general.row.language.description": "OpenCode 표시 언어 변경",
+  "settings.general.row.language.description": "CoStrict 표시 언어 변경",
   "settings.general.row.appearance.title": "모양",
-  "settings.general.row.appearance.description": "기기에서 OpenCode가 보이는 방식 사용자 지정",
+  "settings.general.row.appearance.description": "기기에서 CoStrict가 보이는 방식 사용자 지정",
   "settings.general.row.theme.title": "테마",
-  "settings.general.row.theme.description": "OpenCode 테마 사용자 지정",
+  "settings.general.row.theme.description": "CoStrict 테마 사용자 지정",
   "settings.general.row.font.title": "글꼴",
   "settings.general.row.font.description": "코드 블록에 사용되는 고정폭 글꼴 사용자 지정",
 
@@ -528,13 +528,13 @@ export const dict = {
   "settings.general.row.releaseNotes.description": "업데이트 후 '새 소식' 팝업 표시",
 
   "settings.updates.row.startup.title": "시작 시 업데이트 확인",
-  "settings.updates.row.startup.description": "OpenCode를 실행할 때 업데이트를 자동으로 확인합니다",
+  "settings.updates.row.startup.description": "CoStrict를 실행할 때 업데이트를 자동으로 확인합니다",
   "settings.updates.row.check.title": "업데이트 확인",
   "settings.updates.row.check.description": "업데이트를 수동으로 확인하고, 사용 가능하면 설치합니다",
   "settings.updates.action.checkNow": "지금 확인",
   "settings.updates.action.checking": "확인 중...",
   "settings.updates.toast.latest.title": "최신 상태입니다",
-  "settings.updates.toast.latest.description": "현재 최신 버전의 OpenCode를 사용 중입니다.",
+  "settings.updates.toast.latest.description": "현재 최신 버전의 CoStrict를 사용 중입니다.",
 
   "font.option.ibmPlexMono": "IBM Plex Mono",
   "font.option.cascadiaCode": "Cascadia Code",

@@ -243,7 +243,7 @@ export const dict = {
   "dialog.mcp.empty": "ไม่มี MCP ที่กำหนดค่า",
 
   "dialog.lsp.empty": "LSPs ตรวจจับอัตโนมัติจากประเภทไฟล์",
-  "dialog.plugins.empty": "ปลั๊กอินที่กำหนดค่าใน opencode.json",
+  "dialog.plugins.empty": "ปลั๊กอินที่กำหนดค่าใน costrict.json",
 
   "mcp.status.connected": "เชื่อมต่อแล้ว",
   "mcp.status.failed": "ล้มเหลว",
@@ -365,7 +365,7 @@ export const dict = {
   "toast.session.listFailed.title": "ไม่สามารถโหลดเซสชันสำหรับ {{project}}",
 
   "toast.update.title": "มีการอัปเดต",
-  "toast.update.description": "เวอร์ชันใหม่ของ OpenCode ({{version}}) พร้อมใช้งานสำหรับติดตั้ง",
+  "toast.update.description": "เวอร์ชันใหม่ของ CoStrict ({{version}}) พร้อมใช้งานสำหรับติดตั้ง",
   "toast.update.action.installRestart": "ติดตั้งและรีสตาร์ท",
   "toast.update.action.notYet": "ยังไม่",
 
@@ -376,7 +376,7 @@ export const dict = {
   "error.page.action.checking": "กำลังตรวจสอบ...",
   "error.page.action.checkUpdates": "ตรวจสอบการอัปเดต",
   "error.page.action.updateTo": "อัปเดตเป็น {{version}}",
-  "error.page.report.prefix": "โปรดรายงานข้อผิดพลาดนี้ให้ทีม OpenCode",
+  "error.page.report.prefix": "โปรดรายงานข้อผิดพลาดนี้ให้ทีม CoStrict",
   "error.page.report.discord": "บน Discord",
   "error.page.version": "เวอร์ชัน: {{version}}",
 
@@ -392,8 +392,8 @@ export const dict = {
   "error.chain.responseBody": "เนื้อหาการตอบสนอง:\n{{body}}",
   "error.chain.didYouMean": "คุณหมายถึง: {{suggestions}}",
   "error.chain.modelNotFound": "ไม่พบโมเดล: {{provider}}/{{model}}",
-  "error.chain.checkConfig": "ตรวจสอบการกำหนดค่าของคุณ (opencode.json) ชื่อผู้ให้บริการ/โมเดล",
-  "error.chain.mcpFailed": 'เซิร์ฟเวอร์ MCP "{{name}}" ล้มเหลว โปรดทราบว่า OpenCode ยังไม่รองรับการตรวจสอบสิทธิ์ MCP',
+  "error.chain.checkConfig": "ตรวจสอบการกำหนดค่าของคุณ (costrict.json) ชื่อผู้ให้บริการ/โมเดล",
+  "error.chain.mcpFailed": 'เซิร์ฟเวอร์ MCP "{{name}}" ล้มเหลว โปรดทราบว่า CoStrict ยังไม่รองรับการตรวจสอบสิทธิ์ MCP',
   "error.chain.providerAuthFailed": "การตรวจสอบสิทธิ์ผู้ให้บริการล้มเหลว ({{provider}}): {{message}}",
   "error.chain.providerInitFailed": 'ไม่สามารถเริ่มต้นผู้ให้บริการ "{{provider}}" ตรวจสอบข้อมูลรับรองและการกำหนดค่า',
   "error.chain.configJsonInvalid": "ไฟล์กำหนดค่าที่ {{path}} ไม่ใช่ JSON(C) ที่ถูกต้อง",
@@ -506,7 +506,7 @@ export const dict = {
   "sidebar.project.recentSessions": "เซสชันล่าสุด",
   "sidebar.project.viewAllSessions": "ดูเซสชันทั้งหมด",
 
-  "app.name.desktop": "OpenCode Desktop",
+  "app.name.desktop": "CoStrict Desktop",
 
   "settings.section.desktop": "เดสก์ท็อป",
   "settings.section.server": "เซิร์ฟเวอร์",
@@ -519,11 +519,11 @@ export const dict = {
   "settings.general.section.sounds": "เสียงเอฟเฟกต์",
 
   "settings.general.row.language.title": "ภาษา",
-  "settings.general.row.language.description": "เปลี่ยนภาษาที่แสดงสำหรับ OpenCode",
+  "settings.general.row.language.description": "เปลี่ยนภาษาที่แสดงสำหรับ CoStrict",
   "settings.general.row.appearance.title": "รูปลักษณ์",
-  "settings.general.row.appearance.description": "ปรับแต่งวิธีการที่ OpenCode มีลักษณะบนอุปกรณ์ของคุณ",
+  "settings.general.row.appearance.description": "ปรับแต่งวิธีการที่ CoStrict มีลักษณะบนอุปกรณ์ของคุณ",
   "settings.general.row.theme.title": "ธีม",
-  "settings.general.row.theme.description": "ปรับแต่งวิธีการที่ OpenCode มีธีม",
+  "settings.general.row.theme.description": "ปรับแต่งวิธีการที่ CoStrict มีธีม",
   "settings.general.row.font.title": "ฟอนต์",
   "settings.general.row.font.description": "ปรับแต่งฟอนต์โมโนที่ใช้ในบล็อกโค้ด",
 

@@ -148,7 +148,7 @@ export const dict = {
   "provider.connect.toast.connected.description": "{{provider}} Modelle sind jetzt verfügbar.",
 
   "provider.custom.title": "Benutzerdefinierter Anbieter",
-  "provider.custom.description.prefix": "Konfigurieren Sie einen OpenAI-kompatiblen Anbieter. Siehe die ",
+  "provider.custom.description.prefix": "Konfigurieren Sie einen OpenAI-kompatiblen Anbieter.",
   "provider.custom.description.link": "Anbieter-Konfigurationsdokumente",
   "provider.custom.description.suffix": ".",
   "provider.custom.field.providerID.label": "Anbieter-ID",
@@ -281,7 +281,7 @@ export const dict = {
   "dialog.mcp.empty": "Keine MCPs konfiguriert",
 
   "dialog.lsp.empty": "LSPs automatisch nach Dateityp erkannt",
-  "dialog.plugins.empty": "In opencode.json konfigurierte Plugins",
+  "dialog.plugins.empty": "In costrict.json konfigurierte Plugins",
 
   "mcp.status.connected": "verbunden",
   "mcp.status.failed": "fehlgeschlagen",
@@ -399,7 +399,7 @@ export const dict = {
   "toast.session.listFailed.title": "Sitzungen für {{project}} konnten nicht geladen werden",
 
   "toast.update.title": "Update verfügbar",
-  "toast.update.description": "Eine neue Version von OpenCode ({{version}}) ist zur Installation verfügbar.",
+  "toast.update.description": "Eine neue Version von CoStrict ({{version}}) ist zur Installation verfügbar.",
   "toast.update.action.installRestart": "Installieren und neu starten",
   "toast.update.action.notYet": "Noch nicht",
 
@@ -410,7 +410,7 @@ export const dict = {
   "error.page.action.checking": "Prüfen...",
   "error.page.action.checkUpdates": "Nach Updates suchen",
   "error.page.action.updateTo": "Auf {{version}} aktualisieren",
-  "error.page.report.prefix": "Bitte melden Sie diesen Fehler dem OpenCode-Team",
+  "error.page.report.prefix": "Bitte melden Sie diesen Fehler dem CoStrict-Team",
   "error.page.report.discord": "auf Discord",
   "error.page.version": "Version: {{version}}",
 
@@ -428,9 +428,9 @@ export const dict = {
   "error.chain.responseBody": "Antwort-Body:\n{{body}}",
   "error.chain.didYouMean": "Meinten Sie: {{suggestions}}",
   "error.chain.modelNotFound": "Modell nicht gefunden: {{provider}}/{{model}}",
-  "error.chain.checkConfig": "Überprüfen Sie Ihre Konfiguration (opencode.json) auf Anbieter-/Modellnamen",
+  "error.chain.checkConfig": "Überprüfen Sie Ihre Konfiguration (costrict.json) auf Anbieter-/Modellnamen",
   "error.chain.mcpFailed":
-    'MCP-Server "{{name}}" fehlgeschlagen. Hinweis: OpenCode unterstützt noch keine MCP-Authentifizierung.',
+    'MCP-Server "{{name}}" fehlgeschlagen. Hinweis: CoStrict unterstützt noch keine MCP-Authentifizierung.',
   "error.chain.providerAuthFailed": "Anbieter-Authentifizierung fehlgeschlagen ({{provider}}): {{message}}",
   "error.chain.providerInitFailed":
     'Anbieter "{{provider}}" konnte nicht initialisiert werden. Überprüfen Sie Anmeldeinformationen und Konfiguration.',
@@ -547,7 +547,7 @@ export const dict = {
   "sidebar.project.recentSessions": "Letzte Sitzungen",
   "sidebar.project.viewAllSessions": "Alle Sitzungen anzeigen",
 
-  "app.name.desktop": "OpenCode Desktop",
+  "app.name.desktop": "CoStrict Desktop",
   "settings.section.desktop": "Desktop",
   "settings.section.server": "Server",
   "settings.tab.general": "Allgemein",
@@ -559,11 +559,11 @@ export const dict = {
   "settings.general.section.sounds": "Soundeffekte",
 
   "settings.general.row.language.title": "Sprache",
-  "settings.general.row.language.description": "Die Anzeigesprache für OpenCode ändern",
+  "settings.general.row.language.description": "Die Anzeigesprache für CoStrict ändern",
   "settings.general.row.appearance.title": "Erscheinungsbild",
-  "settings.general.row.appearance.description": "Anpassen, wie OpenCode auf Ihrem Gerät aussieht",
+  "settings.general.row.appearance.description": "Anpassen, wie CoStrict auf Ihrem Gerät aussieht",
   "settings.general.row.theme.title": "Thema",
-  "settings.general.row.theme.description": "Das Thema von OpenCode anpassen.",
+  "settings.general.row.theme.description": "Das Thema von CoStrict anpassen.",
   "settings.general.row.font.title": "Schriftart",
   "settings.general.row.font.description": "Die in Codeblöcken verwendete Monospace-Schriftart anpassen",
 
@@ -571,13 +571,13 @@ export const dict = {
   "settings.general.row.releaseNotes.description": '"Neuigkeiten"-Pop-ups nach Updates anzeigen',
 
   "settings.updates.row.startup.title": "Beim Start nach Updates suchen",
-  "settings.updates.row.startup.description": "Beim Start von OpenCode automatisch nach Updates suchen",
+  "settings.updates.row.startup.description": "Beim Start von CoStrict automatisch nach Updates suchen",
   "settings.updates.row.check.title": "Nach Updates suchen",
   "settings.updates.row.check.description": "Manuell nach Updates suchen und installieren, wenn verfügbar",
   "settings.updates.action.checkNow": "Jetzt prüfen",
   "settings.updates.action.checking": "Wird geprüft...",
   "settings.updates.toast.latest.title": "Du bist auf dem neuesten Stand",
-  "settings.updates.toast.latest.description": "Du verwendest die aktuelle Version von OpenCode.",
+  "settings.updates.toast.latest.description": "Du verwendest die aktuelle Version von CoStrict.",
 
   "font.option.ibmPlexMono": "IBM Plex Mono",
   "font.option.cascadiaCode": "Cascadia Code",
