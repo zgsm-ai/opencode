@@ -183,6 +183,12 @@ export function toolAlias(toolName: string, availableTools?: Set<string>): strin
     createTask: "task",
     new_task: "task",
     newTask: "task",
+    taskdone: "task_done",
+    task_done_with_changeid: "task_done_with_change_id",
+    taskdone_with_change_id: "task_done_with_change_id",
+    taskdone_with_changeid: "task_done_with_change_id",
+    subagent_task_done: "sub_agent_task_done",
+    sub_agent_taskdone: "sub_agent_task_done",
     
     // Batch operations
     batch_operations: "batch",

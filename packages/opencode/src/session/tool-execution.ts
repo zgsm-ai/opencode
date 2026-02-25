@@ -3,6 +3,8 @@ import { Session } from "."
 import { Log } from "@/util/log"
 import { Identifier } from "@/id/id"
 import { PermissionNext } from "@/permission/next"
+import { Agent } from "@/agent/agent"
+import { toolAlias } from "@/costrict/utils/tool-transform-v2"
 
 const log = Log.create({ service: "tool-execution" })
 const DOOM_LOOP_THRESHOLD = 3
@@ -165,6 +167,10 @@ export namespace ToolExecution {
     sessionID: string,
     assistantMessage: MessageV2.Assistant
   ) {
+    const agent = await Agent.get(assistantMessage.agent)
+    const configuredExitToolName = (agent?.options?.exitToolName as string | undefined) || "task_done"
+    const exitToolName = toolAlias(configuredExitToolName)
+
     const reminderMessage: MessageV2.User = {
       id: Identifier.ascending("message"),
       sessionID,
@@ -184,7 +190,7 @@ export namespace ToolExecution {
       messageID: reminderMessage.id,
       sessionID,
       type: "text",
-      text: "CRITICAL: You MUST call at least one tool in your response. Text-only responses are strictly forbidden. Please analyze the current situation and use the appropriate tools to make progress on the task. If you believe the task is complete and there is nothing more to do, you MUST call the `task_done` tool to signal completion.",
+      text: `CRITICAL: You MUST call at least one tool in your response. Text-only responses are strictly forbidden. Please analyze the current situation and use the appropriate tools to make progress on the task. If you believe the task is complete and there is nothing more to do, you MUST call the \`${exitToolName}\` tool to signal completion.`,
       synthetic: true
     } as MessageV2.TextPart)
 
