@@ -100,7 +100,6 @@ export function DialogFixProposal() {
     if (evt.name !== "tab") return
     evt.preventDefault()
     evt.stopPropagation()
-    dialog.clear()
     moveAgent(evt.shift ? -1 : 1)
   })
 
