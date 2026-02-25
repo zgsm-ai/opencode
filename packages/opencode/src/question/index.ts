@@ -11,7 +11,9 @@ export namespace Question {
 
   export const Option = z
     .object({
-      label: z.string().describe("Display text (1-5 words, concise)"),
+      label: z
+        .string()
+        .describe("Display text (1-5 words, concise). If you recommend an option, put it first and add '(Recommended)'"),
       description: z.string().describe("Explanation of choice"),
     })
     .meta({
@@ -21,22 +23,40 @@ export namespace Question {
 
   export const Info = z
     .object({
-      question: z.string().describe("Complete question"),
-      header: z.string().describe("Very short label (max 30 chars)"),
-      options: z.array(Option).describe("Available choices"),
-      multiple: z.boolean().optional().describe("Allow selecting multiple choices"),
-      custom: z.boolean().optional().describe("Allow typing a custom answer (default: true)"),
+      question: z.string().describe("Complete question text shown to the user"),
+      header: z.string().describe("Very short label used as the section title (max 30 chars)"),
+      options: z
+        .array(Option)
+        .describe("Built-in selectable choices. Keep at most 4 items."),
+      multiple: z
+        .boolean()
+        .optional()
+        .describe("Whether multi-select is allowed; answers are returned as an array of selected labels"),
     })
     .meta({
       ref: "QuestionInfo",
     })
   export type Info = z.infer<typeof Info>
 
+  export const Public = Info.describe("Questions to ask")
+  export const Publics = z.array(Public).describe("Questions to ask")
+  const Internal = Public.extend({
+    custom: z.literal(true),
+  })
+  type PublicQuestion = Omit<z.infer<typeof Internal>, "custom">
+
+  export function withCustom(questions: PublicQuestion[]) {
+    return questions.map((question) => ({
+      ...question,
+      custom: true as const,
+    }))
+  }
+
   export const Request = z
     .object({
       id: Identifier.schema("question"),
       sessionID: Identifier.schema("session"),
-      questions: z.array(Info).describe("Questions to ask"),
+      questions: z.array(Internal),
       tool: z
         .object({
           messageID: z.string(),
@@ -97,9 +117,10 @@ export namespace Question {
 
   export async function ask(input: {
     sessionID: string
-    questions: Info[]
+    questions: PublicQuestion[]
     tool?: { messageID: string; callID: string }
   }): Promise<Answer[]> {
+    const questions = withCustom(input.questions)
     const s = state()
     const id = Identifier.ascending("question")
 
@@ -108,7 +129,7 @@ export namespace Question {
     const info: Request = {
       id,
       sessionID: input.sessionID,
-      questions: input.questions,
+      questions,
       tool: input.tool,
     }
     const pending = {

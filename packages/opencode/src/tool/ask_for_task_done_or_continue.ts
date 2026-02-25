@@ -63,7 +63,6 @@ export const AskForTaskDoneOrContinueTool = Tool.define("ask_for_task_done_or_co
             },
           ],
           multiple: false,
-          custom: true, // 允许用户自定义输入
         },
       ],
       tool: ctx.callID ? { messageID: ctx.messageID, callID: ctx.callID } : undefined,

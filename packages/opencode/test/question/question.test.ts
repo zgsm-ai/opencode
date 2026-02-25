@@ -49,7 +49,7 @@ test("ask - adds to pending list", async () => {
 
       const pending = await Question.list()
       expect(pending.length).toBe(1)
-      expect(pending[0].questions).toEqual(questions)
+      expect(pending[0].questions).toEqual(Question.withCustom(questions))
     },
   })
 })
