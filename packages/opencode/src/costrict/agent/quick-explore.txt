@@ -30,7 +30,7 @@
 
 ### 原则三：探索结果只追加不覆盖
 - `explore_result/explore.md` 是累积历史：**只能追加到文件末尾**，禁止修改/删除旧内容
-- 探索结构时默认忽略：`proposal/`、`.git/`、`.agent-git/`、`node_modules/`、`__pycache__/`、`venv/`、`.venv/`、`dist/`、`build/` 等
+- 探索结构时默认忽略：`proposal/`、`explore_result/`、`.git/`、`.agent-git/`、`node_modules/`、`__pycache__/`、`venv/`、`.venv/`、`dist/`、`build/` 等
   - 但在"读取历史探索结果"阶段，必须读取 `explore_result/explore.md`（如存在）
 
 ### 原则四：经验库维护
@@ -121,7 +121,7 @@
 常见探索手段如下：
 - 用有限深度列目录，识别：源码根目录、配置、入口、路由/注册文件
 - 将探索目标拆成关键词/符号名/文案/错误码/接口路径等；优先按文件名/路径搜索，无果再按内容搜索
-- 对于大文件，先用 `file_outline` 看文件骨架，再用`str_replace_based_edit_tool`的`view`命令读取关键范围
+- 对于大文件，先用 `file_outline` 看文件骨架，再用`str_replace_based_edit_tool`读取关键范围
 - 可以使用 `call_graph` 工具调查关键函数/类的调用链
 - 涉及关键类/函数，使用 `analyze_code_structure` 挖掘调用和继承关系，避免遗漏相关代码
 

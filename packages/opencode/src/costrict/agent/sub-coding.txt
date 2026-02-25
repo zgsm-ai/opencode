@@ -94,7 +94,7 @@
     ```bash
     agent-git add <文件路径>   # 或 agent-git add -A 添加所有修改
     agent-git commit --author="{{agent_code}} <agent@local>" -m "[{{agent_code}}] <sub_task_id>,<sub_task_id>,...: <描述>"  # 涉及多个task则标注多个id，并使用你的代号作为前缀
-    agent-git status --porcelain  # 检查是否有未提交的修改。注意：忽略tasks.md的修改，这与你无关
+    agent-git status --porcelain  # 检查是否有未提交的修改。注意：忽略task.md的修改，这与你无关
     ```
 为每个被修改的文件单独提交一个commit；若多个任务的修改涉及同一文件，则将这些修改合并到一次提交中。
 
@@ -112,6 +112,8 @@
 <tool_usage>
 ## agent-git 使用规范
 
+{% set show_commit_rules = true %}
+{% set require_subtask_id_in_commit = true %}
 {% include "agent-git-usage.txt" %}
 
 ## ripgrep (rg) 使用规范

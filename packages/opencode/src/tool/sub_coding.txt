@@ -2,14 +2,14 @@
 
 子编码代理将：
 - 在隔离的上下文中执行分配的编码任务
-- 使用 checkpoint 工具进行代码提交（以 agent_code 作为作者）
-- 返回执行结果，包含反馈信息
+- 使用 agent-git 工具进行代码提交（以 agent_code 作为作者）
+- 返回执行结果，包含反馈信息和 agent-git 统计数据
 
 **重要事项：**
 - 所有代码更改必须通过此委派工具进行
 - 为每次调用分配唯一的代理代码（SubCodingAgent-1、SubCodingAgent-2，依此类推...）
 - 必须等待当前 SubCodingAgent 完成后，才能分发下一个任务
-- 在更新 task.md 之前，请先审查返回的 checkpoint 提交记录以验证任务完成情况
+- 在更新 task.md 之前，请先审查返回的 agent-git 提交记录以验证任务完成情况
 - 只有在子编码代理成功完成任务后，才能更新 task.md
 
 ## 参数说明
@@ -39,7 +39,7 @@
     - `detail` (string): 详细任务描述。当任务来源于 task.md 时，detail 必须包含原始任务条目中的所有具体信息（修改对象/目的/内容等），不得压缩、删减或改写导致信息丢失。
 
 - **agent_code** (必需): 此 SubCodingAgent 的唯一标识符（例如 "SubCodingAgent-1"）。
-  - 用作 checkpoint 提交作者。
+  - 用作 agent-git 提交作者。
   - 每次新的 SubCodingAgent 调用必须递增。
   - 格式：SubCodingAgent-N，其中 N 从 1 开始递增。
 
@@ -55,11 +55,6 @@
 - 当任务来源于 task.md 时：允许为每条任务拟定概括性的 title，但 detail 必须包含原始任务条目中的所有具体信息（修改对象/目的/内容等），不得压缩、删减或改写导致信息丢失。
 - 如需补充主 Agent 新发现的信息，请放到 important_note 而不是 detail。
 
-### Agent Code 规范
-- 从 1 开始："SubCodingAgent-1"
-- 为每个新 Agent 递增："SubCodingAgent-2"、"SubCodingAgent-3" 等
-- 永远不要重复使用代码，即使重试也要使用新编号
-- 在 checkpoint 提交信息中使用相同的代码
 
 ## 使用示例
 
@@ -97,7 +92,7 @@
 3. 创建 SubCodingAgent 的独立 Session
 4. SubCodingAgent 执行分配的任务
 5. 完成后返回结果给 CodingAgent
-6. CodingAgent 审查 checkpoint 提交并更新 task.md
+6. CodingAgent 审查 agent-git 提交并更新 task.md
 
 ## 注意事项
 
