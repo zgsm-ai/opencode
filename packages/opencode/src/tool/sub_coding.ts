@@ -28,33 +28,35 @@ const parameters = z.object({
   important_note: z
     .string()
     .describe(
-      "来自主 CodingAgent 给 SubCodingAgent 的关键补充说明。" +
-        "用于传递在编码过程中发现的高价值、执行关键信息，例如：" +
-        "之前遇到的已知陷阱/bug以及如何避免、编码约束、边界情况、已知的环境缺失情况。" +
-        "与其他字段的关系：important_note是'编码过程中学到的、不能遗漏的重要事项'，" +
-        "previous_work_summary是'之前的SubCodingAgent已更改的内容'。保持简洁但明确。"
+      "来自主 CodingAgent 给 SubCodingAgent 的关键补充说明。\n" +
+        "用于传递在编码过程中发现的高价值、执行关键信息，例如：\n" +
+        "- 之前遇到的已知陷阱/bug，以及如何避免\n" +
+        "- 编码约束、边界情况\n" +
+        "- 已知的环境缺失情况\n\n" +
+        "与其他字段的关系：\n"+
+        "- important_note：\"编码过程中学到的、不能遗漏的重要事项\"\n"+
+        "- previous_work_summary：\"之前的 SubCodingAgent 已更改的内容\"\n"+
+        "保持简洁但明确。"
     ),
   previous_work_summary: z
     .string()
     .describe(
       "之前 SubCodingAgent 完成的工作摘要。仅包含影响当前任务的内容：" +
-        "已完成的内容及位置（文件/模块）、当前任务依赖的关键 API/行为更改。" +
+        "- 已完成的内容及位置（文件/模块）\n" +
+        "- 当前任务依赖的关键 API/行为更改。\n" +
         "不要添加新的推测性想法（将其放入 important_note）。" +
         "如果这是第一个 SubCodingAgent，使用：'None - this is the first SubCodingAgent'。"
     ),
   sub_tasks: z
     .array(SubTaskSchema)
     .describe(
-      "分配给此 SubCodingAgent 的结构化任务列表。格式：array<{id, title, detail}>。" +
-        "当任务来源于 task.md 时，detail 必须包含原始任务条目中的所有具体信息（修改对象/目的/内容等），" +
-        "不得压缩、删减或改写导致信息丢失。"
+      "分配给此 SubCodingAgent 的结构化任务列表。格式：array<{id, title, detail}>。" 
     ),
   agent_code: z
     .string()
     .describe(
       "此 SubCodingAgent 的唯一标识符（例如 'SubCodingAgent-1'）。" +
-      "用作 checkpoint 提交作者。每次新的 SubCodingAgent 调用必须递增。" +
-      "格式：SubCodingAgent-N，其中 N 从 1 开始递增。"
+      "用作 agent-git 提交作者。每次新的 SubCodingAgent 调用必须递增。"
     ),
 })
 

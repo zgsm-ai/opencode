@@ -114,14 +114,14 @@ function validateParams(params: z.infer<typeof parametersSchema>): string | null
  */
 const parametersSchema = z.object({
   thought: z.string().describe('当前思考步骤的内容'),
-  nextThoughtNeeded: z.boolean().describe('是否需要更多思考步骤'),
-  thoughtNumber: z.number().int().min(1).describe('当前步骤编号（从1开始）'),
-  totalThoughts: z.number().int().min(1).describe('预计总步骤数（可动态调整）'),
-  isRevision: z.boolean().optional().describe('是否是对之前思考的修订'),
-  revisesThought: z.number().int().optional().describe('要修订的思考编号'),
-  branchFromThought: z.number().int().optional().describe('从哪个思考创建分支'),
-  branchId: z.string().optional().describe('分支标识符'),
-  needsMoreThoughts: z.boolean().optional().describe('是否需要超出预计的更多思考'),
+  nextThoughtNeeded: z.boolean().describe('如需继续思考则为 true；完成时为 false。'),
+  thoughtNumber: z.number().int().min(1).describe('当前步骤编号（≥1）'),
+  totalThoughts: z.number().int().min(1).describe('预估总步骤数（≥1，可调整）。'),
+  isRevision: z.boolean().optional().describe('如果是修订之前的思考则为 true。'),
+  revisesThought: z.number().int().optional().describe('正在修订的思考步骤编号（≥1）'),
+  branchFromThought: z.number().int().optional().describe('从哪个思考步骤分支（≥1）。'),
+  branchId: z.string().optional().describe('此分支的标识符。'),
+  needsMoreThoughts: z.boolean().optional().describe('如需超出总数的更多思考则为 true。'),
 });
 
 /**
@@ -129,19 +129,24 @@ const parametersSchema = z.object({
  */
 export const SequentialThinkingTool = Tool.define('sequential-thinking', async (ctx) => {
   return {
-    description: `结构化思考工具，用于复杂问题的分步骤分析。
+    description: `用于复杂问题解决的结构化思考。逐步分解问题。
 
 使用场景：
-- 需要多步骤分析的复杂问题
+- 需要复杂的多步骤分析
 - 需要修订的规划/设计
 - 问题范围初始不明确
 - 需要在步骤间保持上下文
 
-功能特性：
-- 动态调整总步骤数
-- 随时修订之前的思考
-- 创建替代方案分支
-- 根据复杂度设置5-25个步骤`,
+特性：
+- 随着进展动态调整 totalThoughts
+- 随时修订/质疑之前的想法
+- 分支到替代方案
+- 根据复杂度将 totalThoughts 设为 5-25
+
+指南：
+- 仅在真正完成时设置 nextThoughtNeeded=false
+- 重新考虑之前步骤时使用 isRevision
+- 需要时在思考步骤之间运行 bash 命令（测试、grep）`,
 
     parameters: parametersSchema,
 

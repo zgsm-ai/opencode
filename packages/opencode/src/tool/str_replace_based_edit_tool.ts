@@ -43,7 +43,7 @@ const Parameters = z
     view_range: ViewRange
       .optional()
       .describe(
-        "`view` 命令在查看文件时必需；当 `path` 指向目录时不允许提供该参数。格式为 [start_line, end_line]，例如 [1, 200] 或 [10, -1]。",
+        "当 `path` 指向文件时，`view` 命令的可选参数。如未提供，显示完整文件。如提供，将显示指定行号范围内的文件内容，例如 [11, 12] 显示第 11 和 12 行。索引从 1 开始。设置 `[start_line, -1]` 显示从 `start_line` 到文件末尾的所有行。",
       ),
     file_text: z.string().optional().describe("`create` 命令的必需参数，包含要创建的文件内容。"),
     old_str: z.string().optional().describe("`str_replace` 命令的必需参数，包含 `path` 中要替换的字符串。"),
@@ -51,7 +51,7 @@ const Parameters = z
       .union([z.string(), z.null()])
       .optional()
       .describe(
-        "`str_replace` 命令的可选参数，包含替换后的新字符串。可省略/设为 null 以删除匹配到的 `old_str`。`insert` 命令的必需参数（必须是 string）。",
+        "`str_replace` 命令的可选参数，包含新字符串（如未提供，则不添加字符串）。`insert` 命令的必需参数，包含要插入的字符串。",
       ),
     insert_line: Int.min(0)
       .optional()
