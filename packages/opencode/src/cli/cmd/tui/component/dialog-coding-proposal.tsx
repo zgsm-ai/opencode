@@ -11,6 +11,7 @@ import { useTheme } from "@tui/context/theme"
 import { Identifier } from "@/id/id"
 import { TextAttributes } from "@opentui/core"
 import { DialogFixProposal } from "@tui/component/dialog-fix-proposal"
+import { DialogTaskcheckProposal } from "@tui/component/dialog-taskcheck-proposal"
 import fs from "fs"
 import path from "path"
 
@@ -89,6 +90,10 @@ export function DialogCodingProposal() {
     if (next.name === "coding") return
     if (next.name === "FixAgent") {
       dialog.replace(() => <DialogFixProposal />)
+      return
+    }
+    if (next.name === "taskcheck") {
+      dialog.replace(() => <DialogTaskcheckProposal />)
       return
     }
     local.agent.set(next.name)

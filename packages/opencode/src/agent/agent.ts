@@ -28,6 +28,8 @@ import { fileURLToPath } from "url"
 import { AgentToolsConfig } from "@/costrict/agent/config"
 
 export namespace Agent {
+  const USER_VISIBLE_AGENT_KEYS = new Set(["build", "proposal", "taskcheck", "coding", "FixAgent"])
+
   /**
    * Agent options 类型定义
    * 可以通过扩展此接口来添加自定义选项
@@ -417,6 +419,12 @@ export namespace Agent {
         native: true,
         hidden: true,
       }
+    }
+
+    for (const [key, item] of Object.entries(result)) {
+      const visible = USER_VISIBLE_AGENT_KEYS.has(key)
+      item.hidden = !visible
+      if (visible) item.mode = "primary"
     }
 
     return result

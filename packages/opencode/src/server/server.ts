@@ -342,7 +342,7 @@ export namespace Server {
           }),
           async (c) => {
             const modes = await Agent.list()
-            return c.json(modes)
+            return c.json(modes.filter((agent) => !agent.hidden))
           },
         )
         .get(

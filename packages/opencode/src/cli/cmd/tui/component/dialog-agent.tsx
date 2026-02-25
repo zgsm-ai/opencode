@@ -4,6 +4,7 @@ import { DialogSelect } from "@tui/ui/dialog-select"
 import { useDialog } from "@tui/ui/dialog"
 import { DialogCodingProposal } from "@tui/component/dialog-coding-proposal"
 import { DialogFixProposal } from "@tui/component/dialog-fix-proposal"
+import { DialogTaskcheckProposal } from "@tui/component/dialog-taskcheck-proposal"
 
 export function DialogAgent() {
   const local = useLocal()
@@ -31,6 +32,10 @@ export function DialogAgent() {
         }
         if (option.value === "FixAgent") {
           dialog.replace(() => <DialogFixProposal />)
+          return
+        }
+        if (option.value === "taskcheck") {
+          dialog.replace(() => <DialogTaskcheckProposal />)
           return
         }
         local.agent.set(option.value)

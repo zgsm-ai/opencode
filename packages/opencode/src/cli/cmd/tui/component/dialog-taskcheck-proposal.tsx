@@ -11,7 +11,7 @@ import { useTheme } from "@tui/context/theme"
 import { Identifier } from "@/id/id"
 import { TextAttributes } from "@opentui/core"
 import { DialogCodingProposal } from "@tui/component/dialog-coding-proposal"
-import { DialogTaskcheckProposal } from "@tui/component/dialog-taskcheck-proposal"
+import { DialogFixProposal } from "@tui/component/dialog-fix-proposal"
 import fs from "fs"
 import path from "path"
 
@@ -45,8 +45,8 @@ async function scanProposals(directory: string) {
   return results.toSorted((a, b) => b.time - a.time)
 }
 
-function DialogFixStarting(props: { changeId?: string }) {
-  const { theme } = useTheme()
+function DialogTaskcheckStarting(props: { changeId?: string }) {
+  const theme = useTheme()
   useKeyboard((evt) => {
     if (evt.name !== "escape" && evt.name !== "tab") return
     evt.preventDefault()
@@ -54,16 +54,16 @@ function DialogFixStarting(props: { changeId?: string }) {
   })
   return (
     <box paddingLeft={4} paddingRight={4} gap={1} paddingBottom={1}>
-      <text fg={theme.text} attributes={TextAttributes.BOLD}>
-        Fix agent 启动中
+      <text fg={theme.theme.text} attributes={TextAttributes.BOLD}>
+        TaskCheck agent 启动中
       </text>
-      <text fg={theme.textMuted}>change-id: {props.changeId ?? "-"}</text>
-      <text fg={theme.textMuted}>正在创建会话并提交任务，请稍候...</text>
+      <text fg={theme.theme.textMuted}>change-id: {props.changeId ?? "-"}</text>
+      <text fg={theme.theme.textMuted}>正在创建会话并提交任务，请稍候...</text>
     </box>
   )
 }
 
-export function DialogFixProposal() {
+export function DialogTaskcheckProposal() {
   const local = useLocal()
   const sync = useSync()
   const sdk = useSDK()
@@ -79,7 +79,7 @@ export function DialogFixProposal() {
     const list = local.agent.list()
     const size = list.length
     if (!size) return
-    const currentName = "FixAgent"
+    const currentName = "taskcheck"
     const currentIndex = list.findIndex((item) => item.name === currentName)
     const fallbackIndex = list.findIndex((item) => item.name === local.agent.current().name)
     const start = currentIndex !== -1 ? currentIndex : fallbackIndex
@@ -87,13 +87,13 @@ export function DialogFixProposal() {
     const nextIndex = (start + direction + size) % size
     const next = list[nextIndex]
     if (!next) return
-    if (next.name === "FixAgent") return
+    if (next.name === "taskcheck") return
     if (next.name === "coding") {
       dialog.replace(() => <DialogCodingProposal />)
       return
     }
-    if (next.name === "taskcheck") {
-      dialog.replace(() => <DialogTaskcheckProposal />)
+    if (next.name === "FixAgent") {
+      dialog.replace(() => <DialogFixProposal />)
       return
     }
     local.agent.set(next.name)
@@ -132,12 +132,12 @@ export function DialogFixProposal() {
   })
 
   if (busy()) {
-    return <DialogFixStarting changeId={selected()} />
+    return <DialogTaskcheckStarting changeId={selected()} />
   }
 
   return (
     <DialogSelect
-      title="Fix agent: select proposal (change-id)"
+      title="TaskCheck agent: select proposal (change-id)"
       placeholder="Search change-id under proposal/"
       options={options()}
       onSelect={async (option) => {
@@ -157,13 +157,13 @@ export function DialogFixProposal() {
           return
         }
 
-        local.agent.set("FixAgent")
+        local.agent.set("taskcheck")
 
         const project = directory()
         const tasks = path.join(project, "proposal", option.value, "tasks.md")
         const projectText = project.split(path.sep).join("/")
         const tasksText = tasks.split(path.sep).join("/")
-        const promptText = `项目路径：\`${projectText}\`\ntasks.md路径：\`${tasksText}\`\n\n请认真收集用户反馈并进行代码修复和改进`
+        const promptText = `项目路径：\`${projectText}\`\ntasks.md路径：\`${tasksText}\`\n\n请检查并改进 tasks.md 的任务质量`
         const variant = local.model.variant.current()
 
         try {
@@ -175,7 +175,7 @@ export function DialogFixProposal() {
               sessionID,
               ...model,
               messageID,
-              agent: "FixAgent",
+              agent: "taskcheck",
               model: model,
               variant,
               parts: [
@@ -200,7 +200,7 @@ export function DialogFixProposal() {
           setSelected(undefined)
           toast.show({
             variant: "error",
-            message: `Failed to start fix session: ${err}`,
+            message: `Failed to start taskcheck session: ${err}`,
             duration: 5000,
           })
         }
