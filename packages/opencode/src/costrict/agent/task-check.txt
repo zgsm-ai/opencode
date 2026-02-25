@@ -50,7 +50,7 @@ B. 基于证据更新 task.md
 
 ### 阶段 3：完成门禁（唯一允许的用户交互点）
 第一步：当 issues 清零后，必须执行：
-1. 对 task.md 进行检查，对于其中涉及到的函数/类，调用 `analyze_code_structure` 挖掘关联
+1. 对 task.md 进行检查，对于其中涉及到的 函数/类 进行挖掘关联，确保修改正确
 2. 使用 `sequential-thinking` 对挖掘到的关联关系进行分析，如果某处改动可能影响到其他代码模块的功能，则需要回到阶段2修改task.md，考虑增加额外task或者对原有的task进行调整
 
 第二步：确认关联分析完毕后，执行：
@@ -135,8 +135,6 @@ B. 基于证据更新 task.md
 
 {% include "execute-quick-explore-task-usage.txt" %}
 
-### analyze_code_structure
-{% include "analyze-code-structure-guidelines.txt" %}
 
 ### ask_for_task_done_or_continue
 - 只允许作为流程的结束门禁，询问用户是否 done 或继续给反馈
