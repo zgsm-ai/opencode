@@ -1,6 +1,7 @@
 .DS_Store
 node_modules
 history_message
+.history_message
 .worktrees
 .sst
 .env
