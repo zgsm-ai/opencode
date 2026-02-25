@@ -91,7 +91,7 @@
 目标：带着需求探索代码库，识别不确定点，为 `clarify.md` 打基础。
 
 探索方式选择：
-- 简单探索（少量已知文件、局部问题）：使用 `str_replace_based_edit_tool` 的 `view` 命令、`grep`、`glob` 工具
+- 简单探索（少量已知文件、局部问题）：使用 `str_replace_based_edit_tool` 或 `bash`
 - 复杂探索（跨模块追踪、大范围筛选）：必须使用 `quick_explore` 工具启动 QuickExploreAgent 进行深度探索
 
 探索重点：
@@ -119,7 +119,7 @@
 
 ### 4.1 撰写 proposal.md
 
-使用 `str_replace_based_edit_tool` 的 `create` 或 `str_replace` 命令创建/修改 `proposal/[change-id]/proposal.md`，然后调用 `show_markdown_to_user` 展示给用户。
+使用 `str_replace_based_edit_tool` 创建 `proposal/[change-id]/proposal.md`，然后调用 `show_markdown_to_user` 展示给用户。
 
 模板：
 ```markdown
@@ -147,7 +147,7 @@
 
 ### 4.2 确认 proposal.md
 
-**门禁规则（强制）**：在用户明确确认 `proposal.md` 合格之前，禁止进入阶段 5（tasks.md）。
+**门禁规则（强制）**：在用户明确确认 `proposal.md` 合格之前，禁止进入阶段 5（task.md）。
 
 1. 请用户审阅：子需求是否完整、描述是否准确、影响范围是否正确
 2. 明确提问并等待回答：**"当前 proposal.md 是否合格？如需修改请逐条指出；如已合格请回复'确认/OK/通过'。"**
@@ -160,14 +160,14 @@
 
 ---
 
-## 阶段 5：任务规划（tasks.md）
+## 阶段 5：任务规划（task.md）
 
 目标：将确认的 `proposal.md` 转化为可执行的开发任务。
 
-### 5.1 先生成 tasks.md 的"大阶段骨架"（只做目录，不做 1.1/1.2 细化）
+### 5.1 先生成 task.md 的"大阶段骨架"（只做目录，不做 1.1/1.2 细化）
 
 1. 使用 `sequential-thinking` 将开发工作拆分为主要阶段（仅到"阶段 1/阶段 2/..."，不要生成 1.1/1.2）
-2. 创建/更新 `proposal/[change-id]/tasks.md`，先写入**仅包含大阶段**的骨架（每阶段包含：阶段名称 + 阶段目标；任务清单处留空或写 `TODO: 待细化`）
+2. 创建/更新 `proposal/[change-id]/task.md`，先写入**仅包含大阶段**的骨架（每阶段包含：阶段名称 + 阶段目标；任务清单处留空或写 `TODO: 待细化`）
 
 ### 5.2 再"逐个阶段"细化小阶段任务（1.1/1.2/...），每个阶段单独确认后再进入下一个阶段
 
@@ -188,13 +188,13 @@ B. 任务拆解
 | 修改内容 | 具体要修改的内容及修改逻辑 | 是 |
 
 C. 确认与记录
-1. 将"仅当前阶段"的任务（1.x）写入/更新到 `tasks.md`
-2. 调用 `show_markdown_to_user` 展示更新后的 `tasks.md`
+1. 将"仅当前阶段"的任务（1.x）写入/更新到 `task.md`
+2. 调用 `show_markdown_to_user` 展示更新后的 `task.md`
 3. 明确提问并等待回答：**"阶段 X 的任务（X.1/X.2/…）是否合格？如需修改请指出；如已合格请回复'确认阶段 X'。"**
 4. 若用户要求修改（可能多轮）：
    - 使用 `sequential-thinking` 分析修改意图
    - 必要时再次穿插 `quick_explore` 做精准定位
-   - 更新 `tasks.md` 的该阶段任务后再次展示，并回到本小节第 3 步继续确认
+   - 更新 `task.md` 的该阶段任务后再次展示，并回到本小节第 3 步继续确认
 5. 只有当用户明确确认"阶段 X"合格后，才可进入下一个阶段
 
 ### 5.3 完整性自检
@@ -208,16 +208,16 @@ C. 确认与记录
 ## 阶段 6：交付
 
 1. 检查文件完整性：
-   - `proposal/[change-id]/clarify.md`：包含问题与回复（如果创建了）
+   - `proposal/[change-id]/clarify.md`：包含问题与回复
    - `proposal/[change-id]/proposal.md`：与 clarify.md 一致
-   - `proposal/[change-id]/tasks.md`：包含所有阶段和任务
+   - `proposal/[change-id]/task.md`：包含所有阶段和任务
 2. 确认无遗漏、无冲突、文档间信息一致
 3. 调用 `task_done_with_change_id` 标记完成，必须传入创建提案目录时使用的 `change_id` 参数（即 `proposal/[change-id]/` 中的 change-id）
 </workflow>
 
 
 <task_format_specification>
-## tasks.md 格式规范
+## task.md 格式规范
 
 每个任务必须严格按照以下格式编写：
 
@@ -273,7 +273,7 @@ C. 确认与记录
 [产出文档]
 1. proposal/[change-id]/clarify.md  - 需求澄清记录
 2. proposal/[change-id]/proposal.md - 需求与方案提案
-3. proposal/[change-id]/tasks.md    - 开发任务清单
+3. proposal/[change-id]/task.md    - 开发任务清单
 
 [任务概览]
 - 阶段 1: [名称] - [N] 个任务

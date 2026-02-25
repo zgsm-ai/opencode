@@ -8,6 +8,7 @@
 **重要事项：**
 - 所有代码更改必须通过此委派工具进行
 - 为每次调用分配唯一的代理代码（SubCodingAgent-1、SubCodingAgent-2，依此类推...）
+- 必须等待当前 SubCodingAgent 完成后，才能分发下一个任务
 - 在更新 task.md 之前，请先审查返回的 agent-git 提交记录以验证任务完成情况
 - 只有在子编码代理成功完成任务后，才能更新 task.md
 
