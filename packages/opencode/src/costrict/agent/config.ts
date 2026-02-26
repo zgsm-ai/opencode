@@ -28,7 +28,6 @@ export namespace AgentToolsConfig {
     "task_done",
     "sub_agent_task_done",
     "task_done_with_change_id",
-    "ask_for_task_done_or_continue",
     "show_markdown_to_user",
 
     // 交互工具
@@ -76,12 +75,12 @@ export namespace AgentToolsConfig {
         "str_replace_based_edit_tool",
         "sequentialthinking",
         "bash",
-        "ask_for_task_done_or_continue",
+        "task_done",
         "file-outline",
         "sub_coding",
         "memory_bank",
       ],
-      exitToolName: "ask_for_task_done_or_continue",
+      exitToolName: "task_done",
     },
 
     // SubCodingAgent - 执行具体代码修改
@@ -114,7 +113,7 @@ export namespace AgentToolsConfig {
     // Fix Agent - 修复代码问题
     FixAgent: {
       tools: [
-        "ask_for_task_done_or_continue",
+        "task_done",
         "question",
         "str_replace_based_edit_tool",
         "sub_coding",
@@ -123,7 +122,7 @@ export namespace AgentToolsConfig {
         "sequentialthinking",
         "memory_bank",
       ],
-      exitToolName: "ask_for_task_done_or_continue",
+      exitToolName: "task_done",
     },
 
     // TaskCheck Agent - 任务质量检查
@@ -131,12 +130,12 @@ export namespace AgentToolsConfig {
       tools: [
         "str_replace_based_edit_tool",
         "sequentialthinking",
-        "ask_for_task_done_or_continue",
+        "task_done",
         "bash",
         "file-outline",
         "quick_explore",
       ],
-      exitToolName: "ask_for_task_done_or_continue",
+      exitToolName: "task_done",
     },
   }
 

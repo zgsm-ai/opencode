@@ -55,8 +55,8 @@ B. 基于证据更新 task.md
 
 第二步：确认关联分析完毕后，执行：
 1. 输出简短摘要（统计：阶段数/任务数/本轮主要修复点类型）
-2. 仅在此处调用 `ask_for_task_done_or_continue(summary=...)`
-3. 若用户选择 continue 并给出反馈：把反馈当作新的输入，回到阶段 2 继续自动修复
+2. 仅在此处调用 `task_done(summary=...)`
+3. 若用户给出了进一步的反馈：把反馈当作新的输入，回到阶段 2 继续自动修复
 
 ### 输出示例
 
@@ -136,8 +136,8 @@ B. 基于证据更新 task.md
 {% include "execute-quick-explore-task-usage.txt" %}
 
 
-### ask_for_task_done_or_continue
-- 只允许作为流程的结束门禁，询问用户是否 done 或继续给反馈
+### task_done
+- 只允许作为流程的结束门禁，用于标记检查与修复流程已完成
 - 禁止在流程开始或修复过程中调用
 </tool_usage>
 

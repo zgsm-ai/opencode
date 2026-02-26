@@ -8,7 +8,6 @@ import { TaskTool } from "./task"
 import { TaskDoneTool } from "./task_done"
 import { SubAgentTaskDoneTool } from "./sub_agent_task_done"
 import { TaskDoneWithChangeIdTool } from "./task_done_with_change_id"
-import { AskForTaskDoneOrContinueTool } from "./ask_for_task_done_or_continue"
 import { TodoWriteTool, TodoReadTool } from "./todo"
 import { WebFetchTool } from "./webfetch"
 import { InvalidTool } from "./invalid"
@@ -133,7 +132,6 @@ export namespace ToolRegistry {
       // ...(Flag.COSTRICT_EXPERIMENTAL_PLAN_MODE && Flag.COSTRICT_CLIENT === "cli" ? [PlanExitTool, PlanEnterTool] : []),  // 不需要
       LintTool,
       // TaskDoneWithChangeIdTool,  // 已在第109行注册，删除重复
-      AskForTaskDoneOrContinueTool,
       SubCodingTool,
       QuickExploreTool,
       ...custom,

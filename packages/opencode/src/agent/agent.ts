@@ -175,7 +175,6 @@ export namespace Agent {
           PermissionNext.fromConfig({
             sub_agent_task_done: "deny",
             task_done_with_change_id: "deny",
-            ask_for_task_done_or_continue: "deny",
           }),
         )),
         mode: "primary",

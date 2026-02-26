@@ -98,23 +98,22 @@ export namespace SessionPrompt {
   const log = Log.create({ service: "session.prompt" })
 export const OUTPUT_TOKEN_MAX = Flag.COSTRICT_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 10_240
 
+  const normalizeAgentName = (name: string) => name.trim().toLowerCase().replace(/[\s_-]/g, "")
+
   // Agents that CREATE new agent-git (continue_run=false)
-  const AGENTS_CREATING_GIT = ["proposal", "StrictPlan"]
+  const AGENTS_CREATING_GIT = new Set(["proposal", "strictplan"])
 
   // Agents that REUSE existing agent-git (continue_run=true)
-  const AGENTS_REUSING_GIT = [
+  const AGENTS_REUSING_GIT = new Set([
     "coding",
-    "PlanApply",
+    "planapply",
     "taskcheck",
-    "TaskCheck",
     "explore",
-    "quick-explore",
-    "QuickExplore",
-    "sub-coding",
-    "SubCodingAgent",
-    "fix-agent",
-    "Fix",
-  ]
+    "quickexplore",
+    "subcoding",
+    "fixagent",
+    "fix",
+  ])
 
   const state = Instance.state(
     () => {
@@ -220,8 +219,9 @@ export const OUTPUT_TOKEN_MAX = Flag.COSTRICT_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 1
 
     // Initialize agent-git if needed
     const agentName = input.agent ?? (await Agent.defaultAgent())
-    const shouldCreateGit = AGENTS_CREATING_GIT.includes(agentName)
-    const shouldReuseGit = AGENTS_REUSING_GIT.includes(agentName)
+    const normalizedAgentName = normalizeAgentName(agentName)
+    const shouldCreateGit = AGENTS_CREATING_GIT.has(normalizedAgentName)
+    const shouldReuseGit = AGENTS_REUSING_GIT.has(normalizedAgentName)
 
     if (shouldCreateGit || shouldReuseGit) {
       try {
@@ -230,27 +230,44 @@ export const OUTPUT_TOKEN_MAX = Flag.COSTRICT_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 1
           agent_name: agentName,
           continue_run: shouldReuseGit, // Create agents use false, reuse agents use true
         })
-        const success = await gitInit.initializeAgentGit()
+        const gitReady = await gitInit.initializeAgentGit()
 
-        if (!success) {
+        if (!gitReady) {
           if (shouldCreateGit) {
-            // Create agent failure should warn (this is unusual)
-            log.warn("Failed to create agent-git", { agent: agentName })
-          } else {
-            // Reuse agent failure is normal (may not have run proposal first)
-            log.debug("Agent-git not available (no previous .agent-git), continuing without it", {
-              agent: agentName,
-            })
+            const message = "Failed to initialize agent-git for create agent"
+            log.error(message, { agent: agentName })
+            throw new Error(message)
           }
-        } else {
+          // Reuse agent failure is normal (may not have run proposal first)
+          log.debug("Agent-git not available (no previous .agent-git), continuing without it", {
+            agent: agentName,
+          })
+        }
+
+        if (gitReady) {
           log.info("Agent-git initialized successfully", {
             agent: agentName,
             mode: shouldCreateGit ? "create" : "reuse",
           })
+
+          const exploreResultReady = await gitInit.initializeExploreResultFolder()
+          if (!exploreResultReady) {
+            if (shouldCreateGit) {
+              log.warn("Failed to initialize explore_result folder for create agent", {
+                agent: agentName,
+              })
+            }
+            if (shouldReuseGit) {
+              log.debug("Failed to initialize explore_result folder for reuse agent", {
+                agent: agentName,
+              })
+            }
+          }
         }
       } catch (error) {
         log.error("Agent-git initialization error", { error, agent: agentName })
-        // Don't block agent execution on agent-git failure
+        // Create agents must fail-fast when initialization fails (aligned with TraeAgent behavior)
+        if (shouldCreateGit) throw error
       }
     }
 

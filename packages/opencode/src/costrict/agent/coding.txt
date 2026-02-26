@@ -80,7 +80,7 @@ agent-git --no-pager show <commit-id>
 如果SubCodingAgent通过了审查，使用`str_replace_based_edit_tool`更新task.md的完成进度。
 
 ### 阶段 3：完成收尾
-当task.md中所有任务均被标记为完成后，调用 `ask_for_task_done_or_continue`。
+当task.md中所有任务均被标记为完成后，调用 `task_done`。
 
 **仍有未完成任务时，严禁调用此工具**
 

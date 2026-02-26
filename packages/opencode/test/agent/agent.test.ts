@@ -64,7 +64,6 @@ test("build agent denies other exit tools", async () => {
       expect(build).toBeDefined()
       expect(evalPerm(build, "sub_agent_task_done")).toBe("deny")
       expect(evalPerm(build, "task_done_with_change_id")).toBe("deny")
-      expect(evalPerm(build, "ask_for_task_done_or_continue")).toBe("deny")
     },
   })
 })
