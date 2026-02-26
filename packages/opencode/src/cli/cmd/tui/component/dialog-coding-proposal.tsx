@@ -18,14 +18,18 @@ import path from "path"
 async function scanProposals(directory: string) {
   const root = path.join(directory, "proposal")
   const entries = await fs.promises.readdir(root, { withFileTypes: true }).catch(() => [])
-  const results: { changeId: string; description?: string; time: number }[] = []
+  const results: { changeId: string; description?: string; time: number; taskPath: string }[] = []
   for (const entry of entries) {
     if (!entry.isDirectory()) continue
     const tasks = path.join(root, entry.name, "tasks.md")
-    const exists = await fs.promises.access(tasks).then(() => true).catch(() => false)
-    if (!exists) continue
+    const task = path.join(root, entry.name, "task.md")
+    const taskPath = await fs.promises
+      .access(tasks)
+      .then(() => tasks)
+      .catch(async () => fs.promises.access(task).then(() => task).catch(() => undefined))
+    if (!taskPath) continue
     const time = await fs.promises
-      .stat(tasks)
+      .stat(taskPath)
       .then((stat) => stat.mtimeMs)
       .catch(() => 0)
     const proposalPath = path.join(root, entry.name, "proposal.md")
@@ -40,7 +44,7 @@ async function scanProposals(directory: string) {
         return firstLine.length > 80 ? firstLine.slice(0, 77) + "..." : firstLine
       })
       .catch(() => undefined)
-    results.push({ changeId: entry.name, description, time })
+    results.push({ changeId: entry.name, description, time, taskPath })
   }
   return results.toSorted((a, b) => b.time - a.time)
 }
@@ -130,6 +134,7 @@ export function DialogCodingProposal() {
       description: item.description,
     }))
   })
+  const proposalMap = createMemo(() => new Map((proposals() ?? []).map((item) => [item.changeId, item.taskPath])))
 
   if (busy()) {
     return <DialogCodingStarting changeId={selected()} />
@@ -160,10 +165,10 @@ export function DialogCodingProposal() {
         local.agent.set("coding")
 
         const project = directory()
-        const tasks = path.join(project, "proposal", option.value, "tasks.md")
+        const tasks = proposalMap().get(option.value) ?? path.join(project, "proposal", option.value, "tasks.md")
         const projectText = project.split(path.sep).join("/")
         const tasksText = tasks.split(path.sep).join("/")
-        const promptText = `项目路径：\`${projectText}\`\ntasks.md路径：\`${tasksText}\`\n\n请确保本次编码任务高质量完成`
+        const promptText = `项目路径：\`${projectText}\`\n任务文件路径：\`${tasksText}\`\n\n请确保本次编码任务高质量完成`
         const variant = local.model.variant.current()
 
         try {
