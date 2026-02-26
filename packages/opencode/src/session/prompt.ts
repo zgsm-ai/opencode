@@ -470,9 +470,12 @@ export const OUTPUT_TOKEN_MAX = Flag.COSTRICT_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 1
                   }
 
                   // 保存到 user_input.md
-                  const proposalDir = path.join(Instance.worktree, "proposal", changeId.trim())
+                  // Non-git projects expose worktree as "/", fallback to current directory.
+                  const root = Instance.worktree === "/" ? Instance.directory : Instance.worktree
+                  const proposalDir = path.join(root, "proposal", changeId.trim())
                   const userInputPath = path.join(proposalDir, "user_input.md")
 
+                  await fs.mkdir(proposalDir, { recursive: true })
                   await fs.writeFile(userInputPath, userInput, "utf-8")
 
                   log.info("saved user_input.md", {
