@@ -9,7 +9,7 @@ export namespace Budget {
 
   // 工具白名单（不消耗预算的工具）
   export const BUDGET_FREE_TOOLS = new Set([
-    "sequential-thinking",
+    "sequentialthinking",
     "task_done",
     "sub_agent_task_done",
     "task_done_with_change_id"

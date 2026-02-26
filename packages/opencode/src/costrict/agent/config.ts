@@ -19,7 +19,7 @@ export namespace AgentToolsConfig {
     // 核心工具
     "bash",
     "str_replace_based_edit_tool",
-    "sequential-thinking",
+    "sequentialthinking",
     "file-outline",
     "memory_bank",
     "lint",
@@ -29,6 +29,7 @@ export namespace AgentToolsConfig {
     "sub_agent_task_done",
     "task_done_with_change_id",
     "ask_for_task_done_or_continue",
+    "show_markdown_to_user",
 
     // 交互工具
     "question",
@@ -58,8 +59,9 @@ export namespace AgentToolsConfig {
     proposal: {
       tools: [
         "str_replace_based_edit_tool",
-        "sequential-thinking",
+        "sequentialthinking",
         "task_done_with_change_id",
+        "show_markdown_to_user",
         "bash",
         "question",
         "file-outline",
@@ -72,7 +74,7 @@ export namespace AgentToolsConfig {
     coding: {
       tools: [
         "str_replace_based_edit_tool",
-        "sequential-thinking",
+        "sequentialthinking",
         "bash",
         "ask_for_task_done_or_continue",
         "file-outline",
@@ -86,7 +88,7 @@ export namespace AgentToolsConfig {
     SubCodingAgent: {
       tools: [
         "str_replace_based_edit_tool",
-        "sequential-thinking",
+        "sequentialthinking",
         "bash",
         "lint",
         "sub_agent_task_done",
@@ -100,7 +102,7 @@ export namespace AgentToolsConfig {
     QuickExplore: {
       tools: [
         "str_replace_based_edit_tool",
-        "sequential-thinking",
+        "sequentialthinking",
         "bash",
         "sub_agent_task_done",
         "file-outline",
@@ -118,7 +120,7 @@ export namespace AgentToolsConfig {
         "sub_coding",
         "quick_explore",
         "bash",
-        "sequential-thinking",
+        "sequentialthinking",
         "memory_bank",
       ],
       exitToolName: "ask_for_task_done_or_continue",
@@ -128,7 +130,7 @@ export namespace AgentToolsConfig {
     taskcheck: {
       tools: [
         "str_replace_based_edit_tool",
-        "sequential-thinking",
+        "sequentialthinking",
         "ask_for_task_done_or_continue",
         "bash",
         "file-outline",

@@ -751,10 +751,11 @@ export const OUTPUT_TOKEN_MAX = Flag.COSTRICT_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 1
         if (text && text.text.trim()) {
           const hasTemplate = text.text.includes("## 项目信息") && text.text.includes("## 用户需求")
           if (!hasTemplate) {
+            const root = session.directory
             text.text = [
               "## 项目信息",
-              `- 项目路径：\`${Instance.worktree}\``,
-              `- 提案目录: \`${Instance.worktree}/proposal\`（如果proposal文件夹不存在，需要由你创建）`,
+              `- 项目路径：\`${root}\``,
+              `- 提案目录: \`${root}/proposal\`（如果proposal文件夹不存在，需要由你创建）`,
               "",
               "## 用户需求",
               "```",

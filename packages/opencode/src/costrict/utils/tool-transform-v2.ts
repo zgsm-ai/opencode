@@ -210,6 +210,11 @@ export function toolAlias(toolName: string, availableTools?: Set<string>): strin
     // Apply patch
     patch: "apply_patch",
     applyPatch: "apply_patch",
+
+    // Sequential thinking
+    "sequential-thinking": "sequentialthinking",
+    sequence_thinking: "sequentialthinking",
+    sequential_thinking: "sequentialthinking",
   }
   
   // Get the mapped name, or use original if no mapping exists

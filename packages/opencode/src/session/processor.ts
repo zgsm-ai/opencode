@@ -33,7 +33,7 @@ export namespace SessionProcessor {
   const TEMPERATURE_SEQUENCE = [0.2, 0.4, 0.6, 0.8, 1.0]
 
   /**
-   * 检查是否需要强制使用 sequential-thinking 工具
+   * 检查是否需要强制使用 sequentialthinking 工具
    *
    * @param agent - 当前 agent 配置
    * @param context - 强制思考检查的上下文
@@ -141,7 +141,7 @@ export namespace SessionProcessor {
         // Extract available tool names for alias resolution with custom tool priority
         const availableTools = new Set(Object.keys(streamInput.tools))
         while (true) {
-          // 强制思考检查：判断是否需要强制只使用 sequential-thinking 工具
+          // 强制思考检查：判断是否需要强制只使用 sequentialthinking 工具
           // 必须在快照创建之前执行，以便强制思考消息被包含在快照中
           const agent = await Agent.get(streamInput.agent.name)
           const allMessages = await Array.fromAsync(MessageV2.stream(input.sessionID))
@@ -187,10 +187,10 @@ export namespace SessionProcessor {
             // 保存原始权限
             originalPermission = streamInput.agent.permission
 
-            // 创建强制思考权限：只允许 sequential-thinking 工具
+            // 创建强制思考权限：只允许 sequentialthinking 工具
             const forcedPermission = PermissionNext.fromConfig({
               "*": "deny",
-              "sequential-thinking": "allow"
+              "sequentialthinking": "allow"
             })
 
             // 临时覆盖权限

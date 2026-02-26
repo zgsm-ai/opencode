@@ -43,6 +43,7 @@ import type { ApplyPatchTool } from "@/tool/apply_patch"
 import type { WebFetchTool } from "@/tool/webfetch"
 import type { TaskTool } from "@/tool/task"
 import type { QuestionTool } from "@/tool/question"
+import type { ShowMarkdownToUserTool } from "@/tool/show_markdown_to_user"
 import { useKeyboard, useRenderer, useTerminalDimensions, type JSX } from "@opentui/solid"
 import { useSDK } from "@tui/context/sdk"
 import { useCommandDialog } from "@tui/component/dialog-command"
@@ -1439,6 +1440,9 @@ function ToolPart(props: { last: boolean; part: ToolPart; message: AssistantMess
         <Match when={props.part.tool === "question"}>
           <Question {...toolprops} />
         </Match>
+        <Match when={props.part.tool === "show_markdown_to_user"}>
+          <ShowMarkdown {...toolprops} />
+        </Match>
         <Match when={true}>
           <GenericTool {...toolprops} />
         </Match>
@@ -1733,6 +1737,110 @@ function WebFetch(props: ToolProps<typeof WebFetchTool>) {
     <InlineTool icon="%" pending="Fetching from the web..." complete={(props.input as any).url} part={props.part}>
       WebFetch {(props.input as any).url}
     </InlineTool>
+  )
+}
+
+function ShowMarkdown(props: ToolProps<typeof ShowMarkdownToUserTool>) {
+  const { theme, syntax } = useTheme()
+  const [expanded, setExpanded] = createSignal(false)
+  const previewLines = 40
+
+  const filePath = createMemo(() => {
+    const value = props.metadata.path
+    if (typeof value === "string" && value.trim()) return value
+    const input = props.input as Record<string, unknown>
+    const fallback = input.markdown_file_path
+    if (typeof fallback === "string") return fallback
+    return ""
+  })
+
+  const content = createMemo(() => {
+    const value = props.metadata.content
+    if (typeof value === "string") return value
+    return ""
+  })
+
+  const rawLines = createMemo(() => content().split("\n"))
+  const overflow = createMemo(() => rawLines().length > previewLines)
+  const lineCount = createMemo(() => {
+    const value = props.metadata.lineCount
+    if (typeof value === "number" && Number.isFinite(value)) return value
+    if (!content()) return 0
+    return rawLines().length
+  })
+  const byteSize = createMemo(() => {
+    const value = props.metadata.byteSize
+    if (typeof value !== "number" || !Number.isFinite(value)) return undefined
+    return Math.max(0, Math.floor(value))
+  })
+  const hiddenLines = createMemo(() => {
+    if (!overflow() || expanded()) return 0
+    return Math.max(0, rawLines().length - previewLines)
+  })
+  const stats = createMemo(() => {
+    const lines = `${lineCount()} line${lineCount() !== 1 ? "s" : ""}`
+    if (byteSize() === undefined) return lines
+    return `${lines} · ${byteSize()} bytes`
+  })
+
+  const display = createMemo(() => {
+    if (!content()) return "File is empty."
+    if (expanded()) return content()
+    if (!overflow()) return content()
+    return [...rawLines().slice(0, previewLines), "…"].join("\n")
+  })
+
+  const title = createMemo(() => "# Markdown " + normalizePath(filePath()))
+
+  return (
+    <Switch>
+      <Match when={props.part.state.status === "completed"}>
+        <BlockTool
+          title={title()}
+          part={props.part}
+          onClick={overflow() ? () => setExpanded((v) => !v) : undefined}
+        >
+          <box gap={1}>
+            <box
+              border={["left"]}
+              paddingLeft={2}
+              paddingTop={0}
+              paddingBottom={0}
+              backgroundColor={theme.backgroundElement}
+              borderColor={theme.warning}
+            >
+              <text>
+                <span style={{ bg: theme.warning, fg: theme.backgroundPanel, bold: true }}> REVIEW REQUIRED </span>
+                <span style={{ fg: theme.warning }}> Please read this markdown content.</span>
+              </text>
+              <text fg={theme.textMuted}>{normalizePath(filePath())}</text>
+              <text fg={theme.textMuted}>{stats()}</text>
+            </box>
+            <code
+              conceal={false}
+              fg={theme.text}
+              filetype="markdown"
+              drawUnstyledText={false}
+              streaming={false}
+              syntaxStyle={syntax()}
+              content={display()}
+            />
+            <Show when={overflow()}>
+              <text fg={theme.warning}>
+                {expanded()
+                  ? "Click to collapse markdown"
+                  : `Click to expand full markdown (${hiddenLines()} more lines)`}
+              </text>
+            </Show>
+          </box>
+        </BlockTool>
+      </Match>
+      <Match when={true}>
+        <InlineTool icon="≡" pending="Rendering markdown..." complete={filePath()} part={props.part}>
+          Show markdown {normalizePath(filePath())}
+        </InlineTool>
+      </Match>
+    </Switch>
   )
 }
 

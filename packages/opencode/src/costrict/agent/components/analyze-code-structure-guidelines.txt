@@ -12,7 +12,7 @@
 <result_usage>
 ### 如何利用返回结果
 
-调用工具后，使用 `sequential-thinking` 分析结果：
+调用工具后，使用 `sequentialthinking` 分析结果：
 
 **incoming_calls（谁调用了目标函数）**
 - 检查调用点：查看调用方上下文，判断修改是否会破坏现有调用

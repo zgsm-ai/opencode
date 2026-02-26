@@ -1,0 +1,6 @@
+向用户展示指定 markdown 文件的完整内容，不对正文做截断。
+
+Usage:
+- 仅用于用户可读的 markdown 文件展示（例如 proposal.md、task.md）
+- `markdown_file_path` 必须是绝对路径，且必须指向 `.md` 文件
+- 工具会返回给模型一个简短确认消息，并把完整 markdown 内容放入 TUI 展示元数据

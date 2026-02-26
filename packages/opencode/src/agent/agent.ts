@@ -45,7 +45,7 @@ export namespace Agent {
 
     /**
      * 强制思考检查函数
-     * 用于判断是否需要强制只使用 sequential-thinking 工具
+     * 用于判断是否需要强制只使用 sequentialthinking 工具
      *
      * @param context - 包含当前会话的所有上下文信息
      * @returns 如果需要强制思考，返回提醒消息；否则返回 null
@@ -54,7 +54,7 @@ export namespace Agent {
      * ```typescript
      * forcedSequentialThinking: (context) => {
      *   if (context.consecutiveToolFailures > 3) {
-     *     return "检测到连续工具调用失败，请先使用 sequential-thinking 工具重新分析问题。"
+     *     return "检测到连续工具调用失败，请先使用 sequentialthinking 工具重新分析问题。"
      *   }
      *   return null
      * }
@@ -148,6 +148,15 @@ export namespace Agent {
       },
     })
     const user = PermissionNext.fromConfig(cfg.permission ?? {})
+    // str_replace_based_edit_tool internally asks read/edit/external_directory permissions.
+    // Keep these explicitly allowed so the unified edit tool is never blocked by legacy denies.
+    const editor = PermissionNext.fromConfig({
+      str_replace_based_edit_tool: "allow",
+      read: "allow",
+      edit: "allow",
+      external_directory: "ask",
+    })
+    const permitEditor = (ruleset: PermissionNext.Ruleset) => PermissionNext.merge(ruleset, editor)
 
     const result: Record<string, Info> = {
       build: {
@@ -155,7 +164,7 @@ export namespace Agent {
         description: "The default agent. Executes tools based on configured permissions.",
         options: {},
         steps: 200,  // 默认预算60次工具调用
-        permission: PermissionNext.merge(
+        permission: permitEditor(PermissionNext.merge(
           defaults,
           PermissionNext.fromConfig({
             question: "allow",
@@ -168,7 +177,7 @@ export namespace Agent {
             task_done_with_change_id: "deny",
             ask_for_task_done_or_continue: "deny",
           }),
-        ),
+        )),
         mode: "primary",
         native: true,
       },
@@ -202,30 +211,30 @@ export namespace Agent {
           exitToolName: "task_done_with_change_id",  // ✅ 正确的退出工具
         },
         // No steps limit for proposal agent
-        permission: PermissionNext.merge(
+        permission: permitEditor(PermissionNext.merge(
           defaults,
           AgentToolsConfig.createToolPermission(
             AgentToolsConfig.AGENT_CONFIGS.proposal.tools
           ),
           user,
-        ),
+        )),
         mode: "primary",
         native: true,
         prompt: proposal,
       },
       taskcheck: {
         name: "taskcheck",
-        description: "Task quality checking and improvement agent. Checks if tasks in tasks.md are clear, precise, and complete. Verifies requirements coverage, code location precision, and style consistency. Can only modify tasks.md, not code files.",
+        description: "Task quality checking and improvement agent. Checks if tasks in task.md are clear, precise, and complete. Verifies requirements coverage, code location precision, and style consistency. Can only modify task.md, not code files.",
         options: {
           exitToolName: AgentToolsConfig.AGENT_CONFIGS.taskcheck.exitToolName,
         },
-        permission: PermissionNext.merge(
+        permission: permitEditor(PermissionNext.merge(
           defaults,
           AgentToolsConfig.createToolPermission(
             AgentToolsConfig.AGENT_CONFIGS.taskcheck.tools
           ),
           user,
-        ),
+        )),
         mode: "primary",
         native: true,
         hidden: true,
@@ -233,17 +242,17 @@ export namespace Agent {
       },
       coding: {
         name: "coding",
-        description: "软件开发团队的项目管理者和技术架构师。负责理解任务规划(tasks.md),将开发任务分发给 SubCodingAgent 执行,审查代码提交,追踪进度。不直接修改代码,通过分发任务推动项目进展。",
+        description: "软件开发团队的项目管理者和技术架构师。负责理解任务规划(task.md),将开发任务分发给 SubCodingAgent 执行,审查代码提交,追踪进度。不直接修改代码,通过分发任务推动项目进展。",
         options: {
           exitToolName: AgentToolsConfig.AGENT_CONFIGS.coding.exitToolName,
         },
-        permission: PermissionNext.merge(
+        permission: permitEditor(PermissionNext.merge(
           defaults,
           AgentToolsConfig.createToolPermission(
             AgentToolsConfig.AGENT_CONFIGS.coding.tools
           ),
           user,
-        ),
+        )),
         mode: "primary",
         native: true,
         prompt: coding,
@@ -255,13 +264,13 @@ export namespace Agent {
         options: {
           exitToolName: AgentToolsConfig.AGENT_CONFIGS.FixAgent.exitToolName,
         },
-        permission: PermissionNext.merge(
+        permission: permitEditor(PermissionNext.merge(
           defaults,
           AgentToolsConfig.createToolPermission(
             AgentToolsConfig.AGENT_CONFIGS.FixAgent.tools
           ),
           user,
-        ),
+        )),
         mode: "primary",
         native: true,
         prompt: fix,
@@ -361,13 +370,13 @@ export namespace Agent {
         },
         steps: 50,  // Budget limit for QuickExplore agent
         warningThreshold: 10,  // Warn when budget is low (≤10)
-        permission: PermissionNext.merge(
+        permission: permitEditor(PermissionNext.merge(
           defaults,
           AgentToolsConfig.createToolPermission(
             AgentToolsConfig.AGENT_CONFIGS.QuickExplore.tools
           ),
           user,
-        ),
+        )),
         mode: "subagent",
         native: true,
         hidden: true,
@@ -414,13 +423,13 @@ export namespace Agent {
         },
         steps: 70,  // Budget limit for SubCodingAgent
         warningThreshold: 20,  // Warn when budget is low (≤20)
-        permission: PermissionNext.merge(
+        permission: permitEditor(PermissionNext.merge(
           defaults,
           AgentToolsConfig.createToolPermission(
             AgentToolsConfig.AGENT_CONFIGS.SubCodingAgent.tools
           ),
           user,
-        ),
+        )),
         mode: "subagent",
         native: true,
         hidden: true,

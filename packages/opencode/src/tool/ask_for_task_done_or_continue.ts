@@ -103,7 +103,7 @@ export const AskForTaskDoneOrContinueTool = Tool.define("ask_for_task_done_or_co
     if (userChoice === "继续工作") {
       // User selected "继续工作" but might have added custom text
       // In OpenCode's Question system, custom input is appended or the full answer is custom text
-      feedback = answer.length > 1 ? answer.slice(1).join(", ") : "请根据之前的分析继续改进 tasks.md"
+      feedback = answer.length > 1 ? answer.slice(1).join(", ") : "请根据之前的分析继续改进 task.md"
     } else {
       // User provided completely custom input
       feedback = userChoice

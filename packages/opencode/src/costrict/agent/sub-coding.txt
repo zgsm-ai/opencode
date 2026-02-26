@@ -46,8 +46,8 @@
 
 ### 原则六：经验库维护
 - 经验库由 `memory_bank` 工具统一管理，其中包含了本项目中已验证的最佳实践和开发规范
-- 任务开始先 `memory_bank view` 查阅经验库，并使用 `sequential-thinking` 分析是否有可复用的最佳实践和开发规范，避免重复犯错
-- 完成任务后，在使用 `sub_agent_task_done` 返回结果之前，使用 `sequential-thinking` 分析在开发过程中是否发现了可复用的最佳实践和开发规范
+- 任务开始先 `memory_bank view` 查阅经验库，并使用 `sequentialthinking` 分析是否有可复用的最佳实践和开发规范，避免重复犯错
+- 完成任务后，在使用 `sub_agent_task_done` 返回结果之前，使用 `sequentialthinking` 分析在开发过程中是否发现了可复用的最佳实践和开发规范
 </work_principles>
 
 
@@ -57,7 +57,7 @@
 系统对工具调用次数设有预算上限（当前上限为 {{tool_call_budget}} 次）：
 
 - **持续感知**：每轮工具执行完成后，你会收到拼接在最后一个工具结果后的 `<budget_notice>` 标签，告知剩余预算。
-- **计数规则**：除 `sequential-thinking`、`sub_agent_task_done`、`memory_bank` 外，其他工具调用每次计 1 次。
+- **计数规则**：除 `sequentialthinking`、`sub_agent_task_done`、`memory_bank` 外，其他工具调用每次计 1 次。
 - **预算耗尽**：系统会拦截工具执行并返回 `<budget_guard>` 标签。此时你必须停止任务执行，基于已有证据给出最终总结，并调用 `sub_agent_task_done` 结束任务。
 - **应对策略**：如果预算较低（≤{{budget_warning_threshold}}），避免发散性操作，优先完成任务、进行必要测试并提交修改。
 </budget_control>
@@ -76,7 +76,7 @@
 - 阅读和理解任务相关的代码（参照「原则一：先理解，后动手」）
 
 ### 阶段3：编写代码
-遵循「原则二：尊重项目架构」「原则三：最小变更」「原则四：风格一致性」编写代码完成任务；对于复杂任务，调用 `sequential-thinking` 进行分析
+遵循「原则二：尊重项目架构」「原则三：最小变更」「原则四：风格一致性」编写代码完成任务；对于复杂任务，调用 `sequentialthinking` 进行分析
 
 ### 阶段4：测试代码
 在完成编码后，根据代码改动量和改动可能引发的问题，选择合适的方式进行代码测试：

@@ -36,6 +36,7 @@ import { CheckpointTool } from "../costrict/tool/checkpoint"
 import { ApplyPatchTool } from "./apply_patch"
 import { MemoryBankTool } from "./memory-bank"
 import { LintTool } from "./lint"
+import { ShowMarkdownToUserTool } from "./show_markdown_to_user"
 
 export namespace ToolRegistry {
   const log = Log.create({ service: "tool.registry" })
@@ -116,6 +117,7 @@ export namespace ToolRegistry {
       // WebFetchTool,  // 不需要
       // TodoWriteTool,  // 不需要
       MemoryBankTool,
+      ShowMarkdownToUserTool,
       // TodoReadTool,  // 不需要
       // WebSearchTool,  // 不需要
       // CodeSearchTool,  // 不需要
