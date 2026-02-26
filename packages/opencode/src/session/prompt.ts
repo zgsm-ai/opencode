@@ -225,8 +225,11 @@ export const OUTPUT_TOKEN_MAX = Flag.COSTRICT_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 1
 
     if (shouldCreateGit || shouldReuseGit) {
       try {
+        // Non-git projects currently expose worktree as "/".
+        // agent-git must initialize in the actual working directory, not filesystem root.
+        const projectPath = Instance.worktree === "/" ? Instance.directory : Instance.worktree
         const gitInit = new AgentGitInitializer.AgentGitInitializer({
-          project_path: Instance.worktree,
+          project_path: projectPath,
           agent_name: agentName,
           continue_run: shouldReuseGit, // Create agents use false, reuse agents use true
         })
