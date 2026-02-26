@@ -5,6 +5,7 @@ import { Identifier } from "@/id/id"
 import { PermissionNext } from "@/permission/next"
 import { Agent } from "@/agent/agent"
 import { toolAlias } from "@/costrict/utils/tool-transform-v2"
+import { Truncate } from "@/tool/truncation"
 
 const log = Log.create({ service: "tool-execution" })
 const DOOM_LOOP_THRESHOLD = 3
@@ -16,6 +17,57 @@ export namespace ToolExecution {
     shouldRetry: boolean     // 是否应该重试（无工具且未达最大重试）
     needsReminder: boolean   // 是否需要插入提醒消息（达到最大重试）
     blocked: boolean         // 工具被拒绝，需要停止
+  }
+
+  /**
+   * 拦截过长的工具结果
+   * 对 output 和 error 字段进行拦截
+   */
+  async function interceptToolResults(toolParts: MessageV2.ToolPart[]): Promise<void> {
+    for (const part of toolParts) {
+      // 只处理已完成或错误状态的工具
+      if (part.state.status === "completed") {
+        const result = await Truncate.output(part.state.output, { toolName: part.tool })
+        if (result.truncated) {
+          // 更新工具结果
+          await Session.updatePart({
+            ...part,
+            state: {
+              ...part.state,
+              output: result.content,
+              metadata: {
+                ...part.state.metadata,
+                truncated: true,
+              },
+            },
+          })
+          log.info("intercepted oversized tool output", {
+            toolName: part.tool,
+            callID: part.callID,
+          })
+        }
+      } else if (part.state.status === "error") {
+        const result = await Truncate.output(part.state.error, { toolName: part.tool })
+        if (result.truncated) {
+          // 更新错误信息
+          await Session.updatePart({
+            ...part,
+            state: {
+              ...part.state,
+              error: result.content,
+              metadata: {
+                ...part.state.metadata,
+                truncated: true,
+              },
+            },
+          })
+          log.info("intercepted oversized tool error", {
+            toolName: part.tool,
+            callID: part.callID,
+          })
+        }
+      }
+    }
   }
 
   /**
@@ -113,6 +165,9 @@ export namespace ToolExecution {
       }
     }
 
+    // 2.5. 拦截过长的工具结果（在批准之后，doom loop 检查之前）
+    await interceptToolResults(toolParts)
+
     // 3. 重复工具检查 (Doom Loop)
     if (toolParts.length >= DOOM_LOOP_THRESHOLD) {
       const lastThree = toolParts.slice(-DOOM_LOOP_THRESHOLD)
@@ -161,6 +216,68 @@ export namespace ToolExecution {
   }
 
   /**
+   * 检查内容是否包含 XML 工具调用模式
+   */
+  function containsXmlToolCallPatterns(content: string | undefined): boolean {
+    if (!content) return false
+    // 简单检查：如果内容包含 "<" 和 ">"，可能包含 XML
+    return content.includes("<") && content.includes(">")
+  }
+
+  /**
+   * 构建零工具调用响应消息
+   */
+  async function buildZeroToolCallResponse(
+    assistantMessage: MessageV2.Assistant,
+    exitToolName: string
+  ): Promise<string> {
+    // 基础消息
+    const baseMessage = `You did not call any tools. If the task is fully completed, please use the \`${exitToolName}\` tool. Otherwise, use other tools to help you complete the task.`
+
+    // 获取 assistant 消息的文本内容
+    const allParts = await MessageV2.parts(assistantMessage.id)
+    const textParts = allParts.filter(p => p.type === "text") as MessageV2.TextPart[]
+    const content = textParts.map(p => p.text).join("\n")
+
+    // 如果没有内容或不包含 XML 模式，直接返回基础消息
+    if (!content || !containsXmlToolCallPatterns(content)) {
+      return baseMessage
+    }
+
+    // 检测当前模型是否是 GLM 系列
+    const modelID = assistantMessage.modelID?.toLowerCase() || ""
+    const isGlmModel = modelID.includes("glm")
+
+    let formatWarning: string
+    if (isGlmModel) {
+      // GLM 特定的 XML 格式警告
+      formatWarning = `It could be that you are using the tool call incorrectly. When calling a tool, it must strictly follow the format below:
+\`\`\`
+<tool_call>
+function_name
+<arg_key>parameter_name1</arg_key><arg_value>parameter_value1</arg_value>
+<arg_key>parameter_name2</arg_key><arg_value>parameter_value2</arg_value>
+...
+</tool_call>
+\`\`\`
+Additionally, you need to ensure that both the function name and parameters are correct.
+Unregistered tools are not permitted, and the parameters used must strictly match the description of the corresponding tool.
+
+`
+    } else {
+      // 通用的工具调用格式警告
+      formatWarning = `It appears that you attempted to call a tool but the format was incorrect.
+Please ensure you are using the correct tool calling format.
+Make sure the function name is valid and all required parameters are provided correctly.
+Unregistered tools are not permitted, and the parameters used must strictly match the description of the corresponding tool.
+
+`
+    }
+
+    return formatWarning + baseMessage
+  }
+
+  /**
    * 插入提醒消息，强制要求模型使用工具
    */
   async function insertToolReminderMessage(
@@ -170,6 +287,9 @@ export namespace ToolExecution {
     const agent = await Agent.get(assistantMessage.agent)
     const configuredExitToolName = (agent?.options?.exitToolName as string | undefined) || "task_done"
     const exitToolName = toolAlias(configuredExitToolName)
+
+    // 构建零工具调用响应消息
+    const reminderText = await buildZeroToolCallResponse(assistantMessage, exitToolName)
 
     const reminderMessage: MessageV2.User = {
       id: Identifier.ascending("message"),
@@ -190,7 +310,7 @@ export namespace ToolExecution {
       messageID: reminderMessage.id,
       sessionID,
       type: "text",
-      text: `CRITICAL: You MUST call at least one tool in your response. Text-only responses are strictly forbidden. Please analyze the current situation and use the appropriate tools to make progress on the task. If you believe the task is complete and there is nothing more to do, you MUST call the \`${exitToolName}\` tool to signal completion.`,
+      text: reminderText,
       synthetic: true
     } as MessageV2.TextPart)
 
@@ -272,7 +392,7 @@ export namespace ToolExecution {
       messageID: doomLoopMessage.id,
       sessionID,
       type: "text",
-      text: `连续检测到多次调用相同工具"${toolName}"且参数也相同，这可能是陷入死循环的迹象。请停止重复调用，重新分析问题并调整策略。考虑：\n1. 使用不同的工具或方法\n2. 修改工具参数\n3. 检查之前的工具执行结果，避免重复操作`,
+      text: `连续检测到多次调用相同工具"${toolName}"且参数也相同，这可能是陷入死循环的迹象。请停止重复调用，重新分析问题并调整策略。`,
       synthetic: true
     } as MessageV2.TextPart)
 
