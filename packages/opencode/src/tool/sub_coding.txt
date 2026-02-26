@@ -2,105 +2,22 @@
 
 子编码代理将：
 - 在隔离的上下文中执行分配的编码任务
-- 使用 checkpoint 工具进行代码提交（以 agent_code 作为作者）
-- 返回执行结果，包含反馈信息
+- 使用 agent-git 进行版本控制（提交时以 agent_code 作为作者）
+- 返回执行结果，包含反馈信息和 agent-git 统计数据
 
 **重要事项：**
 - 所有代码更改必须通过此委派工具进行
 - 为每次调用分配唯一的代理代码（SubCodingAgent-1、SubCodingAgent-2，依此类推...）
 - 必须等待当前 SubCodingAgent 完成后，才能分发下一个任务
-- 在更新 task.md 之前，请先审查返回的 checkpoint 提交记录以验证任务完成情况
+- 在更新 task.md 之前，请先审查返回的 agent-git 提交记录以验证任务完成情况
 - 只有在子编码代理成功完成任务后，才能更新 task.md
 
-## 参数说明
+关键-任务粒度原则：
+- 不要将不同阶段的任务放到一起
+- 避免过多：过多任务可能超过工具调用预算，导致任务无法完成
+- 避免过碎：过小的单个任务（如一行代码修改）会导致上下文割裂和低效
+- 可完成性：确保任务可在工具调用预算内完成，为可能的探索和调试留出余量
 
-- **important_note** (必需): 来自主 CodingAgent 给 SubCodingAgent 的关键补充说明。
-  - 用于传递在编码过程中发现的高价值、执行关键信息，例如：
-    - 之前遇到的已知陷阱/bug，以及如何避免
-    - 编码约束、边界情况
-    - 已知的环境缺失情况
-  - 与其他字段的关系：
-    - important_note："编码过程中学到的、不能遗漏的重要事项"
-    - previous_work_summary："之前的 SubCodingAgent 已更改的内容"
-  - 保持简洁但明确。
-
-- **previous_work_summary** (必需): 之前 SubCodingAgent 完成的工作摘要。
-  - 仅包含影响当前任务的内容：
-    - 已完成的内容及位置（文件/模块）
-    - 当前任务依赖的关键 API/行为更改
-  - 不要添加新的推测性想法（将其放入 important_note）。
-  - 如果这是第一个 SubCodingAgent，使用："None - this is the first SubCodingAgent"。
-
-- **sub_tasks** (必需): 分配给此 SubCodingAgent 的结构化任务列表。
-  - 格式：array<{id, title, detail}>
-  - 每个任务必须包含：
-    - `id` (string): 任务标识符，例如 "1.2"
-    - `title` (string): 概括性的一行任务摘要（允许提炼/归纳）
-    - `detail` (string): 详细任务描述。当任务来源于 task.md 时，detail 必须包含原始任务条目中的所有具体信息（修改对象/目的/内容等），不得压缩、删减或改写导致信息丢失。
-
-- **agent_code** (必需): 此 SubCodingAgent 的唯一标识符（例如 "SubCodingAgent-1"）。
-  - 用作 checkpoint 提交作者。
-  - 每次新的 SubCodingAgent 调用必须递增。
-  - 格式：SubCodingAgent-N，其中 N 从 1 开始递增。
-
-## 关键原则
-
-### 任务粒度原则
-- **不要将不同阶段的任务放到一起**：避免将不相关的任务合并
-- **避免过多**：过多任务可能导致任务无法完成
-- **避免过碎**：过小的单个任务（如一行代码修改）会导致上下文割裂和低效
-- **可完成性**：确保任务可在合理范围内完成，为可能的探索和调试留出余量
-
-### 任务原文一致性
-- 当任务来源于 task.md 时：允许为每条任务拟定概括性的 title，但 detail 必须包含原始任务条目中的所有具体信息（修改对象/目的/内容等），不得压缩、删减或改写导致信息丢失。
+关键-任务原文一致性：
+- 当任务来源于 tasks.md 时：允许为每条任务拟定概括性的 title，但 detail 必须包含原始任务条目中的所有具体信息（修改对象、修改目的、修改内容），不得压缩、删减或改写导致信息丢失。
 - 如需补充主 Agent 新发现的信息，请放到 important_note 而不是 detail。
-
-### Agent Code 规范
-- 从 1 开始："SubCodingAgent-1"
-- 为每个新 Agent 递增："SubCodingAgent-2"、"SubCodingAgent-3" 等
-- 永远不要重复使用代码，即使重试也要使用新编号
-- 在 checkpoint 提交信息中使用相同的代码
-
-## 使用示例
-
-```json
-{
-  "tool": "sub_coding",
-  "arguments": {
-    "important_note": "使用 src/utils/error.ts 中的现有错误处理模式。不要引入新的依赖。",
-    "previous_work_summary": "None - this is the first SubCodingAgent",
-    "sub_tasks": [
-      {
-        "id": "1.1",
-        "title": "实现用户登录 API",
-        "detail": "在 src/routes/auth.ts 中创建 POST /api/login 端点。验证邮箱和密码，成功时返回 JWT 令牌。使用现有的错误中间件处理错误。"
-      }
-    ],
-    "agent_code": "SubCodingAgent-1"
-  }
-}
-```
-
-## 与 task 工具的对比
-
-此工具是调用 `task` 工具并设置 `subagent_type="sub-coding"` 的**推荐替代方案**。
-
-关键区别：
-- **严格验证**：所有参数都使用 Zod schema 进行验证
-- **结构化任务**：任务以结构化数据传递，而非自由文本
-- **更好的错误消息**：清晰的验证错误指导 LLM 修正参数
-
-## 执行流程
-
-1. CodingAgent 调用 `sub_coding` 工具，传递结构化参数
-2. 系统验证所有必需参数
-3. 创建 SubCodingAgent 的独立 Session
-4. SubCodingAgent 执行分配的任务
-5. 完成后返回结果给 CodingAgent
-6. CodingAgent 审查 checkpoint 提交并更新 task.md
-
-## 注意事项
-
-- SubCodingAgent 禁止启动其他子 Agent（防止无限递归）
-- 必须等待当前 SubCodingAgent 完成后才能启动下一个
-- 如任务失败，使用新的 agent_code 重试，不要复用旧编号

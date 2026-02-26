@@ -3,7 +3,6 @@ import { Tool } from "./tool"
 import path from "path"
 import fs from "fs/promises"
 import fsSync from "fs"
-import DESCRIPTION from "./lint.txt"
 import { Instance } from "../project/instance"
 import { assertExternalDirectory } from "./external-directory"
 import { Log } from "../util/log"
@@ -707,15 +706,98 @@ export const LintTool = Tool.define("lint", async () => {
     unavailableReasons["ruby"] = "rubocop 可执行文件未找到（需要 gem install rubocop）"
   }
 
-  // Build dynamic description
-  let description = DESCRIPTION
+  // Build dynamic description based on available languages
+  let description: string
+
   if (availableLanguages.length === 0) {
-    description = `对文件运行静态代码分析（linting）以检测代码质量问题、潜在 bug、风格违规和其他问题。
+    description = `对文件运行静态代码分析（linting）以检测代码质量问题、
+潜在 bug、风格违规和其他问题。
 
 当前没有可用的 lint 工具。请确保以下条件满足：
 - Java: 安装 Java 运行时 JRE/JDK 8+（https://www.oracle.com/java/technologies/downloads/）
 - Rust: 安装 Rust 工具链（https://rustup.rs/）
 - Ruby: 安装 RuboCop（gem install rubocop）
+`
+  } else {
+    // Build language descriptions
+    const formatExts = (exts: Set<string>): string => {
+      return Array.from(exts).sort().join("、")
+    }
+
+    const langDescriptions: string[] = []
+
+    if (availableLanguages.includes("go")) {
+      langDescriptions.push(`- Go（${formatExts(GO_EXTENSIONS)}）：revive`)
+    }
+
+    if (availableLanguages.includes("js")) {
+      langDescriptions.push(`- JavaScript/TypeScript/JSON/CSS（${formatExts(BIOME_EXTENSIONS)}）：biome`)
+    }
+
+    if (availableLanguages.includes("py")) {
+      langDescriptions.push(`- Python（${formatExts(PYTHON_EXTENSIONS)}）：ruff`)
+    }
+
+    if (availableLanguages.includes("cpp")) {
+      langDescriptions.push(`- C/C++（${formatExts(CPP_EXTENSIONS)}）：clang-tidy`)
+    }
+
+    if (availableLanguages.includes("rust")) {
+      langDescriptions.push(`- Rust（${formatExts(RUST_EXTENSIONS)}）：cargo clippy（需 Cargo.toml）`)
+    }
+
+    if (availableLanguages.includes("java")) {
+      langDescriptions.push(`- Java（${formatExts(JAVA_EXTENSIONS)}）：PMD`)
+    }
+
+    if (availableLanguages.includes("ruby")) {
+      langDescriptions.push(`- Ruby（${formatExts(RUBY_EXTENSIONS)}）：RuboCop`)
+    }
+
+    // Build examples based on available languages
+    const examples: string[] = []
+    if (availableLanguages.includes("go")) {
+      examples.push(`- Go：file_path="/path/to/file.go"（自动推断 language="go"，使用 revive）`)
+    }
+    if (availableLanguages.includes("js")) {
+      examples.push(`- JavaScript/TypeScript：file_path="/path/to/file.ts"（自动推断 language="js"，使用 biome；也支持 .js/.tsx/.jsx/.json/.jsonc/.css 等）`)
+    }
+    if (availableLanguages.includes("py")) {
+      examples.push(`- Python：file_path="/path/to/file.py"（自动推断 language="py"，使用 ruff）`)
+    }
+    if (availableLanguages.includes("cpp")) {
+      examples.push(`- C/C++：file_path="/path/to/file.cpp"（自动推断 language="cpp"，使用 clang-tidy；也支持 .c/.h/.hpp 等）`)
+    }
+    if (availableLanguages.includes("rust")) {
+      examples.push(`- Rust：file_path="/path/to/src/lib.rs"（自动推断 language="rust"，使用 cargo clippy；需要项目内存在 Cargo.toml）`)
+    }
+    if (availableLanguages.includes("java")) {
+      examples.push(`- Java：file_path="/path/to/Foo.java"（自动推断 language="java"，使用 PMD）`)
+    }
+    if (availableLanguages.includes("ruby")) {
+      examples.push(`- Ruby：file_path="/path/to/foo.rb"（自动推断 language="ruby"，使用 RuboCop）`)
+    }
+
+    // Example for files without extensions
+    if (availableLanguages.length > 0) {
+      examples.push(`- 无扩展名文件：file_path="/path/to/Makefile"，language="py"（允许通过 language 指定 linter）`)
+    }
+
+    description = `对文件运行静态代码分析（linting）以检测代码质量问题、
+潜在 bug、风格违规和其他问题。
+
+支持多种编程语言和文件类型：
+
+${langDescriptions.join("\n")}
+
+工具会根据文件扩展名自动选择合适的 lint 工具。
+language 参数是可选的 - 如果未提供，将从文件扩展名自动推断。
+当文件没有扩展名时，允许通过 language 指定要使用的 linter。
+
+返回详细的 lint 结果，包括文件路径、行号、问题类型和消息。
+
+使用示例：
+${examples.join("\n")}
 `
   }
 

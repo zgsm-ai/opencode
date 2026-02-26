@@ -29,12 +29,39 @@ import { PermissionNext } from "@/permission/next"
 import { Auth } from "@/auth"
 import path from "path"
 import fs from "fs/promises"
+import { fileURLToPath } from "url"
 
 export namespace LLM {
   const log = Log.create({ service: "llm" })
 
+  // 固定保存到 costrae 项目根目录下的 history_message 文件夹
+  // llm.ts 位于 packages/opencode/src/session/，向上 4 级到达项目根
+  const HISTORY_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../../.history_message")
+
   // 存储每个 session 的最新 system 提示词（经过 Plugin 处理后的完整版本）
   const sessionSystemCache = new Map<string, string[]>()
+
+  // 存储每个 session 的初始北京时间戳（首次记录时生成，后续复用，格式 YYYY-MM-DD-HH-mm-ss）
+  const sessionInitTime = new Map<string, string>()
+
+  function beijingTimeString() {
+    const now = new Date()
+    // 北京时间 UTC+8
+    const offset = 8 * 60 * 60 * 1000
+    const t = new Date(now.getTime() + offset)
+    const pad = (n: number) => String(n).padStart(2, "0")
+    return (
+      `${t.getUTCFullYear()}-${pad(t.getUTCMonth() + 1)}-${pad(t.getUTCDate())}` +
+      `-${pad(t.getUTCHours())}-${pad(t.getUTCMinutes())}-${pad(t.getUTCSeconds())}`
+    )
+  }
+
+  function sessionFilename(sessionID: string, agentName: string) {
+    if (!sessionInitTime.has(sessionID)) {
+      sessionInitTime.set(sessionID, beijingTimeString())
+    }
+    return `context-${agentName}-${sessionID}-${sessionInitTime.get(sessionID)}.json`
+  }
 
   export const OUTPUT_TOKEN_MAX = Flag.COSTRICT_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 10_240
 
@@ -436,8 +463,7 @@ export namespace LLM {
     model: Provider.Model
     responseMessage?: ModelMessage  // 可选：LLM 的响应消息
   }) {
-    const historyDir = path.join(Instance.worktree, "history_message")
-    await fs.mkdir(historyDir, { recursive: true })
+    await fs.mkdir(HISTORY_DIR, { recursive: true })
 
     // 转换消息格式为 OpenAI 标准格式
     const convertedMessages = input.requestMessages.map((msg) => {
@@ -543,17 +569,15 @@ export namespace LLM {
       },
     }
 
-    // 文件名格式：context-{sessionID}-{timestamp}.json
-    const timestamp = Date.now()
-    const filename = `context-${input.sessionID}-${timestamp}.json`
-    const contextFile = path.join(historyDir, filename)
+    const filename = sessionFilename(input.sessionID, input.agent.name)
+    const contextFile = path.join(HISTORY_DIR, filename)
 
-    // 删除旧的context文件（同一会话内只保留最新的）
+    // 删除旧的context文件（同一会话内只保留最新的，兼容旧格式）
     try {
-      const files = await fs.readdir(historyDir)
+      const files = await fs.readdir(HISTORY_DIR)
       for (const file of files) {
-        if (file.startsWith(`context-${input.sessionID}-`) && file.endsWith(".json") && file !== filename) {
-          await fs.unlink(path.join(historyDir, file)).catch(() => {})
+        if (file.includes(`-${input.sessionID}-`) && file.endsWith(".json") && file !== filename) {
+          await fs.unlink(path.join(HISTORY_DIR, file)).catch(() => {})
         }
       }
     } catch {
@@ -682,8 +706,7 @@ export namespace LLM {
       }
 
       // 构建与 saveActualContext 一致的 context 对象
-      const historyDir = path.join(Instance.worktree, "history_message")
-      await fs.mkdir(historyDir, { recursive: true })
+      await fs.mkdir(HISTORY_DIR, { recursive: true })
 
       // 将系统提示词转换为 system 消息（放在 messages 最开头）
       const systemMessages = systemPrompts.map(
@@ -759,17 +782,15 @@ export namespace LLM {
         },
       }
 
-      // 文件名格式：context-{sessionID}-{timestamp}.json
-      const timestamp = Date.now()
-      const filename = `context-${input.sessionID}-${timestamp}.json`
-      const contextFile = path.join(historyDir, filename)
+      const filename = sessionFilename(input.sessionID, input.agent.name)
+      const contextFile = path.join(HISTORY_DIR, filename)
 
-      // 删除旧的context文件（同一会话内只保留最新的）
+      // 删除旧的context文件（同一会话内只保留最新的，兼容旧格式）
       try {
-        const files = await fs.readdir(historyDir)
+        const files = await fs.readdir(HISTORY_DIR)
         for (const file of files) {
-          if (file.startsWith(`context-${input.sessionID}-`) && file.endsWith(".json") && file !== filename) {
-            await fs.unlink(path.join(historyDir, file)).catch(() => {})
+          if (file.includes(`-${input.sessionID}-`) && file.endsWith(".json") && file !== filename) {
+            await fs.unlink(path.join(HISTORY_DIR, file)).catch(() => {})
           }
         }
       } catch {

@@ -143,7 +143,7 @@ export const MemoryBankTool = Tool.define("memory_bank", {
   description: DESCRIPTION,
   parameters: z.object({
     command: z.unknown().optional().describe("操作类型：view(查看全部) | add(添加) | update(更新) | delete(删除)"),
-    tag: z.unknown().optional().describe("记录的唯一标识符。add/update/delete 时必填。"),
+    tag: z.unknown().optional().describe("记录的唯一标识符。使用小写字母、数字、连字符，体现记录类型（如 dev-env-setup, test-import-path）。add/update/delete 时必填。"),
     title: z.unknown().optional().describe("一句话概括记录内容，让人一眼判断是否相关。add 必填，update 可选。"),
     lesson: z.unknown().optional().describe("记录内容，简短描述即可，一条记录只说一个规范点。add 必填，update 可选。"),
   }),

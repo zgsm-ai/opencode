@@ -48,6 +48,7 @@ import { Shell } from "@/shell/shell"
 import { Truncate } from "@/tool/truncation"
 import { Budget } from "./budget"
 import { AgentGitInitializer } from "@/util/agentGitInitializer"
+import { toolAlias } from "@/costrict/utils/tool-transform-v2"
 
 // @ts-ignore
 globalThis.AI_SDK_LOG_WARNINGS = false
@@ -67,9 +68,10 @@ async function llmIndicatesTaskCompleted(
   // 获取工具调用列表
   const parts = await MessageV2.parts(message.id)
   const toolParts = parts.filter((part) => part.type === "tool") as MessageV2.ToolPart[]
+  const normalizedExitToolName = toolAlias(exitToolName)
 
   // 检查是否调用了退出工具（支持自定义退出工具名）
-  const exitToolCall = toolParts.find((part) => part.tool === exitToolName)
+  const exitToolCall = toolParts.find((part) => toolAlias(part.tool) === normalizedExitToolName)
 
   // 只有当调用了退出工具且工具执行完成时，才认为任务完成
   return exitToolCall !== undefined && exitToolCall.state.status === "completed"
@@ -402,10 +404,11 @@ export const OUTPUT_TOKEN_MAX = Flag.COSTRICT_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 1
       if (lastAssistant && lastUser.id < lastAssistant.id) {
         // 从 agent.options 获取退出工具名，默认为 "task_done"
         const currentAgent = await Agent.get(lastAssistant.agent)
-        const exitToolName = (currentAgent.options?.exitToolName as string | undefined) || "task_done"
+        const configuredExitToolName = (currentAgent.options?.exitToolName as string | undefined) || "task_done"
+        const exitToolName = toolAlias(configuredExitToolName)
 
         // 使用动态的退出工具名检查任务是否完成
-        const isTaskCompleted = await llmIndicatesTaskCompleted(lastAssistant, exitToolName)
+        const isTaskCompleted = await llmIndicatesTaskCompleted(lastAssistant, configuredExitToolName)
 
         if (isTaskCompleted) {
           // 获取工具调用列表
@@ -413,7 +416,7 @@ export const OUTPUT_TOKEN_MAX = Flag.COSTRICT_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 1
           const toolParts = parts.filter((part) => part.type === "tool") as MessageV2.ToolPart[]
 
           // 查找退出工具
-          const exitToolCall = toolParts.find((part) => part.tool === exitToolName)
+          const exitToolCall = toolParts.find((part) => toolAlias(part.tool) === exitToolName)
 
           // 从退出工具结果中提取摘要
           const summary = exitToolCall ? extractSummary(exitToolCall) : undefined

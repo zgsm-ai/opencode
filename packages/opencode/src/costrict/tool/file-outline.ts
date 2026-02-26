@@ -380,7 +380,7 @@ function formatDefinitions(definitions: Definition[], filePath: string): string 
  * 参数Schema定义
  */
 const parametersSchema = z.object({
-  file_path: z.string().describe('要分析的文件路径'),
+  file_path: z.string().describe('要分析的代码文件的绝对路径。'),
   include_docstrings: z.boolean().optional().default(true).describe('是否包含文档字符串'),
 });
 
@@ -389,24 +389,16 @@ const parametersSchema = z.object({
  */
 export const FileOutlineTool = Tool.define('file-outline', async (ctx) => {
   return {
-    description: `提取代码文件的结构信息，包括类、函数、方法定义和文档字符串。
+    description: `从单个文件中提取代码结构（类、函数、方法）。
 
-支持的语言：
-- Python (.py)
-- JavaScript (.js, .jsx)
-- TypeScript (.ts, .tsx)
-- Go (.go)
-- Java (.java)
-- C (.c, .h)
-- C++ (.cpp, .hpp)
-- Rust (.rs)
-- Ruby (.rb)
-- PHP (.php)
+使用场景：
+- 阅读代码前了解文件结构
+- 定位特定的类、函数或方法
+- 快速获取文件内容概览
 
-输出包含：
-- 定义的行号
-- 函数/类签名
-- 文档字符串（如果存在）`,
+返回：类定义、函数签名，附带行号和文档字符串。
+
+注意：支持 Python、JavaScript、TypeScript、Go、Java、C/C++、Rust 等多种语言。`,
 
     parameters: parametersSchema,
 
