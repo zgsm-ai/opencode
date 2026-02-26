@@ -29,7 +29,7 @@ const run = async (dir: string, params: Record<string, unknown>, extra?: Record<
   }
   const result = await Instance.provide({
     directory: dir,
-    fn: async () => tool.execute(params, ctx),
+    fn: async () => tool.execute(params as never, ctx),
   })
   return { result, requests }
 }

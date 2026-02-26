@@ -153,8 +153,9 @@ export const MemoryBankTool = Tool.define("memory_bank", {
       if (commandIssue.code === "invalid_type") {
         return `缺少必填参数: command\n可用的命令: ${COMMANDS.join(", ")}\n示例: {'command': 'view'}`
       }
-      if (commandIssue.code === "invalid_enum_value") {
-        return `无效的命令: ${commandIssue.received}\n可用的命令: ${COMMANDS.join(", ")}`
+      if (commandIssue.code === "invalid_value") {
+        const received = String((commandIssue as unknown as { input?: unknown }).input ?? "")
+        return `无效的命令: ${received}\n可用的命令: ${COMMANDS.join(", ")}`
       }
     }
     return error.message
@@ -353,5 +354,7 @@ export const MemoryBankTool = Tool.define("memory_bank", {
         metadata: {},
       }
     }
+
+    throw new Error(`未实现的命令: ${command}`)
   },
 })
