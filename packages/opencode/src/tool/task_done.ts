@@ -11,25 +11,31 @@ export const TaskDoneTool = Tool.define("task_done", async () => {
     description: DESCRIPTION,
     parameters,
     async execute(params: z.infer<typeof parameters>) {
-      // 检查 summary 参数是否存在且为字符串
       if (!params.summary || typeof params.summary !== "string") {
         return {
           title: "",
           metadata: {},
-          output: "Error: summary parameter is required and must be a string.",
+          output:
+            "Missing or invalid 'summary' parameter: must be a non-empty string. " +
+            "Provide a Markdown summary that includes: " +
+            "1) What was implemented/done, " +
+            "2) Verification results (test outputs, command results), " +
+            "3) Key changes made. " +
+            "Example: {'summary': '## Implementation\\n- Added feature X\\n\\n## Verification\\n- Tests pass\\n\\n## Changes\\n- Modified file.py'}",
         }
       }
 
-      // 检查 summary 长度 >= 10 个字符
-      if (params.summary.length < 10) {
+      if (params.summary.trim().length < 10) {
         return {
           title: "",
           metadata: {},
-          output: `Error: summary must be at least 10 characters long. Current length: ${params.summary.length}`,
+          output:
+            `Summary is too brief (${params.summary.trim().length} chars). ` +
+            "Please provide a meaningful summary that describes what was done and verified. " +
+            "A good summary should be at least a few sentences.",
         }
       }
 
-      // 验证成功，返回任务完成信息
       return {
         title: "",
         metadata: {},

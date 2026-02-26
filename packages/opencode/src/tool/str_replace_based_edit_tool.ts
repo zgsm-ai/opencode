@@ -321,10 +321,12 @@ export const StrReplaceBasedEditTool = Tool.define<typeof Parameters, Meta>("str
       return "Parameter `path` must be a string absolute path, e.g. `/repo/file.py`."
     }
 
-    const viewRangeIssue = error.issues.find((issue) => issue.path.join(".") === "view_range")
+    const viewRangeIssue = error.issues.find((issue) => issue.path[0] === "view_range")
     if (viewRangeIssue) {
+      const received = "received" in viewRangeIssue ? String(viewRangeIssue.received) : "unknown"
       return (
-        "Parameter `view_range` is required for command: view and must be a list of two integers [start_line, end_line]. " +
+        "Parameter `view_range` must be a list of two integers [start_line, end_line]. " +
+        `Received: (type: ${received}). ` +
         "Examples: [1, 50] shows lines 1-50, [10, -1] shows from line 10 to end of file. " +
         "Line numbers start at 1."
       )
@@ -377,12 +379,6 @@ export const StrReplaceBasedEditTool = Tool.define<typeof Parameters, Meta>("str
 
     if (params.command === "view") {
       const viewRange = params.view_range
-      if (!isDir && viewRange === undefined) {
-        throw new Error(
-          "Parameter `view_range` is required for command: view when `path` points to a file. " +
-            "Please specify the line range to view, e.g. [1, 50] or [10, -1].",
-        )
-      }
 
       await ctx.ask({
         permission: "read",
@@ -392,6 +388,9 @@ export const StrReplaceBasedEditTool = Tool.define<typeof Parameters, Meta>("str
       })
 
       if (isDir) {
+        if (viewRange !== undefined) {
+          throw new Error("The `view_range` parameter is not allowed when `path` points to a directory.")
+        }
         const output = await formatDirectoryTree(target)
         const truncated = maybeTruncate(output)
         return {
@@ -507,6 +506,13 @@ export const StrReplaceBasedEditTool = Tool.define<typeof Parameters, Meta>("str
             `Received: ${oldStr === undefined ? "None" : typeof oldStr}. ` +
             "The `old_str` must match EXACTLY one or more consecutive lines in the file, " +
             "including all whitespace and indentation. Use the `view` command first to see the exact content.",
+        )
+      }
+      if (!(newStr === null || typeof newStr === "string")) {
+        throw new Error(
+          "Parameter `new_str` must be a string or null for command: str_replace. " +
+            `Received: ${typeof newStr}. ` +
+            "Provide the replacement text as a string, or omit/set to null to delete the matched text.",
         )
       }
 
