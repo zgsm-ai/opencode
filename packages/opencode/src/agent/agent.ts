@@ -366,6 +366,107 @@ export namespace Agent {
         description: "Fast agent specialized for exploring codebases and locating code. Used by other agents via quick_explore tool to find specific implementations, registrations, or call chains.",
         options: {
           exitToolName: "sub_agent_task_done",
+          forcedSequentialThinking: (context: Agent.ForcedThinkingContext) => {
+            const SEARCH_BREAK_THRESHOLD = 10
+            const VIEW_BREAK_THRESHOLD = 6
+
+            // Helper: Check if tool call is bash command with rg/fd/fdfind
+            const isBashRgFdCall = (toolPart: any) => {
+              if (toolPart.tool !== "bash") return false
+              const command = toolPart.state?.input?.command
+              if (!command || typeof command !== "string") return false
+              return /\b(rg|fd|fdfind)\b/i.test(command)
+            }
+
+            // Helper: Check if tool call is str_replace_based_edit_tool with view command
+            const isViewCall = (toolPart: any) => {
+              if (toolPart.tool !== "str_replace_based_edit_tool") return false
+              const command = toolPart.state?.input?.command
+              return command === "view"
+            }
+
+            // Helper: Extract file path from view call
+            const getViewFilePath = (toolPart: any): string | null => {
+              if (!isViewCall(toolPart)) return null
+              const path = toolPart.state?.input?.path
+              return typeof path === "string" ? path : null
+            }
+
+            // Check for consecutive view calls on the same file
+            if (context.messages.length >= VIEW_BREAK_THRESHOLD) {
+              // Get recent assistant messages with tools
+              const recentAssistants = context.messages
+                .filter(m => m.info?.role === "assistant")
+                .slice(-VIEW_BREAK_THRESHOLD)
+
+              // Check if all recent messages only have view calls
+              const allViewOnly = recentAssistants.every(msg => {
+                const parts = msg.parts || []
+                const toolParts = parts.filter((p: any) => p.type === "tool")
+                if (toolParts.length === 0) return false
+                return toolParts.every(isViewCall)
+              })
+
+              if (allViewOnly) {
+                // Extract file paths from all view calls
+                const filePaths: string[] = []
+                for (const msg of recentAssistants) {
+                  const parts = msg.parts || []
+                  const toolParts = parts.filter((p: any) => p.type === "tool")
+                  for (const toolPart of toolParts) {
+                    const filePath = getViewFilePath(toolPart)
+                    if (filePath) filePaths.push(filePath)
+                  }
+                }
+
+                // Check if all paths are the same
+                if (filePaths.length > 0) {
+                  const firstPath = filePaths[0]
+                  if (filePaths.every(p => p === firstPath)) {
+                    return (
+                      `你已经连续 6 轮使用 str_replace_based_edit_tool:view 工具查看同一个文件了（${firstPath}）。` +
+                      "为了避免盲目地查看整个文件，请你这一轮必须使用 sequential-thinking 工具进行反思:\n" +
+                      "1. 明确你要在这个文件中查找什么内容或理解什么逻辑\n" +
+                      "2. 先使用 file_outline 工具查看文件大纲，了解文件的结构和主要函数/类\n" +
+                      "3. 基于文件大纲，确定需要查看的具体代码范围（函数、类或代码段）\n" +
+                      "4. 使用 str_replace_based_edit_tool:view 时指定 view_range 参数，只查看相关的代码范围\n" +
+                      "5. 不要盲目地 view 整个文件，应该有针对性地查看特定部分，因为目标文件可能有上万行代码，盲目地 view 整个文件会浪费大量时间"
+                    )
+                  }
+                }
+              }
+            }
+
+            // Check for consecutive search-only steps (bash+rg/fd)
+            if (context.messages.length >= SEARCH_BREAK_THRESHOLD) {
+              // Get recent assistant messages with tools
+              const recentAssistants = context.messages
+                .filter(m => m.info?.role === "assistant")
+                .slice(-SEARCH_BREAK_THRESHOLD)
+
+              // Check if all recent messages only have bash+rg/fd calls
+              const allSearchOnly = recentAssistants.every(msg => {
+                const parts = msg.parts || []
+                const toolParts = parts.filter((p: any) => p.type === "tool")
+                if (toolParts.length === 0) return false
+                return toolParts.every(isBashRgFdCall)
+              })
+
+              if (allSearchOnly) {
+                return (
+                  "你已经连续 10 轮仅使用 bash 执行 rg/fd 搜索了。" +
+                  "为了避免再次陷入死循环,请你这一轮必须使用 sequential-thinking 工具进行反思:\n" +
+                  "1. 明确你要找的符号/字符串是什么\n" +
+                  "2. 分析为什么前面的搜索没有找到目标\n" +
+                  "3. 缩小目录范围或调整搜索策略\n" +
+                  "4. 目标定义是否还没有在项目中实现，这是否是一个需要从头开始实现的新定义\n" +
+                  "5. 制定接下来 1-3 步最有效的定位计划"
+                )
+              }
+            }
+
+            return null
+          },
         },
         steps: 50,  // Budget limit for QuickExplore agent
         warningThreshold: 10,  // Warn when budget is low (≤10)

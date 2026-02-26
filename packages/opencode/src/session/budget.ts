@@ -128,7 +128,7 @@ export namespace Budget {
 - 已发现的证据
 - 缺失的信息
 - 建议的下一步行动
-然后调用任务完成工具结束任务。
+然后调用 sub_agent_task_done 工具结束任务。
 </budget_guard>`
   }
 
@@ -157,15 +157,12 @@ export namespace Budget {
 
     // 构建预算通知内容
     let noticeText = `<budget_notice>
-预算状态：
-- 已使用：${used} 次
-- 剩余：${remaining} 次
-- 总额：${total} 次
+工具调用预算：剩余 ${remaining} / ${total}，已用 ${used}。
 `
 
     // 根据剩余预算添加警告
     if (remaining <= 0) {
-      noticeText += `\n【关键】预算已耗尽：禁止再调用任何外部工具。请基于现有证据给出最终总结（已发现证据/缺失信息/建议下一步），然后调用完成工具结束任务。`
+      noticeText += `\n【关键】预算已耗尽：禁止再调用任何外部工具。请基于现有证据给出最终总结（已发现证据/缺失信息/建议下一步），然后调用 sub_agent_task_done 工具结束任务。`
     } else if (remaining <= warningThreshold) {
       noticeText += `\n【注意】预算较低（≤${warningThreshold}次）：请停止盲目搜索，开始收敛并准备总结结束。`
     }

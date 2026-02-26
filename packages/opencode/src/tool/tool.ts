@@ -67,7 +67,7 @@ export namespace Tool {
             )
           }
           const result = await execute(args, ctx)
-          const truncated = await Truncate.output(result.output, {}, initCtx?.agent)
+          const truncated = await Truncate.output(result.output, { toolName: id }, initCtx?.agent)
           const flagged = result.metadata.truncated === true
           const merged = flagged || truncated.truncated
           return {
