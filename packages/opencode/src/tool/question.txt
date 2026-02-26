@@ -1,5 +1,20 @@
-Use this tool when you need to ask the user questions during execution. This allows you to:
-1. Gather user preferences or requirements
-2. Clarify ambiguous instructions
-3. Get decisions on implementation choices as you work
-4. Offer choices to the user about what direction to take.
+在执行过程中遇到不确定性时，先向用户提问，不要猜测或臆测。通过明确问题推动决策，避免误解与返工。
+
+使用场景：
+- 需求不清、术语模糊、目标边界未定义
+- 需要在多个实现路径中做选择
+- 需要用户决策命名、结构、配置或技术选型
+- 进行破坏性更改（删除、重构、迁移）前
+- 关键行为、优先级、验收条件或边界场景需要确认时
+
+规则与约束：
+- `questions` 是一个问题数组，每个问题应包含 `question`、`header`、`options`，可选 `multiple`。
+- 每个问题至少1个内置选项，最多不超过4个；必要时可开启多选（`multiple: true`）。
+- 系统会自动加入“自定义输入”选项，用于用户自由补充未覆盖的想法。
+- 每个选项必须是完整、可执行、具体的陈述，避免“修改一下”“需要决定”这类模糊描述。
+- 给出可直接理解和执行的表述，例如：
+  - 任务完整，可以批准
+  - 任务1.2：将 `preprocess` 的返回类型改为 `dict`
+  - 需要新增：在 `utils.py` 添加 `validate` 输入校验函数
+- 不要混合一个选项里包含多个含义，尽量保持一句一条、互斥可比对。
+- 当信息不足或用户上下文不确定时，尽可能频繁提问，而不是强行继续推断。
