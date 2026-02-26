@@ -160,10 +160,66 @@ export function DialogTaskcheckProposal() {
         local.agent.set("taskcheck")
 
         const project = directory()
-        const tasks = path.join(project, "proposal", option.value, "tasks.md")
+        const changeId = option.value
+        const proposalDir = path.join(project, "proposal", changeId)
+        const proposalPath = path.join(proposalDir, "proposal.md")
+        const tasks = path.join(proposalDir, "tasks.md")
+        const userInputPath = path.join(proposalDir, "user_input.md")
+
         const projectText = project.split(path.sep).join("/")
+        const proposalText = proposalPath.split(path.sep).join("/")
         const tasksText = tasks.split(path.sep).join("/")
-        const promptText = `项目路径：\`${projectText}\`\ntasks.md路径：\`${tasksText}\`\n\n请检查并改进 tasks.md 的任务质量`
+
+        // 提取用户原始需求（优先级：user_input.md > proposal.md 背景部分 > proposal.md 摘要）
+        let userTaskText = ""
+        let source = "unknown"
+
+        try {
+          userTaskText = await fs.promises.readFile(userInputPath, "utf-8")
+          source = "user_input.md"
+        } catch {
+          // 后备方案：从 proposal.md 提取
+          try {
+            const proposalContent = await fs.promises.readFile(proposalPath, "utf-8")
+
+            // 尝试提取"背景"或"需求"部分
+            const bgMatch = proposalContent.match(/##\s*(背景|需求|用户需求|目标)[^\n]*\n([\s\S]*?)(?=\n##|$)/i)
+            if (bgMatch && bgMatch[2]) {
+              const content = bgMatch[2].trim()
+              userTaskText = content.length > 500 ? content.substring(0, 497) + "..." : content
+              source = "proposal.md (背景/需求部分)"
+            } else {
+              // 取前几段作为摘要
+              const paragraphs = proposalContent
+                .split('\n\n')
+                .filter(p => p.trim() && !p.trim().startsWith('#'))
+                .slice(0, 2)
+                .join('\n\n')
+              userTaskText = paragraphs.length > 500 ? paragraphs.substring(0, 497) + "..." : paragraphs
+              source = "proposal.md (摘要)"
+            }
+          } catch {
+            userTaskText = "（无法提取用户原始需求）"
+            source = "error"
+          }
+        }
+
+        // 构建 first user message（严格参照 TraeAgent 格式）
+        const promptText = `## 用户原始需求
+
+\`\`\`text
+${userTaskText.trim()}
+\`\`\`
+
+注：此需求提取自 ${source}
+
+## 任务上下文
+
+项目路径：\`${projectText}\`
+proposal.md路径：\`${proposalText}\`
+tasks.md路径：\`${tasksText}\`
+
+请以"用户原始需求"为覆盖基准，认真检查 tasks.md 文件是否需要调整。`
         const variant = local.model.variant.current()
 
         try {
