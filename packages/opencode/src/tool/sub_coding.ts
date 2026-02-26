@@ -1,5 +1,6 @@
 import { Tool } from "./tool"
 import DESCRIPTION from "./sub_coding.txt"
+import SUB_CODING_PROMPT_TEMPLATE from "../costrict/agent/sub-coding.txt"
 import z from "zod"
 import { Session } from "../session"
 import { MessageV2 } from "../session/message-v2"
@@ -10,8 +11,10 @@ import { PermissionNext } from "@/permission/next"
 import { Instance } from "@/project/instance"
 import { defer } from "@/util/defer"
 import path from "path"
+import { fileURLToPath } from "url"
 import { Log } from "@/util/log"
 import { Bus } from "../bus"
+import { ConfigMarkdown } from "@/config/markdown"
 
 // Logger for SubCodingTool - writes to file instead of console
 const subCodingLogger = Log.create({ service: "sub_coding" })
@@ -74,7 +77,7 @@ function formatSubTasks(subTasks: z.infer<typeof parameters>["sub_tasks"]): stri
     .join("\n")
 }
 
-// Build the structured prompt for SubCodingAgent
+// Build the structured prompt for SubCodingAgent (task context only)
 function buildPrompt(params: z.infer<typeof parameters>): string {
   const subTasksMarkdown = formatSubTasks(params.sub_tasks)
 
@@ -91,7 +94,23 @@ ${params.previous_work_summary}
 ### 你被分配的任务
 ${subTasksMarkdown}
 
-请认真完成本次编码任务，编写高质量的代码`
+你被分配的任务见上文。`
+}
+
+// Render SubCodingAgent prompt template with variables
+async function renderSubCodingPrompt(
+  template: string,
+  variables: { agent_code: string; tool_call_budget: string; budget_warning_threshold: string }
+): Promise<string> {
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../costrict/agent")
+  const md = await ConfigMarkdown.parseString(template, {
+    context: variables,
+    baseDir: root,
+    enableIncludes: true,
+    enableVariables: true,
+    enableConditionals: true,
+  })
+  return md?.content.trim() || template
 }
 
 export const SubCodingTool = Tool.define("sub_coding", async (ctx) => {
@@ -149,6 +168,19 @@ export const SubCodingTool = Tool.define("sub_coding", async (ctx) => {
         modelID: msg.info.modelID,
         providerID: msg.info.providerID,
       }
+
+      // Render SubCodingAgent system prompt from sub-coding.txt
+      subCodingLogger.info(`Rendering SubCodingAgent prompt for: ${params.agent_code}`)
+      const agentPrompt = await renderSubCodingPrompt(SUB_CODING_PROMPT_TEMPLATE, {
+        agent_code: params.agent_code,
+        tool_call_budget: agent.steps?.toString() || "70",
+        budget_warning_threshold: agent.warningThreshold?.toString() || "20",
+      })
+      subCodingLogger.info(`SubCodingAgent prompt rendered, length: ${agentPrompt.length}`)
+
+      // Inject prompt into agent (this modifies the cached agent object)
+      // This ensures when Agent.get("SubCodingAgent") is called in the loop, it returns the rendered prompt
+      agent.prompt = agentPrompt
 
       // Report metadata about the sub-agent session
       ctx.metadata({
