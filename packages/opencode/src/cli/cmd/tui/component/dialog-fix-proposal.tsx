@@ -165,7 +165,7 @@ export function DialogFixProposal() {
         local.agent.set("FixAgent")
 
         const project = directory()
-        const tasks = proposalMap().get(option.value) ?? path.join(project, "proposal", option.value, "tasks.md")
+        const tasks = proposalMap().get(option.value) ?? path.join(project, "proposal", option.value, "task.md")
         const projectText = project.split(path.sep).join("/")
         const tasksText = tasks.split(path.sep).join("/")
         const promptText = `项目路径：\`${projectText}\`\n任务文件路径：\`${tasksText}\`\n\n请认真收集用户反馈并进行代码修复和改进`

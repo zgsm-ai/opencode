@@ -447,6 +447,50 @@ export const OUTPUT_TOKEN_MAX = Flag.COSTRICT_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 1
             summary: summary?.substring(0, 100),
           })
 
+          // 当 proposal agent 通过 task_done_with_change_id 完成时，保存用户原始输入
+          if (lastAssistant.agent === "proposal" && exitToolName === "task_done_with_change_id") {
+            const changeId = exitToolCall?.state.input?.change_id
+
+            if (changeId && typeof changeId === "string") {
+              try {
+                // 查找第一条用户消息
+                const firstUserMsg = msgs.find(m => m.info.role === "user")
+                const textPart = firstUserMsg?.parts.find(
+                  (p): p is MessageV2.TextPart => p.type === "text" && !p.synthetic
+                )
+
+                if (textPart) {
+                  // 提取原始用户输入（去除模板包装）
+                  let userInput = textPart.text
+
+                  // 如果包含模板格式，提取原始内容
+                  const match = userInput.match(/## 用户需求\s*```\s*([\s\S]*?)\s*```/m)
+                  if (match && match[1]) {
+                    userInput = match[1].trim()
+                  }
+
+                  // 保存到 user_input.md
+                  const proposalDir = path.join(Instance.worktree, "proposal", changeId.trim())
+                  const userInputPath = path.join(proposalDir, "user_input.md")
+
+                  await fs.writeFile(userInputPath, userInput, "utf-8")
+
+                  log.info("saved user_input.md", {
+                    sessionID,
+                    changeId: changeId.trim(),
+                    path: userInputPath,
+                  })
+                }
+              } catch (err) {
+                // 静默失败，不影响主流程
+                log.warn("failed to save user_input.md", {
+                  sessionID,
+                  error: err,
+                })
+              }
+            }
+          }
+
           // 保存包含 LLM 响应的完整上下文（在 break 之前）
           // system 提示词会从 LLM.stream 保存的缓存中自动读取
           const finalAgent = await Agent.get(lastUser.agent)

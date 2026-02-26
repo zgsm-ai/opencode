@@ -165,7 +165,7 @@ export function DialogCodingProposal() {
         local.agent.set("coding")
 
         const project = directory()
-        const tasks = proposalMap().get(option.value) ?? path.join(project, "proposal", option.value, "tasks.md")
+        const tasks = proposalMap().get(option.value) ?? path.join(project, "proposal", option.value, "task.md")
         const projectText = project.split(path.sep).join("/")
         const tasksText = tasks.split(path.sep).join("/")
         const promptText = `项目路径：\`${projectText}\`\n任务文件路径：\`${tasksText}\`\n\n请确保本次编码任务高质量完成`
