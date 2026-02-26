@@ -752,7 +752,7 @@ export const OUTPUT_TOKEN_MAX = Flag.COSTRICT_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 1
           const hasTemplate = text.text.includes("## 项目信息") && text.text.includes("## 用户需求")
           if (!hasTemplate) {
             const root = session.directory
-            text.text = [
+            const formatted = [
               "## 项目信息",
               `- 项目路径：\`${root}\``,
               `- 提案目录: \`${root}/proposal\`（如果proposal文件夹不存在，需要由你创建）`,
@@ -764,6 +764,13 @@ export const OUTPUT_TOKEN_MAX = Flag.COSTRICT_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 1
               "",
               "请你认真分析用户需求，完成需求提案和任务规划",
             ].join("\n")
+            text.text = formatted
+            // Persist proposal context so trace saving reads the same first user message.
+            await Session.updatePart({
+              ...text,
+              text: formatted,
+              silent: true,
+            })
           }
         }
       }

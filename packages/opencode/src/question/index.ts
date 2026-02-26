@@ -13,8 +13,12 @@ export namespace Question {
     .object({
       label: z
         .string()
-        .describe("Display text (1-5 words, concise). If you recommend an option, put it first and add '(Recommended)'"),
-      description: z.string().describe("Explanation of choice"),
+        .describe(
+          "Short selectable label (1-5 words). Must be a concrete choice, not placeholders like 'Other', 'Custom', or 'Need changes'. If recommended, place first and add '(Recommended)'.",
+        ),
+      description: z
+        .string()
+        .describe("One-sentence consequence of this option (what will happen if selected), concise and actionable."),
     })
     .meta({
       ref: "QuestionOption",
@@ -23,23 +27,33 @@ export namespace Question {
 
   export const Info = z
     .object({
-      question: z.string().describe("Complete question text shown to the user"),
-      header: z.string().describe("Very short label used as the section title (max 30 chars)"),
+      question: z
+        .string()
+        .describe(
+          "Decision-focused prompt shown to user. Keep it short (prefer 1 sentence, max 2). Do not include long analysis/background.",
+        ),
+      header: z
+        .string()
+        .describe("Very short section title for quick scanning (prefer <= 30 chars), without long context."),
       options: z
         .array(Option)
-        .describe("Built-in selectable choices. Keep at most 4 items."),
+        .describe(
+          "Built-in selectable choices (1-4 items). Keep choices mutually exclusive and directly actionable. Do not add a custom/free-text option here.",
+        ),
       multiple: z
         .boolean()
         .optional()
-        .describe("Whether multi-select is allowed; answers are returned as an array of selected labels"),
+        .describe("Whether multi-select is allowed. Enable only when user may intentionally pick more than one option."),
     })
     .meta({
       ref: "QuestionInfo",
     })
   export type Info = z.infer<typeof Info>
 
-  export const Public = Info.describe("Questions to ask")
-  export const Publics = z.array(Public).describe("Questions to ask")
+  export const Public = Info.describe("Question item for explicit user decision")
+  export const Publics = z
+    .array(Public)
+    .describe("Questions to ask the user. Keep each question concise and avoid long background text.")
   const Internal = Public.extend({
     custom: z.literal(true),
   })

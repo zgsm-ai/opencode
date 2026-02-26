@@ -1443,6 +1443,12 @@ function ToolPart(props: { last: boolean; part: ToolPart; message: AssistantMess
         <Match when={props.part.tool === "show_markdown_to_user"}>
           <ShowMarkdown {...toolprops} />
         </Match>
+        <Match when={props.part.tool === "task_done"}>
+          <TaskDoneSummary {...toolprops} />
+        </Match>
+        <Match when={props.part.tool === "task_done_with_change_id"}>
+          <TaskDoneSummary {...toolprops} />
+        </Match>
         <Match when={true}>
           <GenericTool {...toolprops} />
         </Match>
@@ -1838,6 +1844,95 @@ function ShowMarkdown(props: ToolProps<typeof ShowMarkdownToUserTool>) {
       <Match when={true}>
         <InlineTool icon="≡" pending="Rendering markdown..." complete={filePath()} part={props.part}>
           Show markdown {normalizePath(filePath())}
+        </InlineTool>
+      </Match>
+    </Switch>
+  )
+}
+
+function TaskDoneSummary(props: ToolProps<Tool.Info>) {
+  const { theme, syntax } = useTheme()
+  const [expanded, setExpanded] = createSignal(false)
+  const previewLines = 40
+
+  const payload = createMemo(() => props.input as Record<string, unknown>)
+  const summary = createMemo(() => {
+    const value = payload().summary
+    if (typeof value === "string") return value
+    return ""
+  })
+  const changeID = createMemo(() => {
+    const value = payload().change_id
+    if (typeof value === "string" && value.trim()) return value.trim()
+    return ""
+  })
+  const lines = createMemo(() => summary().split("\n"))
+  const overflow = createMemo(() => lines().length > previewLines)
+  const hidden = createMemo(() => {
+    if (!overflow() || expanded()) return 0
+    return Math.max(0, lines().length - previewLines)
+  })
+  const display = createMemo(() => {
+    if (!summary()) return "Summary is empty."
+    if (expanded() || !overflow()) return summary()
+    return [...lines().slice(0, previewLines), "…"].join("\n")
+  })
+  const title = createMemo(() =>
+    props.part.tool === "task_done_with_change_id" ? "# Task Completion Summary (with change id)" : "# Task Completion Summary",
+  )
+  const note = createMemo(() => {
+    const count = lines().length
+    if (count === 1) return "1 line"
+    return `${count} lines`
+  })
+
+  return (
+    <Switch>
+      <Match when={props.part.state.status === "completed"}>
+        <BlockTool
+          title={title()}
+          part={props.part}
+          onClick={overflow() ? () => setExpanded((v) => !v) : undefined}
+        >
+          <box gap={1}>
+            <box
+              border={["left"]}
+              paddingLeft={2}
+              backgroundColor={theme.backgroundElement}
+              borderColor={theme.warning}
+            >
+              <text>
+                <span style={{ bg: theme.warning, fg: theme.backgroundPanel, bold: true }}> FINAL SUMMARY </span>
+                <span style={{ fg: theme.warning }}> Review before agent exit.</span>
+              </text>
+              <Show when={changeID()}>
+                <text fg={theme.textMuted}>change_id: {changeID()}</text>
+              </Show>
+              <text fg={theme.textMuted}>{note()}</text>
+            </box>
+            <code
+              conceal={false}
+              fg={theme.text}
+              filetype="markdown"
+              drawUnstyledText={false}
+              streaming={false}
+              syntaxStyle={syntax()}
+              content={display()}
+            />
+            <Show when={overflow()}>
+              <text fg={theme.warning}>
+                {expanded() ? "Click to collapse summary" : `Click to expand full summary (${hidden()} more lines)`}
+              </text>
+            </Show>
+          </box>
+        </BlockTool>
+      </Match>
+      <Match when={true}>
+        <InlineTool icon="✓" pending="Preparing completion summary..." complete={props.part.state.status !== "pending"} part={props.part}>
+          Complete task
+          <Show when={changeID()}>
+            <span style={{ fg: theme.textMuted }}> ({changeID()})</span>
+          </Show>
         </InlineTool>
       </Match>
     </Switch>
