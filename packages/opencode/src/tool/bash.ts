@@ -881,6 +881,14 @@ export const BashTool = Tool.define("bash", async () => {
       try {
         const restart = params.restart === true
         const command = typeof params.command === "string" ? params.command : ""
+        if (!restart && !command) {
+          throw new Error(
+            "Missing required parameter 'command' for the bash tool. " +
+              "Please provide a shell command string to execute. " +
+              "Example: {'command': 'ls -la'} or {'command': 'pwd'}. " +
+              "If you need to restart the session, use {'restart': true}.",
+          )
+        }
         const detail = command || "bash"
         const value = typeof params.timeout === "number" ? params.timeout : undefined
         const sessionState = getSessionState(ctx.sessionID)
@@ -969,14 +977,6 @@ export const BashTool = Tool.define("bash", async () => {
             }
           }
         }
-        if (!command) {
-          throw new Error(
-            "Missing required parameter 'command' for the bash tool. " +
-              "Please provide a shell command string to execute. " +
-              "Example: {'command': 'ls -la'} or {'command': 'pwd'}. " +
-              "If you need to restart the session, use {'restart': true}.",
-          )
-        }
         const prepared = await (async () => {
           const text = rewriteRgDot(command)
           const tree = await parser().then((p) => p.parse(text))
@@ -1013,7 +1013,7 @@ export const BashTool = Tool.define("bash", async () => {
             if (isGit(info.exe)) {
               return {
                 reason:
-                  "Direct git usage is blocked to avoid polluting user history. Use agent-git instead (e.g. `agent-git status`).",
+                  "检测到使用了 `git`，为避免污染用户的提交记录，本工具禁止直接调用 git 命令。请改用 `agent-git`（例如：`agent-git status`）。",
               }
             }
             if (isAgentGit(info.exe)) {
@@ -1021,7 +1021,7 @@ export const BashTool = Tool.define("bash", async () => {
               if (next.toLowerCase() === "reset") {
                 return {
                   reason:
-                    "`agent-git reset` is blocked because it discards commits after the target. Use `agent-git revert <commit>` to undo a commit while keeping history.",
+                    "检测到你使用了 `agent-git reset`，该命令会污染历史的提交记录，如果你需要回退某次提交，请改用 `agent-git revert <commit>` 撤销指定 commit 的改动，确保提交记录的完整性。",
                 }
               }
             }
@@ -1034,27 +1034,33 @@ export const BashTool = Tool.define("bash", async () => {
             if (info.exe === "find") {
               return {
                 reason: [
-                  "find is blocked when fd/rg are available.",
-                  "Use fd instead (explicit path required):",
-                  'fd "PATTERN" <dir>',
-                  "fd -e ts <dir>",
-                  'fd -t f "PATTERN" <dir>',
-                  'fd -t d "PATTERN" <dir>',
-                  'fd -d 2 "PATTERN" <dir>',
+                  "find 已禁用，请用 fd 代替（文件名搜索）",
+                  "**规则**：必须显式指定搜索目录",
+                  "```bash",
+                  'fd "PATTERN" <dir>          # 按文件名正则搜索',
+                  "fd -e py <dir>               # 按扩展名过滤",
+                  'fd -t f "PATTERN" <dir>     # 只搜文件',
+                  'fd -t d "PATTERN" <dir>     # 只搜目录',
+                  'fd -d 2 "PATTERN" <dir>     # 限制深度',
+                  'fd "PATTERN" <dir> -E .git -E node_modules  # 排除目录',
+                  "```",
                 ].join("\n"),
               }
             }
             if (info.exe === "grep") {
               return {
                 reason: [
-                  "grep is blocked when fd/rg are available.",
-                  "Use rg instead (explicit path required):",
-                  'rg "PATTERN" <dir>',
-                  'rg -F "LITERAL" <dir>',
-                  'rg -t ts "PATTERN" <dir>',
-                  'rg -g "*.ts" "PATTERN" <dir>',
-                  'rg -l "PATTERN" <dir>',
-                  'rg -C 3 "PATTERN" <dir>',
+                  "grep 已禁用，请用 rg 代替（内容搜索）",
+                  "**规则**：必须显式指定搜索目录",
+                  "```bash",
+                  'rg "PATTERN" <dir>          # 正则内容搜索',
+                  'rg -F "LITERAL" <dir>       # 字面量搜索（精确匹配）',
+                  'rg -t py "PATTERN" <dir>    # 按语言类型过滤',
+                  'rg -g "*.py" "PATTERN" <dir>  # 按 glob 过滤',
+                  'rg -l "PATTERN" <dir>       # 只列文件名',
+                  'rg -C 3 "PATTERN" <dir>     # 显示上下文前后各3行',
+                  'rg -i/-w/-S "PATTERN" <dir> # 忽略大小写/全词/智能大小写',
+                  "```",
                 ].join("\n"),
               }
             }
@@ -1299,9 +1305,9 @@ export const BashTool = Tool.define("bash", async () => {
           resultMetadata.push("User aborted the command")
         }
 
-        if (resultMetadata.length > 0) {
-          outputState.value += "\n\n<bash_metadata>\n" + resultMetadata.join("\n") + "\n</bash_metadata>"
-        }
+        // if (resultMetadata.length > 0) {
+        //   outputState.value += "\n\n<bash_metadata>\n" + resultMetadata.join("\n") + "\n</bash_metadata>"
+        // }
 
         const lines = search && countOutput ? countOutput.split("\n").length : 0
         const intercept = search && lines > MAX_SEARCH_LINES

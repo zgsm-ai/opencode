@@ -3,7 +3,7 @@ import DESCRIPTION from "./task_done.txt"
 import z from "zod"
 
 const parameters = z.object({
-  summary: z.string().describe("A summary of what was completed, including what was done, verification results, and key changes"),
+  summary: z.string().describe("最终 Markdown 摘要：实现内容、验证结果、关键更改（编码任务）或直接回答（问答任务）。"),
 })
 
 export const TaskDoneTool = Tool.define("task_done", async () => {

@@ -253,19 +253,24 @@ export const QuickExploreTool = Tool.define("quick_explore", async (ctx) => {
       } catch (error) {
         unsub()
         quickExploreLogger.error(`SessionPrompt.prompt failed: ${error}`)
-        throw error
+        throw new Error(
+          `## QuickExploreAgent Analysis Failed\n\n` +
+          `### Exploration Target\n${params.exploration_target}\n\n` +
+          `### Failure Reason\n${error instanceof Error ? error.message : String(error)}\n\n` +
+          `### Suggested Actions\n` +
+          `1. Narrow the target: include exact symbols/strings (function/class names, error text, route path, config key)\n` +
+          `2. Ask for the exact output form you want (file paths + symbols + key evidence lines)\n` +
+          `3. If you saw a specific error text, include it verbatim to enable precise searching\n`
+        )
       }
     },
     // Custom error formatter for Zod validation errors
-    formatValidationError(error: z.ZodError): string {
-      const issues = error.issues
-        .map((issue) => {
-          const path = issue.path.length > 0 ? issue.path.join(".") : "root"
-          return `  - ${path}: ${issue.message}`
-        })
-        .join("\n")
-
-      return `QuickExplore tool validation failed. Please provide all required parameters:\n${issues}\n\nRequired parameters:\n  - exploration_target: 单个、具体的探索/代码定位请求`
+    formatValidationError(_error: z.ZodError): string {
+      return (
+        "Missing or invalid 'exploration_target' parameter.\n\n" +
+        "Provide a single, concrete code-locating request as a string.\n" +
+        "Example: \"Find where class QuickExploreAgent is defined and how it loads the prompt template.\""
+      )
     },
   }
 })

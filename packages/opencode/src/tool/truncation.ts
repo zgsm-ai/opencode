@@ -19,6 +19,7 @@ export namespace Truncate {
    * 这些工具设计为显示长内容给用户
    */
   const WHITELIST_TOOLS = new Set([
+    "show_markdown_to_user",
     "task_done",
     "sub_agent_task_done",
     "task_done_with_change_id",
