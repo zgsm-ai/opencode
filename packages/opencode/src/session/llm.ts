@@ -56,6 +56,48 @@ export namespace LLM {
     )
   }
 
+  function beijingTimeWithMs(timestamp: number) {
+    const offset = 8 * 60 * 60 * 1000
+    const t = new Date(timestamp + offset)
+    const pad = (n: number, size = 2) => String(n).padStart(size, "0")
+    return (
+      `${t.getUTCFullYear()}-${pad(t.getUTCMonth() + 1)}-${pad(t.getUTCDate())} ` +
+      `${pad(t.getUTCHours())}:${pad(t.getUTCMinutes())}:${pad(t.getUTCSeconds())}.${pad(t.getUTCMilliseconds(), 3)}`
+    )
+  }
+
+  function toolStart(state: MessageV2.ToolPart["state"]) {
+    if (state.status === "pending") return
+    return state.time.start
+  }
+
+  function toolEnd(state: MessageV2.ToolPart["state"]) {
+    if (state.status === "completed") return state.time.end
+    if (state.status === "error") return state.time.end
+  }
+
+  function collectToolExecutions(messages: MessageV2.WithParts[]) {
+    return messages.flatMap((msg) =>
+      msg.parts
+        .filter((part): part is MessageV2.ToolPart => part.type === "tool")
+        .map((part) => {
+          const start = toolStart(part.state)
+          const end = toolEnd(part.state)
+          const durationMs = start !== undefined && end !== undefined ? Math.max(0, end - start) : undefined
+          return {
+            messageID: part.messageID,
+            partID: part.id,
+            callID: part.callID,
+            tool: part.tool,
+            status: part.state.status,
+            startedAt: start,
+            startedAtBeijing: start === undefined ? undefined : beijingTimeWithMs(start),
+            durationMs,
+          }
+        }),
+    )
+  }
+
   function sessionFilename(sessionID: string, agentName: string) {
     if (!sessionInitTime.has(sessionID)) {
       sessionInitTime.set(sessionID, beijingTimeString())
@@ -464,6 +506,8 @@ export namespace LLM {
     responseMessage?: ModelMessage  // 可选：LLM 的响应消息
   }) {
     await fs.mkdir(HISTORY_DIR, { recursive: true })
+    const history = await Session.messages({ sessionID: input.sessionID }).catch(() => [] as MessageV2.WithParts[])
+    const toolExecutions = collectToolExecutions(history)
 
     // 转换消息格式为 OpenAI 标准格式
     const convertedMessages = input.requestMessages.map((msg) => {
@@ -567,6 +611,8 @@ export namespace LLM {
         array: input.system,  // 可能是拼接前的数组
         isCodexFormat: input.isCodex,  // 标记是否使用Codex格式
       },
+      // 仅用于轨迹分析，不会发送给模型
+      toolExecutions,
     }
 
     const filename = sessionFilename(input.sessionID, input.agent.name)
@@ -630,6 +676,7 @@ export namespace LLM {
 
       // 读取当前 session 的所有消息
       const messages = await Session.messages({ sessionID: input.sessionID })
+      const toolExecutions = collectToolExecutions(messages)
       log.info("messages read from DB", {
         count: messages.length,
       })
@@ -780,6 +827,8 @@ export namespace LLM {
         systemPrompts: {
           array: systemPrompts,  // 经过 Plugin 处理后的完整系统提示词数组
         },
+        // 仅用于轨迹分析，不会发送给模型
+        toolExecutions,
       }
 
       const filename = sessionFilename(input.sessionID, input.agent.name)
