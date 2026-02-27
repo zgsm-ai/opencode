@@ -15,6 +15,7 @@ import { fileURLToPath } from "url"
 import { Log } from "@/util/log"
 import { Bus } from "../bus"
 import { ConfigMarkdown } from "@/config/markdown"
+import { $ } from "bun"
 
 // Logger for SubCodingTool - writes to file instead of console
 const subCodingLogger = Log.create({ service: "sub_coding" })
@@ -114,9 +115,60 @@ async function renderSubCodingPrompt(
   return md?.content.trim() || template
 }
 
-export const SubCodingTool = Tool.define("sub_coding", async (ctx) => {
+async function getAgentGitStats(agentCode: string, projectPath: string) {
+  const env = {
+    ...process.env,
+    GIT_DIR: path.join(projectPath, ".agent-git"),
+    GIT_WORK_TREE: projectPath,
+  }
+
+  const logResult = await $`git log --author=${agentCode} --oneline`
+    .cwd(projectPath)
+    .env(env)
+    .quiet()
+    .nothrow()
+  const logText = (await logResult.text()).trim()
+  const commits = logText.length > 0 ? logText.split("\n").filter((line) => line.trim().length > 0) : []
+
+  const filesResult = await $`git log --author=${agentCode} --name-only --pretty=format:`
+    .cwd(projectPath)
+    .env(env)
+    .quiet()
+    .nothrow()
+  const filesText = (await filesResult.text()).trim()
+  const files = filesText.length
+    ? [...new Set(filesText.split("\n").map((file) => file.trim()).filter((file) => file.length > 0))].sort()
+    : []
+
   return {
-    description: DESCRIPTION,
+    commitCount: commits.length,
+    files,
+  }
+}
+
+function formatGitStats(stats: { commitCount: number; files: string[] }): string {
+  const lines = [
+    `- Made ${stats.commitCount} agent-git commit(s)`,
+    `- Modified ${stats.files.length} file(s)`,
+  ]
+
+  if (stats.files.length > 0) {
+    lines.push("- Modified files:")
+    stats.files.forEach((file, index) => {
+      lines.push(`  ${index + 1}. ${file}`)
+    })
+  }
+
+  return lines.join("\n")
+}
+
+export const SubCodingTool = Tool.define("sub_coding", async (ctx) => {
+  const subAgent = await Agent.get("SubCodingAgent").catch(() => null)
+  const budget = subAgent?.steps ?? 70
+  const description = DESCRIPTION.replace("{{budget}}", budget.toString())
+
+  return {
+    description,
     parameters,
     async execute(params: z.infer<typeof parameters>, ctx) {
       subCodingLogger.info(`Starting ${params.agent_code}`)
@@ -265,43 +317,82 @@ export const SubCodingTool = Tool.define("sub_coding", async (ctx) => {
 
         // Get final messages to summarize what was done
         const messages = await Session.messages({ sessionID: session.id })
-        const summary = messages
-          .filter((x) => x.info.role === "assistant")
+        const allToolParts = messages
+          .filter((message) => message.info.role === "assistant")
           .flatMap(
-            (msg) => msg.parts.filter((x: any) => x.type === "tool") as MessageV2.ToolPart[],
-          )
-          .map((part) => ({
-            id: part.id,
-            tool: part.tool,
-            state: {
-              status: part.state.status,
-              title: part.state.status === "completed" ? part.state.title : undefined,
-            },
-          }))
-
-        // Extract the final text response
-        const text = result.parts.findLast((x) => x.type === "text")?.text ?? ""
-
-        // Build output with metadata
-        const output =
-          text +
-          "\n\n" +
-          ["<task_metadata>", `session_id: ${session.id}`, `agent_code: ${params.agent_code}`, "</task_metadata>"].join(
-            "\n",
+            (message) =>
+              message.parts.filter((part: any) => part.type === "tool") as MessageV2.ToolPart[],
           )
 
-        return {
-          title: params.agent_code,
-          metadata: {
-            description: `${params.agent_code} - ${params.sub_tasks.length} tasks`,
-            summary,
-            sessionId: session.id,
-            agentCode: params.agent_code,
-            taskCount: params.sub_tasks.length,
-            model,
+        const summary = allToolParts.map((part) => ({
+          id: part.id,
+          tool: part.tool,
+          state: {
+            status: part.state.status,
+            title: part.state.status === "completed" ? part.state.title : undefined,
           },
-          output,
+        }))
+
+        const exitPart = allToolParts.find(
+          (part) => part.tool === "sub_agent_task_done" && part.state.status === "completed",
+        )
+        const success = exitPart !== undefined
+
+        const directResponse = (() => {
+          if (!exitPart || exitPart.state.status !== "completed") return ""
+          const raw = exitPart.state.output ?? ""
+          const marker = "Direct Response:\n"
+          const index = raw.indexOf(marker)
+          if (index === -1) return raw.trim()
+          return raw.slice(index + marker.length).trim()
+        })()
+
+        const root = Instance.worktree === "/" ? Instance.directory : Instance.worktree
+        const gitStats = await getAgentGitStats(params.agent_code, root).catch(() => ({
+          commitCount: 0,
+          files: [],
+        }))
+        const gitStatsStr = formatGitStats(gitStats)
+
+        const metadata = {
+          description: `${params.agent_code} - ${params.sub_tasks.length} tasks`,
+          summary,
+          sessionId: session.id,
+          agentCode: params.agent_code,
+          taskCount: params.sub_tasks.length,
+          model,
         }
+
+        if (success) {
+          return {
+            title: params.agent_code,
+            metadata,
+            output: `## ${params.agent_code} Completed Assigned Tasks
+
+### SubCodingAgent Feedback
+${directResponse || "Tasks completed successfully"}
+
+### agent-git Statistics
+${gitStatsStr}
+
+**Next Steps**: Review the commits above, then update task.md to mark completed tasks as [x].`,
+          }
+        }
+
+        const lastText = result.parts.findLast((part) => part.type === "text")?.text ?? ""
+
+        throw new Error(`## ${params.agent_code} Task Execution Failed
+
+### Failure Reason
+${lastText || "SubCodingAgent did not complete - sub_agent_task_done was not called (budget exceeded or crashed)"}
+
+### agent-git Statistics
+${gitStatsStr}
+
+**Recommended Actions**:
+1. Use \`agent-git log --author="${params.agent_code}"\` to check what was committed
+2. If needed, use \`agent-git revert <commit-id>\` to rollback changes
+3. Analyze the failure reason and reassign tasks to a new SubCodingAgent`)
       } catch (error) {
         unsub()
         throw error
