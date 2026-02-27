@@ -163,7 +163,6 @@ export namespace Agent {
         name: "build",
         description: "The default agent. Executes tools based on configured permissions.",
         options: {},
-        steps: 200,  // 默认预算60次工具调用
         permission: permitEditor(PermissionNext.merge(
           defaults,
           PermissionNext.fromConfig({
@@ -255,7 +254,6 @@ export namespace Agent {
         mode: "primary",
         native: true,
         prompt: coding,
-        steps: 200,
       },
       FixAgent: {
         name: "FixAgent",
@@ -273,7 +271,6 @@ export namespace Agent {
         mode: "primary",
         native: true,
         prompt: fix,
-        steps: 200,
         color: "#ff4444",
       },
       general: {
@@ -293,7 +290,6 @@ export namespace Agent {
       },
       explore: {
         name: "explore",
-        steps: 200,
         permission: PermissionNext.merge(
           defaults,
           PermissionNext.fromConfig({
