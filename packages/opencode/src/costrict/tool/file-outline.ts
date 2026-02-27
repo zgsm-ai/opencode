@@ -5,7 +5,7 @@
 
 import { Tool } from '@/tool/tool';
 import { z } from 'zod';
-import { readFileSync } from 'fs';
+import { readFileSync, existsSync, statSync } from 'fs';
 import path from 'path';
 import { treeSitterService } from './service/tree-sitter';
 import { loadScmQuery, detectLanguageFromFilename } from './util/scm-loader';
@@ -376,12 +376,23 @@ function formatDefinitions(definitions: Definition[], filePath: string): string 
   return lines.join('\n');
 }
 
+function formatErrorFeedback(reason: string, fixHint: string, example?: string): string {
+  const parts = [
+    "[FileOutline] TOOL CALL FAILED.",
+    `Reason: ${reason}`,
+    `Fix: ${fixHint}`,
+  ]
+  if (example) {
+    parts.push(`Example: ${example}`)
+  }
+  return parts.join("\n")
+}
+
 /**
  * 参数Schema定义
  */
 const parametersSchema = z.object({
   file_path: z.string().describe('要分析的代码文件的绝对路径。'),
-  include_docstrings: z.boolean().optional().default(true).describe('是否包含文档字符串'),
 });
 
 /**
@@ -403,7 +414,38 @@ export const FileOutlineTool = Tool.define('file-outline', async (ctx) => {
     parameters: parametersSchema,
 
     async execute(args: z.infer<typeof parametersSchema>, ctx) {
-      const { file_path, include_docstrings } = args;
+      const file_path = args.file_path
+
+      if (!file_path) {
+        throw new Error(formatErrorFeedback(
+          "Missing required parameter 'file_path'.",
+          "Call the tool with {'file_path': '<absolute path to the code file>'}.",
+          "{'file_path': '/path/to/file.py'}",
+        ))
+      }
+
+      if (!path.isAbsolute(file_path)) {
+        throw new Error(formatErrorFeedback(
+          `Received non-absolute path: '${file_path}'.`,
+          "Convert the path to an absolute path (e.g., Path(relative).resolve()) before calling the tool.",
+          "{'file_path': '/path/to/file.py'}",
+        ))
+      }
+
+      if (!existsSync(file_path)) {
+        throw new Error(formatErrorFeedback(
+          `File does not exist: '${file_path}'.`,
+          "Double-check the path with a file listing command and pass the correct absolute path.",
+          "Run `ls /path/to/directory` to verify the file name before calling.",
+        ))
+      }
+
+      if (!statSync(file_path).isFile()) {
+        throw new Error(formatErrorFeedback(
+          `Path points to a directory, not a file: '${file_path}'.`,
+          "Provide the absolute path to a real file (e.g., .../module.py).",
+        ))
+      }
 
       log.info('Starting file outline extraction', { filePath: file_path });
 
@@ -464,7 +506,7 @@ export const FileOutlineTool = Tool.define('file-outline', async (ctx) => {
         const docTypes = pattern ? pattern.docstringTypes : new Set<string>();
         const defTypes = pattern ? pattern.definitionTypes : new Set<string>();
         const comments: SyntaxNode[] = [];
-        if (include_docstrings && pattern?.position === 'preceding') {
+        if (pattern?.position === 'preceding') {
           collectComments(tree.rootNode, docTypes, comments);
         }
         const lines = sourceCode.split('\n');
@@ -482,7 +524,7 @@ export const FileOutlineTool = Tool.define('file-outline', async (ctx) => {
           const signature =
             sig || (line >= 1 && line <= lines.length ? lines[line - 1].trimEnd() : name);
           const docstring = (() => {
-            if (!include_docstrings || !pattern || !defNode) return undefined;
+            if (!pattern || !defNode) return undefined;
             if (pattern.position === 'first_child' && language === 'python') {
               return extractPythonDocstring(defNode, sourceCode);
             }
