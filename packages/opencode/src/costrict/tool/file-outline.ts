@@ -603,14 +603,13 @@ export const FileOutlineTool = Tool.define('file-outline', async (ctx) => {
           if (language === 'perl' && !isPerlDefinitionLine(lineSig, name, node.type)) continue;
           const signature =
             language === 'perl' ? lineSig || sig || name : sig || lineSig || name;
-          const docNode = defNode ?? (language === 'perl' ? sigNode : undefined);
           const docstring = (() => {
             if (!pattern || !defNode) return undefined;
             if (pattern.position === 'first_child' && language === 'python') {
-              return extractPythonDocstring(docNode, sourceCode);
+              return extractPythonDocstring(defNode, sourceCode);
             }
             if (pattern.position === 'preceding') {
-              return extractPrecedingComment(docNode, comments, sourceCode, pattern);
+              return extractPrecedingComment(defNode, comments, sourceCode, pattern);
             }
             return undefined;
           })();
@@ -638,11 +637,10 @@ export const FileOutlineTool = Tool.define('file-outline', async (ctx) => {
             const sig = extractDefinitionSignature(sigNode, sourceCode, language);
             const signature =
               language === 'perl' ? lineSig || sig || name : sig || lineSig || name;
-            const docNode = defNode ?? sigNode;
             const docstring = (() => {
-              if (!include_docstrings || !pattern || !docNode) return undefined;
+              if (!pattern) return undefined;
               if (pattern.position === 'preceding') {
-                return extractPrecedingComment(docNode, comments, sourceCode, pattern);
+                return extractPrecedingComment(defNode ?? sigNode, comments, sourceCode, pattern);
               }
               return undefined;
             })();
@@ -673,7 +671,7 @@ export const FileOutlineTool = Tool.define('file-outline', async (ctx) => {
             if (shouldIgnorePerlLineNode(lineNode)) continue;
 
             const docstring = (() => {
-              if (!include_docstrings || !pattern) return undefined;
+              if (!pattern) return undefined;
               return extractPrecedingComment(lineNode, comments, sourceCode, pattern);
             })();
 
