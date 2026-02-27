@@ -137,8 +137,7 @@ const precompiled = () => {
 
 const projectRoot = () => {
   const root = Instance.worktree
-  if (!root) return ""
-  if (root === "/") return ""
+  if (!root || root === "/") return Instance.directory
   return root
 }
 
