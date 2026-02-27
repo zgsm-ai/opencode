@@ -26,8 +26,8 @@ type SequentialThinkingMetadata = {
 
 class SequentialThinkingValidationError extends Error {}
 
-const thoughtHistory: ThoughtData[] = []
-const branches = new Map<string, ThoughtData[]>()
+const thoughtHistoryBySession = new Map<string, ThoughtData[]>()
+const branchesBySession = new Map<string, Map<string, ThoughtData[]>>()
 
 const description = `用于复杂问题解决的结构化思考。逐步分解问题。
 
@@ -175,18 +175,22 @@ export const SequentialThinkingTool = Tool.define<typeof parametersSchema, Seque
   {
     description,
     parameters: parametersSchema,
-    async execute(args) {
+    async execute(args, ctx) {
       try {
         const data = validateThoughtData(args)
         const thoughtData =
           data.thought_number > data.total_thoughts ? { ...data, total_thoughts: data.thought_number } : data
 
+        const thoughtHistory = thoughtHistoryBySession.get(ctx.sessionID) ?? []
         thoughtHistory.push(thoughtData)
+        thoughtHistoryBySession.set(ctx.sessionID, thoughtHistory)
 
+        const branches = branchesBySession.get(ctx.sessionID) ?? new Map<string, ThoughtData[]>()
         if (thoughtData.branch_from_thought && thoughtData.branch_id) {
           const history = branches.get(thoughtData.branch_id) ?? []
           history.push(thoughtData)
           branches.set(thoughtData.branch_id, history)
+          branchesBySession.set(ctx.sessionID, branches)
         }
 
         const responseData = {
