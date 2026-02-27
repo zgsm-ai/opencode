@@ -58,7 +58,7 @@ export const QuickExploreTool = Tool.define("quick_explore", async (ctx) => {
         parentID: ctx.sessionID,
         title: `QuickExplore: ${params.exploration_target.substring(0, 50)}...`,
         permission: [
-          // Disable write operations (read-only)
+          // Deny all write operations by default
           {
             permission: "edit" as const,
             pattern: "*" as const,
@@ -73,6 +73,12 @@ export const QuickExploreTool = Tool.define("quick_explore", async (ctx) => {
             permission: "apply_patch" as const,
             pattern: "*" as const,
             action: "deny" as const,
+          },
+          // Allow writing only to explore_result/explore.md (must come AFTER deny rules, findLast wins)
+          {
+            permission: "edit" as const,
+            pattern: "explore_result/explore.md" as const,
+            action: "allow" as const,
           },
           // Disable todo tools
           {
