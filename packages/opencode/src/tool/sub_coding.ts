@@ -80,10 +80,11 @@ function formatSubTasks(subTasks: z.infer<typeof parameters>["sub_tasks"]): stri
 // Build the structured prompt for SubCodingAgent (task context only)
 function buildPrompt(params: z.infer<typeof parameters>): string {
   const subTasksMarkdown = formatSubTasks(params.sub_tasks)
+  const root = Instance.worktree === "/" ? Instance.directory : Instance.worktree
 
   return `## 任务上下文
 
-项目路径: \`${Instance.worktree}\`
+项目路径: \`${root}\`
 
 ### 关键补充说明
 ${params.important_note}

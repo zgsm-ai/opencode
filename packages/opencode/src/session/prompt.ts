@@ -469,7 +469,7 @@ export const OUTPUT_TOKEN_MAX = Flag.COSTRICT_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 1
                     userInput = match[1].trim()
                   }
 
-                  // 保存到 user_input.md
+                  // 保存到 user_input.md¬
                   // Non-git projects expose worktree as "/", fallback to current directory.
                   const root = Instance.worktree === "/" ? Instance.directory : Instance.worktree
                   const proposalDir = path.join(root, "proposal", changeId.trim())
