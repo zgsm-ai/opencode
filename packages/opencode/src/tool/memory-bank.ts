@@ -142,21 +142,26 @@ const save = async (filepath: string, lines: string[]) => {
 export const MemoryBankTool = Tool.define("memory_bank", {
   description: DESCRIPTION,
   parameters: z.object({
-    command: z.unknown().optional().describe("操作类型：view(查看全部) | add(添加) | update(更新) | delete(删除)"),
-    tag: z.unknown().optional().describe("记录的唯一标识符。使用小写字母、数字、连字符，体现记录类型（如 dev-env-setup, test-import-path）。add/update/delete 时必填。"),
-    title: z.unknown().optional().describe("一句话概括记录内容，让人一眼判断是否相关。add 必填，update 可选。"),
-    lesson: z.unknown().optional().describe("记录内容，简短描述即可，一条记录只说一个规范点。add 必填，update 可选。"),
+    command: z.enum(COMMANDS).describe("操作类型：view(查看全部) | add(添加) | update(更新) | delete(删除)"),
+    tag: z.string().optional().describe("记录的唯一标识符。使用小写字母、数字、连字符，体现记录类型（如 dev-env-setup, test-import-path）。add/update/delete 时必填。"),
+    title: z.string().optional().describe("一句话概括记录内容，让人一眼判断是否相关。add 必填，update 可选。"),
+    lesson: z.string().optional().describe("记录内容，简短描述即可，一条记录只说一个规范点。add 必填，update 可选。"),
   }),
+  formatValidationError(error: z.ZodError): string {
+    const commandIssue = error.issues.find((issue) => issue.path[0] === "command")
+    if (commandIssue) {
+      if (commandIssue.code === "invalid_type") {
+        return `缺少必填参数: command\n可用的命令: ${COMMANDS.join(", ")}\n示例: {'command': 'view'}`
+      }
+      if (commandIssue.code === "invalid_value") {
+        const received = String((commandIssue as unknown as { input?: unknown }).input ?? "")
+        return `无效的命令: ${received}\n可用的命令: ${COMMANDS.join(", ")}`
+      }
+    }
+    return error.message
+  },
   async execute(params, ctx) {
-    const command = typeof params.command === "string" ? params.command : String(params.command ?? "")
-    if (!command) {
-      throw new Error(
-        `缺少必填参数: command\n可用的命令: ${COMMANDS.join(", ")}\n示例: {'command': 'view'}`,
-      )
-    }
-    if (!COMMANDS.includes(command as (typeof COMMANDS)[number])) {
-      throw new Error(`无效的命令: ${command}\n可用的命令: ${COMMANDS.join(", ")}`)
-    }
+    const command = params.command
 
     const filepath = bank(ctx)
     await assertExternalDirectory(ctx, filepath)
@@ -239,9 +244,9 @@ export const MemoryBankTool = Tool.define("memory_bank", {
         throw new Error("缺少必填参数: lesson\nadd命令需要: tag, title, lesson")
       }
 
-      const tag = String(params.tag).trim()
-      const title = String(params.title)
-      const lesson = String(params.lesson)
+      const tag = params.tag.trim()
+      const title = params.title
+      const lesson = params.lesson
       if (!tag) {
         throw new Error("tag 不能为空。请提供全局唯一的 tag（例如：'dev-env-setup'）。")
       }
@@ -279,7 +284,7 @@ export const MemoryBankTool = Tool.define("memory_bank", {
         throw new Error("缺少必填参数: tag\nupdate命令需要提供tag（全局唯一标识）。")
       }
 
-      const tag = String(params.tag).trim()
+      const tag = params.tag.trim()
       const title = params.title
       const lesson = params.lesson
       if (!title && !lesson) {
@@ -304,8 +309,8 @@ export const MemoryBankTool = Tool.define("memory_bank", {
       }
 
       const old = entries[hit]
-      const nextTitle = title !== undefined && title !== null ? String(title).trim() : old.title
-      const nextLesson = lesson !== undefined && lesson !== null ? split(String(lesson)) : old.lesson
+      const nextTitle = title !== undefined ? title.trim() : old.title
+      const nextLesson = lesson !== undefined ? split(lesson) : old.lesson
       entries[hit] = { tag: old.tag, title: nextTitle, lesson: nextLesson }
       await save(filepath, render(entries)).catch((error) => {
         throw new Error(`更新记录失败: ${errorText(error)}`)
@@ -323,7 +328,7 @@ export const MemoryBankTool = Tool.define("memory_bank", {
         throw new Error("缺少必填参数: tag\ndelete命令需要提供tag（全局唯一标识）。")
       }
 
-      const tag = String(params.tag).trim()
+      const tag = params.tag.trim()
       await ensure(filepath).catch((error) => {
         throw new Error(`删除记录失败: ${errorText(error)}`)
       })
