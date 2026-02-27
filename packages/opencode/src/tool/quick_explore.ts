@@ -58,7 +58,7 @@ export const QuickExploreTool = Tool.define("quick_explore", async (ctx) => {
         parentID: ctx.sessionID,
         title: `QuickExplore: ${params.exploration_target.substring(0, 50)}...`,
         permission: [
-          // Disable write operations (read-only)
+          // Deny all write operations by default
           {
             permission: "edit" as const,
             pattern: "*" as const,
@@ -73,6 +73,12 @@ export const QuickExploreTool = Tool.define("quick_explore", async (ctx) => {
             permission: "apply_patch" as const,
             pattern: "*" as const,
             action: "deny" as const,
+          },
+          // Allow editing explore.md in any path (must come AFTER deny rules, findLast wins)
+          {
+            permission: "edit" as const,
+            pattern: "**/explore.md" as const,
+            action: "allow" as const,
           },
           // Disable todo tools
           {
@@ -206,24 +212,21 @@ export const QuickExploreTool = Tool.define("quick_explore", async (ctx) => {
             },
           }))
 
-        // 8. Extract result from sub_agent_task_done tool
-        // Find the sub_agent_task_done tool call in the result parts
-        const subAgentTaskDonePart = result.parts.find(
+        // 8. Read direct_response from sub_agent_task_done tool input
+        // Use the latest completed call as final response source
+        const subAgentTaskDonePart = result.parts.findLast(
           (part) => part.type === "tool" && part.tool === "sub_agent_task_done" && part.state?.status === "completed"
         ) as MessageV2.ToolPart | undefined
 
         let directResponse = ""
         if (subAgentTaskDonePart && subAgentTaskDonePart.state.status === "completed") {
-          // Extract direct_response from the tool output
-          const output = subAgentTaskDonePart.state.output || ""
-          // The output format is: "Task done.\n\nDirect Response:\n{direct_response}"
-          const match = output.match(/Direct Response:\s*\n([\s\S]*)/)
-          if (match && match[1]) {
-            directResponse = match[1].trim()
-          } else {
-            // Fallback: use the entire output if pattern doesn't match
-            directResponse = output
+          const input = subAgentTaskDonePart.state.input
+          const direct =
+            input && typeof input === "object" ? (input as Record<string, unknown>).direct_response : undefined
+          if (typeof direct !== "string" || !direct.trim()) {
+            throw new Error("sub_agent_task_done completed but direct_response was missing in tool input")
           }
+          directResponse = direct.trim()
 
           // 清理不需要的内容：移除 budget_notice 和其他系统标签
           directResponse = directResponse
@@ -232,8 +235,8 @@ export const QuickExploreTool = Tool.define("quick_explore", async (ctx) => {
             .trim()
         }
 
-        // If no sub_agent_task_done found, fall back to text content
-        if (!directResponse) {
+        // If sub_agent_task_done was not called, fall back to text content
+        if (!subAgentTaskDonePart) {
           directResponse = result.parts.findLast((x) => x.type === "text")?.text ?? ""
         }
 

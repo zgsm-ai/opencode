@@ -21,18 +21,22 @@ export const SubAgentTaskDoneTool = Tool.define("sub_agent_task_done", async () 
         }
       }
 
-      if (direct_response.trim().length < 5) {
+      const text = direct_response.trim()
+      const chars = text.length
+      const lines = text.length ? text.split("\n").length : 0
+
+      if (chars < 50) {
         return {
           title: "",
           metadata: {},
-          output: `Error: direct_response is too brief (${direct_response.trim().length} chars). Please provide a meaningful response that directly answers the assigned task.`,
+          output: `Error: direct_response is too brief (${chars} chars). Minimum required length is 50 chars. Please provide a complete response that directly answers the assigned task.`,
         }
       }
 
       return {
         title: "",
         metadata: {},
-        output: `Task done.\n\nDirect Response:\n${direct_response}`,
+        output: `Task done. direct_response has been forwarded to parent agent. Stats: ${chars} chars, ${lines} lines.`,
       }
     },
   }
