@@ -38,6 +38,7 @@ export const LANGUAGE_EXTENSIONS: Record<string, string[]> = {
   rust: ['.rs'],
   ruby: ['.rb', '.rake', '.gemspec'],
   php: ['.php', '.phtml', '.php5', '.php7', '.phps'],
+  perl: ['.pl', '.pm', '.perl', '.t'],
 };
 
 /**
@@ -150,6 +151,17 @@ const loadPhp = lazy(async () => {
   return await Language.load(resolveWasm(phpWasm));
 });
 
+/**
+ * 延迟加载Perl语言
+ * 固定使用仓库内置 wasm，保证离线可用
+ */
+const loadPerl = lazy(async () => {
+  const { default: perlWasm } = await import('../wasm/tree-sitter-perl.wasm' as string, {
+    with: { type: 'wasm' },
+  });
+  return await Language.load(resolveWasm(perlWasm));
+});
+
 
 
 /**
@@ -207,6 +219,8 @@ export class TreeSitterService {
         return await loadRuby();
       case 'php':
         return await loadPhp();
+      case 'perl':
+        return await loadPerl();
       default:
         log.error('Unsupported language', { language });
         throw new Error(`Unsupported language: ${language}`);

@@ -33,8 +33,12 @@ const run = async (dir: string, filename: string, content: string) => {
   })
 }
 
+const perl = await Bun.file(
+  path.join(import.meta.dir, "../../src/costrict/tool/wasm/tree-sitter-perl.wasm"),
+).exists()
+
 describe("tool.file_outline multi-language parsing", () => {
-  const cases = [
+  const core = [
     {
       name: "python",
       filename: "sample.py",
@@ -197,6 +201,54 @@ describe("tool.file_outline multi-language parsing", () => {
       parts: ["function add(", "int $a", "int $b", "): int {"],
       doc: "Adds two numbers",
     },
+  ]
+
+  const cases = [
+    ...core,
+    ...(perl
+      ? [
+          {
+            name: "perl",
+            filename: "sample.pl",
+            symbol: "add",
+            content: [
+              "# Adds two numbers",
+              "sub add {",
+              "  my ($a, $b) = @_;",
+              "  return $a + $b;",
+              "}",
+            ].join("\n"),
+            parts: ["sub add {"],
+            doc: "Adds two numbers",
+          },
+          {
+            name: "perl",
+            filename: "complex.pl",
+            symbol: "clone",
+            content: [
+              "package Demo;",
+              "use overload '@{}' => sub { shift->parts }, fallback => 1;",
+              "",
+              "sub canonicalize {",
+              "  my $parts = shift->parts;",
+              "  for (my $i = 0; $i <= $#$parts;) {",
+              "    if ($i < 1) { $i++ }",
+              "    elsif ($i > 1) { $i-- }",
+              "    else { $i++ }",
+              "  }",
+              "  return $parts;",
+              "}",
+              "",
+              "# Clones current object",
+              "sub clone {",
+              "  return shift;",
+              "}",
+            ].join("\n"),
+            parts: ["sub clone {"],
+            doc: "Clones current object",
+          },
+        ]
+      : []),
   ]
 
   test.each(cases)("$name captures multi-line signature", async (entry) => {

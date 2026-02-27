@@ -15,6 +15,7 @@ import cppQuery from '../query/cpp-tags';
 import rustQuery from '../query/rust-tags';
 import rubyQuery from '../query/ruby-tags';
 import phpQuery from '../query/php-tags';
+import perlQuery from '../query/perl-tags';
 
 /**
  * 支持的语言列表
@@ -30,6 +31,7 @@ export const SUPPORTED_LANGUAGES = [
   'rust',
   'ruby',
   'php',
+  'perl',
 ] as const;
 
 export type SupportedLanguage = typeof SUPPORTED_LANGUAGES[number];
@@ -62,6 +64,8 @@ export function loadScmQuery(language: string): string {
       return rubyQuery;
     case 'php':
       return phpQuery;
+    case 'perl':
+      return perlQuery;
     default:
       throw new Error(`Unsupported language: ${language}`);
   }
@@ -121,6 +125,11 @@ export function detectLanguageFromFilename(filename: string): SupportedLanguage 
     case 'php7':
     case 'phps':
       return 'php';
+    case 'pl':
+    case 'pm':
+    case 'perl':
+    case 't':
+      return 'perl';
     default:
       return null;
   }

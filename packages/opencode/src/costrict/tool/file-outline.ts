@@ -108,11 +108,16 @@ const DOCSTRING_PATTERNS: Record<string, DocstringPattern> = {
     definitionTypes: new Set(['function_definition', 'method_declaration', 'class_declaration']),
     position: 'preceding',
   },
+  perl: {
+    docstringTypes: new Set(['comments']),
+    definitionTypes: new Set(['function_definition', 'package_statement']),
+    position: 'preceding',
+  },
 };
 
 type SyntaxNode = Tree['rootNode'];
 
-const COMMENT_TYPES = new Set(['comment', 'block_comment', 'line_comment']);
+const COMMENT_TYPES = new Set(['comment', 'comments', 'block_comment', 'line_comment']);
 const PYTHON_DOCSTRING_SKIP = new Set(['comment', 'NEWLINE', 'INDENT', 'DEDENT', 'pass_statement']);
 
 function getNodeText(node: SyntaxNode, sourceCode: string): string {
@@ -261,6 +266,34 @@ function extractDefinitionSignature(
   return normalizeSignatureWhitespace(withBrace);
 }
 
+function fallbackLineSignature(lines: string[], line: number, name: string): string {
+  if (line < 1 || line > lines.length) return name;
+  return lines[line - 1].trimEnd();
+}
+
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function collectPerlNameNodes(node: SyntaxNode, out: SyntaxNode[]): void {
+  if (node.type === 'identifier' || node.type === 'package_name') {
+    out.push(node);
+  }
+  for (const child of node.children) {
+    if (!child) continue;
+    collectPerlNameNodes(child, out);
+  }
+}
+
+function isPerlDefinitionLine(line: string, name: string, type: string): boolean {
+  if (!line || !name) return false;
+  const escaped = escapeRegex(name);
+  const packageMatch = new RegExp(`^\\s*package\\s+${escaped}(?:\\b|\\s*;)`).test(line);
+  if (packageMatch) return true;
+  if (type === 'package_name') return false;
+  return new RegExp(`^\\s*sub\\s+${escaped}(?:\\b|\\s*\\()`).test(line);
+}
+
 function collectComments(
   node: SyntaxNode,
   docTypes: Set<string>,
@@ -376,6 +409,13 @@ function formatDefinitions(definitions: Definition[], filePath: string): string 
   return lines.join('\n');
 }
 
+function definitionQuality(def: Definition): number {
+  const head = def.signature.trimStart();
+  const hasPrefix = head.startsWith('sub ') || head.startsWith('package ');
+  const hasDoc = Boolean(def.docstring);
+  return (hasPrefix ? 2 : 0) + (hasDoc ? 1 : 0);
+}
+
 /**
  * 参数Schema定义
  */
@@ -398,7 +438,7 @@ export const FileOutlineTool = Tool.define('file-outline', async (ctx) => {
 
 返回：类定义、函数签名，附带行号和文档字符串。
 
-注意：支持 Python、JavaScript、TypeScript、Go、Java、C/C++、Rust 等多种语言。`,
+注意：支持 Python、JavaScript、TypeScript、Go、Java、C/C++、Rust、Ruby、PHP、Perl 等多种语言。`,
 
     parameters: parametersSchema,
 
@@ -479,15 +519,18 @@ export const FileOutlineTool = Tool.define('file-outline', async (ctx) => {
           const sigNode = defNode ?? inferSignatureNodeFromNameNode(node);
           const line = sigNode.startPosition.row + 1;
           const sig = extractDefinitionSignature(sigNode, sourceCode, language);
+          const lineSig = fallbackLineSignature(lines, line, name);
+          if (language === 'perl' && !isPerlDefinitionLine(lineSig, name, node.type)) continue;
           const signature =
-            sig || (line >= 1 && line <= lines.length ? lines[line - 1].trimEnd() : name);
+            language === 'perl' ? lineSig || sig || name : sig || lineSig || name;
+          const docNode = defNode ?? (language === 'perl' ? sigNode : undefined);
           const docstring = (() => {
-            if (!include_docstrings || !pattern || !defNode) return undefined;
+            if (!include_docstrings || !pattern || !docNode) return undefined;
             if (pattern.position === 'first_child' && language === 'python') {
-              return extractPythonDocstring(defNode, sourceCode);
+              return extractPythonDocstring(docNode, sourceCode);
             }
             if (pattern.position === 'preceding') {
-              return extractPrecedingComment(defNode, comments, sourceCode, pattern);
+              return extractPrecedingComment(docNode, comments, sourceCode, pattern);
             }
             return undefined;
           })();
@@ -500,33 +543,79 @@ export const FileOutlineTool = Tool.define('file-outline', async (ctx) => {
           });
         }
 
-        const seen = new Set<string>();
-        const unique: Definition[] = [];
+        if (language === 'perl') {
+          const perlNames: SyntaxNode[] = [];
+          collectPerlNameNodes(tree.rootNode, perlNames);
+          for (const node of perlNames) {
+            const name = getNodeText(node, sourceCode);
+            if (!name) continue;
+            const line = node.startPosition.row + 1;
+            const lineSig = fallbackLineSignature(lines, line, name);
+            if (!isPerlDefinitionLine(lineSig, name, node.type)) continue;
+
+            const defNode = pattern ? findDefinitionParent(node, defTypes) : undefined;
+            const sigNode = defNode ?? inferSignatureNodeFromNameNode(node);
+            const sig = extractDefinitionSignature(sigNode, sourceCode, language);
+            const signature =
+              language === 'perl' ? lineSig || sig || name : sig || lineSig || name;
+            const docNode = defNode ?? sigNode;
+            const docstring = (() => {
+              if (!include_docstrings || !pattern || !docNode) return undefined;
+              if (pattern.position === 'preceding') {
+                return extractPrecedingComment(docNode, comments, sourceCode, pattern);
+              }
+              return undefined;
+            })();
+
+            definitions.push({
+              line,
+              name,
+              signature,
+              docstring,
+            });
+          }
+        }
+
+        const map = new Map<string, Definition>();
         for (const def of definitions) {
           const key = `${def.name}:${def.line}`;
-          if (seen.has(key)) continue;
-          seen.add(key);
-          unique.push(def);
+          const current = map.get(key);
+          if (!current) {
+            map.set(key, def);
+            continue;
+          }
+          if (definitionQuality(def) > definitionQuality(current)) {
+            map.set(key, def);
+          }
+        }
+        const unique = [...map.values()];
+        const compact: Definition[] = [];
+        const sigSeen = new Set<string>();
+        for (const def of unique) {
+          const key = `${def.line}:${def.signature}`;
+          if (sigSeen.has(key)) continue;
+          sigSeen.add(key);
+          compact.push(def);
         }
 
         // 按行号排序
-        unique.sort((a, b) => a.line - b.line);
+        compact.sort((a, b) => a.line - b.line);
 
         log.info('File outline extraction completed', {
           filePath: file_path,
           language,
-          definitionCount: unique.length
+          definitionCount: compact.length
         });
 
         // 格式化输出
-        const output = formatDefinitions(unique, file_path);
+        const output = formatDefinitions(compact, file_path);
 
         return {
           title: `File Outline: ${file_path}`,
           metadata: {
             file_path,
             language,
-            definition_count: unique.length,
+              definition_count: compact.length,
             error: '',
           },
           output,
