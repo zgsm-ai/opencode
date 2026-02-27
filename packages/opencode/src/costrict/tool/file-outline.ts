@@ -119,6 +119,17 @@ type SyntaxNode = Tree['rootNode'];
 
 const COMMENT_TYPES = new Set(['comment', 'comments', 'block_comment', 'line_comment']);
 const PYTHON_DOCSTRING_SKIP = new Set(['comment', 'NEWLINE', 'INDENT', 'DEDENT', 'pass_statement']);
+const PERL_IGNORE_TYPES = new Set([
+  'pod_statement',
+  'string',
+  'string_content',
+  'string_single_quoted',
+  'string_double_quoted',
+  'comment',
+  'comments',
+  'line_comment',
+  'block_comment',
+]);
 
 function getNodeText(node: SyntaxNode, sourceCode: string): string {
   return sourceCode.substring(node.startIndex, node.endIndex);
@@ -292,6 +303,33 @@ function isPerlDefinitionLine(line: string, name: string, type: string): boolean
   if (packageMatch) return true;
   if (type === 'package_name') return false;
   return new RegExp(`^\\s*sub\\s+${escaped}(?:\\b|\\s*\\()`).test(line);
+}
+
+function collectPerlPodLines(lines: string[]): Set<number> {
+  const pod = new Set<number>();
+  const scan = (index: number, inPod: boolean): void => {
+    if (index >= lines.length) return;
+    const line = lines[index];
+    const next = /^=\w/.test(line.trim()) ? true : /^=cut\b/.test(line.trim()) ? false : inPod;
+    if (next) pod.add(index + 1);
+    scan(index + 1, next);
+  };
+  scan(0, false);
+  return pod;
+}
+
+function perlLineDefinition(line: string): { name: string; type: 'identifier' | 'package_name' } | undefined {
+  const packageMatch = line.match(/^\s*package\s+([A-Za-z_][A-Za-z0-9_:]*)\b/);
+  if (packageMatch) return { name: packageMatch[1], type: 'package_name' };
+  const subMatch = line.match(/^\s*sub\s+([A-Za-z_][A-Za-z0-9_:]*)\b/);
+  if (subMatch) return { name: subMatch[1], type: 'identifier' };
+  return undefined;
+}
+
+function shouldIgnorePerlLineNode(node: SyntaxNode | null | undefined): boolean {
+  if (!node) return false;
+  if (PERL_IGNORE_TYPES.has(node.type)) return true;
+  return shouldIgnorePerlLineNode(node.parent ?? undefined);
 }
 
 function collectComments(
@@ -574,6 +612,36 @@ export const FileOutlineTool = Tool.define('file-outline', async (ctx) => {
               docstring,
             });
           }
+
+          const podLines = collectPerlPodLines(lines);
+          for (const [index, lineText] of lines.entries()) {
+            const line = index + 1;
+            if (podLines.has(line)) continue;
+            const parsed = perlLineDefinition(lineText);
+            if (!parsed) continue;
+            if (!isPerlDefinitionLine(lineText, parsed.name, parsed.type)) continue;
+            const column = lineText.indexOf(parsed.name);
+            if (column < 0) continue;
+
+            const lineNode = tree.rootNode.namedDescendantForPosition(
+              { row: index, column },
+              { row: index, column: column + parsed.name.length }
+            );
+            if (!lineNode) continue;
+            if (shouldIgnorePerlLineNode(lineNode)) continue;
+
+            const docstring = (() => {
+              if (!include_docstrings || !pattern) return undefined;
+              return extractPrecedingComment(lineNode, comments, sourceCode, pattern);
+            })();
+
+            definitions.push({
+              line,
+              name: parsed.name,
+              signature: lineText.trimEnd(),
+              docstring,
+            });
+          }
         }
 
         const map = new Map<string, Definition>();
@@ -584,7 +652,11 @@ export const FileOutlineTool = Tool.define('file-outline', async (ctx) => {
             map.set(key, def);
             continue;
           }
-          if (definitionQuality(def) > definitionQuality(current)) {
+          const next =
+            definitionQuality(def) > definitionQuality(current) ||
+            (definitionQuality(def) === definitionQuality(current) &&
+              def.signature.length < current.signature.length);
+          if (next) {
             map.set(key, def);
           }
         }

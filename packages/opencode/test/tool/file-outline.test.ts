@@ -247,6 +247,43 @@ describe("tool.file_outline multi-language parsing", () => {
             parts: ["sub clone {"],
             doc: "Clones current object",
           },
+          {
+            name: "perl",
+            filename: "regex-heavy.pl",
+            symbol: "to_string",
+            content: [
+              "package Demo;",
+              "sub path_query {",
+              "  my ($self, $pq) = @_;",
+              "  return $self unless $pq =~ /^([^?#]*)(?:\\?([^#]*))?/;",
+              "  return $self;",
+              "}",
+              "sub protocol { lc(shift // '') }",
+              "sub to_string { shift }",
+            ].join("\n"),
+            parts: ["sub to_string {"],
+          },
+          {
+            name: "perl",
+            filename: "pod-safe.pl",
+            symbol: "real",
+            content: [
+              "package Demo;",
+              "=head1 METHODS",
+              "sub fake {",
+              "  return 0;",
+              "}",
+              "=cut",
+              "",
+              "# Real doc",
+              "sub real {",
+              "  return 1;",
+              "}",
+            ].join("\n"),
+            parts: ["sub real {"],
+            doc: "Real doc",
+            absent: ["sub fake {"],
+          },
         ]
       : []),
   ]
@@ -263,6 +300,11 @@ describe("tool.file_outline multi-language parsing", () => {
     }
     if (entry.doc) {
       expect(result.output).toContain(entry.doc)
+    }
+    if ("absent" in entry && entry.absent) {
+      for (const part of entry.absent) {
+        expect(result.output).not.toContain(part)
+      }
     }
   })
 })
