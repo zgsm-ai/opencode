@@ -28,7 +28,7 @@ const run = async (dir: string, filename: string, content: string) => {
     directory: dir,
     fn: async () => {
       const tool = await FileOutlineTool.init()
-      return tool.execute({ file_path: filePath, include_docstrings: true }, ctx)
+      return tool.execute({ file_path: filePath }, ctx)
     },
   })
 }
