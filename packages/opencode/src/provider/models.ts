@@ -13,6 +13,33 @@ import { lazy } from "@/util/lazy"
 export namespace ModelsDev {
   const log = Log.create({ service: "models.dev" })
   const filepath = path.join(Global.Path.cache, "models.json")
+  const glmProvider: Provider = {
+    id: "ai-code-glm",
+    name: "AI Code 测评 GLM 服务",
+    api: "http://10.72.1.37:8510",
+    npm: "@ai-sdk/openai-compatible",
+    env: [],
+    models: {
+      "glm-4.7": {
+        id: "glm-4.7",
+        name: "GLM-4.7",
+        release_date: "2026-02-28",
+        attachment: false,
+        reasoning: true,
+        temperature: true,
+        tool_call: true,
+        limit: {
+          context: 200000,
+          output: 10240,
+        },
+        modalities: {
+          input: ["text"],
+          output: ["text"],
+        },
+        options: {},
+      },
+    },
+  }
 
   export const Model = z.object({
     id: z.string(),
@@ -101,8 +128,12 @@ export namespace ModelsDev {
   })
 
   export async function get() {
-    const result = await Data()
-    return result as Record<string, Provider>
+    const result = (await Data()) as Record<string, Provider>
+    if (result["ai-code-glm"]) return result
+    return {
+      ...result,
+      "ai-code-glm": glmProvider,
+    }
   }
 
   export async function refresh() {
