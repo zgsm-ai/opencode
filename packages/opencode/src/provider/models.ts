@@ -16,7 +16,7 @@ export namespace ModelsDev {
   const glmProvider: Provider = {
     id: "ai-code-glm",
     name: "AI Code 测评 GLM 服务",
-    api: "http://10.72.1.37:8510",
+    api: "http://10.72.1.37:8510/v1/chat/completions",
     npm: "@ai-sdk/openai-compatible",
     env: [],
     models: {
