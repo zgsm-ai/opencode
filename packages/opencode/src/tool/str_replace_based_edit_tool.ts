@@ -25,6 +25,7 @@ type Params = z.infer<typeof Parameters>
 type Meta = {
   truncated?: boolean
   filediff?: Snapshot.FileDiff
+  diff?: string
 }
 
 const Int = z.number().refine(Number.isInteger, "必须是整数")
@@ -492,6 +493,7 @@ export const StrReplaceBasedEditTool = Tool.define<typeof Parameters, Meta>("str
         output,
         metadata: {
           filediff,
+          diff,
           truncated: false,
         },
       }
@@ -560,6 +562,7 @@ export const StrReplaceBasedEditTool = Tool.define<typeof Parameters, Meta>("str
         output,
         metadata: {
           filediff,
+          diff,
           truncated: false,
         },
       }
@@ -634,6 +637,7 @@ export const StrReplaceBasedEditTool = Tool.define<typeof Parameters, Meta>("str
       output,
       metadata: {
         filediff,
+        diff,
         truncated: false,
       },
     }

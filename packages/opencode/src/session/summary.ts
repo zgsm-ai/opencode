@@ -7,6 +7,7 @@ import { Session } from "."
 import { MessageV2 } from "./message-v2"
 import { Identifier } from "@/id/id"
 import { Snapshot } from "@/snapshot"
+import { diffLines } from "diff"
 
 import { Log } from "@/util/log"
 import path from "path"
@@ -19,6 +20,14 @@ import { Agent } from "@/agent/agent"
 
 export namespace SessionSummary {
   const log = Log.create({ service: "session.summary" })
+
+  function normalizeFile(input: string) {
+    const unquoted = unquoteGitPath(input).replaceAll("\\", "/")
+    if (path.isAbsolute(unquoted)) {
+      return path.relative(Instance.worktree, unquoted).replaceAll("\\", "/")
+    }
+    return unquoted
+  }
 
   function unquoteGitPath(input: string) {
     if (!input.startsWith('"')) return input
@@ -96,13 +105,20 @@ export namespace SessionSummary {
         .flatMap((x) => x.parts)
         .filter((x) => x.type === "patch")
         .flatMap((x) => x.files)
-        .map((x) => path.relative(Instance.worktree, x).replaceAll("\\", "/")),
+        .map((x) => normalizeFile(x)),
     )
-    const diffs = await computeDiff({ messages: input.messages }).then((x) =>
-      x.filter((x) => {
-        return files.has(x.file)
-      }),
+    const snapshotDiffs = await computeDiff({ messages: input.messages }).then((x) =>
+      x.map((item) => ({
+        ...item,
+        file: normalizeFile(item.file),
+      })),
     )
+    const filteredSnapshotDiffs = snapshotDiffs.filter((item) => files.has(item.file))
+    const diffs = filteredSnapshotDiffs.length
+      ? filteredSnapshotDiffs
+      : snapshotDiffs.length
+        ? snapshotDiffs
+        : computeToolDiff(input.messages)
     await Session.update(input.sessionID, (draft) => {
       draft.summary = {
         additions: diffs.reduce((sum, x) => sum + x.additions, 0),
@@ -114,6 +130,46 @@ export namespace SessionSummary {
     Bus.publish(Session.Event.Diff, {
       sessionID: input.sessionID,
       diff: diffs,
+    })
+  }
+
+  function computeToolDiff(messages: MessageV2.WithParts[]) {
+    const state = new Map<string, { file: string; before: string; after: string }>()
+    for (const msg of messages) {
+      for (const part of msg.parts) {
+        if (part.type !== "tool") continue
+        if (part.state.status !== "completed") continue
+        const metadata = part.state.metadata as Record<string, unknown> | undefined
+        const item = metadata?.filediff as Record<string, unknown> | undefined
+        if (!item) continue
+        const fileRaw = typeof item.file === "string" ? item.file : ""
+        const file = normalizeFile(fileRaw)
+        if (!file) continue
+        const before = typeof item.before === "string" ? item.before : ""
+        const after = typeof item.after === "string" ? item.after : ""
+        const prev = state.get(file)
+        if (!prev) {
+          state.set(file, { file, before, after })
+          continue
+        }
+        state.set(file, { file, before: prev.before, after })
+      }
+    }
+    return Array.from(state.values()).map((item) => {
+      const counts = diffLines(item.before, item.after).reduce(
+        (agg, part) => ({
+          additions: agg.additions + (part.added ? (part.count ?? 0) : 0),
+          deletions: agg.deletions + (part.removed ? (part.count ?? 0) : 0),
+        }),
+        { additions: 0, deletions: 0 },
+      )
+      return {
+        file: item.file,
+        before: item.before,
+        after: item.after,
+        additions: counts.additions,
+        deletions: counts.deletions,
+      }
     })
   }
 
@@ -174,7 +230,7 @@ export namespace SessionSummary {
     async (input) => {
       const diffs = await Storage.read<Snapshot.FileDiff[]>(["session_diff", input.sessionID]).catch(() => [])
       const next = diffs.map((item) => {
-        const file = unquoteGitPath(item.file)
+        const file = normalizeFile(item.file)
         if (file === item.file) return item
         return {
           ...item,

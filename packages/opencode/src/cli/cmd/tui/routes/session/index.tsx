@@ -40,6 +40,7 @@ import type { GrepTool } from "@/tool/grep"
 import type { ListTool } from "@/tool/ls"
 import type { EditTool } from "@/tool/edit"
 import type { ApplyPatchTool } from "@/tool/apply_patch"
+import type { StrReplaceBasedEditTool } from "@/tool/str_replace_based_edit_tool"
 import type { WebFetchTool } from "@/tool/webfetch"
 import type { TaskTool } from "@/tool/task"
 import type { QuestionTool } from "@/tool/question"
@@ -1419,6 +1420,9 @@ function ToolPart(props: { last: boolean; part: ToolPart; message: AssistantMess
         <Match when={props.part.tool === "write"}>
           <Write {...toolprops} />
         </Match>
+        <Match when={props.part.tool === "str_replace_based_edit_tool"}>
+          <StrReplaceBasedEdit {...toolprops} />
+        </Match>
         <Match when={props.part.tool === "edit"}>
           <Edit {...toolprops} />
         </Match>
@@ -2167,6 +2171,75 @@ function Edit(props: ToolProps<typeof EditTool>) {
       <Match when={true}>
         <InlineTool icon="←" pending="Preparing edit..." complete={props.input.filePath} part={props.part}>
           Edit {normalizePath(props.input.filePath!)} {input({ replaceAll: props.input.replaceAll })}
+        </InlineTool>
+      </Match>
+    </Switch>
+  )
+}
+
+function StrReplaceBasedEdit(props: ToolProps<typeof StrReplaceBasedEditTool>) {
+  const ctx = use()
+  const { theme, syntax } = useTheme()
+  const command = createMemo(() => props.input.command ?? "str_replace_based_edit_tool")
+  const filePath = createMemo(() => props.input.path ?? "")
+  const diffContent = createMemo(() => (typeof props.metadata.diff === "string" ? props.metadata.diff : ""))
+  const filediff = createMemo(() => props.metadata.filediff)
+  const ft = createMemo(() => filetype(filePath()))
+
+  const view = createMemo(() => {
+    const diffStyle = ctx.sync.data.config.tui?.diff_style
+    if (diffStyle === "stacked") return "unified"
+    return ctx.width > 120 ? "split" : "unified"
+  })
+
+  const title = createMemo(() => {
+    if (command() === "create") return "# Created " + normalizePath(filePath())
+    if (command() === "insert") return "← Insert " + normalizePath(filePath())
+    return "← Edit " + normalizePath(filePath())
+  })
+
+  const summary = createMemo(() => {
+    const value = filediff()
+    if (!value) return ""
+    const additions = value.additions > 0 ? `+${value.additions}` : ""
+    const deletions = value.deletions > 0 ? `-${value.deletions}` : ""
+    if (additions && deletions) return `${additions} ${deletions}`
+    return additions || deletions
+  })
+
+  return (
+    <Switch>
+      <Match when={diffContent()}>
+        <BlockTool title={title()} part={props.part}>
+          <Show when={summary()}>
+            <text fg={theme.textMuted}>{summary()}</text>
+          </Show>
+          <box paddingLeft={1}>
+            <diff
+              diff={diffContent()}
+              view={view()}
+              filetype={ft()}
+              syntaxStyle={syntax()}
+              showLineNumbers={true}
+              width="100%"
+              wrapMode={ctx.diffWrapMode()}
+              fg={theme.text}
+              addedBg={theme.diffAddedBg}
+              removedBg={theme.diffRemovedBg}
+              contextBg={theme.diffContextBg}
+              addedSignColor={theme.diffHighlightAdded}
+              removedSignColor={theme.diffHighlightRemoved}
+              lineNumberFg={theme.diffLineNumber}
+              lineNumberBg={theme.diffContextBg}
+              addedLineNumberBg={theme.diffAddedLineNumberBg}
+              removedLineNumberBg={theme.diffRemovedLineNumberBg}
+            />
+          </box>
+        </BlockTool>
+      </Match>
+      <Match when={true}>
+        <InlineTool icon="←" pending="Preparing str_replace_based_edit_tool..." complete={filePath()} part={props.part}>
+          {command()} {normalizePath(filePath())} {input(props.input, ["path", "old_str", "new_str", "file_text"])}
         </InlineTool>
       </Match>
     </Switch>

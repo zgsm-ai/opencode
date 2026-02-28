@@ -153,7 +153,7 @@ export namespace Agent {
     const editor = PermissionNext.fromConfig({
       str_replace_based_edit_tool: "allow",
       read: "allow",
-      edit: "allow",
+      edit: "ask",
       external_directory: "ask",
     })
     const permitEditor = (ruleset: PermissionNext.Ruleset) => PermissionNext.merge(ruleset, editor)
