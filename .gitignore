@@ -50,3 +50,6 @@ __pycache__/
 .pytest_cache/
 .venv/
 venv/
+
+# Windows 保留设备名，无法被 git 跟踪
+nul

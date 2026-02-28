@@ -512,7 +512,19 @@ export const OUTPUT_TOKEN_MAX = Flag.COSTRICT_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 1
       }
 
       // 保留原有的退出逻辑作为后备
+      // 以下 agent 必须通过退出工具（出口 1）退出，不允许走备用出口
+      const REQUIRE_EXIT_TOOL_AGENTS = new Set([
+        "proposal",
+        "taskcheck",
+        "coding",
+        "FixAgent",
+        "QuickExplore",
+        "SubCodingAgent",
+      ])
+      const assistantAgent = lastAssistant?.agent ?? ""
+      const requiresExitTool = REQUIRE_EXIT_TOOL_AGENTS.has(assistantAgent)
       if (
+        !requiresExitTool &&
         lastAssistant?.finish &&
         !["tool-calls", "unknown"].includes(lastAssistant.finish) &&
         lastUser.id < lastAssistant.id
