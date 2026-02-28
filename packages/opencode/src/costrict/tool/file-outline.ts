@@ -532,16 +532,7 @@ export const FileOutlineTool = Tool.define('file-outline', async (ctx) => {
         const language = detectLanguageFromFilename(file_path);
         if (!language) {
           log.warn('Unsupported file type', { filePath: file_path });
-          return {
-            title: '不支持的文件类型',
-            metadata: {
-              file_path,
-              language: 'unknown',
-              definition_count: 0,
-              error: 'unsupported_file_type'
-            },
-            output: `Error: Unsupported file type for ${file_path}`,
-          };
+          throw new Error(`Unsupported file type for ${file_path}`)
         }
 
         // 读取文件内容
@@ -565,16 +556,7 @@ export const FileOutlineTool = Tool.define('file-outline', async (ctx) => {
 
         // 执行查询
         if (!tree) {
-          return {
-            title: '解析失败',
-            metadata: {
-              file_path,
-              language,
-              definition_count: 0,
-              error: 'parse_failed',
-            },
-            output: `Error: Failed to parse ${file_path}`,
-          };
+          throw new Error(`Failed to parse ${file_path}`)
         }
         const captures = query.captures(tree.rootNode);
 
@@ -737,16 +719,7 @@ export const FileOutlineTool = Tool.define('file-outline', async (ctx) => {
           filePath: file_path,
           error: error instanceof Error ? error.message : String(error)
         });
-        return {
-          title: '文件分析失败',
-          metadata: {
-            file_path,
-            language: 'unknown',
-            definition_count: 0,
-            error: error instanceof Error ? error.message : String(error),
-          },
-          output: `Error: ${error instanceof Error ? error.message : String(error)}`,
-        };
+        throw error
       }
     },
   };

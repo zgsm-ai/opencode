@@ -212,28 +212,12 @@ export const SequentialThinkingTool = Tool.define<typeof parametersSchema, Seque
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
         if (error instanceof SequentialThinkingValidationError) {
-          return {
-            title: "",
-            metadata: {
-              error: `Sequential thinking validation failed: ${message}`,
-            },
-            output: `Sequential thinking validation failed: ${message}`,
-          }
+          throw new Error(`Sequential thinking validation failed: ${message}`)
         }
-
-        const errorData = {
-          error: message,
-          status: "failed",
-          hint: "Check that all required parameters (thought, thought_number, total_thoughts, next_thought_needed) are provided with correct types.",
-        }
-
-        return {
-          title: "",
-          metadata: {
-            ...errorData,
-          },
-          output: `Sequential thinking failed: ${message}\n\nDetails:\n${JSON.stringify(errorData, null, 2)}`,
-        }
+        throw new Error(
+          `Sequential thinking failed: ${message}\n\nHint: Check that all required parameters ` +
+            `(thought, thought_number, total_thoughts, next_thought_needed) are provided with correct types.`,
+        )
       }
     },
   },

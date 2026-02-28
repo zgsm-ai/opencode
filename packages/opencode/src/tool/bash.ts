@@ -899,23 +899,7 @@ export const BashTool = Tool.define("bash", async () => {
         const timeoutSeconds = value ?? DEFAULT_TIMEOUT_SECONDS
         if (command && timeoutSeconds > MAX_TIMEOUT_SECONDS) {
           const out = `timeout 最大支持 ${MAX_TIMEOUT_SECONDS} 秒，请设置为 1-${MAX_TIMEOUT_SECONDS} 秒。已拦截本次 bash 命令执行。`
-          ctx.metadata({
-            metadata: {
-              output: out,
-              description: detail,
-            },
-          })
-          const meta: BashMeta = {
-            output: out,
-            exit: null,
-            description: detail,
-            blocked: true,
-          }
-          return {
-            title: detail,
-            metadata: meta,
-            output: out,
-          }
+          throw new Error(out)
         }
         const timeout = timeoutSeconds * 1000
         const envPath = withPath(process.env.PATH)
@@ -1069,25 +1053,7 @@ export const BashTool = Tool.define("bash", async () => {
         })()
 
         if (blocked) {
-          const out = blocked.reason
-          const metaOut = out.length > MAX_METADATA_LENGTH ? out.slice(0, MAX_METADATA_LENGTH) + "\n\n..." : out
-          ctx.metadata({
-            metadata: {
-              output: metaOut,
-              description: detail,
-            },
-          })
-          const meta: BashMeta = {
-            output: metaOut,
-            exit: null,
-            description: detail,
-            blocked: true,
-          }
-          return {
-            title: detail,
-            metadata: meta,
-            output: out,
-          }
+          throw new Error(blocked.reason)
         }
 
         const directories = new Set<string>()

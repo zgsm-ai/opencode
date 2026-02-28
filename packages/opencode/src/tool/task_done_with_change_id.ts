@@ -16,35 +16,27 @@ export const TaskDoneWithChangeIdTool = Tool.define("task_done_with_change_id", 
       const change_id = params.change_id
 
       if (!summary || typeof summary !== "string") {
-        return {
-          title: "",
-          metadata: {},
-          output: "Error: Missing or invalid 'summary' parameter: must be a non-empty string. Provide a Markdown summary that includes: 1) Proposal overview, 2) Task planning summary. Example: {'summary': '## 提案概述\\n- 实现功能 X\\n\\n## 任务规划\\n- 任务1: ...'}",
-        }
+        throw new Error(
+          "Missing or invalid 'summary' parameter: must be a non-empty string. Provide a Markdown summary that includes: 1) Proposal overview, 2) Task planning summary. Example: {'summary': '## 提案概述\\n- 实现功能 X\\n\\n## 任务规划\\n- 任务1: ...'}",
+        )
       }
 
       if (!change_id || typeof change_id !== "string") {
-        return {
-          title: "",
-          metadata: {},
-          output: "Error: Missing or invalid 'change_id' parameter: must be a non-empty string. Provide the exact change_id used when creating the proposal directory. Example: {'change_id': 'feat-add-login-20250105'}",
-        }
+        throw new Error(
+          "Missing or invalid 'change_id' parameter: must be a non-empty string. Provide the exact change_id used when creating the proposal directory. Example: {'change_id': 'feat-add-login-20250105'}",
+        )
       }
 
       if (summary.trim().length < 10) {
-        return {
-          title: "",
-          metadata: {},
-          output: `Error: Summary is too brief (${summary.trim().length} chars). Please provide a meaningful summary that describes the proposal and tasks.`,
-        }
+        throw new Error(
+          `Summary is too brief (${summary.trim().length} chars). Please provide a meaningful summary that describes the proposal and tasks.`,
+        )
       }
 
       if (change_id.trim().length < 3) {
-        return {
-          title: "",
-          metadata: {},
-          output: `Error: change_id is too brief (${change_id.trim().length} chars). Please provide a valid change_id that matches the proposal directory name.`,
-        }
+        throw new Error(
+          `change_id is too brief (${change_id.trim().length} chars). Please provide a valid change_id that matches the proposal directory name.`,
+        )
       }
 
       return {

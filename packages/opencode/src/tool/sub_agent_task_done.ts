@@ -14,11 +14,9 @@ export const SubAgentTaskDoneTool = Tool.define("sub_agent_task_done", async () 
       const direct_response = params.direct_response
 
       if (!direct_response || typeof direct_response !== "string") {
-        return {
-          title: "",
-          metadata: {},
-          output: "Error: Missing or invalid 'direct_response' parameter: must be a non-empty string. Provide a direct answer to the task assigned by the parent agent. Example: {'direct_response': 'This module implements user authentication with JWT tokens'}",
-        }
+        throw new Error(
+          "Missing or invalid 'direct_response' parameter: must be a non-empty string. Provide a direct answer to the task assigned by the parent agent. Example: {'direct_response': 'This module implements user authentication with JWT tokens'}",
+        )
       }
 
       const text = direct_response.trim()
@@ -26,11 +24,9 @@ export const SubAgentTaskDoneTool = Tool.define("sub_agent_task_done", async () 
       const lines = text.length ? text.split("\n").length : 0
 
       if (chars < 50) {
-        return {
-          title: "",
-          metadata: {},
-          output: `Error: direct_response is too brief (${chars} chars). Minimum required length is 50 chars. Please provide a complete response that directly answers the assigned task.`,
-        }
+        throw new Error(
+          `direct_response is too brief (${chars} chars). Minimum required length is 50 chars. Please provide a complete response that directly answers the assigned task.`,
+        )
       }
 
       return {
