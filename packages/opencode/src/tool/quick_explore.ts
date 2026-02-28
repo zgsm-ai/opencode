@@ -194,6 +194,11 @@ export const QuickExploreTool = Tool.define("quick_explore", async (ctx) => {
 
         quickExploreLogger.info(`SessionPrompt.prompt completed, result parts: ${result.parts.length}`)
 
+        const sessionError = result.info.role === "assistant" ? result.info.error : undefined
+        if (sessionError) {
+          throw new Error([sessionError.name, (sessionError as any).message].filter(Boolean).join(": "))
+        }
+
         unsub()
 
         // 7. Get final messages to summarize what was done
