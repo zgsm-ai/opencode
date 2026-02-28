@@ -23,30 +23,22 @@ export const QuestionTool = Tool.define("question", {
       const q = params.questions[qi]
 
       if (!q.question) {
-        const error =
+        throw new Error(
           "Missing required 'question' parameter. " +
           "Provide a clear, concise question to ask the user. " +
           "You must provide at least one option in the 'options' array. " +
           "A custom input option is automatically added. " +
           "Example: {'questions': [{'question': 'Is the plan ready?', 'header': 'Plan Status', 'options': [{'label': 'Yes, approved', 'description': 'Proceed with the plan'}]}]}"
-        return {
-          title: "Missing question",
-          output: error,
-          metadata: { error, answers: [] },
-        }
+        )
       }
 
       if (q.options.length === 0) {
-        const error =
+        throw new Error(
           "TOOL CALL FAILED: Missing required option. " +
           "Each question MUST provide at least one option in the 'options' array. " +
           "A custom input option is automatically added. " +
           "Example: {'questions': [{'question': 'Is this correct?', 'header': 'Verification', 'options': [{'label': 'Yes, correct', 'description': 'The current approach is correct'}]}]}"
-        return {
-          title: "Question has no options",
-          output: error,
-          metadata: { error, answers: [] },
-        }
+        )
       }
 
       for (let oi = 0; oi < q.options.length; oi++) {
@@ -55,24 +47,14 @@ export const QuestionTool = Tool.define("question", {
           const fieldName = `questions[${qi}].options[${oi}].${field}`
           for (const pattern of FORBIDDEN_PATTERNS) {
             if (pattern.test(opt[field])) {
-              const error = `TOOL CALL FAILED: Invalid ${fieldName} content. ${fieldName} uses an incorrect tool call format. `
-              return {
-                title: "Invalid option content",
-                output: error,
-                metadata: { error, answers: [] },
-              }
+              throw new Error(`TOOL CALL FAILED: Invalid ${fieldName} content. ${fieldName} uses an incorrect tool call format. `)
             }
           }
         }
       }
 
       if (q.options.length > maxOptions) {
-        const error = `Question "${q.question}" has ${q.options.length} options, but the maximum is ${maxOptions}. Please provide at most ${maxOptions} options.`
-        return {
-          title: "Question has too many options",
-          output: error,
-          metadata: { error, answers: [] },
-        }
+        throw new Error(`Question "${q.question}" has ${q.options.length} options, but the maximum is ${maxOptions}. Please provide at most ${maxOptions} options.`)
       }
     }
 
