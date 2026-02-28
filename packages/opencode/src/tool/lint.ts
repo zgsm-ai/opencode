@@ -2,12 +2,11 @@ import z from "zod"
 import { Tool } from "./tool"
 import path from "path"
 import fs from "fs/promises"
-import fsSync from "fs"
 import { Instance } from "../project/instance"
 import { assertExternalDirectory } from "./external-directory"
 import { Log } from "../util/log"
 import os from "os"
-import { fileURLToPath } from "url"
+import { resolveResourcesPath } from "../util/resources"
 
 const log = Log.create({ service: "lint-tool" })
 
@@ -52,29 +51,7 @@ const LANGUAGE_ALIASES: Record<string, string> = {
 }
 
 export function getLintResourcesPath(): string {
-  const currentFilePath = fileURLToPath(import.meta.url)
-  const toolDir = path.dirname(currentFilePath)
-  // Try different path depths to handle both source and compiled contexts
-  // Source: src/tool/lint.ts -> ../../.. -> package root
-  // Compiled: dist/tool/lint.js -> ../../.. -> package root
-  const attempts = [
-    path.resolve(toolDir, "..", "..", "..", "resources", "lint"), // Standard path
-    path.resolve(toolDir, "..", "..", "resources", "lint"),       // One level up
-    path.resolve(toolDir, "..", "resources", "lint"),             // Two levels up
-  ]
-  
-  // Return the first path that exists, or default to standard path
-  for (const p of attempts) {
-    try {
-      const stat = fsSync.statSync(p)
-      if (stat.isDirectory()) return p
-    } catch {
-      // Path doesn't exist, try next
-    }
-  }
-  
-  // Default to standard path if none exist
-  return attempts[0]
+  return resolveResourcesPath(import.meta.url, "lint")
 }
 
 export function inferLanguageFromExtension(filePath: string): string | null {

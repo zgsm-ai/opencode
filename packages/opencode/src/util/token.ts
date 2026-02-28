@@ -1,11 +1,11 @@
 import fs from "fs/promises"
 import path from "path"
-import { fileURLToPath } from "url"
 import { Tiktoken } from "js-tiktoken/lite"
+import { resolveResourcesPath } from "./resources"
 
 export namespace Token {
   const URL = "https://tiktoken.pages.dev/js/o200k_base.json"
-  const dir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "resources", "tokenizer")
+  const dir = resolveResourcesPath(import.meta.url, "tokenizer")
   const file = path.join(dir, "o200k_base.json")
   const cache = { tok: undefined as Promise<Tiktoken | null> | undefined }
 

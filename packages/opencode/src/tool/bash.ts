@@ -16,6 +16,7 @@ import { fileURLToPath } from "url"
 import { Shell } from "@/shell/shell"
 import { Flag } from "@/flag/flag"
 import { existsSync } from "fs"
+import { resolveResourcesPath } from "@/util/resources"
 
 import { BashArity } from "@/permission/arity"
 import { Lock } from "@/util/lock"
@@ -117,7 +118,7 @@ const getSessionState = (sessionID: string) => {
 }
 
 const precompiled = () => {
-  const baseDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "resources", "search")
+  const baseDir = resolveResourcesPath(import.meta.url, "search")
   const rgDir =
     process.platform === "win32"
       ? path.join(baseDir, "rg", "ripgrep-15.1.0-x86_64-pc-windows-msvc")
