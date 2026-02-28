@@ -12,7 +12,8 @@ export namespace Budget {
     "sequentialthinking",
     "task_done",
     "sub_agent_task_done",
-    "task_done_with_change_id"
+    "task_done_with_change_id",
+    "memory_bank"
   ])
 
   /**
