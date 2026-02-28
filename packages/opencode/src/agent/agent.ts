@@ -156,6 +156,13 @@ export namespace Agent {
       edit: "ask",
       external_directory: "ask",
     })
+    const proposalAutoAllow = PermissionNext.fromConfig({
+      edit: {
+        "*proposal.md": "allow",
+        "*clarify.md": "allow",
+        "*task.md": "allow",
+      },
+    })
     const permitEditor = (ruleset: PermissionNext.Ruleset) => PermissionNext.merge(ruleset, editor)
 
     const result: Record<string, Info> = {
@@ -209,13 +216,18 @@ export namespace Agent {
           exitToolName: "task_done_with_change_id",  // ✅ 正确的退出工具
         },
         // No steps limit for proposal agent
-        permission: permitEditor(PermissionNext.merge(
-          defaults,
-          AgentToolsConfig.createToolPermission(
-            AgentToolsConfig.AGENT_CONFIGS.proposal.tools
+        permission: PermissionNext.merge(
+          permitEditor(
+            PermissionNext.merge(
+              defaults,
+              AgentToolsConfig.createToolPermission(
+                AgentToolsConfig.AGENT_CONFIGS.proposal.tools
+              ),
+              user,
+            ),
           ),
-          user,
-        )),
+          proposalAutoAllow,
+        ),
         mode: "primary",
         native: true,
         prompt: proposal,
