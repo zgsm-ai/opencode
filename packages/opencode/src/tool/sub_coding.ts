@@ -364,11 +364,7 @@ export const SubCodingTool = Tool.define("sub_coding", async (ctx) => {
           model,
         }
 
-        if (success) {
-          if (!directResponse) {
-            throw new Error("sub_agent_task_done completed but direct_response was missing in tool input")
-          }
-
+        if (success && directResponse) {
           return {
             title: params.agent_code,
             metadata,
@@ -385,11 +381,19 @@ ${gitStatsStr}
         }
 
         const lastText = result.parts.findLast((part) => part.type === "text")?.text ?? ""
+        const sessionError = result.info.role === "assistant" ? result.info.error : undefined
+        const errorMsg = sessionError
+          ? [sessionError.name, (sessionError as any).message].filter(Boolean).join(": ")
+          : ""
+        const failureReason = (() => {
+          if (success && !directResponse) return "sub_agent_task_done was called but direct_response was missing"
+          return lastText || errorMsg || "Unknown error"
+        })()
 
         throw new Error(`## ${params.agent_code} Task Execution Failed
 
 ### Failure Reason
-${lastText || "SubCodingAgent did not complete - sub_agent_task_done was not called (budget exceeded or crashed)"}
+${failureReason}
 
 ### agent-git Statistics
 ${gitStatsStr}
