@@ -381,9 +381,13 @@ ${gitStatsStr}
         }
 
         const lastText = result.parts.findLast((part) => part.type === "text")?.text ?? ""
+        const sessionError = result.info.role === "assistant" ? result.info.error : undefined
+        const errorMsg = sessionError
+          ? [sessionError.name, (sessionError as any).message].filter(Boolean).join(": ")
+          : ""
         const failureReason = (() => {
           if (success && !directResponse) return "sub_agent_task_done was called but direct_response was missing"
-          return lastText || "Unknown error"
+          return lastText || errorMsg || "Unknown error"
         })()
 
         throw new Error(`## ${params.agent_code} Task Execution Failed
