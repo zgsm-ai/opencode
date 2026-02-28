@@ -34,9 +34,13 @@ import { fileURLToPath } from "url"
 export namespace LLM {
   const log = Log.create({ service: "llm" })
 
-  // 固定保存到 costrae 项目根目录下的 history_message 文件夹
-  // llm.ts 位于 packages/opencode/src/session/，向上 4 级到达项目根
-  const HISTORY_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../../.history_message")
+  // 本地开发（bun dev）保存在仓库根目录；打包后保存在 bin/resources 同级目录
+  const HISTORY_DIR = path.join(
+    Installation.isLocal()
+      ? path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../../")
+      : path.resolve(path.dirname(process.execPath), ".."),
+    ".history_message",
+  )
 
   // 存储每个 session 的最新 system 提示词（经过 Plugin 处理后的完整版本）
   const sessionSystemCache = new Map<string, string[]>()
