@@ -8,7 +8,6 @@ import { Identifier } from "../id/id"
 import { Agent } from "../agent/agent"
 import { SessionPrompt } from "../session/prompt"
 import { PermissionNext } from "@/permission/next"
-import { Instance } from "@/project/instance"
 import { defer } from "@/util/defer"
 import path from "path"
 import { fileURLToPath } from "url"
@@ -79,9 +78,8 @@ function formatSubTasks(subTasks: z.infer<typeof parameters>["sub_tasks"]): stri
 }
 
 // Build the structured prompt for SubCodingAgent (task context only)
-function buildPrompt(params: z.infer<typeof parameters>): string {
+function buildPrompt(params: z.infer<typeof parameters>, root: string): string {
   const subTasksMarkdown = formatSubTasks(params.sub_tasks)
-  const root = Instance.worktree === "/" ? Instance.directory : Instance.worktree
 
   return `## 任务上下文
 
@@ -208,7 +206,8 @@ export const SubCodingTool = Tool.define("sub_coding", async (ctx) => {
       subCodingLogger.info(`Session created: ${session.id}`)
 
       // Build the structured prompt
-      const prompt = buildPrompt(params)
+      const root = session.directory
+      const prompt = buildPrompt(params, root)
 
       // Get the current message to extract model info
       const msg = await MessageV2.get({ sessionID: ctx.sessionID, messageID: ctx.messageID })
@@ -348,7 +347,6 @@ export const SubCodingTool = Tool.define("sub_coding", async (ctx) => {
           return direct.trim()
         })()
 
-        const root = Instance.worktree === "/" ? Instance.directory : Instance.worktree
         const gitStats = await getAgentGitStats(params.agent_code, root).catch(() => ({
           commitCount: 0,
           files: [],
