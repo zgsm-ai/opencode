@@ -194,10 +194,11 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                 <Show when={diff().length <= 2 || expanded.diff}>
                   <For each={diff() || []}>
                     {(item) => {
+                      const file = formatDiffFile(item.file, directory())
                       return (
                         <box flexDirection="row" gap={1} justifyContent="space-between">
-                          <text fg={theme.textMuted} wrapMode="none">
-                            {item.file}
+                          <text fg={theme.textMuted} wrapMode="none" flexGrow={1}>
+                            {file}
                           </text>
                           <box flexDirection="row" gap={1} flexShrink={0}>
                             <Show when={item.additions}>
@@ -266,4 +267,20 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
       </box>
     </Show>
   )
+}
+
+function formatDiffFile(input: string, cwd: string) {
+  const absolute = path.isAbsolute(input) ? input : path.resolve(cwd, input)
+  const relative = path.relative(cwd, absolute)
+  const base = relative && !relative.startsWith("..") ? relative : absolute
+  const normalized = base.replaceAll("\\", "/")
+  const parts = normalized.split("/")
+  const name = parts.at(-1) ?? normalized
+  const dir = parts.slice(0, -1).join("/")
+  if (!dir) return Locale.truncateMiddle(name, 28)
+
+  const size = Math.max(8, 28 - Math.min(name.length, 18) - 1)
+  const head = Locale.truncateMiddle(dir, size)
+  const tail = Locale.truncateMiddle(name, 18)
+  return `${head}/${tail}`
 }
