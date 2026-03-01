@@ -55,8 +55,9 @@ export namespace Tool {
         const toolInfo = init instanceof Function ? await init(initCtx) : init
         const execute = toolInfo.execute
         toolInfo.execute = async (args, ctx) => {
+          let parsed: z.infer<Parameters>
           try {
-            toolInfo.parameters.parse(args)
+            parsed = toolInfo.parameters.parse(args) as z.infer<Parameters>
           } catch (error) {
             if (error instanceof z.ZodError && toolInfo.formatValidationError) {
               throw new Error(toolInfo.formatValidationError(error), { cause: error })
@@ -66,7 +67,7 @@ export namespace Tool {
               { cause: error },
             )
           }
-          const result = await execute(args, ctx)
+          const result = await execute(parsed, ctx)
           const truncated = await Truncate.output(result.output, { toolName: id }, initCtx?.agent)
           const flagged = result.metadata.truncated === true
           const merged = flagged || truncated.truncated

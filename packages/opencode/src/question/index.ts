@@ -41,7 +41,7 @@ export namespace Question {
           "Built-in selectable choices (1-4 items). Keep choices mutually exclusive and directly actionable. Do not add a custom/free-text option here.",
         ),
       multiple: z
-        .boolean()
+        .preprocess((v) => (v === "true" ? true : v === "false" ? false : v), z.boolean())
         .optional()
         .describe("Whether multi-select is allowed. Enable only when user may intentionally pick more than one option."),
     })

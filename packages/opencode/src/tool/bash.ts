@@ -871,9 +871,12 @@ export const BashTool = Tool.define("bash", async () => {
     description: desc,
     parameters: z.object({
       command: z.string().describe("要执行的 bash 命令").optional(),
-      restart: z.boolean().describe("设为 true 重启会话（超时或异常退出时使用）").optional(),
+      restart: z
+        .preprocess((v) => (v === "true" ? true : v === "false" ? false : v), z.boolean())
+        .describe("设为 true 重启会话（超时或异常退出时使用）")
+        .optional(),
       timeout: z
-        .number()
+        .coerce.number()
         .describe("超时时间（秒），默认 20。编译等长时任务可适当增大，最大 120")
         .optional(),
     }),

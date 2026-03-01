@@ -28,9 +28,12 @@ type Meta = {
   diff?: string
 }
 
-const Int = z.number().refine(Number.isInteger, "必须是整数")
-const StartLine = z.number().min(1).refine(Number.isInteger, "必须是整数")
-const EndLine = z.union([z.literal(-1), z.number().min(1).refine(Number.isInteger, "必须是整数")])
+const Int = z.coerce.number().refine(Number.isInteger, "必须是整数")
+const StartLine = z.coerce.number().min(1).refine(Number.isInteger, "必须是整数")
+const EndLine = z.preprocess(
+  (v) => (v === "-1" ? -1 : v),
+  z.union([z.literal(-1), z.coerce.number().min(1).refine(Number.isInteger, "必须是整数")]),
+)
 const ViewRange = z
   .tuple([StartLine, EndLine])
   .describe(
