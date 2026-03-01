@@ -517,6 +517,32 @@ const normalizeWin = (value: string) => {
     .replace(/\//g, "\\")
 }
 
+const ripgrepConfigPath = (value: string | undefined, cwd: string) => {
+  if (!value) return ""
+  const home = process.env.HOME || process.env.USERPROFILE || ""
+  const cleaned = strip(value)
+  if (!cleaned) return ""
+  const expanded =
+    cleaned.startsWith("~/") && home
+      ? path.join(home, cleaned.slice(2))
+      : cleaned === "~" && home
+        ? home
+        : cleaned
+  const normalized = normalizeWin(expanded)
+  if (path.isAbsolute(normalized)) return normalized
+  return path.resolve(cwd, normalized)
+}
+
+const safeEnv = (cwd: string, envPath: string): NodeJS.ProcessEnv => {
+  const env = { ...process.env, PATH: envPath } as NodeJS.ProcessEnv & Record<string, string | undefined>
+  const key = "RIPGREP_CONFIG_PATH"
+  const config = ripgrepConfigPath(env[key], cwd)
+  if (!config) return env
+  if (existsSync(config)) return env
+  delete env[key]
+  return env
+}
+
 const resolveCd = (cwd: string, prev: string, arg?: string) => {
   const home = process.env.HOME || process.env.USERPROFILE || ""
   if (arg === undefined) {
@@ -907,7 +933,7 @@ export const BashTool = Tool.define("bash", async () => {
         }
         const timeout = timeoutSeconds * 1000
         const envPath = withPath(process.env.PATH)
-        const env = { ...process.env, PATH: envPath }
+        const env = safeEnv(cwd, envPath)
         const rgAvailable = await exists(bins.rgBin).then((found) => found || Boolean(Bun.which("rg")))
         const fdAvailable = await exists(bins.fdBin).then((found) => found || Boolean(Bun.which("fd") || Bun.which("fdfind")))
         if (restart) {

@@ -318,6 +318,26 @@ describe("bash tool safeguards", () => {
       process.env.PATH = original
     }
   })
+
+  test(
+    "ignores missing RIPGREP_CONFIG_PATH",
+    async () => {
+      const dir = await prep("rg-config-missing")
+      const target = path.join(dir, "needle.txt")
+      await fs.writeFile(target, "rg-config-needle\n", "utf8")
+      const original = process.env.RIPGREP_CONFIG_PATH
+      process.env.RIPGREP_CONFIG_PATH = path.join(dir, "missing-ripgreprc")
+      try {
+        const res = await call(dir, { command: 'rg "rg-config-needle" .', restart: true })
+        expect(res.result.output.includes("needle.txt")).toBe(true)
+        expect(res.result.output.includes("failed to read the file specified in RIPGREP_CONFIG_PATH")).toBe(false)
+      } finally {
+        if (original === undefined) delete process.env.RIPGREP_CONFIG_PATH
+        if (original !== undefined) process.env.RIPGREP_CONFIG_PATH = original
+      }
+    },
+    10_000,
+  )
 })
 
 describe("bash tool permissions", () => {
