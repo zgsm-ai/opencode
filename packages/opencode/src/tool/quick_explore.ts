@@ -6,7 +6,6 @@ import { MessageV2 } from "../session/message-v2"
 import { Identifier } from "../id/id"
 import { Agent } from "../agent/agent"
 import { SessionPrompt } from "../session/prompt"
-import { Instance } from "@/project/instance"
 import { defer } from "@/util/defer"
 import { Log } from "@/util/log"
 import { Bus } from "../bus"
@@ -102,7 +101,8 @@ export const QuickExploreTool = Tool.define("quick_explore", async (ctx) => {
       quickExploreLogger.info(`Session created: ${session.id}`)
 
       // 3. Build exploration prompt
-      const prompt = `项目路径: ${Instance.worktree}
+      const root = session.directory
+      const prompt = `项目路径: ${root}
 探索目标: ${params.exploration_target}
 
 请认真完成本次探索`
