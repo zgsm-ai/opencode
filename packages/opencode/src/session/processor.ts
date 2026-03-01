@@ -30,7 +30,9 @@ export namespace SessionProcessor {
     temperature: number        // 当前尝试的温度
   }
   const MAX_RETRY_ATTEMPTS = 5
+  const MAX_JSON_PARSE_RETRIES = 5
   const TEMPERATURE_SEQUENCE = [0.2, 0.4, 0.6, 0.8, 1.0]
+  const JSON_PARSE_RETRY_DELAY_MS = 150
 
   /**
    * 检查是否需要强制使用 sequentialthinking 工具
@@ -55,6 +57,17 @@ export namespace SessionProcessor {
     return null
   }
 
+  function isJSONParseFailure(error: unknown) {
+    if (!(error instanceof Error)) return false
+    const content = [error.name, error.message].filter(Boolean).join(" ").toLowerCase()
+    if (!content.includes("json")) return false
+    if (!content.includes("parse")) return false
+    if (content.includes("ai_jsonparseerror")) return true
+    if (content.includes("json parsing failed")) return true
+    if (content.includes("json parse error")) return true
+    return content.includes("chat.completion.chunk")
+  }
+
   export type Info = Awaited<ReturnType<typeof create>>
   export type Result = Awaited<ReturnType<Info["process"]>>
 
@@ -73,6 +86,7 @@ export namespace SessionProcessor {
     // 重试机制相关状态
     let retrySnapshot: RetrySnapshot | undefined
     let retryAttemptCount = 0
+    let jsonParseRetryCount = 0
     let isSilentMode = false  // Silent 模式：重试时不发布事件
 
     // 预算机制相关状态（从参数传入，如果没有则初始化为无预算）
@@ -159,7 +173,7 @@ export namespace SessionProcessor {
 
           // 如果需要强制思考，插入提醒消息并修改工具权限
           let originalPermission: PermissionNext.Ruleset | undefined
-          if (forcedThinkingMessage) {
+          if (forcedThinkingMessage && jsonParseRetryCount === 0) {
             log.info("forced sequential thinking triggered", {
               sessionID: input.sessionID,
               agent: agent.name,
@@ -487,6 +501,9 @@ export namespace SessionProcessor {
               if (needsCompaction) break
             }
 
+            // 流式成功结束后，重置 JSON 解析失败重试计数
+            jsonParseRetryCount = 0
+
             // 每次 LLM 流式响应完成后立即保存最新消息历史（覆盖式），
             // 确保即使 Agent 中途退出也能保留最新记录
             LLM.saveContextAfterResponse({
@@ -503,6 +520,28 @@ export namespace SessionProcessor {
               stack: JSON.stringify(e.stack),
             })
 
+            // 流式 JSON 解析失败：丢弃本次不完整输出并原地重试（同一上下文）
+            if (isJSONParseFailure(e) && jsonParseRetryCount < MAX_JSON_PARSE_RETRIES) {
+              jsonParseRetryCount++
+              if (retrySnapshot) {
+                await rollbackToSnapshot(retrySnapshot, input.assistantMessage.id, input.sessionID)
+              }
+              for (const key of Object.keys(toolcalls)) {
+                delete toolcalls[key]
+              }
+              const delay = Math.min(JSON_PARSE_RETRY_DELAY_MS * jsonParseRetryCount, 1000)
+              log.warn("retrying stream after json parse failure", {
+                sessionID: input.sessionID,
+                providerID: input.model.providerID,
+                modelID: input.model.id,
+                retry: jsonParseRetryCount,
+                maxRetries: MAX_JSON_PARSE_RETRIES,
+                delay,
+              })
+              await SessionRetry.sleep(delay, input.abort).catch(() => {})
+              continue
+            }
+
             // Publish LLM error event for plugins to handle
             Bus.publish(Session.Event.LLMError, {
               providerID: input.model.providerID,
@@ -514,6 +553,7 @@ export namespace SessionProcessor {
               error: e,
             })
 
+            jsonParseRetryCount = 0
             const error = MessageV2.fromError(e, { providerID: input.model.providerID })
             const retry = SessionRetry.retryable(error)
             if (retry !== undefined) {
