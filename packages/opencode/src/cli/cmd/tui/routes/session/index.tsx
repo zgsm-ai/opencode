@@ -1451,6 +1451,13 @@ function ToolPart(props: { last: boolean; part: ToolPart; message: AssistantMess
         <Match when={props.part.tool === "task_done_with_change_id"}>
           <TaskDoneSummary {...toolprops} />
         </Match>
+        <Match
+          when={["sequentialthinking", "sequential-thinking", "sequential_thinking", "sequence_thinking"].includes(
+            props.part.tool,
+          )}
+        >
+          <SequentialThinking {...toolprops} />
+        </Match>
         <Match when={true}>
           <GenericTool {...toolprops} />
         </Match>
@@ -1472,6 +1479,152 @@ function GenericTool(props: ToolProps<any>) {
     <InlineTool icon="⚙" pending="Writing command..." complete={true} part={props.part}>
       {props.tool} {input(props.input)}
     </InlineTool>
+  )
+}
+
+function SequentialThinking(props: ToolProps<any>) {
+  const { theme, subtleSyntax } = useTheme()
+  const ctx = use()
+  const [expanded, setExpanded] = createSignal(false)
+  const previewLines = 12
+
+  const data = createMemo(() => props.input as Record<string, unknown>)
+  const meta = createMemo(() => props.metadata as Record<string, unknown>)
+  const thought = createMemo(() => {
+    const value = data().thought
+    if (typeof value !== "string") return ""
+    return formatReasoningText(value).trim()
+  })
+  const step = createMemo(() => toPositiveInt(meta().thought_number) ?? toPositiveInt(data().thought_number))
+  const total = createMemo(() => toPositiveInt(meta().total_thoughts) ?? toPositiveInt(data().total_thoughts))
+  const next = createMemo(() => toBoolean(meta().next_thought_needed) ?? toBoolean(data().next_thought_needed))
+  const revise = createMemo(() => toPositiveInt(data().revises_thought))
+  const isRevision = createMemo(() => toBoolean(data().is_revision))
+  const branchFrom = createMemo(() => toPositiveInt(data().branch_from_thought))
+  const branchID = createMemo(() => toText(data().branch_id))
+  const more = createMemo(() => toBoolean(data().needs_more_thoughts))
+  const history = createMemo(() => toPositiveInt(meta().thought_history_length))
+  const branches = createMemo(() => {
+    const value = meta().branches
+    if (!Array.isArray(value)) return [] as string[]
+    return value
+      .filter((item): item is string => typeof item === "string")
+      .map((item) => item.trim())
+      .filter(Boolean)
+  })
+
+  const marker = createMemo(() => {
+    if (props.part.state.status === "error") return theme.error
+    if (next() === false) return theme.success
+    if (more() === true) return theme.warning
+    if (isRevision() === true || revise() || branchFrom() || branchID()) return theme.secondary
+    return theme.info
+  })
+  const phase = createMemo(() => {
+    if (props.part.state.status === "error") return "VALIDATION"
+    if (next() === false) return "COMPLETE"
+    if (more() === true) return "EXTEND"
+    return "THINKING"
+  })
+  const meter = createMemo(() => {
+    const current = step()
+    const estimate = total()
+    if (!current || !estimate) return ""
+    const width = 18
+    const ratio = Math.max(0, Math.min(1, current / estimate))
+    const fill = Math.round(ratio * width)
+    return `[${"#".repeat(fill)}${"-".repeat(width - fill)}] ${current}/${estimate}`
+  })
+  const details = createMemo(() => {
+    return [
+      isRevision() === true ? "revision" : undefined,
+      revise() ? `revises #${revise()}` : undefined,
+      branchFrom() ? `branch from #${branchFrom()}` : undefined,
+      branchID() ? `branch "${branchID()}"` : undefined,
+      next() === true ? "next thought needed" : undefined,
+      next() === false ? "final thought" : undefined,
+      more() === true ? "requesting more thoughts" : undefined,
+    ]
+      .filter((item): item is string => Boolean(item))
+      .join(" · ")
+  })
+  const thoughtLines = createMemo(() => thought().split("\n"))
+  const overflow = createMemo(() => thoughtLines().length > previewLines)
+  const hidden = createMemo(() => {
+    if (!overflow() || expanded()) return 0
+    return Math.max(0, thoughtLines().length - previewLines)
+  })
+  const display = createMemo(() => {
+    if (!thought()) return "(no thought content)"
+    if (expanded() || !overflow()) return thought()
+    return [...thoughtLines().slice(0, previewLines), "…"].join("\n")
+  })
+  const title = createMemo(() => {
+    const current = step()
+    const estimate = total()
+    if (current && estimate) return `# Sequential Thinking (${current}/${estimate})`
+    return "# Sequential Thinking"
+  })
+
+  return (
+    <Switch>
+      <Match when={props.part.state.status !== "pending"}>
+        <BlockTool title={title()} part={props.part} onClick={overflow() ? () => setExpanded((v) => !v) : undefined}>
+          <box gap={1}>
+            <box
+              border={["left"]}
+              paddingLeft={2}
+              backgroundColor={theme.backgroundElement}
+              borderColor={marker()}
+              flexDirection="column"
+            >
+              <text>
+                <span style={{ bg: marker(), fg: theme.backgroundPanel, bold: true }}> {phase()} </span>
+                <Show when={meter()}>
+                  <span style={{ fg: marker() }}> {meter()}</span>
+                </Show>
+              </text>
+              <Show when={details()}>
+                <text fg={theme.textMuted}>{details()}</text>
+              </Show>
+              <Show when={history()}>
+                <text fg={theme.textMuted}>history length: {history()}</text>
+              </Show>
+              <Show when={branches().length > 0}>
+                <text fg={theme.textMuted}>known branches: {branches().join(", ")}</text>
+              </Show>
+            </box>
+            <Show when={ctx.showThinking()} fallback={<text fg={theme.textMuted}>Thinking hidden</text>}>
+              <code
+                filetype="markdown"
+                drawUnstyledText={false}
+                streaming={false}
+                syntaxStyle={subtleSyntax()}
+                content={display()}
+                conceal={ctx.conceal()}
+                fg={theme.textMuted}
+              />
+              <Show when={overflow()}>
+                <text fg={marker()}>
+                  {expanded() ? "Click to collapse thought" : `Click to expand thought (${hidden()} more lines)`}
+                </text>
+              </Show>
+            </Show>
+          </box>
+        </BlockTool>
+      </Match>
+      <Match when={true}>
+        <InlineTool icon="◌" pending="Thinking sequentially..." complete={step() ?? thought()} part={props.part}>
+          Sequential thinking
+          <Show when={meter()}>
+            <span style={{ fg: theme.textMuted }}> {meter()}</span>
+          </Show>
+          <Show when={phase() !== "THINKING"}>
+            <span style={{ fg: marker() }}> {phase()}</span>
+          </Show>
+        </InlineTool>
+      </Match>
+    </Switch>
   )
 }
 
@@ -2379,6 +2532,30 @@ function normalizePath(input?: string) {
     return path.relative(process.cwd(), input) || "."
   }
   return input
+}
+
+function toPositiveInt(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value) && value >= 1) return Math.floor(value)
+  if (typeof value !== "string") return undefined
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed) || parsed < 1) return undefined
+  return Math.floor(parsed)
+}
+
+function toBoolean(value: unknown) {
+  if (typeof value === "boolean") return value
+  if (typeof value !== "string") return undefined
+  const parsed = value.trim().toLowerCase()
+  if (parsed === "true") return true
+  if (parsed === "false") return false
+  return undefined
+}
+
+function toText(value: unknown) {
+  if (typeof value !== "string") return undefined
+  const parsed = value.trim()
+  if (!parsed) return undefined
+  return parsed
 }
 
 function input(input: Record<string, any>, omit?: string[]): string {
