@@ -142,9 +142,13 @@ export namespace Agent {
       external_directory: "ask",
       read: {
         "*": "allow",
+        "*.memory_bank.md": "allow",
         "*.env": "ask",
         "*.env.*": "ask",
         "*.env.example": "allow",
+      },
+      edit: {
+        "*.memory_bank.md": "allow",
       },
     })
     const user = PermissionNext.fromConfig(cfg.permission ?? {})
@@ -153,7 +157,10 @@ export namespace Agent {
     const editor = PermissionNext.fromConfig({
       str_replace_based_edit_tool: "allow",
       read: "allow",
-      edit: "ask",
+      edit: {
+        "*": "ask",
+        "*.memory_bank.md": "allow",
+      },
       external_directory: "ask",
     })
     const proposalAutoAllow = PermissionNext.fromConfig({
