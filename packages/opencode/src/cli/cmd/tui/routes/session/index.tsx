@@ -75,7 +75,7 @@ import { Global } from "@/global"
 import { PermissionPrompt } from "./permission"
 import { QuestionPrompt } from "./question"
 import { DialogExportOptions } from "../../ui/dialog-export-options"
-import { formatTranscript } from "../../util/transcript"
+import { formatReasoningText, formatTranscript } from "../../util/transcript"
 
 addDefaultParsers(parsers.parsers)
 
@@ -1305,9 +1305,7 @@ function ReasoningPart(props: { last: boolean; part: ReasoningPart; message: Ass
   const { theme, subtleSyntax } = useTheme()
   const ctx = use()
   const content = createMemo(() => {
-    // Filter out redacted reasoning chunks from OpenRouter
-    // OpenRouter sends encrypted reasoning data that appears as [REDACTED]
-    return props.part.text.replace("[REDACTED]", "").trim()
+    return formatReasoningText(props.part.text)
   })
   return (
     <Show when={content() && ctx.showThinking()}>

@@ -62,7 +62,21 @@ const parametersSchema = z
   })
   .passthrough()
 
-const isInteger = (value: unknown): value is number => typeof value === "number" && Number.isInteger(value)
+function coerceToInteger(value: unknown): number | null {
+  if (typeof value === "number" && Number.isInteger(value)) return value
+  if (typeof value === "string") {
+    const parsed = Number(value)
+    return Number.isInteger(parsed) ? parsed : null
+  }
+  return null
+}
+
+function coerceToBoolean(value: unknown): boolean | null {
+  if (typeof value === "boolean") return value
+  if (value === "true") return true
+  if (value === "false") return false
+  return null
+}
 
 const typeName = (value: unknown) => {
   if (value === null) return "NoneType"
@@ -84,7 +98,8 @@ function validateThoughtData(args: z.infer<typeof parametersSchema>): ThoughtDat
     )
   }
 
-  if (!("thought_number" in args) || !isInteger(args.thought_number)) {
+  const thoughtNumber = "thought_number" in args ? coerceToInteger(args.thought_number) : null
+  if (thoughtNumber === null || thoughtNumber < 1) {
     throw new SequentialThinkingValidationError(
       "Missing or invalid 'thought_number' parameter: must be a positive integer. " +
         `Received: ${args.thought_number} (type: ${typeName(args.thought_number)}). ` +
@@ -92,7 +107,8 @@ function validateThoughtData(args: z.infer<typeof parametersSchema>): ThoughtDat
     )
   }
 
-  if (!("total_thoughts" in args) || !isInteger(args.total_thoughts)) {
+  const totalThoughts = "total_thoughts" in args ? coerceToInteger(args.total_thoughts) : null
+  if (totalThoughts === null || totalThoughts < 1) {
     throw new SequentialThinkingValidationError(
       "Missing or invalid 'total_thoughts' parameter: must be a positive integer. " +
         `Received: ${args.total_thoughts} (type: ${typeName(args.total_thoughts)}). ` +
@@ -100,7 +116,8 @@ function validateThoughtData(args: z.infer<typeof parametersSchema>): ThoughtDat
     )
   }
 
-  if (!("next_thought_needed" in args) || typeof args.next_thought_needed !== "boolean") {
+  const nextThoughtNeeded = "next_thought_needed" in args ? coerceToBoolean(args.next_thought_needed) : null
+  if (nextThoughtNeeded === null) {
     throw new SequentialThinkingValidationError(
       "Missing or invalid 'next_thought_needed' parameter: must be a boolean. " +
         `Received: ${args.next_thought_needed} (type: ${typeName(args.next_thought_needed)}). ` +
@@ -108,47 +125,34 @@ function validateThoughtData(args: z.infer<typeof parametersSchema>): ThoughtDat
     )
   }
 
-  if (args.thought_number < 1) {
-    throw new SequentialThinkingValidationError(
-      `Invalid thought_number: ${args.thought_number}. ` +
-        "Must be at least 1 (thinking steps are 1-indexed). " +
-        "Start with thought_number=1 for the first step.",
-    )
-  }
-
-  if (args.total_thoughts < 1) {
-    throw new SequentialThinkingValidationError(
-      `Invalid total_thoughts: ${args.total_thoughts}. ` +
-        "Must be at least 1. Estimate how many steps you'll need (typically 5-25 for complex problems). " +
-        "You can adjust this later using needs_more_thoughts=true.",
-    )
-  }
 
   const revisesThought =
     "revises_thought" in args && args.revises_thought !== null && args.revises_thought !== 0
       ? (() => {
-          if (!isInteger(args.revises_thought) || args.revises_thought < 1) {
+          const val = coerceToInteger(args.revises_thought)
+          if (val === null || val < 1) {
             throw new SequentialThinkingValidationError(
               `Invalid revises_thought: ${args.revises_thought}. ` +
                 "Must be a positive integer referring to a previous thought number. " +
                 "Use this when you want to revise or correct a previous thinking step.",
             )
           }
-          return Number(args.revises_thought)
+          return val
         })()
       : null
 
   const branchFromThought =
     "branch_from_thought" in args && args.branch_from_thought !== null && args.branch_from_thought !== 0
       ? (() => {
-          if (!isInteger(args.branch_from_thought) || args.branch_from_thought < 1) {
+          const val = coerceToInteger(args.branch_from_thought)
+          if (val === null || val < 1) {
             throw new SequentialThinkingValidationError(
               `Invalid branch_from_thought: ${args.branch_from_thought}. ` +
                 "Must be a positive integer referring to a thought number to branch from. " +
                 "Use this with branch_id to explore alternative approaches from a previous step.",
             )
           }
-          return Number(args.branch_from_thought)
+          return val
         })()
       : null
 
@@ -159,9 +163,9 @@ function validateThoughtData(args: z.infer<typeof parametersSchema>): ThoughtDat
 
   return {
     thought: String(args.thought),
-    thought_number: Number(args.thought_number),
-    total_thoughts: Number(args.total_thoughts),
-    next_thought_needed: Boolean(args.next_thought_needed),
+    thought_number: thoughtNumber,
+    total_thoughts: totalThoughts,
+    next_thought_needed: nextThoughtNeeded,
     is_revision: isRevision,
     revises_thought: revisesThought,
     branch_from_thought: branchFromThought,

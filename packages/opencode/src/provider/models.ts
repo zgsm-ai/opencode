@@ -28,6 +28,9 @@ export namespace ModelsDev {
         reasoning: true,
         temperature: true,
         tool_call: true,
+        interleaved: {
+          field: "reasoning_content",
+        },
         limit: {
           context: 200000,
           output: 10240,
