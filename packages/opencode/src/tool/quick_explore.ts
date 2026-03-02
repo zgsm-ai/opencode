@@ -6,6 +6,7 @@ import { MessageV2 } from "../session/message-v2"
 import { Identifier } from "../id/id"
 import { Agent } from "../agent/agent"
 import { SessionPrompt } from "../session/prompt"
+import { LLM } from "@/session/llm"
 import { defer } from "@/util/defer"
 import { Log } from "@/util/log"
 import { Bus } from "../bus"
@@ -99,6 +100,10 @@ export const QuickExploreTool = Tool.define("quick_explore", async (ctx) => {
         ],
       })
       quickExploreLogger.info(`Session created: ${session.id}`)
+      const parentAgent = LLM.normalizeTrajectoryAgentName(ctx.agent)
+      const trajectoryAgent = `${parentAgent}-QuickExploreAgent`
+      LLM.setTrajectoryAgentAlias(session.id, trajectoryAgent)
+      using __ = defer(() => LLM.clearTrajectoryAgentAlias(session.id))
 
       // 3. Build exploration prompt
       const root = session.directory

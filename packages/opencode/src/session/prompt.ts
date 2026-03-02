@@ -54,6 +54,8 @@ import { toolAlias } from "@/costrict/utils/tool-transform-v2"
 globalThis.AI_SDK_LOG_WARNINGS = false
 
 const ENABLE_HISTORY_PRUNE = false
+const ENABLE_MAX_STEPS_EPHEMERAL_INJECTION = false
+const ENABLE_QUEUED_USER_REMINDER_WRAP = false
 
 async function extractTextContent(message: MessageV2.Assistant): Promise<string | undefined> {
   const parts = await MessageV2.parts(message.id)
@@ -498,7 +500,7 @@ export const OUTPUT_TOKEN_MAX = Flag.COSTRICT_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 1
           // system 提示词会从 LLM.stream 保存的缓存中自动读取
           const finalAgent = await Agent.get(lastUser.agent)
           const finalModel = await Provider.getModel(lastUser.model.providerID, lastUser.model.modelID)
-          LLM.saveContextAfterResponse({
+          await LLM.saveContextAfterResponse({
             sessionID,
             agent: finalAgent,
             model: finalModel,
@@ -855,7 +857,7 @@ export const OUTPUT_TOKEN_MAX = Flag.COSTRICT_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 1
       }
 
       // Ephemerally wrap queued user messages with a reminder to stay on track
-      if (step > 1 && lastFinished) {
+      if (ENABLE_QUEUED_USER_REMINDER_WRAP && step > 1 && lastFinished) {
         for (const msg of sessionMessages) {
           if (msg.info.role !== "user" || msg.info.id <= lastFinished.id) continue
           for (const part of msg.parts) {
@@ -895,7 +897,7 @@ export const OUTPUT_TOKEN_MAX = Flag.COSTRICT_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 1
         ],
         messages: [
           ...MessageV2.toModelMessages(sessionMessages, model),
-          ...(isLastStep
+          ...(ENABLE_MAX_STEPS_EPHEMERAL_INJECTION && isLastStep
             ? [
                 {
                   role: "assistant" as const,

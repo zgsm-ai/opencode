@@ -204,15 +204,43 @@ function parseOpenCodeTrajectory(data: OpenCodeTrajectory): StepAnalysis[] {
   return analyses
 }
 
+function parseTimestamp(text: string): Date | null {
+  const clean = text.replace(/[-_]/g, "")
+  if (!/^\d{14}$/.test(clean)) return null
+  const ts = new Date(
+    clean.slice(0, 4) +
+      "-" +
+      clean.slice(4, 6) +
+      "-" +
+      clean.slice(6, 8) +
+      "T" +
+      clean.slice(8, 10) +
+      ":" +
+      clean.slice(10, 12) +
+      ":" +
+      clean.slice(12, 14),
+  )
+  if (Number.isNaN(ts.getTime())) return null
+  return ts
+}
+
 function parseFilename(filename: string): { agentType: string; agentName: string; timestamp: Date } | null {
-  const match = filename.match(/^context-(.+?)-ses_[A-Za-z0-9]+-(\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2})\.json$/)
-  const agentPart = match?.[1]
-  const dateStr = match?.[2]
+  const current = filename.match(/^trajectory_(.+)_(\d{8}_\d{6})_([A-Za-z][A-Za-z0-9-]*)\.json$/)
+  if (current?.[2] && current?.[3]) {
+    const ts = parseTimestamp(current[2])
+    if (!ts) return null
+    const agent = current[3]
+    return { agentType: agent, agentName: agent, timestamp: ts }
+  }
+
+  const legacy = filename.match(/^context-(.+?)-ses_[A-Za-z0-9]+-(\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2})\.json$/)
+  const agentPart = legacy?.[1]
+  const dateStr = legacy?.[2]
   if (!agentPart || !dateStr) return null
-  const clean = dateStr.replace(/-/g, "")
+  const ts = parseTimestamp(dateStr)
+  if (!ts) return null
   const agentName = agentPart.replace(/-/g, " ")
   const agentType = agentPart
-  const ts = new Date(clean.slice(0, 4) + "-" + clean.slice(4, 6) + "-" + clean.slice(6, 8) + "T" + clean.slice(9, 11) + ":" + clean.slice(11, 13) + ":" + clean.slice(13, 15))
   return { agentType, agentName, timestamp: ts }
 }
 
@@ -737,7 +765,7 @@ async function collectFiles(input: string): Promise<string[]> {
   const entries = await readdir(resolved, { withFileTypes: true })
   const files: string[] = []
   for (const e of entries) {
-    if (e.isFile() && e.name.endsWith(".json") && e.name.startsWith("context-")) {
+    if (e.isFile() && e.name.endsWith(".json") && (e.name.startsWith("context-") || e.name.startsWith("trajectory_"))) {
       files.push(path.join(resolved, e.name))
     }
   }

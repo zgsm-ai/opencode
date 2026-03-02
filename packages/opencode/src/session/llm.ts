@@ -42,11 +42,13 @@ export namespace LLM {
     ".history_message",
   )
 
-  // 存储每个 session 的最新 system 提示词（经过 Plugin 处理后的完整版本）
+  // 存储每个轨迹键（session + agent）的最新 system 提示词（经过 Plugin 处理后的完整版本）
   const sessionSystemCache = new Map<string, string[]>()
+  const requestMessageCache = new Map<string, ModelMessage[]>()
 
-  // 存储每个 session 的初始北京时间戳（首次记录时生成，后续复用，格式 YYYY-MM-DD-HH-mm-ss）
+  // 存储每个轨迹键（session + agent）的初始北京时间戳（首次记录时生成，后续复用，格式 YYYYMMDD_hhmmss）
   const sessionInitTime = new Map<string, string>()
+  const trajectoryAlias = new Map<string, string>()
 
   function beijingTimeString() {
     const now = new Date()
@@ -55,8 +57,8 @@ export namespace LLM {
     const t = new Date(now.getTime() + offset)
     const pad = (n: number) => String(n).padStart(2, "0")
     return (
-      `${t.getUTCFullYear()}-${pad(t.getUTCMonth() + 1)}-${pad(t.getUTCDate())}` +
-      `-${pad(t.getUTCHours())}-${pad(t.getUTCMinutes())}-${pad(t.getUTCSeconds())}`
+      `${t.getUTCFullYear()}${pad(t.getUTCMonth() + 1)}${pad(t.getUTCDate())}` +
+      `_${pad(t.getUTCHours())}${pad(t.getUTCMinutes())}${pad(t.getUTCSeconds())}`
     )
   }
 
@@ -102,11 +104,80 @@ export namespace LLM {
     )
   }
 
-  function sessionFilename(sessionID: string, agentName: string) {
-    if (!sessionInitTime.has(sessionID)) {
-      sessionInitTime.set(sessionID, beijingTimeString())
+  function trajectoryAgentName(name: string) {
+    const key = name.trim().toLowerCase().replace(/[\s_-]+/g, "")
+    if (key === "proposal" || key === "proposalagent") return "ProposalAgent"
+    if (key === "taskcheck" || key === "taskcheckagent") return "TaskCheckAgent"
+    if (key === "coding" || key === "codingagent") return "CodingAgent"
+    if (key === "fix" || key === "fixagent") return "FixAgent"
+    if (key === "quickexplore" || key === "quickexploreagent") return "QuickExploreAgent"
+    if (key === "subcoding" || key === "subcodingagent") return "SubCodingAgent"
+    return name.trim() || "UnknownAgent"
+  }
+
+  export function normalizeTrajectoryAgentName(name: string) {
+    return trajectoryAgentName(name)
+  }
+
+  export function setTrajectoryAgentAlias(sessionID: string, alias: string) {
+    const val = alias.trim()
+    if (!val) return
+    trajectoryAlias.set(sessionID, val)
+  }
+
+  export function clearTrajectoryAgentAlias(sessionID: string) {
+    trajectoryAlias.delete(sessionID)
+  }
+
+  export function setSubCodingTrajectoryAlias(sessionID: string, alias: string) {
+    setTrajectoryAgentAlias(sessionID, alias)
+  }
+
+  export function clearSubCodingTrajectoryAlias(sessionID: string) {
+    clearTrajectoryAgentAlias(sessionID)
+  }
+
+  function effectiveAgentName(sessionID: string, name: string) {
+    const alias = trajectoryAlias.get(sessionID)?.trim()
+    if (alias) return alias
+    return trajectoryAgentName(name)
+  }
+
+  function trajectoryKey(sessionID: string, agentName: string) {
+    return `${sessionID}::${agentName}`
+  }
+
+  function parseTrajectoryFile(filename: string) {
+    const current = filename.match(/^trajectory_(ses_[A-Za-z0-9]+)_(\d{8}_\d{6})_(.+)\.json$/)
+    if (current?.[1] && current?.[3]) {
+      return {
+        sessionID: current[1],
+        agentName: current[3],
+      }
     }
-    return `context-${agentName}-${sessionID}-${sessionInitTime.get(sessionID)}.json`
+
+    const legacy = filename.match(/^context-(.+?)-(ses_[A-Za-z0-9]+)-\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}\.json$/)
+    if (legacy?.[1] && legacy?.[2]) {
+      return {
+        sessionID: legacy[2],
+        agentName: legacy[1],
+      }
+    }
+  }
+
+  function isSameTrajectoryFile(filename: string, sessionID: string, agentName: string) {
+    if (!filename.endsWith(".json")) return false
+    const parsed = parseTrajectoryFile(filename)
+    if (!parsed) return false
+    return parsed.sessionID === sessionID && parsed.agentName === agentName
+  }
+
+  function sessionFilename(sessionID: string, agentName: string) {
+    const key = trajectoryKey(sessionID, agentName)
+    if (!sessionInitTime.has(key)) {
+      sessionInitTime.set(key, beijingTimeString())
+    }
+    return `trajectory_${sessionID}_${sessionInitTime.get(key)}_${agentName}.json`
   }
 
   export const OUTPUT_TOKEN_MAX = Flag.COSTRICT_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 10_240
@@ -213,7 +284,8 @@ export namespace LLM {
     }
 
     // 保存经过 Plugin 处理后的完整 system 数组，供 saveContextAfterResponse 使用
-    sessionSystemCache.set(input.sessionID, clone(system))
+    const agentName = effectiveAgentName(input.sessionID, input.agent.name)
+    sessionSystemCache.set(trajectoryKey(input.sessionID, agentName), clone(system))
 
     const variant =
       !input.small && input.model.variants && input.user.variant ? input.model.variants[input.user.variant] : {}
@@ -341,6 +413,7 @@ export namespace LLM {
           )),
       ...input.messages,
     ]
+    requestMessageCache.set(trajectoryKey(input.sessionID, agentName), clone(requestMessages))
 
     const requestBody = {
       temperature: params.temperature,
@@ -582,6 +655,8 @@ export namespace LLM {
       }
     })
 
+    const agentName = effectiveAgentName(input.sessionID, input.agent.name)
+
     // 构建完整的上下文对象
     const context = {
       timestamp: Date.now(),
@@ -589,7 +664,7 @@ export namespace LLM {
 
       // 元信息
       meta: {
-        agent: input.agent.name,
+        agent: agentName,
         agentMode: input.agent.mode,
         modelID: input.model.id,
         providerID: input.model.providerID,
@@ -619,14 +694,14 @@ export namespace LLM {
       toolExecutions,
     }
 
-    const filename = sessionFilename(input.sessionID, input.agent.name)
+    const filename = sessionFilename(input.sessionID, agentName)
     const contextFile = path.join(HISTORY_DIR, filename)
 
-    // 删除旧的context文件（同一会话内只保留最新的，兼容旧格式）
+    // 删除旧的轨迹文件（同一会话内只保留最新的，兼容旧格式）
     try {
       const files = await fs.readdir(HISTORY_DIR)
       for (const file of files) {
-        if (file.includes(`-${input.sessionID}-`) && file.endsWith(".json") && file !== filename) {
+        if (isSameTrajectoryFile(file, input.sessionID, agentName) && file !== filename) {
           await fs.unlink(path.join(HISTORY_DIR, file)).catch(() => {})
         }
       }
@@ -664,15 +739,21 @@ export namespace LLM {
         agent: input.agent.name,
       })
 
-      // 获取系统提示词：优先使用传入的，否则从缓存读取
-      const systemPrompts = input.system || sessionSystemCache.get(input.sessionID) || []
+      const agentName = effectiveAgentName(input.sessionID, input.agent.name)
+      const key = trajectoryKey(input.sessionID, agentName)
+
+      // 获取系统提示词：优先使用传入的，否则从当前轨迹键缓存读取
+      const systemPrompts = input.system || sessionSystemCache.get(key) || []
+      const cachedRequestMessages = requestMessageCache.get(key)
       if (!input.system && systemPrompts.length === 0) {
         log.warn("No system prompts available", {
           sessionID: input.sessionID,
+          agent: agentName,
         })
       } else {
         log.info("Using system prompts", {
           sessionID: input.sessionID,
+          agent: agentName,
           source: input.system ? "provided" : "cache",
           count: systemPrompts.length,
         })
@@ -769,6 +850,16 @@ export namespace LLM {
 
       // 合并系统提示词和对话消息（system 放在最开头）
       const messagesWithSystem = [...systemMessages, ...convertedMessages]
+      const messagesWithRequestContext = (() => {
+        if (!cachedRequestMessages) return messagesWithSystem
+        const base = clone(cachedRequestMessages)
+        const last = convertedMessages[convertedMessages.length - 1]
+        if (!last || last.role !== "assistant") return base
+        const tail = base[base.length - 1]
+        const duplicated = !!tail && JSON.stringify(tail) === JSON.stringify(last)
+        if (!duplicated) base.push(last as ModelMessage)
+        return base
+      })()
 
       // 提取工具信息并转换为 OpenAI 格式（与 saveActualContext 一致）
       const activeToolNames = Object.keys(input.tools).filter((x) => x !== "invalid")
@@ -817,14 +908,14 @@ export namespace LLM {
         timestamp: Date.now(),
         sessionID: input.sessionID,
         meta: {
-          agent: input.agent.name,
+          agent: agentName,
           agentMode: input.agent.mode,
           modelID: input.model.id,
           providerID: input.model.providerID,
         },
         // 使用 actualRequest 格式，与 saveActualContext 保持一致
         actualRequest: {
-          messages: messagesWithSystem,  // 包含系统提示词和 LLM 响应的完整消息历史
+          messages: messagesWithRequestContext,  // 优先保留真实请求上下文（含 MAX_STEPS 等临时注入消息）并补上最后响应
           tools: availableTools,  // OpenAI格式的工具定义
         },
         // System消息的原始形式（用于对比）
@@ -835,14 +926,14 @@ export namespace LLM {
         toolExecutions,
       }
 
-      const filename = sessionFilename(input.sessionID, input.agent.name)
+      const filename = sessionFilename(input.sessionID, agentName)
       const contextFile = path.join(HISTORY_DIR, filename)
 
-      // 删除旧的context文件（同一会话内只保留最新的，兼容旧格式）
+      // 删除旧的轨迹文件（同一会话内只保留最新的，兼容旧格式）
       try {
         const files = await fs.readdir(HISTORY_DIR)
         for (const file of files) {
-          if (file.includes(`-${input.sessionID}-`) && file.endsWith(".json") && file !== filename) {
+          if (isSameTrajectoryFile(file, input.sessionID, agentName) && file !== filename) {
             await fs.unlink(path.join(HISTORY_DIR, file)).catch(() => {})
           }
         }

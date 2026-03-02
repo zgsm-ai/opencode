@@ -7,6 +7,7 @@ import { MessageV2 } from "../session/message-v2"
 import { Identifier } from "../id/id"
 import { Agent } from "../agent/agent"
 import { SessionPrompt } from "../session/prompt"
+import { LLM } from "@/session/llm"
 import { PermissionNext } from "@/permission/next"
 import { defer } from "@/util/defer"
 import path from "path"
@@ -204,6 +205,11 @@ export const SubCodingTool = Tool.define("sub_coding", async (ctx) => {
         ],
       })
       subCodingLogger.info(`Session created: ${session.id}`)
+      const parentAgent = LLM.normalizeTrajectoryAgentName(ctx.agent)
+      const subCode = params.agent_code.trim() || "SubCodingAgent"
+      const trajectoryAgent = `${parentAgent}-${subCode}`
+      LLM.setTrajectoryAgentAlias(session.id, trajectoryAgent)
+      using __ = defer(() => LLM.clearTrajectoryAgentAlias(session.id))
 
       // Build the structured prompt
       const root = session.directory

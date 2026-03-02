@@ -506,7 +506,7 @@ export namespace SessionProcessor {
 
             // 每次 LLM 流式响应完成后立即保存最新消息历史（覆盖式），
             // 确保即使 Agent 中途退出也能保留最新记录
-            LLM.saveContextAfterResponse({
+            await LLM.saveContextAfterResponse({
               sessionID: input.sessionID,
               agent: streamInput.agent,
               model: input.model,
