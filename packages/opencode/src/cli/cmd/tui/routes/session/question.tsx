@@ -364,7 +364,7 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
                     </box>
                     <box backgroundColor={other() ? theme.backgroundElement : undefined}>
                       <text fg={other() ? theme.secondary : customPicked() ? theme.success : theme.text}>
-                        {multi() ? `[${customPicked() ? "✓" : " "}] Type your own answer` : "Type your own answer"}
+                        {multi() ? `[${customPicked() ? "✓" : " "}] 输入以告诉 costrict 怎么做` : "输入以告诉 costrict 怎么做"}
                       </text>
                     </box>
 
@@ -383,7 +383,7 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
                           })
                         }}
                         initialValue={input()}
-                        placeholder="Type your own answer"
+                        placeholder="输入以告诉 costrict 怎么做"
                         minHeight={1}
                         maxHeight={6}
                         textColor={theme.text}
