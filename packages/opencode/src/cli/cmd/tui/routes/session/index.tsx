@@ -25,6 +25,7 @@ import {
   type ScrollAcceleration,
   TextAttributes,
   RGBA,
+  MouseEvent as TuiMouseEvent,
 } from "@opentui/core"
 import { Prompt, type PromptRef } from "@tui/component/prompt"
 import type { AssistantMessage, Part, ToolPart, UserMessage, TextPart, ReasoningPart } from "@opencode-ai/sdk/v2"
@@ -217,6 +218,7 @@ export function Session() {
 
   let scroll: ScrollBoxRenderable
   let prompt: PromptRef
+  let dragScrollY: number | null = null
   const keybind = useKeybind()
 
   // Allow exit when in child session (prompt is hidden)
@@ -587,7 +589,7 @@ export function Session() {
       value: "session.line.up",
       keybind: "messages_line_up",
       category: "Session",
-      disabled: true,
+      hidden: true,
       onSelect: (dialog) => {
         scroll.scrollBy(-1)
         dialog.clear()
@@ -598,7 +600,7 @@ export function Session() {
       value: "session.line.down",
       keybind: "messages_line_down",
       category: "Session",
-      disabled: true,
+      hidden: true,
       onSelect: (dialog) => {
         scroll.scrollBy(1)
         dialog.clear()
@@ -961,6 +963,24 @@ export function Session() {
               stickyStart="bottom"
               flexGrow={1}
               scrollAcceleration={scrollAcceleration()}
+              onMouseDrag={(e: TuiMouseEvent) => {
+                if (e.isSelecting) {
+                  dragScrollY = null
+                  return
+                }
+                if (dragScrollY === null) {
+                  dragScrollY = e.y
+                  return
+                }
+                const delta = dragScrollY - e.y
+                if (delta !== 0) {
+                  scroll.scrollBy(delta)
+                  dragScrollY = e.y
+                }
+              }}
+              onMouseUp={() => {
+                dragScrollY = null
+              }}
             >
               <For each={messages()}>
                 {(message, index) => (

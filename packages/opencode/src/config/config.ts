@@ -751,8 +751,8 @@ export namespace Config {
         .optional()
         .default("pagedown,ctrl+alt+f")
         .describe("Scroll messages down by one page"),
-      messages_line_up: z.string().optional().default("ctrl+alt+y").describe("Scroll messages up by one line"),
-      messages_line_down: z.string().optional().default("ctrl+alt+e").describe("Scroll messages down by one line"),
+      messages_line_up: z.string().optional().default("alt+up,ctrl+alt+y").describe("Scroll messages up by one line"),
+      messages_line_down: z.string().optional().default("alt+down,ctrl+alt+e").describe("Scroll messages down by one line"),
       messages_half_page_up: z.string().optional().default("ctrl+alt+u").describe("Scroll messages up by half page"),
       messages_half_page_down: z
         .string()
