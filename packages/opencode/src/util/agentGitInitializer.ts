@@ -191,6 +191,13 @@ export namespace AgentGitInitializer {
             }
         }
 
+        private async _pathExists(target: string): Promise<boolean> {
+            return fs
+                .stat(target)
+                .then(() => true)
+                .catch(() => false)
+        }
+
         private async _ensureAgentGitCommand(): Promise<string> {
             const isWindows = this._isWindows()
             const agentGitPath = path.join(this.projectPath, "agent-git")
@@ -729,14 +736,19 @@ exec git "$@"
                     }
                 }
 
-                const agentGitDirExists = await Bun.file(this.agentGitDir).exists()
+                const agentGitDirExists = await this._pathExists(this.agentGitDir)
                 if (agentGitDirExists) {
                     const err = await this._removeDir(this.agentGitDir)
                     if (err) {
-                        this.logger.warn("Failed to remove .agent-git directory", { error: err })
-                    } else {
-                        this.logger.info("Removed existing .agent-git directory")
+                        this.logger.error("Failed to remove .agent-git directory", { error: err })
+                        throw new AgentGitInitError({ message: "Failed to remove existing .agent-git directory" })
                     }
+                    const stillExists = await this._pathExists(this.agentGitDir)
+                    if (stillExists) {
+                        this.logger.error(".agent-git directory still exists after removal")
+                        throw new AgentGitInitError({ message: "Failed to fully remove existing .agent-git directory" })
+                    }
+                    this.logger.info("Removed existing .agent-git directory")
                 }
 
                 const initResult = await this._runAgentGit({
@@ -815,19 +827,20 @@ exec git "$@"
             }
         }
 
-        public async initializeExploreResultFolder(): Promise<boolean> {
+        public async initializeExploreResultFolder(options?: { preserveExisting?: boolean }): Promise<boolean> {
             try {
                 const exploreResultDir = path.join(this.projectPath, "explore_result")
+                const keepExisting = this.continueRun || options?.preserveExisting === true
 
-                if (this.continueRun) {
-                    const exists = await Bun.file(exploreResultDir).exists()
+                if (keepExisting) {
+                    const exists = await this._pathExists(exploreResultDir)
                     if (exists) {
-                        this.logger.info("Continuing from previous run - keeping existing explore_result folder")
+                        this.logger.info("Keeping existing explore_result folder")
                         return true
                     }
                 }
 
-                const exists = await Bun.file(exploreResultDir).exists()
+                const exists = await this._pathExists(exploreResultDir)
                 if (exists) {
                     const err = await this._removeDir(exploreResultDir)
                     if (err) {
@@ -837,7 +850,7 @@ exec git "$@"
                     }
                 }
 
-                const dirExists = await Bun.file(exploreResultDir).exists()
+                const dirExists = await this._pathExists(exploreResultDir)
                 if (!dirExists) {
                     await fs.mkdir(exploreResultDir, { recursive: true })
                     this.logger.info("Created fresh explore_result directory")

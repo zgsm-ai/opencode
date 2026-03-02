@@ -101,6 +101,10 @@ export namespace SessionPrompt {
 export const OUTPUT_TOKEN_MAX = Flag.COSTRICT_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 10_240
 
   const normalizeAgentName = (name: string) => name.trim().toLowerCase().replace(/[\s_-]/g, "")
+  const normalizeAgentKind = (name: string) => {
+    const normalized = normalizeAgentName(name)
+    return normalized.endsWith("agent") ? normalized.slice(0, -5) : normalized
+  }
 
   // Agents that CREATE new agent-git (continue_run=false)
   const AGENTS_CREATING_GIT = new Set(["proposal", "strictplan"])
@@ -113,7 +117,6 @@ export const OUTPUT_TOKEN_MAX = Flag.COSTRICT_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 1
     "explore",
     "quickexplore",
     "subcoding",
-    "fixagent",
     "fix",
   ])
 
@@ -220,8 +223,10 @@ export const OUTPUT_TOKEN_MAX = Flag.COSTRICT_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 1
     await Session.touch(input.sessionID)
 
     // Initialize agent-git if needed
-    const agentName = input.agent ?? (await Agent.defaultAgent())
-    const normalizedAgentName = normalizeAgentName(agentName)
+    const requestedAgent = input.agent ?? (await Agent.defaultAgent())
+    const resolvedAgent = await Agent.get(requestedAgent)
+    const agentName = resolvedAgent?.name ?? requestedAgent
+    const normalizedAgentName = normalizeAgentKind(agentName)
     if (normalizedAgentName !== "proposal") {
       const hint = input.parts
         .filter((part): part is MessageV2.TextPart => part.type === "text")
@@ -231,6 +236,7 @@ export const OUTPUT_TOKEN_MAX = Flag.COSTRICT_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 1
     }
     const shouldCreateGit = AGENTS_CREATING_GIT.has(normalizedAgentName)
     const shouldReuseGit = AGENTS_REUSING_GIT.has(normalizedAgentName)
+    const preserveExploreResult = normalizedAgentName === "proposal"
 
     if (shouldCreateGit || shouldReuseGit) {
       try {
@@ -262,7 +268,9 @@ export const OUTPUT_TOKEN_MAX = Flag.COSTRICT_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 1
             mode: shouldCreateGit ? "create" : "reuse",
           })
 
-          const exploreResultReady = await gitInit.initializeExploreResultFolder()
+          const exploreResultReady = await gitInit.initializeExploreResultFolder({
+            preserveExisting: preserveExploreResult,
+          })
           if (!exploreResultReady) {
             if (shouldCreateGit) {
               log.warn("Failed to initialize explore_result folder for create agent", {
