@@ -1179,10 +1179,12 @@ export namespace Config {
           autoSelectFirstOption: z
             .boolean()
             .optional()
-            .describe("Automatically select the first option for each question (default: false). Useful for CI/CD and automated scripts."),
+            .describe(
+              "@deprecated No longer used. Set OPENCODE_QUESTION_AUTO_SELECT_FIRST_OPTION=1 to auto-select the first option for each question.",
+            ),
         })
         .optional()
-        .describe("Question tool behavior configuration"),
+        .describe("Question tool behavior configuration (legacy compatibility only)"),
     })
     .strict()
     .meta({

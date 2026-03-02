@@ -3,11 +3,11 @@ import { BusEvent } from "@/bus/bus-event"
 import { Identifier } from "@/id/id"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
-import { Config } from "@/config/config"
 import z from "zod"
 
 export namespace Question {
   const log = Log.create({ service: "question" })
+  const AUTO_SELECT_ENV = "OPENCODE_QUESTION_AUTO_SELECT_FIRST_OPTION"
 
   export const Option = z
     .object({
@@ -160,12 +160,11 @@ export namespace Question {
       reject: pending.reject,
     }
 
-    // Check if auto-select mode is enabled
-    const configState = await Config.state()
-    const autoSelectEnabled = configState.config.question?.autoSelectFirstOption ?? false
+    const autoSelectValue = process.env[AUTO_SELECT_ENV]
+    const autoSelectEnabled = autoSelectValue === "1" || autoSelectValue?.toLowerCase() === "true"
 
     if (autoSelectEnabled) {
-      log.info("auto-select mode enabled", { id })
+      log.info("auto-select mode enabled", { id, source: AUTO_SELECT_ENV })
       // Auto-select first option for each question
       const autoAnswers: Answer[] = input.questions.map((question) => {
         if (question.options.length > 0) {
