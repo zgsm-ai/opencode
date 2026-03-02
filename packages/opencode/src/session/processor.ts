@@ -716,37 +716,60 @@ export namespace SessionProcessor {
             // 扣减预算（重试模式下不扣减）
             budgetState = Budget.deductBudget(toolsExecuted, budgetState, false)
 
-            // 【预算通知】- 附加到每个工具结果
-            for (const tool of toolsExecuted) {
-              if (tool.state.status === "completed" && tool.state.output) {
-                // 构建预算通知（使用 agent 自定义的预警阈值）
+            if (toolsExecuted.length > 0 && budgetState.total !== undefined) {
+              // 当启用预算时，将 <budget_notice> 拼接到“最后一个工具结果”的输出中，
+              // 无论该工具是成功还是失败（success/error），都要体现最新的预算状态。
+              const lastTool = toolsExecuted[toolsExecuted.length - 1]
+
+              if (lastTool.state.status === "completed" && typeof lastTool.state.output === "string") {
+                const baseOutput = lastTool.state.output
                 const budgetNotice = Budget.buildBudgetNotice(
-                  tool.state.output,
+                  baseOutput,
                   budgetState,
-                  streamInput.agent.warningThreshold
+                  streamInput.agent.warningThreshold ?? Budget.WARNING_THRESHOLD,
                 )
 
-                // 更新工具的输出（包含预算通知）
-                // fullContent 包含预算通知，会被 LLM 看到
-                // displayContent 在前端展示时过滤预算通知标签
                 await updatePart({
-                  ...tool,
+                  ...lastTool,
                   state: {
-                    ...tool.state,
-                    output: budgetNotice.fullContent
-                  }
+                    ...lastTool.state,
+                    output: budgetNotice.fullContent,
+                  },
+                })
+
+                log.info("budget notice attached to last completed tool", {
+                  sessionID: input.sessionID,
+                  tool: lastTool.tool,
+                  callID: lastTool.callID,
+                  remaining: budgetState.remaining,
+                  used: budgetState.used,
+                  total: budgetState.total,
+                })
+              } else if (lastTool.state.status === "error" && typeof lastTool.state.error === "string") {
+                const baseOutput = lastTool.state.error
+                const budgetNotice = Budget.buildBudgetNotice(
+                  baseOutput,
+                  budgetState,
+                  streamInput.agent.warningThreshold ?? Budget.WARNING_THRESHOLD,
+                )
+
+                await updatePart({
+                  ...lastTool,
+                  state: {
+                    ...lastTool.state,
+                    error: budgetNotice.fullContent,
+                  },
+                })
+
+                log.info("budget notice attached to last errored tool", {
+                  sessionID: input.sessionID,
+                  tool: lastTool.tool,
+                  callID: lastTool.callID,
+                  remaining: budgetState.remaining,
+                  used: budgetState.used,
+                  total: budgetState.total,
                 })
               }
-            }
-
-            if (toolsExecuted.length > 0) {
-              log.info("budget notice attached to all tools", {
-                sessionID: input.sessionID,
-                toolCount: toolsExecuted.length,
-                remaining: budgetState.remaining,
-                used: budgetState.used,
-                total: budgetState.total
-              })
             }
           }
 

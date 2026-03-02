@@ -750,7 +750,8 @@ export const OUTPUT_TOKEN_MAX = Flag.COSTRICT_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 1
 
       // 初始化预算状态（仅在第一次执行时）
       if (sessionBudgetState === undefined) {
-        sessionBudgetState = Budget.calculateState(agent.steps, 0)
+        // Use agent.budgetSteps as tool-call budget when configured; otherwise unlimited.
+        sessionBudgetState = Budget.calculateState(agent.budgetSteps, 0)
         log.info("session budget initialized", {
           sessionID,
           agent: agent.name,
@@ -919,6 +920,17 @@ export const OUTPUT_TOKEN_MAX = Flag.COSTRICT_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 1
         remaining: sessionBudgetState.remaining,
         total: sessionBudgetState.total
       })
+
+      // 如果达到最大步数，无论是否调用退出工具，都直接结束本次会话循环
+      if (isLastStep) {
+        log.info("max steps reached, exiting loop", {
+          sessionID,
+          agent: agent.name,
+          step,
+          maxSteps,
+        })
+        break
+      }
 
       if (result === "stop") break
       if (result === "compact") {

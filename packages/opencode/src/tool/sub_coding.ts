@@ -163,7 +163,7 @@ function formatGitStats(stats: { commitCount: number; files: string[] }): string
 
 export const SubCodingTool = Tool.define("sub_coding", async (ctx) => {
   const subAgent = await Agent.get("SubCodingAgent").catch(() => null)
-  const budget = subAgent?.steps ?? 70
+  const budget = subAgent?.budgetSteps ?? 70
   const description = DESCRIPTION.replace("{{budget}}", budget.toString())
 
   return {
@@ -231,7 +231,7 @@ export const SubCodingTool = Tool.define("sub_coding", async (ctx) => {
       subCodingLogger.info(`Rendering SubCodingAgent prompt for: ${params.agent_code}`)
       const agentPrompt = await renderSubCodingPrompt(SUB_CODING_PROMPT_TEMPLATE, {
         agent_code: params.agent_code,
-        tool_call_budget: agent.steps?.toString() || "70",
+        tool_call_budget: agent.budgetSteps?.toString() || "70",
         budget_warning_threshold: agent.warningThreshold?.toString() || "20",
       })
       subCodingLogger.info(`SubCodingAgent prompt rendered, length: ${agentPrompt.length}`)
