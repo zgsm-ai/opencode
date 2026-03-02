@@ -94,7 +94,10 @@ export namespace Agent {
         .optional(),
       prompt: z.string().optional(),
       options: z.record(z.string(), z.any()),
+      // steps: outer loop max (max_steps)
       steps: z.number().int().positive().optional(),
+      // budgetSteps: tool-call budget for agents that use it (e.g. QuickExplore/SubCodingAgent)
+      budgetSteps: z.number().int().positive().optional(),
       warningThreshold: z.number().int().nonnegative().optional(),
     })
     .meta({
@@ -483,7 +486,9 @@ export namespace Agent {
             return null
           },
         },
-        steps: 50,  // Budget limit for QuickExplore agent
+        // steps: outer loop max, budgetSteps: tool-call budget for QuickExplore agent
+        steps: 500,
+        budgetSteps: 50,
         warningThreshold: 10,  // Warn when budget is low (≤10)
         permission: permitEditor(PermissionNext.merge(
           defaults,
@@ -523,6 +528,9 @@ export namespace Agent {
       item.hidden = value.hidden ?? item.hidden
       item.name = value.name ?? item.name
       item.steps = value.steps ?? item.steps
+      // Allow config to override tool-call budget for agents that use it
+      // Config.Agent transform injects budgetSteps when budget_steps/steps are configured.
+      item.budgetSteps = (value as any).budgetSteps ?? item.budgetSteps
       item.warningThreshold = value.warningThreshold ?? item.warningThreshold
       item.options = mergeDeep(item.options, value.options ?? {})
       item.permission = PermissionNext.merge(item.permission, PermissionNext.fromConfig(value.permission ?? {}))
@@ -536,7 +544,9 @@ export namespace Agent {
         options: {
           exitToolName: "sub_agent_task_done",
         },
-        steps: 70,  // Budget limit for SubCodingAgent
+        // steps: outer loop max, budgetSteps: tool-call budget for SubCodingAgent
+        steps: 500,
+        budgetSteps: 70,
         warningThreshold: 20,  // Warn when budget is low (≤20)
         permission: permitEditor(PermissionNext.merge(
           defaults,

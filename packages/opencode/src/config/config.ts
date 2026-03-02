@@ -659,13 +659,30 @@ export namespace Config {
         .regex(/^#[0-9a-fA-F]{6}$/, "Invalid hex color format")
         .optional()
         .describe("Hex color code for the agent (e.g., #FF5733)"),
+      budget_steps: z
+        .number()
+        .int()
+        .positive()
+        .optional()
+        .describe("Tool-call budget for this agent (e.g., QuickExplore/SubCoding)."),
+      max_steps: z
+        .number()
+        .int()
+        .positive()
+        .optional()
+        .describe("Maximum number of agentic iterations before forcing text-only response (default: 500)."),
       steps: z
         .number()
         .int()
         .positive()
         .optional()
-        .describe("Maximum number of agentic iterations before forcing text-only response"),
-      maxSteps: z.number().int().positive().optional().describe("@deprecated Use 'steps' field instead."),
+        .describe("@deprecated Use 'budget_steps' for tool-call budget or 'max_steps' for outer loop limit."),
+      maxSteps: z
+        .number()
+        .int()
+        .positive()
+        .optional()
+        .describe("@deprecated Use 'max_steps' field instead."),
       permission: Permission.optional(),
     })
     .catchall(z.any())
@@ -680,6 +697,8 @@ export namespace Config {
         "mode",
         "hidden",
         "color",
+        "budget_steps",
+        "max_steps",
         "steps",
         "maxSteps",
         "options",
@@ -707,13 +726,17 @@ export namespace Config {
       }
       Object.assign(permission, agent.permission)
 
-      // Convert legacy maxSteps to steps
-      const steps = agent.steps ?? agent.maxSteps
+      // Normalize budget and max steps:
+      // - budgetSteps: prefer explicit budget_steps, fall back to legacy steps (which previously mixed meanings)
+      // - steps: unified max_steps / maxSteps with a sane default of 500
+      const budgetSteps = agent.budget_steps ?? agent.steps
+      const steps = agent.max_steps ?? agent.maxSteps ?? 500
 
-      return { ...agent, options, permission, steps } as typeof agent & {
+      return { ...agent, options, permission, steps, budgetSteps } as typeof agent & {
         options?: Record<string, unknown>
         permission?: Permission
         steps?: number
+        budgetSteps?: number
       }
     })
     .meta({
