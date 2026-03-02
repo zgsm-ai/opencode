@@ -49,6 +49,7 @@ export namespace LLM {
   // 存储每个轨迹键（session + agent）的初始北京时间戳（首次记录时生成，后续复用，格式 YYYYMMDD_hhmmss）
   const sessionInitTime = new Map<string, string>()
   const trajectoryAlias = new Map<string, string>()
+  const trajectoryChangeID = new Map<string, string>()
 
   function beijingTimeString() {
     const now = new Date()
@@ -129,6 +130,119 @@ export namespace LLM {
     trajectoryAlias.delete(sessionID)
   }
 
+  function normalizeTrajectoryChangeID(changeID: string) {
+    const val = changeID
+      .trim()
+      .replace(/^["'`]+|["'`]+$/g, "")
+      .replace(/[\\/]/g, "-")
+      .replace(/\s+/g, "-")
+      .replace(/[^A-Za-z0-9._-]/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-+|-+$/g, "")
+    if (!val) return
+    return val
+  }
+
+  export function detectTrajectoryChangeID(text: string) {
+    const val = text.trim()
+    if (!val) return
+    const patterns = [
+      /(?:change[_-]?id)\s*[:=：]\s*`?([A-Za-z0-9][A-Za-z0-9._-]*)`?/gi,
+      /proposal\/([A-Za-z0-9][A-Za-z0-9._-]*)\//gi,
+      /proposal\\([A-Za-z0-9][A-Za-z0-9._-]*)\\/gi,
+      /changes\/([A-Za-z0-9][A-Za-z0-9._-]*)\//gi,
+    ]
+    for (const pattern of patterns) {
+      const matches = [...val.matchAll(pattern)]
+      const latest = matches.at(-1)?.[1]
+      if (!latest) continue
+      const normalized = normalizeTrajectoryChangeID(latest)
+      if (normalized) return normalized
+    }
+  }
+
+  function detectTrajectoryChangeIDFromMessages(messages: ModelMessage[]) {
+    if (!messages.length) return
+    const text = messages
+      .map((msg) => {
+        if (typeof msg.content === "string") return msg.content
+        return JSON.stringify(msg.content)
+      })
+      .join("\n")
+    return detectTrajectoryChangeID(text)
+  }
+
+  export function setTrajectoryChangeID(sessionID: string, changeID: string) {
+    const val = normalizeTrajectoryChangeID(changeID)
+    if (!val) return
+    trajectoryChangeID.set(sessionID, val)
+    return val
+  }
+
+  async function resolveTrajectoryChangeID(
+    sessionID: string,
+    visited = new Set<string>(),
+  ): Promise<string | undefined> {
+    if (visited.has(sessionID)) return
+    visited.add(sessionID)
+    const cached = trajectoryChangeID.get(sessionID)
+    if (cached) return cached
+    const session = await Session.get(sessionID).catch(() => undefined)
+    const parentID = session?.parentID
+    if (!parentID) return
+    const parent = await resolveTrajectoryChangeID(parentID, visited)
+    if (!parent) return
+    trajectoryChangeID.set(sessionID, parent)
+    return parent
+  }
+
+  async function renameTrajectoryFilesForSession(sessionID: string) {
+    const changeID = trajectoryChangeID.get(sessionID)
+    if (!changeID) return
+    await fs.mkdir(HISTORY_DIR, { recursive: true }).catch(() => {})
+    const files = await fs.readdir(HISTORY_DIR).catch(() => [] as string[])
+    for (const file of files) {
+      const parsed = parseTrajectoryFile(file)
+      if (!parsed || parsed.sessionID !== sessionID) continue
+      const key = trajectoryKey(sessionID, parsed.agentName)
+      const initTime = parsed.initTime || sessionInitTime.get(key) || beijingTimeString()
+      sessionInitTime.set(key, initTime)
+      const target = sessionFilename(sessionID, parsed.agentName, changeID)
+      if (target === file) continue
+      const fromPath = path.join(HISTORY_DIR, file)
+      const toPath = path.join(HISTORY_DIR, target)
+      await fs.unlink(toPath).catch(() => {})
+      await fs.rename(fromPath, toPath).catch(() => {})
+    }
+  }
+
+  export async function applyTrajectoryChangeID(sessionID: string, changeID: string) {
+    const val = setTrajectoryChangeID(sessionID, changeID)
+    if (!val) return
+    await renameTrajectoryFilesForSession(sessionID)
+    const children = await Session.children(sessionID).catch(() => [] as Session.Info[])
+    for (const child of children) {
+      await applyTrajectoryChangeID(child.id, val)
+    }
+  }
+
+  export async function inheritTrajectoryChangeID(sessionID: string, parentSessionID: string) {
+    const parent = await resolveTrajectoryChangeID(parentSessionID)
+    if (!parent) return
+    trajectoryChangeID.set(sessionID, parent)
+  }
+
+  export async function ensureTrajectoryChangeID(sessionID: string, hint?: string) {
+    const hinted = hint ? detectTrajectoryChangeID(hint) : undefined
+    if (hinted) {
+      trajectoryChangeID.set(sessionID, hinted)
+      return hinted
+    }
+    const cached = trajectoryChangeID.get(sessionID)
+    if (cached) return cached
+    return resolveTrajectoryChangeID(sessionID)
+  }
+
   export function setSubCodingTrajectoryAlias(sessionID: string, alias: string) {
     setTrajectoryAgentAlias(sessionID, alias)
   }
@@ -148,11 +262,27 @@ export namespace LLM {
   }
 
   function parseTrajectoryFile(filename: string) {
-    const current = filename.match(/^trajectory_(ses_[A-Za-z0-9]+)_(\d{8}_\d{6})_(.+)\.json$/)
-    if (current?.[1] && current?.[3]) {
+    const current = filename.match(
+      /^trajectory_([A-Za-z0-9][A-Za-z0-9._-]*)_(ses_[A-Za-z0-9]+)_(\d{8}_\d{6})_(.+)\.json$/,
+    )
+    if (current?.[1] && current?.[2] && current?.[3] && current?.[4]) {
       return {
-        sessionID: current[1],
-        agentName: current[3],
+        sessionID: current[2],
+        changeID: current[1],
+        initTime: current[3],
+        agentName: current[4],
+      }
+    }
+
+    const previous = filename.match(
+      /^trajectory_(ses_[A-Za-z0-9]+)(?:_([A-Za-z0-9][A-Za-z0-9._-]*))?_(\d{8}_\d{6})_(.+)\.json$/,
+    )
+    if (previous?.[1] && previous?.[3] && previous?.[4]) {
+      return {
+        sessionID: previous[1],
+        changeID: previous[2],
+        initTime: previous[3],
+        agentName: previous[4],
       }
     }
 
@@ -172,10 +302,13 @@ export namespace LLM {
     return parsed.sessionID === sessionID && parsed.agentName === agentName
   }
 
-  function sessionFilename(sessionID: string, agentName: string) {
+  function sessionFilename(sessionID: string, agentName: string, changeID?: string) {
     const key = trajectoryKey(sessionID, agentName)
     if (!sessionInitTime.has(key)) {
       sessionInitTime.set(key, beijingTimeString())
+    }
+    if (changeID) {
+      return `trajectory_${changeID}_${sessionID}_${sessionInitTime.get(key)}_${agentName}.json`
     }
     return `trajectory_${sessionID}_${sessionInitTime.get(key)}_${agentName}.json`
   }
@@ -694,7 +827,11 @@ export namespace LLM {
       toolExecutions,
     }
 
-    const filename = sessionFilename(input.sessionID, agentName)
+    const changeID = await ensureTrajectoryChangeID(
+      input.sessionID,
+      detectTrajectoryChangeIDFromMessages(input.requestMessages),
+    )
+    const filename = sessionFilename(input.sessionID, agentName, changeID)
     const contextFile = path.join(HISTORY_DIR, filename)
 
     // 删除旧的轨迹文件（同一会话内只保留最新的，兼容旧格式）
@@ -926,7 +1063,11 @@ export namespace LLM {
         toolExecutions,
       }
 
-      const filename = sessionFilename(input.sessionID, agentName)
+      const changeID = await ensureTrajectoryChangeID(
+        input.sessionID,
+        detectTrajectoryChangeIDFromMessages(messagesWithRequestContext),
+      )
+      const filename = sessionFilename(input.sessionID, agentName, changeID)
       const contextFile = path.join(HISTORY_DIR, filename)
 
       // 删除旧的轨迹文件（同一会话内只保留最新的，兼容旧格式）

@@ -1189,6 +1189,10 @@ export namespace Config {
             .optional()
             .describe("Tools that should only be available to primary agents."),
           continue_loop_on_deny: z.boolean().optional().describe("Continue the agent loop when a tool call is denied"),
+          auto_taskcheck: z
+            .boolean()
+            .optional()
+            .describe("Enable auto-starting TaskCheckAgent after ProposalAgent completes"),
           mcp_timeout: z
             .number()
             .int()

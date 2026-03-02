@@ -222,6 +222,13 @@ export const OUTPUT_TOKEN_MAX = Flag.COSTRICT_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 1
     // Initialize agent-git if needed
     const agentName = input.agent ?? (await Agent.defaultAgent())
     const normalizedAgentName = normalizeAgentName(agentName)
+    if (normalizedAgentName !== "proposal") {
+      const hint = input.parts
+        .filter((part): part is MessageV2.TextPart => part.type === "text")
+        .map((part) => part.text)
+        .join("\n")
+      await LLM.ensureTrajectoryChangeID(input.sessionID, hint)
+    }
     const shouldCreateGit = AGENTS_CREATING_GIT.has(normalizedAgentName)
     const shouldReuseGit = AGENTS_REUSING_GIT.has(normalizedAgentName)
 
@@ -454,6 +461,13 @@ export const OUTPUT_TOKEN_MAX = Flag.COSTRICT_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 1
             const changeId = exitToolCall?.state.input?.change_id
 
             if (changeId && typeof changeId === "string") {
+              await LLM.applyTrajectoryChangeID(sessionID, changeId).catch((err) => {
+                log.warn("failed to apply trajectory change-id", {
+                  sessionID,
+                  changeId,
+                  error: err,
+                })
+              })
               try {
                 // 查找第一条用户消息
                 const firstUserMsg = msgs.find(m => m.info.role === "user")

@@ -205,6 +205,7 @@ export const SubCodingTool = Tool.define("sub_coding", async (ctx) => {
         ],
       })
       subCodingLogger.info(`Session created: ${session.id}`)
+      await LLM.inheritTrajectoryChangeID(session.id, ctx.sessionID)
       const parentAgent = LLM.normalizeTrajectoryAgentName(ctx.agent)
       const subCode = params.agent_code.trim() || "SubCodingAgent"
       const trajectoryAgent = `${parentAgent}-${subCode}`

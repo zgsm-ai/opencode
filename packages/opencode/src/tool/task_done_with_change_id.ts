@@ -41,7 +41,9 @@ export const TaskDoneWithChangeIdTool = Tool.define("task_done_with_change_id", 
 
       return {
         title: "",
-        metadata: {},
+        metadata: {
+          changeID: change_id.trim(),
+        },
         output: `Task done.\n\nChange ID: ${change_id.trim()}\n\nSummary:\n${summary}`,
       }
     },

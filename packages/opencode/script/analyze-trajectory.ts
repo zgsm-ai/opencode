@@ -225,11 +225,23 @@ function parseTimestamp(text: string): Date | null {
 }
 
 function parseFilename(filename: string): { agentType: string; agentName: string; timestamp: Date } | null {
-  const current = filename.match(/^trajectory_(.+)_(\d{8}_\d{6})_([A-Za-z][A-Za-z0-9-]*)\.json$/)
-  if (current?.[2] && current?.[3]) {
-    const ts = parseTimestamp(current[2])
+  const current = filename.match(
+    /^trajectory_([A-Za-z0-9][A-Za-z0-9._-]*)_(ses_[A-Za-z0-9]+)_(\d{8}_\d{6})_(.+)\.json$/,
+  )
+  if (current?.[3] && current?.[4]) {
+    const ts = parseTimestamp(current[3])
     if (!ts) return null
-    const agent = current[3]
+    const agent = current[4]
+    return { agentType: agent, agentName: agent, timestamp: ts }
+  }
+
+  const previous = filename.match(
+    /^trajectory_(ses_[A-Za-z0-9]+)(?:_([A-Za-z0-9][A-Za-z0-9._-]*))?_(\d{8}_\d{6})_(.+)\.json$/,
+  )
+  if (previous?.[3] && previous?.[4]) {
+    const ts = parseTimestamp(previous[3])
+    if (!ts) return null
+    const agent = previous[4]
     return { agentType: agent, agentName: agent, timestamp: ts }
   }
 

@@ -100,6 +100,7 @@ export const QuickExploreTool = Tool.define("quick_explore", async (ctx) => {
         ],
       })
       quickExploreLogger.info(`Session created: ${session.id}`)
+      await LLM.inheritTrajectoryChangeID(session.id, ctx.sessionID)
       const parentAgent = LLM.normalizeTrajectoryAgentName(ctx.agent)
       const trajectoryAgent = `${parentAgent}-QuickExploreAgent`
       LLM.setTrajectoryAgentAlias(session.id, trajectoryAgent)
