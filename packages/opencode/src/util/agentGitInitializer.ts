@@ -730,10 +730,10 @@ exec git "$@"
                     if (statusResult.exitCode === 0) {
                         this.logger.info("agent-git is ready")
                         return true
-                    } else {
-                        this.logger.error("Failed to verify agent-git status")
-                        return false
                     }
+                    this.logger.warn("Failed to verify existing agent-git status, falling back to fresh initialization", {
+                        stderr: statusResult.stderr.slice(0, 300),
+                    })
                 }
 
                 const agentGitDirExists = await this._pathExists(this.agentGitDir)
