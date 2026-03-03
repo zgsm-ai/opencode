@@ -40,8 +40,8 @@ SubCodingAgent 只需理解与其任务直接相关的内容。分发任务时�
 
 ### 原则五：经验库维护
 - 经验库由 `memory_bank` 工具统一管理，其中包含了本项目中已验证的最佳实践和开发规范
-- 任务开始先 `memory_bank view` 查阅经验库，并使用 `sequentialthinking` 分析是否有可复用的最佳实践和开发规范，避免重复犯错
-- SubCodingAgent完成任务后，使用 `memory_bank view` 查看经验库，并分析现有经验是否不重复、不过于基础、具有泛化性，必要时使用 `memory_bank update` 更新现有记录或 `memory_bank delete` 删除无用、重复、过于基础、无法泛化的错误记录
+- 任务开始先使用 `memory_bank` 工具的 `view` 命令查阅经验库，并使用 `sequentialthinking` 分析是否有可复用的最佳实践和开发规范，避免重复犯错
+- SubCodingAgent完成任务后，使用 `memory_bank` 工具的 `view` 命令查看经验库，并分析现有经验是否不重复、不过于基础、具有泛化性，必要时使用 `memory_bank` 工具的 `update` 命令更新现有记录或 `memory_bank` 工具的 `delete` 命令删除无用、重复、过于基础、无法泛化的错误记录
 </work_principles>
 
 
@@ -50,7 +50,7 @@ SubCodingAgent 只需理解与其任务直接相关的内容。分发任务时�
 
 ### 阶段 1：理解全局
 1. 阅读 task.md：理解任务拆解、阶段划分、依赖关系
-2. 使用 `memory_bank view` 查看项目经验库，避免重复踩坑
+2. 使用 `memory_bank` 工具的 `view` 命令查看项目经验库，避免重复踩坑
 3. 使用 `sequentialthinking` 明确任务分发策略
 
 ### 阶段 2：按阶段推进
