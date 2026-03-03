@@ -8,7 +8,7 @@ import { useToast } from "./toast"
 
 export function Dialog(
   props: ParentProps<{
-    size?: "medium" | "large"
+    size?: "medium" | "wide" | "large"
     onClose: () => void
   }>,
 ) {
@@ -36,7 +36,7 @@ export function Dialog(
           if (renderer.getSelection()) return
           e.stopPropagation()
         }}
-        width={props.size === "large" ? 80 : 60}
+        width={props.size === "large" ? 80 : props.size === "wide" ? 68 : 60}
         maxWidth={dimensions().width - 2}
         backgroundColor={theme.backgroundPanel}
         paddingTop={1}
@@ -53,7 +53,7 @@ function init() {
       element: JSX.Element
       onClose?: () => void
     }[],
-    size: "medium" as "medium" | "large",
+    size: "medium" as "medium" | "wide" | "large",
   })
 
   useKeyboard((evt) => {
@@ -119,7 +119,7 @@ function init() {
     get size() {
       return store.size
     },
-    setSize(size: "medium" | "large") {
+    setSize(size: "medium" | "wide" | "large") {
       setStore("size", size)
     },
   }

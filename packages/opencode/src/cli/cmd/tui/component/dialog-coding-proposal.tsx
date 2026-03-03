@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createResource, createSignal } from "solid-js"
+import { createEffect, createMemo, createResource, createSignal, onMount } from "solid-js"
 import { useKeyboard } from "@opentui/solid"
 import { useLocal } from "@tui/context/local"
 import { useSync } from "@tui/context/sync"
@@ -12,42 +12,8 @@ import { Identifier } from "@/id/id"
 import { TextAttributes } from "@opentui/core"
 import { DialogFixProposal } from "@tui/component/dialog-fix-proposal"
 import { DialogTaskcheckProposal } from "@tui/component/dialog-taskcheck-proposal"
-import fs from "fs"
+import { scanProposals } from "@tui/util/proposal"
 import path from "path"
-
-async function scanProposals(directory: string) {
-  const root = path.join(directory, "proposal")
-  const entries = await fs.promises.readdir(root, { withFileTypes: true }).catch(() => [])
-  const results: { changeId: string; description?: string; time: number; taskPath: string }[] = []
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue
-    const tasks = path.join(root, entry.name, "tasks.md")
-    const task = path.join(root, entry.name, "task.md")
-    const taskPath = await fs.promises
-      .access(tasks)
-      .then(() => tasks)
-      .catch(async () => fs.promises.access(task).then(() => task).catch(() => undefined))
-    if (!taskPath) continue
-    const time = await fs.promises
-      .stat(taskPath)
-      .then((stat) => stat.mtimeMs)
-      .catch(() => 0)
-    const proposalPath = path.join(root, entry.name, "proposal.md")
-    const description = await fs.promises
-      .readFile(proposalPath, "utf-8")
-      .then((content) => {
-        const firstLine = content
-          .split("\n")
-          .map((line) => line.trim())
-          .find((line) => line.length > 0 && !line.startsWith("#"))
-        if (!firstLine) return undefined
-        return firstLine.length > 80 ? firstLine.slice(0, 77) + "..." : firstLine
-      })
-      .catch(() => undefined)
-    results.push({ changeId: entry.name, description, time, taskPath })
-  }
-  return results.toSorted((a, b) => b.time - a.time)
-}
 
 function DialogCodingStarting(props: { changeId?: string }) {
   const { theme } = useTheme()
@@ -78,6 +44,10 @@ export function DialogCodingProposal() {
   const [selected, setSelected] = createSignal<string | undefined>()
 
   const directory = createMemo(() => sync.data.path.directory || process.cwd())
+
+  onMount(() => {
+    dialog.setSize("wide")
+  })
 
   function moveAgent(direction: 1 | -1) {
     const list = local.agent.list()
