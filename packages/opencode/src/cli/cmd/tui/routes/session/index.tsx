@@ -146,6 +146,7 @@ export function Session() {
   const [showDetails, setShowDetails] = kv.signal("tool_details_visibility", true)
   const [showAssistantMetadata, setShowAssistantMetadata] = kv.signal("assistant_metadata_visibility", true)
   const [showScrollbar, setShowScrollbar] = kv.signal("scrollbar_visible", false)
+  const [autoAllowPermissions] = kv.signal("permissions_auto_allow_all", false)
   const [diffWrapMode] = kv.signal<"word" | "none">("diff_wrap_mode", "word")
   const [animationsEnabled, setAnimationsEnabled] = kv.signal("animations_enabled", true)
 
@@ -189,6 +190,23 @@ export function Session() {
 
   const toast = useToast()
   const sdk = useSDK()
+  const [autoReplyingPermissionID, setAutoReplyingPermissionID] = createSignal<string>()
+
+  createEffect(() => {
+    if (!autoAllowPermissions()) return
+    const first = permissions()[0]
+    if (!first) return
+    if (autoReplyingPermissionID() === first.id) return
+    setAutoReplyingPermissionID(first.id)
+    sdk.client.permission
+      .reply({
+        requestID: first.id,
+        reply: "once",
+      })
+      .finally(() => {
+        setAutoReplyingPermissionID((current) => (current === first.id ? undefined : current))
+      })
+  })
 
   // Handle initial prompt from fork
   createEffect(() => {

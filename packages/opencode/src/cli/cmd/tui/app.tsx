@@ -261,6 +261,7 @@ function App() {
     renderer.clearSelection()
   }
   const [terminalTitleEnabled, setTerminalTitleEnabled] = createSignal(kv.get("terminal_title_enabled", true))
+  const [autoAllowPermissions, setAutoAllowPermissions] = kv.signal("permissions_auto_allow_all", false)
 
   createEffect(() => {
     console.log(JSON.stringify(route.data))
@@ -565,6 +566,25 @@ function App() {
       value: "theme.switch_mode",
       onSelect: (dialog) => {
         setMode(mode() === "dark" ? "light" : "dark")
+        dialog.clear()
+      },
+      category: "System",
+    },
+    {
+      title: autoAllowPermissions() ? "Disable auto-allow permissions" : "Enable auto-allow permissions",
+      value: "permission.auto_approve.toggle",
+      slash: {
+        name: "auto-approve",
+      },
+      onSelect: (dialog) => {
+        setAutoAllowPermissions((prev) => {
+          const next = !prev
+          toast.show({
+            variant: "info",
+            message: next ? "Auto-allow permissions enabled" : "Auto-allow permissions disabled",
+          })
+          return next
+        })
         dialog.clear()
       },
       category: "System",
