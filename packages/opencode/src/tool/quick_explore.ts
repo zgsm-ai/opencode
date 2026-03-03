@@ -77,7 +77,7 @@ export const QuickExploreTool = Tool.define("quick_explore", async (ctx) => {
           // Allow editing explore.md in any path (must come AFTER deny rules, findLast wins)
           {
             permission: "edit" as const,
-            pattern: "**/explore.md" as const,
+            pattern: "*explore.md" as const,
             action: "allow" as const,
           },
           // Disable todo tools

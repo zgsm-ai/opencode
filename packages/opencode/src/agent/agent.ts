@@ -175,6 +175,11 @@ export namespace Agent {
         "*task.md": "allow",
       },
     })
+    const exploreAutoAllow = PermissionNext.fromConfig({
+      edit: {
+        "*explore.md": "allow",
+      },
+    })
     const permitEditor = (ruleset: PermissionNext.Ruleset) => PermissionNext.merge(ruleset, editor)
 
     const result: Record<string, Info> = {
@@ -250,13 +255,16 @@ export namespace Agent {
         options: {
           exitToolName: AgentToolsConfig.AGENT_CONFIGS.taskcheck.exitToolName,
         },
-        permission: permitEditor(PermissionNext.merge(
-          defaults,
-          AgentToolsConfig.createToolPermission(
-            AgentToolsConfig.AGENT_CONFIGS.taskcheck.tools
-          ),
-          user,
-        )),
+        permission: PermissionNext.merge(
+          permitEditor(PermissionNext.merge(
+            defaults,
+            AgentToolsConfig.createToolPermission(
+              AgentToolsConfig.AGENT_CONFIGS.taskcheck.tools
+            ),
+            user,
+          )),
+          proposalAutoAllow,
+        ),
         mode: "primary",
         native: true,
         hidden: true,
@@ -268,13 +276,16 @@ export namespace Agent {
         options: {
           exitToolName: AgentToolsConfig.AGENT_CONFIGS.coding.exitToolName,
         },
-        permission: permitEditor(PermissionNext.merge(
-          defaults,
-          AgentToolsConfig.createToolPermission(
-            AgentToolsConfig.AGENT_CONFIGS.coding.tools
-          ),
-          user,
-        )),
+        permission: PermissionNext.merge(
+          permitEditor(PermissionNext.merge(
+            defaults,
+            AgentToolsConfig.createToolPermission(
+              AgentToolsConfig.AGENT_CONFIGS.coding.tools
+            ),
+            user,
+          )),
+          proposalAutoAllow,
+        ),
         mode: "primary",
         native: true,
         prompt: coding,
@@ -285,13 +296,16 @@ export namespace Agent {
         options: {
           exitToolName: AgentToolsConfig.AGENT_CONFIGS.FixAgent.exitToolName,
         },
-        permission: permitEditor(PermissionNext.merge(
-          defaults,
-          AgentToolsConfig.createToolPermission(
-            AgentToolsConfig.AGENT_CONFIGS.FixAgent.tools
-          ),
-          user,
-        )),
+        permission: PermissionNext.merge(
+          permitEditor(PermissionNext.merge(
+            defaults,
+            AgentToolsConfig.createToolPermission(
+              AgentToolsConfig.AGENT_CONFIGS.FixAgent.tools
+            ),
+            user,
+          )),
+          proposalAutoAllow,
+        ),
         mode: "primary",
         native: true,
         prompt: fix,
@@ -492,13 +506,16 @@ export namespace Agent {
         steps: 500,
         budgetSteps: 50,
         warningThreshold: 10,  // Warn when budget is low (≤10)
-        permission: permitEditor(PermissionNext.merge(
-          defaults,
-          AgentToolsConfig.createToolPermission(
-            AgentToolsConfig.AGENT_CONFIGS.QuickExplore.tools
-          ),
-          user,
-        )),
+        permission: PermissionNext.merge(
+          permitEditor(PermissionNext.merge(
+            defaults,
+            AgentToolsConfig.createToolPermission(
+              AgentToolsConfig.AGENT_CONFIGS.QuickExplore.tools
+            ),
+            user,
+          )),
+          exploreAutoAllow,
+        ),
         mode: "subagent",
         native: true,
         hidden: true,
@@ -550,13 +567,16 @@ export namespace Agent {
         steps: 500,
         budgetSteps: 70,
         warningThreshold: 20,  // Warn when budget is low (≤20)
-        permission: permitEditor(PermissionNext.merge(
-          defaults,
-          AgentToolsConfig.createToolPermission(
-            AgentToolsConfig.AGENT_CONFIGS.SubCodingAgent.tools
-          ),
-          user,
-        )),
+        permission: PermissionNext.merge(
+          permitEditor(PermissionNext.merge(
+            defaults,
+            AgentToolsConfig.createToolPermission(
+              AgentToolsConfig.AGENT_CONFIGS.SubCodingAgent.tools
+            ),
+            user,
+          )),
+          proposalAutoAllow,
+        ),
         mode: "subagent",
         native: true,
         hidden: true,

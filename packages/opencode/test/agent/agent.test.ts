@@ -99,6 +99,36 @@ test("explore agent denies edit and write", async () => {
   })
 })
 
+test("proposal-style agents allow editing markdown files by filename", async () => {
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const ids = ["proposal", "taskcheck", "coding", "FixAgent", "SubCodingAgent"]
+      for (const id of ids) {
+        const agent = await Agent.get(id)
+        expect(agent).toBeDefined()
+        expect(PermissionNext.evaluate("edit", "task.md", agent!.permission).action).toBe("allow")
+        expect(PermissionNext.evaluate("edit", "nested/clarify.md", agent!.permission).action).toBe("allow")
+        expect(PermissionNext.evaluate("edit", "proposal/change/proposal.md", agent!.permission).action).toBe("allow")
+      }
+    },
+  })
+})
+
+test("QuickExplore allows editing explore.md by filename", async () => {
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const agent = await Agent.get("QuickExplore")
+      expect(agent).toBeDefined()
+      expect(PermissionNext.evaluate("edit", "explore.md", agent!.permission).action).toBe("allow")
+      expect(PermissionNext.evaluate("edit", "nested/explore.md", agent!.permission).action).toBe("allow")
+    },
+  })
+})
+
 test("general agent denies todo tools", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
