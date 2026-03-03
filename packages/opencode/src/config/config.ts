@@ -1037,7 +1037,7 @@ export namespace Config {
         .string()
         .optional()
         .describe(
-          "Default agent to use when none is specified. Must be a primary agent. Falls back to 'build' if not set or if the specified agent is invalid.",
+          "Default agent to use when none is specified. Must be a visible primary agent. Falls back to 'proposal' if not set or if the specified agent is unavailable.",
         ),
       username: z
         .string()

@@ -224,12 +224,15 @@ export function Session() {
     if (part.id === lastSwitch) return
 
     if (part.tool === "plan_exit") {
+      if (!local.agent.list().some((item) => item.name === "build")) return
       local.agent.set("build")
       lastSwitch = part.id
-    } else if (part.tool === "plan_enter") {
-      local.agent.set("plan")
-      lastSwitch = part.id
+      return
     }
+    if (part.tool !== "plan_enter") return
+    if (!local.agent.list().some((item) => item.name === "plan")) return
+    local.agent.set("plan")
+    lastSwitch = part.id
   })
 
   let scroll: ScrollBoxRenderable

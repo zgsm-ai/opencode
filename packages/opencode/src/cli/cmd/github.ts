@@ -886,7 +886,7 @@ export const GithubRunCommand = cmd({
             providerID,
             modelID,
           },
-          // agent is omitted - server will use default_agent from config or fall back to "build"
+          // agent is omitted - server will use default_agent from config or fall back to "proposal"
           parts: [
             {
               id: Identifier.ascending("part"),

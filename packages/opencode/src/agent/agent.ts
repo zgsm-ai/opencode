@@ -29,7 +29,7 @@ import { AgentToolsConfig } from "@/costrict/agent/config"
 import { COMPONENTS } from "@/costrict/agent/components"
 
 export namespace Agent {
-  const USER_VISIBLE_AGENT_KEYS = new Set(["build", "proposal", "taskcheck", "coding", "FixAgent"])
+  const USER_VISIBLE_AGENT_KEYS = new Set(["proposal", "taskcheck", "coding", "FixAgent"])
 
   /**
    * Agent options 类型定义
@@ -598,10 +598,11 @@ export namespace Agent {
 
   export async function list() {
     const cfg = await Config.get()
+    const def = cfg.default_agent ?? "proposal"
     return pipe(
       await state(),
       values(),
-      sortBy([(x) => (cfg.default_agent ? x.name === cfg.default_agent : x.name === "build"), "desc"]),
+      sortBy([(x) => x.name === def, "desc"]),
     )
   }
 
@@ -611,10 +612,7 @@ export namespace Agent {
 
     if (cfg.default_agent) {
       const agent = agents[cfg.default_agent]
-      if (!agent) throw new Error(`default agent "${cfg.default_agent}" not found`)
-      if (agent.mode === "subagent") throw new Error(`default agent "${cfg.default_agent}" is a subagent`)
-      if (agent.hidden === true) throw new Error(`default agent "${cfg.default_agent}" is hidden`)
-      return agent.name
+      if (agent && agent.mode !== "subagent" && agent.hidden !== true) return agent.name
     }
 
     const primaryVisible = Object.values(agents).find(
