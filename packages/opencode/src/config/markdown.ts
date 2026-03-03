@@ -137,20 +137,29 @@ export namespace ConfigMarkdown {
       enableIncludes: boolean
       enableVariables: boolean
       enableConditionals: boolean
+      components?: Record<string, string>
     },
     tokens: Map<string, string>,
   ) {
     const root = path.join(baseDir, "components")
     return {
       getSource(name: string) {
-        const file = path.join(root, normalizeIncludeName(name))
-        if (!fs.existsSync(file)) {
+        const normalized = normalizeIncludeName(name)
+        const file = path.join(root, normalized)
+        const raw = (() => {
+          if (fs.existsSync(file)) return fs.readFileSync(file, "utf-8")
+          if (options.components) {
+            const key = name.replace(/\.txt$/, "")
+            return options.components[key] ?? options.components[normalized]
+          }
+          return undefined
+        })()
+        if (raw === undefined) {
           const label = name.replace(/\.txt$/, "")
           const missing = `[ERROR: Cannot include ${label}]`
           const masked = maskTemplate(missing, options, tokens)
           return { src: masked, path: file, noCache: true }
         }
-        const raw = fs.readFileSync(file, "utf-8")
         const masked = maskTemplate(raw, options, tokens)
         return { src: masked, path: file, noCache: true }
       },
@@ -165,11 +174,12 @@ export namespace ConfigMarkdown {
       enableIncludes: boolean
       enableVariables: boolean
       enableConditionals: boolean
+      components?: Record<string, string>
     },
   ) {
     const tokens = new Map<string, string>()
     const masked = maskTemplate(template, options, tokens)
-    const loader = options.baseDir ? createLoader(options.baseDir, options, tokens) : undefined
+    const loader = options.baseDir ?? options.components ? createLoader(options.baseDir ?? "", options, tokens) : undefined
     const env = new nunjucks.Environment(loader, { autoescape: false })
     const context = options.context ?? {}
     const rendered = env.renderString(masked, context)
@@ -187,6 +197,7 @@ export namespace ConfigMarkdown {
     options?: {
       context?: Record<string, any>
       baseDir?: string
+      components?: Record<string, string>
       enableIncludes?: boolean
       enableVariables?: boolean
       enableConditionals?: boolean
@@ -198,10 +209,11 @@ export namespace ConfigMarkdown {
       enableConditionals: true,
       ...options,
     }
-    const includeEnabled = Boolean(opts.enableIncludes && opts.baseDir)
+    const includeEnabled = Boolean(opts.enableIncludes && (opts.baseDir ?? opts.components))
     const rendered = renderNunjucks(template, {
       context: opts.context,
-      baseDir: includeEnabled ? opts.baseDir : undefined,
+      baseDir: opts.baseDir,
+      components: opts.components,
       enableIncludes: includeEnabled,
       enableVariables: opts.enableVariables,
       enableConditionals: opts.enableConditionals,

@@ -26,6 +26,7 @@ import path from "path"
 import { Plugin } from "@/plugin"
 import { fileURLToPath } from "url"
 import { AgentToolsConfig } from "@/costrict/agent/config"
+import { COMPONENTS } from "@/costrict/agent/components"
 
 export namespace Agent {
   const USER_VISIBLE_AGENT_KEYS = new Set(["build", "proposal", "taskcheck", "coding", "FixAgent"])
@@ -126,6 +127,7 @@ export namespace Agent {
       const md = await ConfigMarkdown.parseString(text, {
         context: promptContext(options),
         baseDir: root,
+        components: COMPONENTS,
         enableIncludes: true,
         enableVariables: true,
         enableConditionals: true,

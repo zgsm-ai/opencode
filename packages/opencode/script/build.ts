@@ -288,6 +288,10 @@ await $`rm -rf dist`
 console.log("Generating builtin agents...")
 await $`bun run script/generate-agents.ts`
 
+// Generate builtin components file before building
+console.log("Generating builtin components...")
+await $`bun run script/generate-components.ts`
+
 const binaries: Record<string, string> = {}
 if (!skipInstall) {
   const coreInstall = await $`bun install --os="*" --cpu="*" @opentui/core@${pkg.dependencies["@opentui/core"]}`.nothrow()

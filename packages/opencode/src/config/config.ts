@@ -26,6 +26,7 @@ import { Installation } from "@/installation"
 import { ConfigMarkdown } from "./markdown"
 import { existsSync } from "fs"
 import { BUILTIN_AGENTS } from "../costrict/agent/builtin"
+import { COMPONENTS } from "../costrict/agent/components"
 import { Bus } from "@/bus"
 import { GlobalBus } from "@/bus/global"
 import { Event } from "../server/event"
@@ -316,6 +317,7 @@ export namespace Config {
         const md = await ConfigMarkdown.parseString(agentContent, {
           context,
           baseDir: componentsDir,
+          components: COMPONENTS,
           enableIncludes: true,
           enableVariables: true,
           enableConditionals: true,

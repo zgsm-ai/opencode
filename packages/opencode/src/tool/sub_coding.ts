@@ -15,6 +15,7 @@ import { fileURLToPath } from "url"
 import { Log } from "@/util/log"
 import { Bus } from "../bus"
 import { ConfigMarkdown } from "@/config/markdown"
+import { COMPONENTS } from "@/costrict/agent/components"
 import { $ } from "bun"
 
 // Logger for SubCodingTool - writes to file instead of console
@@ -107,6 +108,7 @@ async function renderSubCodingPrompt(
   const md = await ConfigMarkdown.parseString(template, {
     context: variables,
     baseDir: root,
+    components: COMPONENTS,
     enableIncludes: true,
     enableVariables: true,
     enableConditionals: true,
