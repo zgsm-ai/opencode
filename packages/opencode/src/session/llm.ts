@@ -116,6 +116,11 @@ export namespace LLM {
     return name.trim() || "UnknownAgent"
   }
 
+  function skipTrajectory(name: string) {
+    const key = name.trim().toLowerCase().replace(/[\s_-]+/g, "")
+    return key === "title" || key === "titleagent"
+  }
+
   export function normalizeTrajectoryAgentName(name: string) {
     return trajectoryAgentName(name)
   }
@@ -417,8 +422,11 @@ export namespace LLM {
     }
 
     // 保存经过 Plugin 处理后的完整 system 数组，供 saveContextAfterResponse 使用
+    const ignored = skipTrajectory(input.agent.name)
     const agentName = effectiveAgentName(input.sessionID, input.agent.name)
-    sessionSystemCache.set(trajectoryKey(input.sessionID, agentName), clone(system))
+    if (!ignored) {
+      sessionSystemCache.set(trajectoryKey(input.sessionID, agentName), clone(system))
+    }
 
     const variant =
       !input.small && input.model.variants && input.user.variant ? input.model.variants[input.user.variant] : {}
@@ -546,7 +554,9 @@ export namespace LLM {
           )),
       ...input.messages,
     ]
-    requestMessageCache.set(trajectoryKey(input.sessionID, agentName), clone(requestMessages))
+    if (!ignored) {
+      requestMessageCache.set(trajectoryKey(input.sessionID, agentName), clone(requestMessages))
+    }
 
     const requestBody = {
       temperature: params.temperature,
@@ -561,18 +571,20 @@ export namespace LLM {
     }
 
     // 保存实际发送给LLM的请求上下文
-    await saveActualContext({
-      sessionID: input.sessionID,
-      requestMessages,
-      requestHeaders,
-      requestBody,
-      system,
-      isCodex,
-      agent: input.agent,
-      model: input.model,
-    }).catch((err) => {
-      l.error("failed to save actual context", { error: err })
-    })
+    if (!ignored) {
+      await saveActualContext({
+        sessionID: input.sessionID,
+        requestMessages,
+        requestHeaders,
+        requestBody,
+        system,
+        isCodex,
+        agent: input.agent,
+        model: input.model,
+      }).catch((err) => {
+        l.error("failed to save actual context", { error: err })
+      })
+    }
 
     return streamText({
       onError(error) {
@@ -715,6 +727,7 @@ export namespace LLM {
     model: Provider.Model
     responseMessage?: ModelMessage  // 可选：LLM 的响应消息
   }) {
+    if (skipTrajectory(input.agent.name)) return
     await fs.mkdir(HISTORY_DIR, { recursive: true })
     const history = await Session.messages({ sessionID: input.sessionID }).catch(() => [] as MessageV2.WithParts[])
     const toolExecutions = collectToolExecutions(history)
@@ -871,6 +884,7 @@ export namespace LLM {
     system?: string[]  // 可选：系统提示词数组，如果没有提供则从 sessionSystemCache 读取
   }) {
     try {
+      if (skipTrajectory(input.agent.name)) return
       log.info("saveContextAfterResponse called", {
         sessionID: input.sessionID,
         agent: input.agent.name,
