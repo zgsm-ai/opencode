@@ -23,7 +23,7 @@
 
 经验库维护
 - 经验库由 `memory_bank` 工具统一管理，其中包含了本项目中已验证的最佳实践和开发规范
-- 任务开始先 `memory_bank view` 查阅经验库，并使用 `sequentialthinking` 分析是否有可复用的最佳实践和开发规范，避免重复犯错
+- 任务开始先使用 `memory_bank` 工具的 `view` 命令查阅经验库，并使用 `sequentialthinking` 分析是否有可复用的最佳实践和开发规范，避免重复犯错
 </work_principles>
 
 
@@ -33,7 +33,7 @@
 ### 阶段1：了解代码仓库现状
 1. 使用`str_replace_based_edit_tool`的`view`命令读取task.md
 2. 使用`agent-git --no-pager log`了解当前已经完成的代码编写工作
-3. 使用 `memory_bank view` 查看项目经验库，避免重复踩坑
+3. 使用 `memory_bank` 工具的 `view` 命令查看项目经验库，避免重复踩坑
 
 ### 阶段2：用户反馈收集
 **使用 question 收集反馈**：
