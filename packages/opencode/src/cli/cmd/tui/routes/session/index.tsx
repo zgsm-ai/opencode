@@ -146,7 +146,7 @@ export function Session() {
   const [showDetails, setShowDetails] = kv.signal("tool_details_visibility", true)
   const [showAssistantMetadata, setShowAssistantMetadata] = kv.signal("assistant_metadata_visibility", true)
   const [showScrollbar, setShowScrollbar] = kv.signal("scrollbar_visible", false)
-  const [autoAllowPermissions] = kv.signal("permissions_auto_allow_all", false)
+  const [autoAllowPermissions] = kv.mem("permissions_auto_allow_all", false)
   const [diffWrapMode] = kv.signal<"word" | "none">("diff_wrap_mode", "word")
   const [animationsEnabled, setAnimationsEnabled] = kv.signal("animations_enabled", true)
 

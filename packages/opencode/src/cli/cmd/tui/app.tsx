@@ -261,7 +261,7 @@ function App() {
     renderer.clearSelection()
   }
   const [terminalTitleEnabled, setTerminalTitleEnabled] = createSignal(kv.get("terminal_title_enabled", true))
-  const [autoAllowPermissions, setAutoAllowPermissions] = kv.signal("permissions_auto_allow_all", false)
+  const [autoAllowPermissions, setAutoAllowPermissions] = kv.mem("permissions_auto_allow_all", false)
 
   createEffect(() => {
     console.log(JSON.stringify(route.data))
