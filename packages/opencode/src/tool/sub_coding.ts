@@ -392,8 +392,19 @@ ${gitStatsStr}
         const errorMsg = sessionError
           ? [sessionError.name, (sessionError as any).message].filter(Boolean).join(": ")
           : ""
+        const finish = result.info.role === "assistant" ? result.info.finish : undefined
         const failureReason = (() => {
           if (success && !directResponse) return "sub_agent_task_done was called but direct_response was missing"
+          if (!success) {
+            return [
+              "SubCodingAgent stopped without calling sub_agent_task_done.",
+              finish ? `Assistant finish reason: ${finish}` : "",
+              errorMsg ? `Assistant error: ${errorMsg}` : "",
+              lastText ? `Last text output:\n${lastText}` : "",
+            ]
+              .filter(Boolean)
+              .join("\n\n")
+          }
           return lastText || errorMsg || "Unknown error"
         })()
 

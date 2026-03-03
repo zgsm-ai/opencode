@@ -569,6 +569,7 @@ export namespace SessionProcessor {
               continue
             }
             input.assistantMessage.error = error
+            input.assistantMessage.finish = input.assistantMessage.finish || "error"
             Bus.publish(Session.Event.Error, {
               sessionID: input.assistantMessage.sessionID,
               error: input.assistantMessage.error,
@@ -655,6 +656,16 @@ export namespace SessionProcessor {
           }
           input.assistantMessage.time.completed = Date.now()
           await Session.updateMessage(input.assistantMessage)
+          if (input.assistantMessage.error) {
+            await LLM.saveContextAfterResponse({
+              sessionID: input.sessionID,
+              agent: streamInput.agent,
+              model: input.model,
+              tools: streamInput.tools,
+            }).catch((err) => {
+              log.error("failed to save context after llm error", { error: err })
+            })
+          }
 
           // 调用封装的工具执行验证函数
           const executionResult = await ToolExecution.executeToolsWithValidation({

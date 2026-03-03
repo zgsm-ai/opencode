@@ -49,6 +49,7 @@ import { Truncate } from "@/tool/truncation"
 import { Budget } from "./budget"
 import { AgentGitInitializer } from "@/util/agentGitInitializer"
 import { toolAlias } from "@/costrict/utils/tool-transform-v2"
+import * as LoopPolicy from "./loop-policy"
 
 // @ts-ignore
 globalThis.AI_SDK_LOG_WARNINGS = false
@@ -94,6 +95,50 @@ function extractSummary(toolPart: MessageV2.ToolPart): string | undefined {
   }
 
   return resultText || undefined
+}
+
+function stopReason(message: MessageV2.Assistant, text?: string) {
+  return [
+    message.error ? `${message.error.name}: ${message.error.data.message}` : "",
+    message.finish ? `Finish reason: ${message.finish}` : "",
+    text ? `Last response:\n${text}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n")
+}
+
+function shouldRecoverStop(error?: MessageV2.Assistant["error"]) {
+  return error?.name === "UnknownError"
+}
+
+async function insertExitToolReminder(input: {
+  sessionID: string
+  agentName: string
+  model: {
+    providerID: string
+    modelID: string
+  }
+  exitToolName: string
+  reason?: string
+}) {
+  const reminderMessage: MessageV2.User = {
+    id: Identifier.ascending("message"),
+    sessionID: input.sessionID,
+    role: "user",
+    time: { created: Date.now() },
+    agent: input.agentName,
+    model: input.model,
+  }
+
+  await Session.updateMessage(reminderMessage)
+  await Session.updatePart({
+    id: Identifier.ascending("part"),
+    messageID: reminderMessage.id,
+    sessionID: input.sessionID,
+    type: "text",
+    text: LoopPolicy.unexpectedStop(input.exitToolName, input.reason),
+    synthetic: true,
+  } satisfies MessageV2.TextPart)
 }
 
 export namespace SessionPrompt {
@@ -436,16 +481,13 @@ export const OUTPUT_TOKEN_MAX = Flag.COSTRICT_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 1
       }
 
       if (!lastUser) throw new Error("No user message found in stream. This should never happen.")
+      const currentAgent = lastAssistant ? await Agent.get(lastAssistant.agent) : undefined
+      const exitToolName = currentAgent ? LoopPolicy.exitTool(currentAgent) : undefined
       
       // 检查是否有 task 完成指示（通过退出工具）
-      if (lastAssistant && lastUser.id < lastAssistant.id) {
-        // 从 agent.options 获取退出工具名，默认为 "task_done"
-        const currentAgent = await Agent.get(lastAssistant.agent)
-        const configuredExitToolName = (currentAgent.options?.exitToolName as string | undefined) || "task_done"
-        const exitToolName = toolAlias(configuredExitToolName)
-
+      if (lastAssistant && exitToolName && lastUser.id < lastAssistant.id) {
         // 使用动态的退出工具名检查任务是否完成
-        const isTaskCompleted = await llmIndicatesTaskCompleted(lastAssistant, configuredExitToolName)
+        const isTaskCompleted = await llmIndicatesTaskCompleted(lastAssistant, exitToolName)
 
         if (isTaskCompleted) {
           // 获取工具调用列表
@@ -536,17 +578,7 @@ export const OUTPUT_TOKEN_MAX = Flag.COSTRICT_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 1
       }
 
       // 保留原有的退出逻辑作为后备
-      // 以下 agent 必须通过退出工具（出口 1）退出，不允许走备用出口
-      const REQUIRE_EXIT_TOOL_AGENTS = new Set([
-        "proposal",
-        "taskcheck",
-        "coding",
-        "FixAgent",
-        "QuickExplore",
-        "SubCodingAgent",
-      ])
-      const assistantAgent = lastAssistant?.agent ?? ""
-      const requiresExitTool = REQUIRE_EXIT_TOOL_AGENTS.has(assistantAgent)
+      const requiresExitTool = exitToolName !== undefined
       if (
         !requiresExitTool &&
         lastAssistant?.finish &&
@@ -748,7 +780,27 @@ export const OUTPUT_TOKEN_MAX = Flag.COSTRICT_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 1
           sessionID,
           auto: task.auto,
         })
-        if (result === "stop") break
+        if (result === "stop") {
+          const agent = await Agent.get(lastUser.agent)
+          const exitToolName = agent ? LoopPolicy.exitTool(agent) : undefined
+          const failed = (await Session.messages({ sessionID })).findLast((msg) => msg.info.role === "assistant")?.info
+          if (
+            agent &&
+            exitToolName &&
+            failed?.role === "assistant" &&
+            shouldRecoverStop(failed.error)
+          ) {
+            await insertExitToolReminder({
+              sessionID,
+              agentName: agent.name,
+              model: lastUser.model,
+              exitToolName,
+              reason: stopReason(failed),
+            })
+            continue
+          }
+          break
+        }
         continue
       }
 
@@ -825,7 +877,7 @@ export const OUTPUT_TOKEN_MAX = Flag.COSTRICT_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 1
       const lastUserMsg = msgs.findLast((m) => m.info.role === "user")
       const bypassAgentCheck = lastUserMsg?.parts.some((p) => p.type === "agent") ?? false
 
-      const tools = await resolveTools({
+      const baseTools = await resolveTools({
         agent,
         session,
         model,
@@ -834,6 +886,10 @@ export const OUTPUT_TOKEN_MAX = Flag.COSTRICT_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 1
         bypassAgentCheck,
         messages: msgs,
       })
+      const maxStepState = LoopPolicy.maxStep(agent, step, Object.keys(baseTools))
+      const tools = maxStepState.forceExitTool && maxStepState.exitToolName
+        ? LoopPolicy.restrict(baseTools, maxStepState.exitToolName)
+        : baseTools
 
       if (step === 1) {
         SessionSummary.summarize({
@@ -920,6 +976,14 @@ export const OUTPUT_TOKEN_MAX = Flag.COSTRICT_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 1
         ],
         messages: [
           ...MessageV2.toModelMessages(sessionMessages, model),
+          ...(maxStepState.forceExitTool && maxStepState.exitToolName
+            ? [
+                {
+                  role: "user" as const,
+                  content: [{ type: "text" as const, text: LoopPolicy.reminder(maxStepState.exitToolName) }],
+                },
+              ]
+            : []),
           ...(ENABLE_MAX_STEPS_EPHEMERAL_INJECTION && isLastStep
             ? [
                 {
@@ -943,8 +1007,8 @@ export const OUTPUT_TOKEN_MAX = Flag.COSTRICT_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 1
         total: sessionBudgetState.total
       })
 
-      // 如果达到最大步数，无论是否调用退出工具，都直接结束本次会话循环
-      if (isLastStep) {
+      // 没有退出工具的 agent 仍然沿用原有的最大步数保护
+      if (maxStepState.shouldBreak) {
         log.info("max steps reached, exiting loop", {
           sessionID,
           agent: agent.name,
@@ -954,7 +1018,23 @@ export const OUTPUT_TOKEN_MAX = Flag.COSTRICT_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 1
         break
       }
 
-      if (result === "stop") break
+      if (result === "stop") {
+        const exitToolName = LoopPolicy.exitTool(agent)
+        const lastText = (await MessageV2.parts(processor.message.id)).findLast(
+          (part): part is MessageV2.TextPart => part.type === "text",
+        )?.text
+        if (exitToolName && shouldRecoverStop(processor.message.error)) {
+          await insertExitToolReminder({
+            sessionID,
+            agentName: agent.name,
+            model: lastUser.model,
+            exitToolName,
+            reason: stopReason(processor.message, lastText),
+          })
+          continue
+        }
+        break
+      }
       if (result === "compact") {
         await SessionCompaction.create({
           sessionID,

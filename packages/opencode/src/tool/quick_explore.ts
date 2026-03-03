@@ -246,9 +246,17 @@ export const QuickExploreTool = Tool.define("quick_explore", async (ctx) => {
             .trim()
         }
 
-        // If sub_agent_task_done was not called, fall back to text content
         if (!subAgentTaskDonePart) {
-          directResponse = result.parts.findLast((x) => x.type === "text")?.text ?? ""
+          const finish = result.info.role === "assistant" ? result.info.finish : undefined
+          const lastText = result.parts.findLast((x) => x.type === "text")?.text ?? ""
+          const reason = [
+            "QuickExploreAgent stopped without calling sub_agent_task_done.",
+            finish ? `Assistant finish reason: ${finish}` : "",
+            lastText ? `Last text output:\n${lastText}` : "",
+          ]
+            .filter(Boolean)
+            .join("\n\n")
+          throw new Error(reason)
         }
 
         return {

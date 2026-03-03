@@ -105,6 +105,14 @@ export namespace LLM {
     )
   }
 
+  function collectErrorTurns(messages: MessageV2.WithParts[]) {
+    return structuredClone(
+      messages.filter(
+        (msg) => msg.info.role === "assistant" && !!msg.info.error,
+      ),
+    )
+  }
+
   function trajectoryAgentName(name: string) {
     const key = name.trim().toLowerCase().replace(/[\s_-]+/g, "")
     if (key === "proposal" || key === "proposalagent") return "ProposalAgent"
@@ -913,6 +921,7 @@ export namespace LLM {
       // 读取当前 session 的所有消息
       const messages = await Session.messages({ sessionID: input.sessionID })
       const toolExecutions = collectToolExecutions(messages)
+      const errorTurns = collectErrorTurns(messages)
       log.info("messages read from DB", {
         count: messages.length,
       })
@@ -1075,6 +1084,8 @@ export namespace LLM {
         },
         // 仅用于轨迹分析，不会发送给模型
         toolExecutions,
+        // Preserve assistant error turns that are intentionally excluded from actualRequest.messages.
+        errorTurns,
       }
 
       const changeID = await ensureTrajectoryChangeID(
@@ -1106,6 +1117,7 @@ export namespace LLM {
         sessionID: input.sessionID,
         file: contextFile,
         messageCount: convertedMessages.length,
+        errorTurnCount: errorTurns.length,
       })
     } catch (error) {
       log.error("failed to save context after response", { error, sessionID: input.sessionID })
