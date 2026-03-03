@@ -2,7 +2,9 @@
 """
 Agent 轨迹分析工具
 
-分析轨迹 JSON（格式 trajectory_<changeID>_<sessionID>_<YYYYMMDD_HHMMSS>_<agent>.json），提供：
+分析轨迹 JSON（兼容以下命名）：
+- trajectory_<changeID>_<sessionID>_<YYYYMMDD_HHMMSS>_<agent>.json
+- trajectory_<sessionID>_<YYYYMMDD_HHMMSS>_<agent>.json
 - 高频工具错误分析
 - 简洁回放 agent 运行过程
 - 开发优化洞察
@@ -11,7 +13,7 @@ Agent 轨迹分析工具
 依赖: pip install rich  (或 pip install -r script/requirements.txt)
 
 Usage:
-  python script/analyze_trajectory.py <path>                  # 指定轨迹 JSON 或目录（默认当前目录）
+  python script/analyze_trajectory.py <path>                  # 指定轨迹 JSON；若为目录则做综合分析
   python script/analyze_trajectory.py <path> --replay         # 简洁回放模式
   python script/analyze_trajectory.py <path> --replay-fold-ok # 回放时折叠仅成功的步骤
   python script/analyze_trajectory.py <path> --top 10         # 显示 Top N
@@ -160,11 +162,20 @@ def parse_open_code_trajectory(data: dict[str, Any]) -> list[StepAnalysis]:
 
         tool_calls: list[ToolCallInfo] = []
         for c in content:
-            if c.get("type") not in ("tool-call", "tool_call") or not c.get("name"):
+            if c.get("type") not in ("tool-call", "tool_call"):
                 continue
 
-            call_id = c.get("toolCallId") or c.get("tool_call_id")
-            args = c.get("arguments") or {}
+            name = c.get("name") or c.get("toolName") or c.get("tool_name")
+            if not isinstance(name, str) or not name:
+                continue
+
+            call_id = c.get("toolCallId") or c.get("tool_call_id") or c.get("callID") or c.get("call_id")
+
+            raw_args = c.get("arguments")
+            if raw_args is None:
+                raw_args = c.get("input")
+            args = raw_args if isinstance(raw_args, dict) else {}
+
             result = result_map.get(call_id) if call_id else None
             duration_sec = duration_map.get(call_id) if call_id else None
 
@@ -178,7 +189,7 @@ def parse_open_code_trajectory(data: dict[str, Any]) -> list[StepAnalysis]:
 
             tool_calls.append(
                 ToolCallInfo(
-                    name=c["name"],
+                    name=name,
                     call_id=call_id,
                     arguments=args,
                     success=success,
@@ -230,30 +241,34 @@ def parse_timestamp(text: str) -> Any | None:
         return None
 
 
-# 当前命名格式（opencode llm.ts）: trajectory_<changeID>_<sessionID>_<YYYYMMDD_HHMMSS>_<agent>.json
+# 兼容命名格式：
+# - trajectory_<changeID>_<sessionID>_<YYYYMMDD_HHMMSS>_<agent>.json
+# - trajectory_<sessionID>_<YYYYMMDD_HHMMSS>_<agent>.json
 TRAJECTORY_FILENAME_RE = re.compile(
-    r"^trajectory_[A-Za-z0-9][A-Za-z0-9._-]*_ses_[A-Za-z0-9]+_\d{8}_\d{6}_.+\.json$"
+    r"^trajectory_(?:[A-Za-z0-9][A-Za-z0-9._-]*_)?ses_[A-Za-z0-9]+(?:_[A-Za-z0-9][A-Za-z0-9._-]*)*_\d{8}_\d{6}_.+\.json$"
 )
 
 
 def parse_filename(filename: str) -> dict[str, Any] | None:
-    # trajectory_<changeID>_<sessionID>_<YYYYMMDD_HHMMSS>_<agent>.json
+    # 兼容:
+    # - trajectory_<changeID>_<sessionID>_<YYYYMMDD_HHMMSS>_<agent>.json
+    # - trajectory_<sessionID>_<YYYYMMDD_HHMMSS>_<agent>.json
     m = re.match(
-        r"^trajectory_([A-Za-z0-9][A-Za-z0-9._-]*)_(ses_[A-Za-z0-9]+)_(\d{8}_\d{6})_(.+)\.json$",
+        r"^trajectory_(?:[A-Za-z0-9][A-Za-z0-9._-]*_)?(ses_[A-Za-z0-9]+)(?:_[A-Za-z0-9][A-Za-z0-9._-]*)*_(\d{8}_\d{6})_(.+)\.json$",
         filename,
     )
     if not m:
         return None
-    ts = parse_timestamp(m.group(3))
+    ts = parse_timestamp(m.group(2))
     if not ts:
         return None
-    agent = m.group(4)
+    agent = m.group(3)
     return {"agent_type": agent, "agent_name": agent, "timestamp": ts}
 
 
 def load_trajectory(file_path: str) -> TrajectoryFile | None:
     try:
-        with open(file_path, encoding="utf-8") as f:
+        with open(file_path, encoding="utf-8", errors="replace") as f:
             raw = f.read()
     except OSError:
         return None
@@ -376,6 +391,13 @@ def normalize_whitespace(s: str) -> str:
     return " ".join(s.strip().split())
 
 
+def clean_error_message(s: str) -> str:
+    text = re.sub(r"<tool_results_end\s*/?>", " ", s)
+    text = re.sub(r"<budget_notice>.*?</budget_notice>", " ", text, flags=re.DOTALL)
+    text = re.sub(r"<budget_guard>.*?</budget_guard>", " ", text, flags=re.DOTALL)
+    return normalize_whitespace(text)
+
+
 # ---------------------------------------------------------------------------
 # Error analysis
 # ---------------------------------------------------------------------------
@@ -384,16 +406,16 @@ ERROR_KEYWORDS = ("view_range", "timeout", "ENOENT", "EACCES", "ECONNREFUSED", "
 
 
 def _error_type_key(msg: str) -> str:
-    n = normalize_whitespace(msg)
+    n = clean_error_message(msg)
     if not n:
         return "未知"
     if n.startswith("Error:"):
-        first = n[6:].strip().split("\n")[0][:60]
-        return f"Error: {first}" + ("..." if len(first) >= 60 else "")
+        first = n[6:].strip().split("\n")[0]
+        return f"Error: {truncate(first, 140)}"
     for kw in ERROR_KEYWORDS:
         if kw in n:
             return kw
-    return n[:50] + ("..." if len(n) > 50 else "")
+    return truncate(n, 120)
 
 
 def compute_error_clusters(analyses: list[StepAnalysis]) -> dict[str, dict[str, Any]]:
@@ -406,7 +428,7 @@ def compute_error_clusters(analyses: list[StepAnalysis]) -> dict[str, dict[str, 
             cur = clusters.setdefault(key, {"count": 0, "examples": []})
             cur["count"] += 1
             if len(cur["examples"]) < 2:
-                cur["examples"].append((a.step_number, truncate(normalize_whitespace(tc.error_message), 70)))
+                cur["examples"].append((a.step_number, truncate(clean_error_message(tc.error_message), 320)))
     return clusters
 
 
@@ -754,43 +776,39 @@ def print_summary(traj: TrajectoryFile, top_n: int = 5) -> None:
     if step_bars:
         max_dur = max(d for _, d, _ in step_bars) or 1
         n_steps = len(step_bars)
-        chart_height = 6
-        chart_width = min(n_steps, 80)
+        chart_height = 12
+        chart_width = min(max(n_steps * 2, 50), 120)
         if n_steps > chart_width:
             indices = [i * (n_steps - 1) // (chart_width - 1) if chart_width > 1 else 0 for i in range(chart_width)]
+            sampled = [step_bars[i] for i in indices]
+        elif chart_width > n_steps and n_steps > 1:
+            indices = [round(i * (n_steps - 1) / (chart_width - 1)) for i in range(chart_width)]
             sampled = [step_bars[i] for i in indices]
         else:
             sampled = step_bars
         w = len(sampled)
-        # row 0 = 最大耗时, row (chart_height-1) = 最小耗时
-        def row_for(d: float) -> int:
-            if max_dur <= 0:
-                return chart_height - 1
-            r = (chart_height - 1) - round((d / max_dur) * (chart_height - 1))
-            return max(0, min(chart_height - 1, r))
-
-        rows_by_col = [row_for(d) for _, d, _ in sampled]
+        scale_exponent = 0.55
+        heights = []
+        for _, d, _ in sampled:
+            if max_dur <= 0 or d <= 0:
+                heights.append(0)
+                continue
+            scaled = (d / max_dur) ** scale_exponent
+            heights.append(max(0, min(chart_height - 1, round(scaled * (chart_height - 1)))))
         err_steps = [step for step, _, has_err in step_bars if has_err]
+        err_cols = {idx for idx, (_, _, has_err) in enumerate(sampled) if has_err}
 
         grid = [[" " for _ in range(w)] for _ in range(chart_height)]
-        for c in range(w - 1):
-            r0, r1 = rows_by_col[c], rows_by_col[c + 1]
-            lo, hi = min(r0, r1), max(r0, r1)
-            for r in range(lo, hi + 1):
-                if r0 != r1:
-                    x = c + (r - r0) / (r1 - r0)
-                else:
-                    x = c
-                col = round(x)
-                if 0 <= col < w and grid[r][col] == " ":
-                    grid[r][col] = "·"
-        for c in range(w):
-            r = rows_by_col[c]
-            _, _, has_err = sampled[c]
-            grid[r][c] = "✗" if has_err else "●"
+        for c, h in enumerate(heights):
+            for level in range(h + 1):
+                row = chart_height - 1 - level
+                grid[row][c] = "█"
+            top_row = chart_height - 1 - h
+            if c in err_cols:
+                grid[top_row][c] = "✗"
 
-        console.print("[cyan]步骤耗时分布 (已排除人交互)[/cyan]")
-        y_label_width = 6
+        console.print("[cyan]步骤耗时分布（柱状图，已排除人交互）[/cyan]")
+        y_label_width = 8
         for r in range(chart_height):
             if max_dur > 0:
                 frac = 1 - r / (chart_height - 1)
@@ -798,14 +816,17 @@ def print_summary(traj: TrajectoryFile, top_n: int = 5) -> None:
             else:
                 label = "0"
             line = "".join(grid[r])
-            console.print(f"[dim]{label:>6}[/dim] │{line}")
+            console.print(f"[dim]{label:>8}[/dim] │{line}")
         console.print("[dim]" + " " * (y_label_width + 1) + "└" + "─" * w + "[/dim]")
         if w < n_steps:
-            console.print(f"[dim]步骤 1 … {n_steps} (共 {n_steps} 步，已压缩为 {w} 点)[/dim]")
+            console.print(
+                f"[dim]步骤 1 … {n_steps} (共 {n_steps} 步，已压缩为 {w} 列，每列约 {n_steps / w:.1f} 步)[/dim]"
+            )
         else:
             console.print(f"[dim]步骤 1 … {n_steps}[/dim]")
         if err_steps:
-            console.print(f"[dim]错误步: {err_steps[:12]}{'…' if len(err_steps) > 12 else ''}[/dim]")
+            console.print(f"[dim]错误步: {err_steps[:20]}{'…' if len(err_steps) > 20 else ''}[/dim]")
+        console.print("[dim]注: 错误步骤以 ✗ 标记；柱高使用非线性缩放以兼顾长尾耗时。[/dim]")
         console.print()
 
     count_dist = compute_tool_count_per_step(analyses)
@@ -857,7 +878,7 @@ def print_summary(traj: TrajectoryFile, top_n: int = 5) -> None:
         for tc in a.tool_calls:
             if not tc.success:
                 failed_events.append(
-                    (a.step_number, tc.name, command_summary(tc) or tc.name, tc.error_message or ""),
+                    (a.step_number, tc.name, command_summary(tc) or tc.name, clean_error_message(tc.error_message or "")),
                 )
 
     if failed_events:
@@ -868,30 +889,48 @@ def print_summary(traj: TrajectoryFile, top_n: int = 5) -> None:
             if len(cur["examples"]) < 3:
                 cur["examples"].append({"step": step, "summary": summary, "err": err})
 
-        fail_table = Table(show_header=True, header_style="bold")
-        fail_table.add_column("工具", width=22)
+        fail_table = Table(show_header=True, header_style="bold", show_lines=True)
+        fail_table.add_column("工具", width=24)
         fail_table.add_column("失败次数", width=12)
-        fail_table.add_column("示例", width=60)
+        fail_table.add_column("失败示例", width=130, overflow="fold")
         sorted_fail = sorted(fail_by_tool.items(), key=lambda x: x[1]["count"], reverse=True)
         for name, s in sorted_fail[:5]:
-            examples = "\n".join(
-                f"{e['step']}: {truncate(e['summary'], 40)} | {truncate(normalize_whitespace(e['err']), 60)}"
+            details = [
+                f"step{e['step']}: {truncate(e['summary'], 140)} | {truncate(e['err'], 320)}"
                 for e in s["examples"]
-            )
-            fail_table.add_row(name, str(s["count"]), examples)
+            ]
+            if not details:
+                fail_table.add_row(name, str(s["count"]), "—")
+                fail_table.add_section()
+                continue
+            for idx, detail in enumerate(details):
+                if idx == 0:
+                    fail_table.add_row(name, str(s["count"]), detail)
+                    continue
+                fail_table.add_row("", "", detail)
+            fail_table.add_section()
         console.print("[red]高频工具错误 (Top 5)[/red]")
         console.print(fail_table)
         console.print()
 
     err_clusters = compute_error_clusters(analyses)
     if err_clusters:
-        cluster_table = Table(show_header=True, header_style="bold")
-        cluster_table.add_column("错误类型", width=35)
-        cluster_table.add_column("次数", width=8)
-        cluster_table.add_column("示例", width=55)
+        cluster_table = Table(show_header=True, header_style="bold", show_lines=True, expand=True)
+        cluster_table.add_column("错误类型", overflow="fold", ratio=5)
+        cluster_table.add_column("次数", width=6, justify="right", no_wrap=True)
+        cluster_table.add_column("示例", overflow="fold", ratio=7)
         for key, s in sorted(err_clusters.items(), key=lambda x: -x[1]["count"])[:8]:
-            examples = "; ".join(f"step{e[0]}: {e[1]}" for e in s["examples"])
-            cluster_table.add_row(truncate(key, 40), str(s["count"]), truncate(examples, 70))
+            details = [f"step{e[0]}: {e[1]}" for e in s["examples"]]
+            if not details:
+                cluster_table.add_row(truncate(key, 180), str(s["count"]), "—")
+                cluster_table.add_section()
+                continue
+            for idx, detail in enumerate(details):
+                if idx == 0:
+                    cluster_table.add_row(truncate(key, 180), str(s["count"]), truncate(detail, 420))
+                    continue
+                cluster_table.add_row("", "", truncate(detail, 420))
+            cluster_table.add_section()
         console.print("[red]错误类型聚类[/red]")
         console.print(cluster_table)
         console.print()
@@ -970,21 +1009,40 @@ def print_summary(traj: TrajectoryFile, top_n: int = 5) -> None:
                 cur["examples"].append({"step": step, "cmd": cmd})
 
         sorted_cmd = sorted(cmd_stats.items(), key=lambda x: x[1]["total_dur"], reverse=True)
-        bash_table = Table(show_header=True, header_style="bold")
-        bash_table.add_column("总耗时", width=10)
-        bash_table.add_column("调用", width=8)
-        bash_table.add_column("失败", width=8)
-        bash_table.add_column("平均", width=10)
-        bash_table.add_column("命令", width=62)
+        bash_table = Table(show_header=True, header_style="bold", show_lines=True, expand=True)
+        bash_table.add_column("总耗时", width=8, justify="right", no_wrap=True)
+        bash_table.add_column("调用", width=6, justify="right", no_wrap=True)
+        bash_table.add_column("失败", width=6, justify="right", no_wrap=True)
+        bash_table.add_column("平均", width=8, justify="right", no_wrap=True)
+        bash_table.add_column("命令", overflow="fold", ratio=7)
+        bash_table.add_column("示例步骤", overflow="fold", ratio=4)
         for key, s in sorted_cmd[: max(top_n, 5)]:
             avg = s["total_dur"] / len(s["durations"]) if s["durations"] else 0
-            bash_table.add_row(
-                format_seconds(s["total_dur"]),
-                str(s["calls"]),
-                str(s["failed"]),
-                format_seconds(avg),
-                truncate(key, 80),
-            )
+            details = [f"step{e['step']}: {truncate(e['cmd'], 90)}" for e in s["examples"]]
+            if not details:
+                bash_table.add_row(
+                    format_seconds(s["total_dur"]),
+                    str(s["calls"]),
+                    str(s["failed"]),
+                    format_seconds(avg),
+                    truncate(key, 320),
+                    "—",
+                )
+                bash_table.add_section()
+                continue
+            for idx, detail in enumerate(details):
+                if idx == 0:
+                    bash_table.add_row(
+                        format_seconds(s["total_dur"]),
+                        str(s["calls"]),
+                        str(s["failed"]),
+                        format_seconds(avg),
+                        truncate(key, 320),
+                        detail,
+                    )
+                    continue
+                bash_table.add_row("", "", "", "", "", detail)
+            bash_table.add_section()
         console.print("[cyan]最耗时的 Bash 命令 (Top 命令)[/cyan]")
         console.print(bash_table)
         console.print()
@@ -1025,9 +1083,9 @@ def print_summary(traj: TrajectoryFile, top_n: int = 5) -> None:
     if error_steps:
         err_table = Table(show_header=True, header_style="bold")
         err_table.add_column("步骤", width=8)
-        err_table.add_column("错误", width=80)
+        err_table.add_column("错误", width=130, overflow="fold")
         for a in error_steps[:10]:
-            err_table.add_row(str(a.step_number), truncate(normalize_whitespace(a.error_message or ""), 120))
+            err_table.add_row(str(a.step_number), truncate(clean_error_message(a.error_message or ""), 420))
         console.print("[yellow]错误步骤 (Top 10)[/yellow]")
         console.print(err_table)
         console.print()
@@ -1264,6 +1322,388 @@ def print_all_summary(trajectories: list[TrajectoryFile]) -> None:
     console.print()
 
 
+def print_directory_summary(trajectories: list[TrajectoryFile], top_n: int = 20, source: str | None = None) -> None:
+    if not trajectories:
+        console.print("[red]没有可用于目录综合分析的轨迹[/red]")
+        return
+
+    all_analyses = [a for t in trajectories for a in t.analyses]
+    total_steps = len(all_analyses)
+    total_files = len(trajectories)
+    session_count = len({t.session_id for t in trajectories})
+    agent_count = len({t.agent_name for t in trajectories})
+    error_steps = [(t, a) for t in trajectories for a in t.analyses if a.has_error]
+    error_count = len(error_steps)
+
+    tool_stats: dict[str, dict[str, Any]] = {}
+    tool_events: list[tuple[float, TrajectoryFile, StepAnalysis, ToolCallInfo]] = []
+    failed_events: list[tuple[TrajectoryFile, StepAnalysis, ToolCallInfo]] = []
+    bash_records: list[tuple[TrajectoryFile, StepAnalysis, str, ToolCallInfo]] = []
+
+    for t in trajectories:
+        for a in t.analyses:
+            for tc in a.tool_calls:
+                cur = tool_stats.setdefault(
+                    tc.name,
+                    {"total": 0, "success": 0, "failed": 0, "durations": [], "with_duration": 0},
+                )
+                cur["total"] += 1
+                if tc.success:
+                    cur["success"] += 1
+                else:
+                    cur["failed"] += 1
+                    failed_events.append((t, a, tc))
+                if tc.estimated_duration_seconds is not None:
+                    cur["durations"].append(tc.estimated_duration_seconds)
+                    cur["with_duration"] += 1
+                    if not is_human_interaction_tool(tc.name):
+                        tool_events.append((tc.estimated_duration_seconds, t, a, tc))
+                cmd = extract_bash_command(tc)
+                if cmd:
+                    bash_records.append((t, a, cmd, tc))
+
+    total_tool_calls = sum(s["total"] for s in tool_stats.values())
+    total_duration = sum(sum(s["durations"]) for s in tool_stats.values())
+    duration_excl_human = sum(
+        sum(s["durations"]) for name, s in tool_stats.items() if not is_human_interaction_tool(name)
+    )
+    human_calls = sum(s["total"] for name, s in tool_stats.items() if is_human_interaction_tool(name))
+    human_duration = max(0.0, total_duration - duration_excl_human)
+
+    timestamps = [
+        t.file_timestamp
+        for t in trajectories
+        if hasattr(t.file_timestamp, "timestamp") and callable(t.file_timestamp.timestamp)
+    ]
+    first_time = min(timestamps) if timestamps else None
+    last_time = max(timestamps) if timestamps else None
+    span = (last_time - first_time).total_seconds() if first_time and last_time else None
+
+    console.print()
+    console.print(box("目录综合轨迹分析", "cyan"))
+    console.print()
+
+    overall = Table(show_header=True, header_style="bold")
+    overall.add_column("指标", width=24)
+    overall.add_column("值", width=48)
+    overall.add_row("轨迹文件数", str(total_files))
+    overall.add_row("Session 数", str(session_count))
+    overall.add_row("Agent 数", str(agent_count))
+    overall.add_row("总步骤数", str(total_steps))
+    overall.add_row("总工具调用次数", str(total_tool_calls))
+    overall.add_row("错误步骤数", f"{error_count} ({(error_count / total_steps * 100 if total_steps else 0):.1f}%)")
+    overall.add_row("工具总耗时", format_seconds(total_duration) if total_duration > 0 else "N/A")
+    overall.add_row("纯Agent耗时", format_seconds(duration_excl_human) if duration_excl_human > 0 else "N/A")
+    if total_tool_calls > 0:
+        overall.add_row("人交互占比 (次数)", f"{human_calls / total_tool_calls * 100:.1f}%")
+    if total_duration > 0:
+        overall.add_row("人交互占比 (耗时)", f"{human_duration / total_duration * 100:.1f}%")
+    if first_time and last_time:
+        overall.add_row("时间范围", f"{first_time.strftime('%Y-%m-%d %H:%M:%S')} -> {last_time.strftime('%Y-%m-%d %H:%M:%S')}")
+    if span is not None:
+        overall.add_row("覆盖时间跨度", format_seconds(span))
+    if source:
+        overall.add_row("目录", truncate(source, 58))
+    console.print(overall)
+    console.print()
+
+    agent_stats: dict[str, dict[str, Any]] = {}
+    session_stats: dict[str, dict[str, Any]] = {}
+    for t in trajectories:
+        a_cur = agent_stats.setdefault(
+            t.agent_name,
+            {"files": 0, "steps": 0, "calls": 0, "errors": 0, "duration": 0.0},
+        )
+        row = trajectory_summary_row(t)
+        a_cur["files"] += 1
+        a_cur["steps"] += row["steps"]
+        a_cur["calls"] += row["tool_calls"]
+        a_cur["errors"] += row["errors"]
+        a_cur["duration"] += row["duration_sec"] or 0.0
+
+        s_cur = session_stats.setdefault(
+            t.session_id,
+            {"files": 0, "agents": set(), "steps": 0, "calls": 0, "errors": 0, "duration": 0.0},
+        )
+        s_cur["files"] += 1
+        s_cur["agents"].add(t.agent_name)
+        s_cur["steps"] += row["steps"]
+        s_cur["calls"] += row["tool_calls"]
+        s_cur["errors"] += row["errors"]
+        s_cur["duration"] += row["duration_sec"] or 0.0
+
+    if agent_stats:
+        agent_table = Table(show_header=True, header_style="bold")
+        agent_table.add_column("Agent", width=26)
+        agent_table.add_column("轨迹", width=8)
+        agent_table.add_column("步骤", width=8)
+        agent_table.add_column("工具调用", width=10)
+        agent_table.add_column("错误步", width=8)
+        agent_table.add_column("总耗时", width=10)
+        for name, s in sorted(agent_stats.items(), key=lambda x: (x[1]["duration"], x[1]["calls"]), reverse=True)[:15]:
+            agent_table.add_row(
+                truncate(name, 28),
+                str(s["files"]),
+                str(s["steps"]),
+                str(s["calls"]),
+                str(s["errors"]),
+                format_seconds(s["duration"]) if s["duration"] > 0 else "N/A",
+            )
+        console.print("[cyan]Agent 统计[/cyan]")
+        console.print(agent_table)
+        console.print()
+
+    if session_stats:
+        sess_table = Table(show_header=True, header_style="bold")
+        sess_table.add_column("Session", width=22)
+        sess_table.add_column("轨迹", width=8)
+        sess_table.add_column("Agent数", width=8)
+        sess_table.add_column("步骤", width=8)
+        sess_table.add_column("工具调用", width=10)
+        sess_table.add_column("错误步", width=8)
+        sess_table.add_column("总耗时", width=10)
+        sorted_sessions = sorted(
+            session_stats.items(),
+            key=lambda x: (x[1]["duration"], x[1]["steps"]),
+            reverse=True,
+        )
+        for sid, s in sorted_sessions[: max(top_n, 10)]:
+            sess_table.add_row(
+                truncate(sid, 24),
+                str(s["files"]),
+                str(len(s["agents"])),
+                str(s["steps"]),
+                str(s["calls"]),
+                str(s["errors"]),
+                format_seconds(s["duration"]) if s["duration"] > 0 else "N/A",
+            )
+        console.print(f"[cyan]Session 统计 (Top {max(top_n, 10)})[/cyan]")
+        console.print(sess_table)
+        console.print()
+
+    if tool_stats:
+        table = Table(show_header=True, header_style="bold")
+        table.add_column("工具", width=24)
+        table.add_column("调用", width=8)
+        table.add_column("有耗时", width=8)
+        table.add_column("成功率", width=10)
+        table.add_column("失败", width=8)
+        table.add_column("总耗时", width=10)
+        table.add_column("平均", width=10)
+        sorted_tools = sorted(
+            tool_stats.items(),
+            key=lambda x: (sum(x[1]["durations"]), x[1]["total"]),
+            reverse=True,
+        )
+        for name, s in sorted_tools[:15]:
+            total_dur = sum(s["durations"])
+            avg = total_dur / len(s["durations"]) if s["durations"] else 0
+            rate = f"{s['success'] / s['total'] * 100:.1f}%" if s["total"] else "N/A"
+            no_dur = s["total"] - s["with_duration"]
+            label = f"{name} (人交互)" if is_human_interaction_tool(name) else name
+            table.add_row(
+                label,
+                str(s["total"]),
+                str(s["with_duration"]) + (f" (-{no_dur})" if no_dur else ""),
+                rate,
+                str(s["failed"]),
+                format_seconds(total_dur) if total_dur > 0 else "N/A",
+                format_seconds(avg) if avg > 0 else "N/A",
+            )
+        console.print("[cyan]工具调用统计（跨目录）[/cyan]")
+        console.print(table)
+        console.print()
+
+    if tool_events:
+        hot_table = Table(show_header=True, header_style="bold")
+        hot_table.add_column("耗时", width=10)
+        hot_table.add_column("Agent", width=20)
+        hot_table.add_column("Session", width=14)
+        hot_table.add_column("步骤", width=8)
+        hot_table.add_column("工具", width=22)
+        hot_table.add_column("状态", width=8)
+        hot_table.add_column("摘要", width=75, overflow="fold")
+        for dur, t, a, tc in sorted(tool_events, key=lambda x: x[0], reverse=True)[: min(top_n, 20)]:
+            hot_table.add_row(
+                format_seconds(dur),
+                truncate(t.agent_name, 22),
+                truncate(t.session_id, 14),
+                str(a.step_number),
+                tc.name,
+                "OK" if tc.success else "FAIL",
+                truncate(command_summary(tc) or tc.name, 260),
+            )
+        console.print(f"[cyan]最耗时的工具调用 (Top {min(top_n, 20)}，跨目录，已排除人交互)[/cyan]")
+        console.print(hot_table)
+        console.print()
+
+    if failed_events:
+        fail_by_tool: dict[str, dict[str, Any]] = {}
+        for t, a, tc in failed_events:
+            cur = fail_by_tool.setdefault(tc.name, {"count": 0, "examples": []})
+            cur["count"] += 1
+            if len(cur["examples"]) < 3:
+                cur["examples"].append(
+                    {
+                        "agent": t.agent_name,
+                        "session": t.session_id,
+                        "step": a.step_number,
+                        "summary": command_summary(tc) or tc.name,
+                        "err": clean_error_message(tc.error_message or ""),
+                    }
+                )
+        fail_table = Table(show_header=True, header_style="bold", show_lines=True)
+        fail_table.add_column("工具", width=24)
+        fail_table.add_column("失败次数", width=10)
+        fail_table.add_column("失败示例", width=130, overflow="fold")
+        for name, s in sorted(fail_by_tool.items(), key=lambda x: x[1]["count"], reverse=True)[:5]:
+            details = [
+                f"{truncate(e['agent'], 20)}({truncate(e['session'], 10)}) step{e['step']}: "
+                f"{truncate(e['summary'], 100)} | {truncate(e['err'], 220)}"
+                for e in s["examples"]
+            ]
+            if not details:
+                fail_table.add_row(name, str(s["count"]), "—")
+                fail_table.add_section()
+                continue
+            for idx, detail in enumerate(details):
+                if idx == 0:
+                    fail_table.add_row(name, str(s["count"]), detail)
+                    continue
+                fail_table.add_row("", "", detail)
+            fail_table.add_section()
+        console.print("[red]高频工具错误 (Top 5，跨目录)[/red]")
+        console.print(fail_table)
+        console.print()
+
+    cluster_stats: dict[str, dict[str, Any]] = {}
+    for t, a, tc in failed_events:
+        key = _error_type_key(tc.error_message or "")
+        cur = cluster_stats.setdefault(key, {"count": 0, "examples": []})
+        cur["count"] += 1
+        if len(cur["examples"]) < 2:
+            cur["examples"].append(
+                f"{truncate(t.agent_name, 20)}({truncate(t.session_id, 10)}) step{a.step_number}: "
+                + truncate(clean_error_message(tc.error_message or ""), 260)
+            )
+    if cluster_stats:
+        cluster_table = Table(show_header=True, header_style="bold", show_lines=True, expand=True)
+        cluster_table.add_column("错误类型", overflow="fold", ratio=5)
+        cluster_table.add_column("次数", width=6, justify="right", no_wrap=True)
+        cluster_table.add_column("示例", overflow="fold", ratio=7)
+        for key, s in sorted(cluster_stats.items(), key=lambda x: x[1]["count"], reverse=True)[:8]:
+            details = [truncate(x, 460) for x in s["examples"]]
+            if not details:
+                cluster_table.add_row(truncate(key, 180), str(s["count"]), "—")
+                cluster_table.add_section()
+                continue
+            for idx, detail in enumerate(details):
+                if idx == 0:
+                    cluster_table.add_row(truncate(key, 180), str(s["count"]), detail)
+                    continue
+                cluster_table.add_row("", "", detail)
+            cluster_table.add_section()
+        console.print("[red]错误类型聚类 (跨目录)[/red]")
+        console.print(cluster_table)
+        console.print()
+
+    if bash_records:
+        bash_durations = [tc.estimated_duration_seconds for _, _, _, tc in bash_records if tc.estimated_duration_seconds is not None]
+        if bash_durations:
+            sorted_dur = sorted(bash_durations)
+            total = len(sorted_dur)
+            mean = sum(sorted_dur) / total
+            p50 = percentile(sorted_dur, 50)
+            p90 = percentile(sorted_dur, 90)
+            p99 = percentile(sorted_dur, 99)
+            buckets = [
+                (0, 0.5),
+                (0.5, 1),
+                (1, 2),
+                (2, 5),
+                (5, 10),
+                (10, 30),
+                (30, 60),
+                (60, float("inf")),
+            ]
+            bucket_rows = []
+            for lo, hi in buckets:
+                label = f">= {lo}s" if hi == float("inf") else f"[{lo}, {hi})s"
+                count = len([x for x in sorted_dur if x >= lo and (x < hi if hi != float("inf") else True)])
+                pct = count / total * 100
+                bucket_rows.append({"label": label, "count": count, "pct": pct})
+            max_count = max((r["count"] for r in bucket_rows), default=1)
+            console.print("[cyan]Bash 命令耗时分布 (跨目录)[/cyan]")
+            dist_table = Table(show_header=True, header_style="bold")
+            for col in ["count", "min", "p50", "p90", "p99", "mean", "max"]:
+                dist_table.add_column(col, width=8)
+            dist_table.add_row(
+                str(total),
+                format_seconds(sorted_dur[0]),
+                format_seconds(p50),
+                format_seconds(p90),
+                format_seconds(p99),
+                format_seconds(mean),
+                format_seconds(sorted_dur[-1]),
+            )
+            console.print(dist_table)
+            hist_table = Table(show_header=True, header_style="bold")
+            hist_table.add_column("区间", width=12)
+            hist_table.add_column("count", width=8)
+            hist_table.add_column("pct", width=8)
+            hist_table.add_column("bar", width=35)
+            for r in bucket_rows:
+                bar_len = round((r["count"] / max_count) * 30)
+                hist_table.add_row(r["label"], str(r["count"]), f"{r['pct']:.1f}%", "█" * bar_len)
+            console.print(hist_table)
+            console.print()
+
+        cmd_stats: dict[str, dict[str, Any]] = {}
+        for t, a, cmd, tc in bash_records:
+            key = bash_command_key(cmd)
+            cur = cmd_stats.setdefault(key, {"calls": 0, "failed": 0, "durations": [], "examples": []})
+            cur["calls"] += 1
+            if not tc.success:
+                cur["failed"] += 1
+            if tc.estimated_duration_seconds is not None:
+                cur["durations"].append(tc.estimated_duration_seconds)
+            if len(cur["examples"]) < 3:
+                cur["examples"].append(
+                    f"{truncate(t.agent_name, 20)}({truncate(t.session_id, 10)}) step{a.step_number}: {truncate(cmd, 90)}"
+                )
+        bash_table = Table(show_header=True, header_style="bold", show_lines=True)
+        bash_table.add_column("统计", overflow="fold")
+        bash_table.add_column("命令", overflow="fold")
+        bash_table.add_column("示例", overflow="fold")
+        sorted_cmd = sorted(
+            cmd_stats.items(),
+            key=lambda x: (sum(x[1]["durations"]), x[1]["calls"]),
+            reverse=True,
+        )[: max(top_n, 5)]
+        for cmd_key, s in sorted_cmd:
+            total_dur = sum(s["durations"]) if s["durations"] else 0
+            avg = total_dur / len(s["durations"]) if s["durations"] else 0
+            metrics = (
+                f"总:{format_seconds(total_dur) if total_dur > 0 else 'N/A'} "
+                f"调:{s['calls']} 败:{s['failed']} "
+                f"均:{format_seconds(avg) if avg > 0 else 'N/A'}"
+            )
+            details = s["examples"] or ["—"]
+            for idx, detail in enumerate(details):
+                if idx == 0:
+                    bash_table.add_row(
+                        metrics,
+                        truncate(cmd_key, 300),
+                        detail,
+                    )
+                    continue
+                bash_table.add_row("", "", detail)
+            bash_table.add_section()
+        console.print(f"[cyan]最耗时的 Bash 命令 (Top {max(top_n, 5)}，跨目录)[/cyan]")
+        console.print(bash_table)
+        console.print()
+
+
 def print_compare(traj_a: TrajectoryFile, traj_b: TrajectoryFile) -> None:
     """Side-by-side comparison of two trajectories."""
     ra = trajectory_summary_row(traj_a)
@@ -1293,7 +1733,11 @@ def collect_files(input_path: str) -> list[str]:
     files = []
     for name in os.listdir(resolved):
         full = os.path.join(resolved, name)
-        if os.path.isfile(full) and TRAJECTORY_FILENAME_RE.match(name):
+        if (
+            os.path.isfile(full)
+            and TRAJECTORY_FILENAME_RE.match(name)
+            and not name.endswith("_title.json")
+        ):
             files.append(full)
     return sorted(files)
 
@@ -1308,7 +1752,7 @@ def main() -> None:
         "path",
         nargs="?",
         default=".",
-        help="轨迹 JSON 文件或包含轨迹文件的目录（目录下仅解析 trajectory_<changeID>_<sessionID>_<日期>_<agent>.json）",
+        help="轨迹 JSON 文件或包含轨迹文件的目录（目录下解析 trajectory_<changeID>_<sessionID>_<日期>_<agent>.json 与 trajectory_<sessionID>_<日期>_<agent>.json）",
     )
     parser.add_argument(
         "path2",
@@ -1351,8 +1795,12 @@ def main() -> None:
 
     files = collect_files(resolved)
     if not files:
-        console.print("[yellow]未找到轨迹文件。请指定一个轨迹 JSON 文件，或包含 trajectory_<changeID>_<sessionID>_<日期>_<agent>.json 的目录。[/yellow]")
-        console.print("[dim]示例: python analyze_trajectory.py ./path/to/trajectory_xxx_ses_xxx_20260302_235332_ProposalAgent.json[/dim]")
+        console.print(
+            "[yellow]未找到轨迹文件。请指定一个轨迹 JSON 文件，或包含 trajectory_<changeID>_<sessionID>_<日期>_<agent>.json / trajectory_<sessionID>_<日期>_<agent>.json 的目录。[/yellow]"
+        )
+        console.print(
+            "[dim]示例: python analyze_trajectory.py ./path/to/trajectory_ses_xxx_20260302_235332_ProposalAgent.json[/dim]"
+        )
         raise SystemExit(1)
 
     trajectories: list[TrajectoryFile] = []
@@ -1372,10 +1820,15 @@ def main() -> None:
         return 0.0
 
     sorted_trajectories = sorted(trajectories, key=sort_key, reverse=True)
+    is_directory = search_path.is_dir()
     to_analyze = sorted_trajectories[:1]
 
     if args.all:
         print_all_summary(sorted_trajectories)
+        return
+
+    if is_directory and not args.replay and not args.output:
+        print_directory_summary(sorted_trajectories, args.top, str(search_path))
         return
 
     if args.output:
