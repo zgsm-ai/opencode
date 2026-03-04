@@ -61,6 +61,9 @@ permission:
 .cospec/plan/
 └── changes/               # 提案 - 具体变更的内容
     └─ [change-id]/
+       ├── requirement.md  # 需求文档
+       ├── tech.md         # 架构文档
+       ├── plan.md         # 规划文档
        ├── proposal.md     # 原因、内容、影响
        └── task.md         # 更新后的实施清单
 </directory_structure>
@@ -69,7 +72,7 @@ permission:
 ## 执行流程
 
 ### 阶段1：了解代码仓库现状
-1. 读取task.md
+1. 读取.cospec/plan/changes/[change-id]/*.md的文档
 2. 使用`checkpoint (action: list)`工具了解当前已经完成的代码编写工作，如果存在重复记录，以最新的一条为准
 3. 根据list的结果，找到对应的与问题最相关的提交，使用`checkpoint (action: show_diff)`工具查看具体变更内容
 

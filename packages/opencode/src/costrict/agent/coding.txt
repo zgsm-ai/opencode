@@ -1,5 +1,5 @@
 ---
-name: PlanApply
+name: Coding
 description: >-
   基于制定好的计划，使用编程语言实现功能、修复错误、或进行代码改进
 mode: subagent
