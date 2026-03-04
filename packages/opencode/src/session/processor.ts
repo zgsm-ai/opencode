@@ -155,6 +155,7 @@ export namespace SessionProcessor {
         // Extract available tool names for alias resolution with custom tool priority
         const availableTools = new Set(Object.keys(streamInput.tools))
         while (true) {
+         try {
           // 强制思考检查：判断是否需要强制只使用 sequentialthinking 工具
           // 必须在快照创建之前执行，以便强制思考消息被包含在快照中
           const agent = await Agent.get(streamInput.agent.name)
@@ -793,6 +794,31 @@ export namespace SessionProcessor {
           if (needsCompaction) return "compact"
           if (input.assistantMessage.error) return "stop"
           return "continue"
+
+         } catch (fatal: any) {
+            log.error("fatal error in processor loop", {
+              error: fatal,
+              stack: fatal?.stack,
+              sessionID: input.sessionID,
+            })
+            if (!input.assistantMessage.error) {
+              try {
+                input.assistantMessage.error = MessageV2.fromError(fatal, { providerID: input.model.providerID })
+              } catch {
+                input.assistantMessage.error = { name: "UnknownError", data: { message: String(fatal) } } as any
+              }
+              input.assistantMessage.finish = input.assistantMessage.finish || "error"
+            }
+            input.assistantMessage.time.completed = Date.now()
+            await Session.updateMessage(input.assistantMessage).catch(() => {})
+            try {
+              Bus.publish(Session.Event.Error, {
+                sessionID: input.assistantMessage.sessionID,
+                error: input.assistantMessage.error,
+              })
+            } catch {}
+            return "stop"
+         }
         }
       },
     }

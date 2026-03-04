@@ -458,6 +458,7 @@ export const OUTPUT_TOKEN_MAX = Flag.COSTRICT_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 1
     let lastTools: Record<string, any> = {}
 
     while (true) {
+     try {
       SessionStatus.set(sessionID, { type: "busy" })
       log.info("loop", { step, sessionID })
       if (abort.aborted) break
@@ -1044,6 +1045,19 @@ export const OUTPUT_TOKEN_MAX = Flag.COSTRICT_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 1
         })
       }
       continue
+
+     } catch (fatal: any) {
+      log.error("fatal unhandled error in session loop", {
+        error: fatal,
+        stack: fatal?.stack,
+        sessionID,
+      })
+      Bus.publish(Session.Event.Error, {
+        sessionID,
+        error: { name: "UnknownError", data: { message: String(fatal) } },
+      })
+      break
+     }
     }
     if (ENABLE_HISTORY_PRUNE) SessionCompaction.prune({ sessionID })
     for await (const item of MessageV2.stream(sessionID)) {
