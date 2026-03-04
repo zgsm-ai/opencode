@@ -408,7 +408,7 @@ ${gitStatsStr}
           return lastText || errorMsg || "Unknown error"
         })()
 
-        throw new Error(`## ${params.agent_code} Task Execution Failed
+        throw new Error(`## ${params.agent_code} Task Execution Failed. It may have been affected by external unstable factors; you may consider re-running the subcoding tool
 
 ### Failure Reason
 ${failureReason}
