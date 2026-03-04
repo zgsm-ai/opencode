@@ -265,7 +265,7 @@ export const QuickExploreTool = Tool.define("quick_explore", async (ctx) => {
         unsub()
         quickExploreLogger.error(`SessionPrompt.prompt failed: ${error}`)
         throw new Error(
-          `## QuickExploreAgent Analysis Failed\n\n` +
+          `## QuickExploreAgent Analysis Failed. It may have been affected by external unstable factors; you may consider re-running the quickexplore tool\n\n` +
           `### Exploration Target\n${params.exploration_target}\n\n` +
           `### Failure Reason\n${error instanceof Error ? error.message : String(error)}\n\n` +
           `### Suggested Actions\n` +
