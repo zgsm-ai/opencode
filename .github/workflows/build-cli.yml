@@ -2,12 +2,16 @@ name: Build CLI Binaries
 
 on:
   workflow_dispatch:
+  release:
+    types:
+      - published
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build-all:
+    if: ${{ github.event_name != 'release' || startsWith(github.event.release.tag_name, 'v') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -53,6 +57,19 @@ jobs:
             packages/opencode/dist/*.zip
           retention-days: 7
           if-no-files-found: error
+
+      - name: Upload release assets
+        if: ${{ github.event_name == 'release' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.release.tag_name }}
+          files: |
+            packages/opencode/dist/*.tar.gz
+            packages/opencode/dist/*.zip
+          fail_on_unmatched_files: true
+          overwrite_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build Summary
         if: always()
