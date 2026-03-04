@@ -607,13 +607,19 @@ export namespace SessionProcessor {
             })
 
             // 将所有工具调用（包括白名单工具）标记为 completed，输出拦截消息
+            // 注意：必须显式提供 title 和 metadata，因为 ToolStateCompleted 要求它们为必填字段，
+            // 而 running/pending 状态的 part 可能没有这些字段（它们在 ToolStateRunning 中是 optional 的）。
             for (const part of toolPartsOnly) {
+              const runningTitle = (part.state.status === "running" || part.state.status === "completed") ? part.state.title : undefined
+              const runningMetadata = (part.state.status !== "pending") ? (part.state as any).metadata : undefined
               await updatePart({
                 ...part,
                 state: {
-                  ...part.state,
                   status: "completed",
+                  input: part.state.input,
                   output: budgetCheck.guardMessage,
+                  title: runningTitle ?? "",
+                  metadata: runningMetadata ?? {},
                   time: {
                     start: (part.state.status !== "pending" && 'time' in part.state && part.state.time?.start) || Date.now(),
                     end: Date.now()
