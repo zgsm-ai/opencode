@@ -160,7 +160,7 @@ export namespace ModelsDev {
     return JSON.parse(json)
   })
 
-  export async function get() {
+  export async function get(): Promise<Record<string, Provider>> {
     const result = (await Data()) as Record<string, Provider>
     return {
       ...result,

@@ -303,7 +303,14 @@ export const AuthLoginCommand = cmd({
           openrouter: 8,
           vercel: 9,
         }
-        let provider = await prompts.autocomplete({
+        const hint: Record<string, string> = {
+          costrict: "recommended",
+          "ai-code-glm": "glm-4.7",
+          "ai-code-glm-5": "glm-5",
+          anthropic: "Claude Max or API key",
+          openai: "ChatGPT Plus/Pro or API key",
+        }
+        const selected = await prompts.autocomplete({
           message: "Select provider",
           maxItems: 8,
           options: [
@@ -317,13 +324,7 @@ export const AuthLoginCommand = cmd({
               map((x) => ({
                 label: x.name,
                 value: x.id,
-                hint: {
-                  costrict: "recommended",
-                  "ai-code-glm": "glm-4.7",
-                  "ai-code-glm-5": "glm-5",
-                  anthropic: "Claude Max or API key",
-                  openai: "ChatGPT Plus/Pro or API key",
-                }[x.id],
+                hint: hint[x.id],
               })),
             ),
             {
@@ -333,7 +334,16 @@ export const AuthLoginCommand = cmd({
           ],
         })
 
-        if (prompts.isCancel(provider)) throw new UI.CancelledError()
+        if (prompts.isCancel(selected)) throw new UI.CancelledError()
+        const provider = await (async () => {
+          if (selected !== "other") return selected as string
+          const custom = await prompts.text({
+            message: "Enter provider id",
+            validate: (x) => (x && x.match(/^[0-9a-z-]+$/) ? undefined : "a-z, 0-9 and hyphens only"),
+          })
+          if (prompts.isCancel(custom)) throw new UI.CancelledError()
+          return custom.replace(/^@ai-sdk\//, "")
+        })()
 
         const plugin = await Plugin.list().then((x) => x.find((x) => x.auth?.provider === provider))
         if (plugin && plugin.auth) {
@@ -341,15 +351,7 @@ export const AuthLoginCommand = cmd({
           if (handled) return
         }
 
-        if (provider === "other") {
-          provider = await prompts.text({
-            message: "Enter provider id",
-            validate: (x) => (x && x.match(/^[0-9a-z-]+$/) ? undefined : "a-z, 0-9 and hyphens only"),
-          })
-          if (prompts.isCancel(provider)) throw new UI.CancelledError()
-          provider = provider.replace(/^@ai-sdk\//, "")
-          if (prompts.isCancel(provider)) throw new UI.CancelledError()
-
+        if (selected === "other") {
           // Check if a plugin provides auth for this custom provider
           const customPlugin = await Plugin.list().then((x) => x.find((x) => x.auth?.provider === provider))
           if (customPlugin && customPlugin.auth) {
@@ -386,14 +388,14 @@ export const AuthLoginCommand = cmd({
           )
         }
 
-        const key = await prompts.password({
+        const secret = await prompts.password({
           message: "Enter your API key",
           validate: (x) => (x && x.length > 0 ? undefined : "Required"),
         })
-        if (prompts.isCancel(key)) throw new UI.CancelledError()
+        if (prompts.isCancel(secret)) throw new UI.CancelledError()
         await Auth.set(provider, {
           type: "api",
-          key,
+          key: secret,
         })
 
         prompts.outro("Done")
@@ -414,14 +416,15 @@ export const AuthLogoutCommand = cmd({
       return
     }
     const database = await ModelsDev.get()
-    const providerID = await prompts.select({
+    const selected = await prompts.select({
       message: "Select provider",
       options: credentials.map(([key, value]) => ({
         label: (database[key]?.name || key) + UI.Style.TEXT_DIM + " (" + value.type + ")",
         value: key,
       })),
     })
-    if (prompts.isCancel(providerID)) throw new UI.CancelledError()
+    if (prompts.isCancel(selected)) throw new UI.CancelledError()
+    const providerID = selected as string
     await Auth.remove(providerID)
     prompts.outro("Logout successful")
   },

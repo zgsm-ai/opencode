@@ -265,7 +265,7 @@ export const GithubInstallCommand = cmd({
               openai: 2,
               google: 3,
             }
-            let provider = await prompts.select({
+            const selected = await prompts.select({
               message: "Select provider",
               maxItems: 8,
               options: pipe(
@@ -283,15 +283,15 @@ export const GithubInstallCommand = cmd({
               ),
             })
 
-            if (prompts.isCancel(provider)) throw new UI.CancelledError()
+            if (prompts.isCancel(selected)) throw new UI.CancelledError()
 
-            return provider
+            return selected as string
           }
 
           async function promptModel() {
             const providerData = providers[provider]!
 
-            const model = await prompts.select({
+            const selected = await prompts.select({
               message: "Select model",
               maxItems: 8,
               options: pipe(
@@ -305,8 +305,8 @@ export const GithubInstallCommand = cmd({
               ),
             })
 
-            if (prompts.isCancel(model)) throw new UI.CancelledError()
-            return model
+            if (prompts.isCancel(selected)) throw new UI.CancelledError()
+            return selected as string
           }
 
           async function installGitHubApp() {
