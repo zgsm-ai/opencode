@@ -95,6 +95,19 @@ class TrajectoryFile:
     parameters: dict[str, Any] | None = None
     tool_names: list[str] | None = None
     system_prompt_count: int | None = None
+    exit_tool_name: str | None = None
+
+
+@dataclass
+class ExitToolStatus:
+    exit_tool: str | None
+    matched: bool | None
+    last_tool: str | None
+    step_number: int | None
+    call_id: str | None
+    file_path: str
+    agent_name: str
+    session_id: str
 
 
 # ---------------------------------------------------------------------------
@@ -331,6 +344,7 @@ def load_trajectory(file_path: str) -> TrajectoryFile | None:
     system_prompts = data.get("systemPrompts") or {}
     sp_array = system_prompts.get("array") if isinstance(system_prompts, dict) else None
     sp_count = len(sp_array) if isinstance(sp_array, list) else None
+    exit_tool_name = extract_exit_tool_name(params)
 
     return TrajectoryFile(
         file_path=file_path,
@@ -343,7 +357,138 @@ def load_trajectory(file_path: str) -> TrajectoryFile | None:
         parameters=params,
         tool_names=tool_names_list,
         system_prompt_count=sp_count,
+        exit_tool_name=exit_tool_name,
     )
+
+
+# ---------------------------------------------------------------------------
+# Exit tool analysis
+# ---------------------------------------------------------------------------
+
+
+def extract_exit_tool_name(params: dict[str, Any] | None) -> str | None:
+    if not params:
+        return None
+    direct = params.get("exitToolName")
+    if isinstance(direct, str) and direct:
+        return direct
+    provider_options = params.get("providerOptions")
+    if not isinstance(provider_options, dict):
+        return None
+    for value in provider_options.values():
+        if not isinstance(value, dict):
+            continue
+        name = value.get("exitToolName")
+        if isinstance(name, str) and name:
+            return name
+    return None
+
+
+def last_tool_call(traj: TrajectoryFile) -> tuple[StepAnalysis, ToolCallInfo] | None:
+    for step in reversed(traj.analyses):
+        if step.tool_calls:
+            return step, step.tool_calls[-1]
+    return None
+
+
+def analyze_exit_tool(traj: TrajectoryFile) -> ExitToolStatus:
+    last = last_tool_call(traj)
+    step = last[0] if last else None
+    tool = last[1] if last else None
+    last_tool = tool.name if tool else None
+    exit_tool = traj.exit_tool_name
+    return ExitToolStatus(
+        exit_tool=exit_tool,
+        matched=(last_tool == exit_tool) if exit_tool else None,
+        last_tool=last_tool,
+        step_number=step.step_number if step else None,
+        call_id=tool.call_id if tool else None,
+        file_path=traj.file_path,
+        agent_name=traj.agent_name,
+        session_id=traj.session_id,
+    )
+
+
+def print_exit_tool_block(traj: TrajectoryFile) -> None:
+    status = analyze_exit_tool(traj)
+    style = "green" if status.matched else ("yellow" if status.exit_tool else "red")
+    result = (
+        "[green]是[/green]"
+        if status.matched is True
+        else ("[red]否[/red]" if status.matched is False else "[red]未配置[/red]")
+    )
+
+    console.print()
+    console.print(box(f"Exit Tool 检查: {traj.agent_name}", style))
+    console.print()
+
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("指标", width=22)
+    table.add_column("值", width=52)
+    table.add_row("配置 Exit Tool", status.exit_tool or "N/A")
+    table.add_row("最后调用工具", status.last_tool or "N/A")
+    table.add_row("是否命中", result)
+    table.add_row("最后步骤", str(status.step_number) if status.step_number is not None else "N/A")
+    table.add_row("Call ID", status.call_id or "N/A")
+    table.add_row("Session", truncate(status.session_id, 50))
+    table.add_row("文件", truncate(status.file_path, 50))
+    console.print(table)
+    console.print()
+
+
+def print_directory_exit_tool_summary(trajectories: list[TrajectoryFile], source: str | None = None) -> None:
+    if not trajectories:
+        return
+
+    statuses = [analyze_exit_tool(traj) for traj in trajectories]
+    configured = sum(1 for status in statuses if status.exit_tool)
+    hit = sum(1 for status in statuses if status.matched is True)
+    miss = sum(1 for status in statuses if status.matched is False)
+    missing = sum(1 for status in statuses if status.matched is None)
+
+    console.print()
+    console.print(box("Exit Tool 检查", "cyan"))
+    console.print()
+
+    overall = Table(show_header=True, header_style="bold")
+    overall.add_column("指标", width=20)
+    overall.add_column("值", width=48)
+    overall.add_row("轨迹数", str(len(statuses)))
+    overall.add_row("已配置 Exit Tool", str(configured))
+    overall.add_row("命中数", str(hit))
+    overall.add_row("未命中数", str(miss))
+    overall.add_row("未配置数", str(missing))
+    overall.add_row("命中率", f"{(hit / configured * 100) if configured else 0:.1f}%")
+    if source:
+        overall.add_row("目录", truncate(source, 58))
+    console.print(overall)
+    console.print()
+
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("Agent", width=20)
+    table.add_column("Session", width=16)
+    table.add_column("配置Exit", width=20)
+    table.add_column("最后工具", width=22)
+    table.add_column("步骤", width=6)
+    table.add_column("命中", width=6)
+
+    for status in statuses:
+        result = (
+            "[green]是[/green]"
+            if status.matched is True
+            else ("[red]否[/red]" if status.matched is False else "[red]-[/red]")
+        )
+        table.add_row(
+            truncate(status.agent_name, 22),
+            truncate(status.session_id, 14),
+            truncate(status.exit_tool or "N/A", 22),
+            truncate(status.last_tool or "N/A", 24),
+            str(status.step_number) if status.step_number is not None else "N/A",
+            result,
+        )
+
+    console.print(table)
+    console.print()
 
 
 # ---------------------------------------------------------------------------
@@ -1828,6 +1973,7 @@ def main() -> None:
         return
 
     if is_directory and not args.replay and not args.output:
+        print_directory_exit_tool_summary(sorted_trajectories, str(search_path))
         print_directory_summary(sorted_trajectories, args.top, str(search_path))
         return
 
@@ -1840,6 +1986,7 @@ def main() -> None:
         return
 
     for traj in to_analyze:
+        print_exit_tool_block(traj)
         if args.replay:
             print_replay(traj, args.verbose, fold_ok=args.replay_fold_ok)
         else:
