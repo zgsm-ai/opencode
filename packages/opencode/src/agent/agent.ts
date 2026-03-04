@@ -504,7 +504,7 @@ export namespace Agent {
         },
         // steps: outer loop max, budgetSteps: tool-call budget for QuickExplore agent
         steps: 500,
-        budgetSteps: 50,
+        budgetSteps: 60,
         warningThreshold: 10,  // Warn when budget is low (≤10)
         permission: PermissionNext.merge(
           permitEditor(PermissionNext.merge(
@@ -565,7 +565,7 @@ export namespace Agent {
         },
         // steps: outer loop max, budgetSteps: tool-call budget for SubCodingAgent
         steps: 500,
-        budgetSteps: 70,
+        budgetSteps: 80,
         warningThreshold: 20,  // Warn when budget is low (≤20)
         permission: PermissionNext.merge(
           permitEditor(PermissionNext.merge(
