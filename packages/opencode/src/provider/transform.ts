@@ -586,7 +586,7 @@ export namespace ProviderTransform {
     }
 
     if (
-      ["zai", "zhipuai", "ai-code-glm"].includes(input.model.providerID) &&
+      ["zai", "zhipuai", "ai-code-glm", "ai-code-glm-5"].includes(input.model.providerID) &&
       input.model.api.npm === "@ai-sdk/openai-compatible"
     ) {
       result["thinking"] = {

@@ -17,11 +17,12 @@ import { useToast } from "../ui/toast"
 const PROVIDER_PRIORITY: Record<string, number> = {
   costrict: 0,
   "ai-code-glm": 1,
-  anthropic: 2,
-  "github-copilot": 3,
-  openai: 4,
-  google: 5,
-  opencode: 6,
+  "ai-code-glm-5": 2,
+  anthropic: 3,
+  "github-copilot": 4,
+  openai: 5,
+  google: 6,
+  opencode: 7,
 }
 
 export function createDialogProviderOptions() {
@@ -41,6 +42,7 @@ export function createDialogProviderOptions() {
           description: {
             costrict: "(Recommended)",
             "ai-code-glm": "(GLM-4.7)",
+            "ai-code-glm-5": "(GLM-5)",
             anthropic: "(Claude Max or API key)",
             openai: "(ChatGPT Plus/Pro or API key)",
           }[provider.id],

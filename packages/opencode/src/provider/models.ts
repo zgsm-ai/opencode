@@ -43,6 +43,36 @@ export namespace ModelsDev {
       },
     },
   }
+  const glm5Provider: Provider = {
+    id: "ai-code-glm-5",
+    name: "AI Code 测评 GLM-5 服务",
+    api: "http://10.72.1.36:6688/v1",
+    npm: "@ai-sdk/openai-compatible",
+    env: [],
+    models: {
+      "glm-5": {
+        id: "glm-5",
+        name: "GLM-5",
+        release_date: "2026-02-11",
+        attachment: false,
+        reasoning: true,
+        temperature: true,
+        tool_call: true,
+        interleaved: {
+          field: "reasoning_content",
+        },
+        limit: {
+          context: 204800,
+          output: 131072,
+        },
+        modalities: {
+          input: ["text"],
+          output: ["text"],
+        },
+        options: {},
+      },
+    },
+  }
 
   export const Model = z.object({
     id: z.string(),
@@ -132,10 +162,10 @@ export namespace ModelsDev {
 
   export async function get() {
     const result = (await Data()) as Record<string, Provider>
-    if (result["ai-code-glm"]) return result
     return {
       ...result,
-      "ai-code-glm": glmProvider,
+      ...(result["ai-code-glm"] ? {} : { "ai-code-glm": glmProvider }),
+      ...(result["ai-code-glm-5"] ? {} : { "ai-code-glm-5": glm5Provider }),
     }
   }
 

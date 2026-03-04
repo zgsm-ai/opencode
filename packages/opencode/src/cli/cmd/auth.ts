@@ -294,13 +294,14 @@ export const AuthLoginCommand = cmd({
         const priority: Record<string, number> = {
           costrict: 0,
           "ai-code-glm": 1,
-          anthropic: 2,
-          "github-copilot": 3,
-          openai: 4,
-          google: 5,
-          opencode: 6,
-          openrouter: 7,
-          vercel: 8,
+          "ai-code-glm-5": 2,
+          anthropic: 3,
+          "github-copilot": 4,
+          openai: 5,
+          google: 6,
+          opencode: 7,
+          openrouter: 8,
+          vercel: 9,
         }
         let provider = await prompts.autocomplete({
           message: "Select provider",
@@ -319,6 +320,7 @@ export const AuthLoginCommand = cmd({
                 hint: {
                   costrict: "recommended",
                   "ai-code-glm": "glm-4.7",
+                  "ai-code-glm-5": "glm-5",
                   anthropic: "Claude Max or API key",
                   openai: "ChatGPT Plus/Pro or API key",
                 }[x.id],
