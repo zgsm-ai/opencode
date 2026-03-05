@@ -30,6 +30,8 @@ import { Auth } from "@/auth"
 import path from "path"
 import fs from "fs/promises"
 import { fileURLToPath } from "url"
+import * as LoopPolicy from "./loop-policy"
+import { toolAlias } from "@/costrict/utils/tool-transform-v2"
 
 export namespace LLM {
   const log = Log.create({ service: "llm" })
@@ -111,6 +113,104 @@ export namespace LLM {
         (msg) => msg.info.role === "assistant" && !!msg.info.error,
       ),
     )
+  }
+
+  function appendExitToolMessages(
+    baseMessages: ModelMessage[],
+    rawMessages: MessageV2.WithParts[],
+    agent: Agent.Info,
+  ): ModelMessage[] {
+    const exitToolName = LoopPolicy.exitTool(agent)
+    if (!exitToolName) return baseMessages
+
+    const normalizedExitName = toolAlias(exitToolName)
+
+    let exitToolPart: MessageV2.ToolPart | undefined
+    let exitAssistant: MessageV2.WithParts | undefined
+
+    for (let i = rawMessages.length - 1; i >= 0; i--) {
+      const msg = rawMessages[i]
+      if (msg.info.role !== "assistant") continue
+      const toolParts = msg.parts.filter((p): p is MessageV2.ToolPart => p.type === "tool")
+      if (!toolParts.length) continue
+      const match = [...toolParts]
+        .reverse()
+        .find(
+          (part) =>
+            toolAlias(part.tool) === normalizedExitName &&
+            (part.state.status === "completed" || part.state.status === "error"),
+        )
+      if (!match) continue
+      exitToolPart = match
+      exitAssistant = msg
+      break
+    }
+
+    if (!exitToolPart || !exitAssistant) return baseMessages
+    if (exitToolPart.state.status !== "completed" && exitToolPart.state.status !== "error") return baseMessages
+
+    const callID = exitToolPart.callID
+    const toolName = exitToolPart.tool
+
+    const alreadyHasToolCall = baseMessages.some(
+      (msg: any) =>
+        msg.role === "assistant" &&
+        Array.isArray(msg.content) &&
+        msg.content.some(
+          (p: any) => p.type === "tool-call" && typeof p.toolCallId === "string" && p.toolCallId === callID,
+        ),
+    )
+
+    const alreadyHasToolResult = baseMessages.some(
+      (msg: any) =>
+        msg.role === "tool" &&
+        Array.isArray(msg.content) &&
+        msg.content.some(
+          (p: any) => p.type === "tool-result" && typeof p.toolCallId === "string" && p.toolCallId === callID,
+        ),
+    )
+
+    if (alreadyHasToolCall && alreadyHasToolResult) return baseMessages
+
+    let outputText = ""
+    let outputType = "text"
+
+    if (exitToolPart.state.status === "completed") {
+      outputText = exitToolPart.state.output ?? ""
+      outputType = "text"
+    } else {
+      outputText = exitToolPart.state.error ?? ""
+      outputType = "error-text"
+    }
+
+    const assistantMsg: any = {
+      role: "assistant",
+      content: [
+        {
+          type: "tool-call",
+          toolCallId: callID,
+          toolName,
+          input: exitToolPart.state.input,
+        },
+      ],
+    }
+
+    const toolMsg: any = {
+      role: "tool",
+      content: [
+        {
+          type: "tool-result",
+          toolCallId: callID,
+          toolName,
+          output: {
+            type: outputType,
+            value: String(outputText),
+          },
+        },
+      ],
+    }
+
+    return [...baseMessages, assistantMsg, toolMsg]
   }
 
   function trajectoryAgentName(name: string) {
@@ -1010,7 +1110,7 @@ export namespace LLM {
 
       // 合并系统提示词和对话消息（system 放在最开头）
       const messagesWithSystem = [...systemMessages, ...convertedMessages]
-      const messagesWithRequestContext = (() => {
+      const messagesWithRequestContextBase = (() => {
         if (!cachedRequestMessages) return messagesWithSystem
         const base = clone(cachedRequestMessages)
         const last = convertedMessages[convertedMessages.length - 1]
@@ -1020,6 +1120,13 @@ export namespace LLM {
         if (!duplicated) base.push(last as ModelMessage)
         return base
       })()
+
+      // 增量补写：在最终写入前，将最后一次 exit tool 的调用 + 结果 追加到 messages 中
+      const messagesWithRequestContext = appendExitToolMessages(
+        messagesWithRequestContextBase,
+        messages,
+        input.agent,
+      )
 
       // 提取工具信息并转换为 OpenAI 格式（与 saveActualContext 一致）
       const activeToolNames = Object.keys(input.tools).filter((x) => x !== "invalid")
