@@ -72,6 +72,8 @@ interface TrajectoryFile {
   agentType: string
   agentName: string
   analyses: StepAnalysis[]
+  /** 最后工具执行：来自 toolExecutions 最后一个元素的 tool 字段 */
+  lastExecutedTool: string | null
 }
 
 interface OpenCodeMessage {
@@ -276,6 +278,10 @@ async function loadTrajectory(filePath: string): Promise<TrajectoryFile | null> 
   const agentName = parsed?.agentName ?? agentType
   const fileTimestamp = parsed?.timestamp ?? new Date(data.timestamp ?? 0)
 
+  const te = data.toolExecutions ?? []
+  const lastEx = te.length > 0 ? te[te.length - 1] : undefined
+  const lastExecutedTool = lastEx != null && typeof lastEx.tool === "string" ? lastEx.tool : null
+
   return {
     filePath,
     sessionId,
@@ -283,6 +289,7 @@ async function loadTrajectory(filePath: string): Promise<TrajectoryFile | null> 
     agentType,
     agentName,
     analyses,
+    lastExecutedTool,
   }
 }
 
@@ -349,6 +356,37 @@ function formatTokens(n: number): string {
 function truncate(s: string, max: number): string {
   if (s.length <= max) return s
   return s.slice(0, max - 3) + "..."
+}
+
+// ---------------------------------------------------------------------------
+// Exit Tool 检查：最后工具执行 = toolExecutions 最后一个元素的 tool 字段
+// ---------------------------------------------------------------------------
+
+function lastToolFromAnalyses(traj: TrajectoryFile): { stepNumber: number; name: string } | null {
+  for (let i = traj.analyses.length - 1; i >= 0; i--) {
+    const step = traj.analyses[i]
+    if (step == null || step.toolCalls.length === 0) continue
+    const last = step.toolCalls[step.toolCalls.length - 1]
+    if (last != null) return { stepNumber: step.stepNumber, name: last.name }
+  }
+  return null
+}
+
+function printExitToolBlock(traj: TrajectoryFile) {
+  const lastFromMessages = lastToolFromAnalyses(traj)
+  console.log()
+  console.log(box(pc.bold(`Exit Tool 检查: ${traj.agentName}`), "cyan"))
+  console.log()
+  const table = new Table({ head: [pc.bold("指标"), pc.bold("值")], colWidths: [22, 52] })
+  table.push(
+    ["最后工具执行", traj.lastExecutedTool ?? "N/A"],
+    ["最后调用工具", lastFromMessages?.name ?? "N/A"],
+    ["最后步骤", lastFromMessages != null ? String(lastFromMessages.stepNumber) : "N/A"],
+    ["Session", truncate(traj.sessionId, 50)],
+    ["文件", truncate(traj.filePath, 50)],
+  )
+  console.log(table.toString())
+  console.log()
 }
 
 // ---------------------------------------------------------------------------
@@ -832,6 +870,7 @@ async function main() {
   }
 
   for (const traj of toAnalyze) {
+    printExitToolBlock(traj)
     if (replayFlag) {
       printReplay(traj, verboseFlag)
     } else {
