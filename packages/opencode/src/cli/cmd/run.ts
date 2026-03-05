@@ -11,6 +11,7 @@ import { createOpencodeClient, type OpencodeClient } from "@opencode-ai/sdk/v2"
 import { Server } from "../../server/server"
 import { Provider } from "../../provider/provider"
 import { Agent } from "../../agent/agent"
+import { LLM } from "../../session/llm"
 
 const TOOL: Record<string, [string, string]> = {
   todowrite: ["Todo", UI.Style.TEXT_WARNING_BOLD],
@@ -91,8 +92,27 @@ export const RunCommand = cmd({
         type: "string",
         describe: "model variant (provider-specific reasoning effort, e.g., high, max, minimal)",
       })
+      .option("auto-allow-permissions", {
+        type: "boolean",
+        describe: "automatically allow permission requests without prompting",
+        default: false,
+      })
+      .option("auto-answer-questions", {
+        type: "boolean",
+        describe: "automatically answer question prompts using their first option",
+        default: false,
+      })
+      .option("history-dir", {
+        type: "string",
+        describe: "directory to save history messages (default: .history_message)",
+      })
   },
   handler: async (args) => {
+    // 设置 history message 保存目录
+    if (args["history-dir"]) {
+      LLM.setHistoryDir(args["history-dir"])
+    }
+
     let message = [...args.message, ...(args["--"] || [])]
       .map((arg) => (arg.includes(" ") ? `"${arg.replace(/"/g, '\\"')}"` : arg))
       .join(" ")
@@ -141,6 +161,36 @@ export const RunCommand = cmd({
           "",
           UI.Style.TEXT_NORMAL + title,
         )
+      }
+
+      const parent = new Map<string, string | null>([[sessionID, null]])
+      const tracked = new Map<string, boolean>([[sessionID, true]])
+
+      const fetchParent = async (id: string) => {
+        if (parent.has(id)) {
+          const cached = parent.get(id)
+          if (cached === null) return undefined
+          return cached
+        }
+        const result = await sdk.session.get({ sessionID: id }).catch(() => undefined)
+        const next = result?.data?.parentID
+        parent.set(id, next ?? null)
+        return next
+      }
+
+      const inTree = async (id: string): Promise<boolean> => {
+        const known = tracked.get(id)
+        if (known !== undefined) return known
+
+        const pid = await fetchParent(id)
+        if (!pid) {
+          tracked.set(id, false)
+          return false
+        }
+
+        const ok = await inTree(pid)
+        tracked.set(id, ok)
+        return ok
       }
 
       const outputJsonEvent = (type: string, data: any) => {
@@ -208,22 +258,42 @@ export const RunCommand = cmd({
 
           if (event.type === "permission.asked") {
             const permission = event.properties
-            if (permission.sessionID !== sessionID) continue
-            const result = await select({
-              message: `Permission required: ${permission.permission} (${permission.patterns.join(", ")})`,
-              options: [
-                { value: "once", label: "Allow once" },
-                { value: "always", label: "Always allow: " + permission.always.join(", ") },
-                { value: "reject", label: "Reject" },
-              ],
-              initialValue: "once",
-            }).catch(() => "reject")
-            const response = (result.toString().includes("cancel") ? "reject" : result) as "once" | "always" | "reject"
+            if (!(await inTree(permission.sessionID))) continue
+            const response: "once" | "always" | "reject" = args["auto-allow-permissions"]
+              ? "always"
+              : await (async () => {
+              const result = await select({
+                message: `Permission required: ${permission.permission} (${permission.patterns.join(", ")})`,
+                options: [
+                  { value: "once", label: "Allow once" },
+                  { value: "always", label: "Always allow: " + permission.always.join(", ") },
+                  { value: "reject", label: "Reject" },
+                ],
+                initialValue: "once",
+              }).catch(() => "reject")
+                  return result.toString().includes("cancel") ? "reject" : (result as "once" | "always" | "reject")
+                })()
             await sdk.permission.respond({
-              sessionID,
+              sessionID: permission.sessionID,
               permissionID: permission.id,
               response,
             })
+          }
+
+          if (event.type === "question.asked") {
+            const question = event.properties
+            if (!(await inTree(question.sessionID))) continue
+            if (args["auto-answer-questions"]) {
+              // Auto-select first option for each question
+              const answers = question.questions.map((q) => {
+                if (q.options.length > 0) return [q.options[0].label]
+                return []
+              })
+              await sdk.question.reply({
+                requestID: question.id,
+                answers,
+              })
+            }
           }
         }
       })()
@@ -292,28 +362,8 @@ export const RunCommand = cmd({
               : args.title
             : undefined
 
-        const result = await sdk.session.create(
-          title
-            ? {
-                title,
-                permission: [
-                  {
-                    permission: "question",
-                    action: "deny",
-                    pattern: "*",
-                  },
-                ],
-              }
-            : {
-                permission: [
-                  {
-                    permission: "question",
-                    action: "deny",
-                    pattern: "*",
-                  },
-                ],
-              },
-        )
+        const permissionRules = [{ permission: "question", action: "deny" as const, pattern: "*" }]
+        const result = await sdk.session.create(title ? { title, permission: permissionRules } : { permission: permissionRules })
         return result.data?.id
       })()
 

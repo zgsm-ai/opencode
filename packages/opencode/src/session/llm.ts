@@ -37,12 +37,30 @@ export namespace LLM {
   const log = Log.create({ service: "llm" })
 
   // 本地开发（bun dev）保存在仓库根目录；打包后保存在 bin/resources 同级目录
-  const HISTORY_DIR = path.join(
+  let HISTORY_DIR = path.join(
     Installation.isLocal()
       ? path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../../")
       : path.resolve(path.dirname(process.execPath), ".."),
     ".history_message",
   )
+
+  /**
+   * 设置 history message 保存目录
+   * @param dir 目录路径，如果未提供则使用默认路径
+   */
+  export function setHistoryDir(dir?: string) {
+    if (dir) {
+      HISTORY_DIR = path.resolve(dir)
+      log.info("history directory set", { dir: HISTORY_DIR })
+    }
+  }
+
+  /**
+   * 获取当前 history message 保存目录
+   */
+  export function getHistoryDir(): string {
+    return HISTORY_DIR
+  }
 
   // 存储每个轨迹键（session + agent）的最新 system 提示词（经过 Plugin 处理后的完整版本）
   const sessionSystemCache = new Map<string, string[]>()

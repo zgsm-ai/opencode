@@ -8,7 +8,6 @@ import { Identifier } from "../id/id"
 import { Agent } from "../agent/agent"
 import { SessionPrompt } from "../session/prompt"
 import { LLM } from "@/session/llm"
-import { PermissionNext } from "@/permission/next"
 import { defer } from "@/util/defer"
 import path from "path"
 import { fileURLToPath } from "url"
@@ -185,6 +184,7 @@ export const SubCodingTool = Tool.define("sub_coding", async (ctx) => {
 
       // Create a child session for SubCodingAgent
       subCodingLogger.info(`Creating child session with parent: ${ctx.sessionID}`)
+
       const session = await Session.create({
         parentID: ctx.sessionID,
         title: `${params.agent_code}: ${params.sub_tasks.map((t) => t.title).join(", ")}`,
