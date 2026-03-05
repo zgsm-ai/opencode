@@ -42,9 +42,9 @@ jobs:
           for key in dist/opencode-*/; do
             key=$(basename "$key")
             if [[ "$key" == *"linux"* ]]; then
-              (cd "dist/${key}/bin" && tar -czf "../../${key}.tar.gz" *)
+              (cd "dist/${key}" && tar -czf "../../${key}.tar.gz" *)
             else
-              (cd "dist/${key}/bin" && zip -r "../../${key}.zip" *)
+              (cd "dist/${key}" && zip -r "../../${key}.zip" *)
             fi
           done
 
