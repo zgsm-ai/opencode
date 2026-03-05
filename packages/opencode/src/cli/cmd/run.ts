@@ -345,9 +345,7 @@ export const RunCommand = cmd({
               : args.title
             : undefined
 
-        const permissionRules = args.yes
-          ? [{ permission: "*", action: "allow" as const, pattern: "*" }]
-          : [{ permission: "question", action: "deny" as const, pattern: "*" }]
+        const permissionRules = [{ permission: "question", action: "deny" as const, pattern: "*" }]
         const result = await sdk.session.create(title ? { title, permission: permissionRules } : { permission: permissionRules })
         return result.data?.id
       })()
@@ -402,10 +400,7 @@ export const RunCommand = cmd({
               : args.title
             : undefined
 
-        const permissionRules = args.yes
-          ? [{ permission: "*", action: "allow" as const, pattern: "*" }]
-          : undefined
-        const result = await sdk.session.create(title ? { title, permission: permissionRules } : permissionRules ? { permission: permissionRules } : {})
+        const result = await sdk.session.create(title ? { title } : {})
         return result.data?.id
       })()
 
