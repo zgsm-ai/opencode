@@ -104,6 +104,6 @@ tools:
 .cospec/plan/
 └── changes/               # 提案 - 具体变更的内容
     └─ [change-id]/
-       ├── proposal.md     # 原因、内容、影响
-       └── task.md         # 更新后的实施清单
+       ├── proposal_[feature_name].md     # 原因、内容、影响
+       └── task_[feature_name].md         # 更新后的实施清单
 </directory_structure>
