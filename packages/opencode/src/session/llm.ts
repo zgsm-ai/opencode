@@ -147,6 +147,7 @@ export namespace LLM {
     }
 
     if (!exitToolPart || !exitAssistant) return baseMessages
+    if (exitToolPart.state.status !== "completed" && exitToolPart.state.status !== "error") return baseMessages
 
     const callID = exitToolPart.callID
     const toolName = exitToolPart.tool
@@ -171,11 +172,16 @@ export namespace LLM {
 
     if (alreadyHasToolCall && alreadyHasToolResult) return baseMessages
 
-    const isCompleted = exitToolPart.state.status === "completed"
-    const outputText =
-      (isCompleted ? exitToolPart.state.output : exitToolPart.state.error) ??
-      ""
-    const outputType = isCompleted ? "text" : "error-text"
+    let outputText = ""
+    let outputType = "text"
+
+    if (exitToolPart.state.status === "completed") {
+      outputText = exitToolPart.state.output ?? ""
+      outputType = "text"
+    } else {
+      outputText = exitToolPart.state.error ?? ""
+      outputType = "error-text"
+    }
 
     const assistantMsg: any = {
       role: "assistant",
