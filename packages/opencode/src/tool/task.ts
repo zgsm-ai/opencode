@@ -65,35 +65,48 @@ export const TaskTool = Tool.define("task", async (ctx) => {
           if (found) return found
         }
 
+        // Get parent session to check if it has unrestricted permissions (allow all)
+        const parentSession = await Session.get(ctx.sessionID)
+        const parentPermission = parentSession?.permission ?? []
+        const hasUnrestrictedPermission = parentPermission.some(
+          (r) => r.permission === "*" && r.pattern === "*" && r.action === "allow"
+        )
+        
+        // If parent has unrestricted permissions (--yes mode), inherit them fully
+        // Otherwise, apply sub-agent restrictions
+        const subAgentPermission = hasUnrestrictedPermission
+          ? parentPermission
+          : PermissionNext.merge(parentPermission, [
+              {
+                permission: "todowrite",
+                pattern: "*",
+                action: "deny" as const,
+              },
+              {
+                permission: "todoread",
+                pattern: "*",
+                action: "deny" as const,
+              },
+              ...(hasTaskPermission
+                ? []
+                : [
+                    {
+                      permission: "task",
+                      pattern: "*",
+                      action: "deny" as const,
+                    },
+                  ]),
+              ...(config.experimental?.primary_tools?.map((t) => ({
+                pattern: "*",
+                action: "allow" as const,
+                permission: t,
+              })) ?? []),
+            ])
+
         return await Session.create({
           parentID: ctx.sessionID,
           title: params.description + ` (@${agent.name} subagent)`,
-          permission: [
-            {
-              permission: "todowrite",
-              pattern: "*",
-              action: "deny",
-            },
-            {
-              permission: "todoread",
-              pattern: "*",
-              action: "deny",
-            },
-            ...(hasTaskPermission
-              ? []
-              : [
-                  {
-                    permission: "task" as const,
-                    pattern: "*" as const,
-                    action: "deny" as const,
-                  },
-                ]),
-            ...(config.experimental?.primary_tools?.map((t) => ({
-              pattern: "*",
-              action: "allow" as const,
-              permission: t,
-            })) ?? []),
-          ],
+          permission: subAgentPermission,
         })
       })
       const msg = await MessageV2.get({ sessionID: ctx.sessionID, messageID: ctx.messageID })

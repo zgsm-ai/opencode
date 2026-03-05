@@ -7,6 +7,7 @@ import { Identifier } from "../id/id"
 import { Agent } from "../agent/agent"
 import { SessionPrompt } from "../session/prompt"
 import { LLM } from "@/session/llm"
+import { PermissionNext } from "@/permission/next"
 import { defer } from "@/util/defer"
 import { Log } from "@/util/log"
 import { Bus } from "../bus"
@@ -54,50 +55,64 @@ export const QuickExploreTool = Tool.define("quick_explore", async (ctx) => {
 
       // 2. Create child session with read-only permissions
       quickExploreLogger.info(`Creating child session with parent: ${ctx.sessionID}`)
+      
+      // Get parent session to check if it has unrestricted permissions (allow all)
+      const parentSession = await Session.get(ctx.sessionID)
+      const parentPermission = parentSession?.permission ?? []
+      const hasUnrestrictedPermission = parentPermission.some(
+        (r) => r.permission === "*" && r.pattern === "*" && r.action === "allow"
+      )
+      
+      // If parent has unrestricted permissions (--yes mode), inherit them fully
+      // Otherwise, apply QuickExploreAgent restrictions
+      const quickExplorePermission = hasUnrestrictedPermission
+        ? parentPermission
+        : PermissionNext.merge(parentPermission, [
+            // Deny all write operations by default
+            {
+              permission: "edit",
+              pattern: "*",
+              action: "deny" as const,
+            },
+            {
+              permission: "write",
+              pattern: "*",
+              action: "deny" as const,
+            },
+            {
+              permission: "apply_patch",
+              pattern: "*",
+              action: "deny" as const,
+            },
+            // Allow editing explore.md in any path (must come AFTER deny rules, findLast wins)
+            {
+              permission: "edit",
+              pattern: "*explore.md",
+              action: "allow" as const,
+            },
+            // Disable todo tools
+            {
+              permission: "todowrite",
+              pattern: "*",
+              action: "deny" as const,
+            },
+            {
+              permission: "todoread",
+              pattern: "*",
+              action: "deny" as const,
+            },
+            // Disable task tool to prevent spawning sub-agents
+            {
+              permission: "task",
+              pattern: "*",
+              action: "deny" as const,
+            },
+          ])
+      
       const session = await Session.create({
         parentID: ctx.sessionID,
         title: `QuickExplore: ${params.exploration_target.substring(0, 50)}...`,
-        permission: [
-          // Deny all write operations by default
-          {
-            permission: "edit" as const,
-            pattern: "*" as const,
-            action: "deny" as const,
-          },
-          {
-            permission: "write" as const,
-            pattern: "*" as const,
-            action: "deny" as const,
-          },
-          {
-            permission: "apply_patch" as const,
-            pattern: "*" as const,
-            action: "deny" as const,
-          },
-          // Allow editing explore.md in any path (must come AFTER deny rules, findLast wins)
-          {
-            permission: "edit" as const,
-            pattern: "*explore.md" as const,
-            action: "allow" as const,
-          },
-          // Disable todo tools
-          {
-            permission: "todowrite" as const,
-            pattern: "*" as const,
-            action: "deny" as const,
-          },
-          {
-            permission: "todoread" as const,
-            pattern: "*" as const,
-            action: "deny" as const,
-          },
-          // Disable task tool to prevent spawning sub-agents
-          {
-            permission: "task" as const,
-            pattern: "*" as const,
-            action: "deny" as const,
-          },
-        ],
+        permission: quickExplorePermission,
       })
       quickExploreLogger.info(`Session created: ${session.id}`)
       await LLM.inheritTrajectoryChangeID(session.id, ctx.sessionID)

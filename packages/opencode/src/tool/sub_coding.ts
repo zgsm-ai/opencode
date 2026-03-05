@@ -185,26 +185,40 @@ export const SubCodingTool = Tool.define("sub_coding", async (ctx) => {
 
       // Create a child session for SubCodingAgent
       subCodingLogger.info(`Creating child session with parent: ${ctx.sessionID}`)
+      
+      // Get parent session to check if it has unrestricted permissions (allow all)
+      const parentSession = await Session.get(ctx.sessionID)
+      const parentPermission = parentSession?.permission ?? []
+      const hasUnrestrictedPermission = parentPermission.some(
+        (r) => r.permission === "*" && r.pattern === "*" && r.action === "allow"
+      )
+      
+      // If parent has unrestricted permissions (--yes mode), inherit them fully
+      // Otherwise, apply sub-agent restrictions
+      const subAgentPermission = hasUnrestrictedPermission
+        ? parentPermission
+        : PermissionNext.merge(parentPermission, [
+            {
+              permission: "todowrite",
+              pattern: "*",
+              action: "deny" as const,
+            },
+            {
+              permission: "todoread",
+              pattern: "*",
+              action: "deny" as const,
+            },
+            {
+              permission: "task",
+              pattern: "*",
+              action: "deny" as const,
+            },
+          ])
+      
       const session = await Session.create({
         parentID: ctx.sessionID,
         title: `${params.agent_code}: ${params.sub_tasks.map((t) => t.title).join(", ")}`,
-        permission: [
-          {
-            permission: "todowrite",
-            pattern: "*",
-            action: "deny",
-          },
-          {
-            permission: "todoread",
-            pattern: "*",
-            action: "deny",
-          },
-          {
-            permission: "task" as const,
-            pattern: "*" as const,
-            action: "deny" as const,
-          },
-        ],
+        permission: subAgentPermission,
       })
       subCodingLogger.info(`Session created: ${session.id}`)
       await LLM.inheritTrajectoryChangeID(session.id, ctx.sessionID)
