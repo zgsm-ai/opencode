@@ -11,6 +11,7 @@ import { createOpencodeClient, type OpencodeClient } from "@opencode-ai/sdk/v2"
 import { Server } from "../../server/server"
 import { Provider } from "../../provider/provider"
 import { Agent } from "../../agent/agent"
+import { LLM } from "../../session/llm"
 
 const TOOL: Record<string, [string, string]> = {
   todowrite: ["Todo", UI.Style.TEXT_WARNING_BOLD],
@@ -96,8 +97,17 @@ export const RunCommand = cmd({
         describe: "automatically allow all permissions without prompting",
         default: false,
       })
+      .option("history-dir", {
+        type: "string",
+        describe: "directory to save history messages (default: .history_message)",
+      })
   },
   handler: async (args) => {
+    // 设置 history message 保存目录
+    if (args["history-dir"]) {
+      LLM.setHistoryDir(args["history-dir"])
+    }
+
     let message = [...args.message, ...(args["--"] || [])]
       .map((arg) => (arg.includes(" ") ? `"${arg.replace(/"/g, '\\"')}"` : arg))
       .join(" ")
