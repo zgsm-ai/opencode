@@ -26,6 +26,93 @@ const TOOL: Record<string, [string, string]> = {
   websearch: ["Search", UI.Style.TEXT_DIM_BOLD],
 }
 
+const CHANGE_ID_AGENTS = new Set(["taskcheck", "coding", "FixAgent"])
+
+function normalizeAgent(name?: string) {
+  if (!name) return undefined
+  if (name === "fix") return "FixAgent"
+  return name
+}
+
+function normalizePath(value: string) {
+  return value.split(path.sep).join("/")
+}
+
+function trimExcerpt(value: string) {
+  const text = value.trim()
+  if (text.length <= 500) return text
+  return text.slice(0, 497) + "..."
+}
+
+function extractTaskcheckUserInput(content: string) {
+  const bgMatch = content.match(/##\s*(背景|需求|用户需求|目标)[^\n]*\n([\s\S]*?)(?=\n##|$)/i)
+  if (bgMatch?.[2]) return trimExcerpt(bgMatch[2])
+
+  const paragraphs = content
+    .split("\n\n")
+    .filter((line) => line.trim() && !line.trim().startsWith("#"))
+    .slice(0, 2)
+    .join("\n\n")
+    .trim()
+
+  if (paragraphs.length > 0) return trimExcerpt(paragraphs)
+  return "（无法提取用户原始需求）"
+}
+
+async function resolveTaskPath(project: string, changeID: string) {
+  const root = path.join(project, "proposal", changeID)
+  const tasks = path.join(root, "tasks.md")
+  if (await Bun.file(tasks).exists()) return tasks
+  const task = path.join(root, "task.md")
+  if (await Bun.file(task).exists()) return task
+  return undefined
+}
+
+async function promptFromChangeID(input: { agent: string; changeID: string; project: string }) {
+  const taskPath = await resolveTaskPath(input.project, input.changeID)
+  if (!taskPath) return undefined
+
+  const projectText = normalizePath(input.project)
+  const taskText = normalizePath(taskPath)
+  if (input.agent === "coding") {
+    return `项目路径：\`${projectText}\`\n任务文件路径：\`${taskText}\`\n\n请确保本次编码任务高质量完成`
+  }
+
+  if (input.agent === "FixAgent") {
+    return `项目路径：\`${projectText}\`\n任务文件路径：\`${taskText}\`\n\n请认真收集用户反馈并进行代码修复和改进`
+  }
+
+  const proposalDir = path.join(input.project, "proposal", input.changeID)
+  const proposalPath = path.join(proposalDir, "proposal.md")
+  const userInputPath = path.join(proposalDir, "user_input.md")
+  const proposalText = normalizePath(proposalPath)
+  const taskcheckText = normalizePath(taskPath)
+  const userInputText = await Bun.file(userInputPath)
+    .text()
+    .then((text) => text.trim())
+    .catch(() => undefined)
+  const userTaskText = userInputText
+    ? trimExcerpt(userInputText)
+    : await Bun.file(proposalPath)
+        .text()
+        .then((text) => extractTaskcheckUserInput(text))
+        .catch(() => "（无法提取用户原始需求）")
+
+  return `## 用户原始需求
+
+\`\`\`text
+${userTaskText}
+\`\`\`
+
+## 任务上下文
+
+项目路径：\`${projectText}\`
+proposal.md路径：\`${proposalText}\`
+task.md路径：\`${taskcheckText}\`
+
+请以"用户原始需求"为覆盖基准，认真检查 task.md 文件是否需要调整。`
+}
+
 export const RunCommand = cmd({
   command: "run [message..]",
   describe: "run costrict-cli with a message",
@@ -63,6 +150,10 @@ export const RunCommand = cmd({
       .option("agent", {
         type: "string",
         describe: "agent to use",
+      })
+      .option("change-id", {
+        type: "string",
+        describe: "proposal change-id for taskcheck/coding/fix agents",
       })
       .option("format", {
         type: "string",
@@ -116,6 +207,8 @@ export const RunCommand = cmd({
     let message = [...args.message, ...(args["--"] || [])]
       .map((arg) => (arg.includes(" ") ? `"${arg.replace(/"/g, '\\"')}"` : arg))
       .join(" ")
+    const targetAgent = normalizeAgent(args.agent)
+    const changeID = args["change-id"]?.trim()
 
     const fileParts: any[] = []
     if (args.file) {
@@ -147,6 +240,39 @@ export const RunCommand = cmd({
     }
 
     if (!process.stdin.isTTY) message += "\n" + (await Bun.stdin.text())
+
+    if (changeID) {
+      if (!targetAgent) {
+        UI.error("`--change-id` requires `--agent` (taskcheck/coding/fix)")
+        process.exit(1)
+      }
+
+      if (!CHANGE_ID_AGENTS.has(targetAgent)) {
+        UI.error("`--change-id` only supports taskcheck, coding, and fix agents")
+        process.exit(1)
+      }
+
+      if (args.command) {
+        UI.error("`--change-id` cannot be used with `--command`")
+        process.exit(1)
+      }
+
+      if (message.trim().length > 0) {
+        UI.error("`--change-id` mode does not accept a manual message")
+        process.exit(1)
+      }
+
+      const prompt = await promptFromChangeID({
+        agent: targetAgent,
+        changeID,
+        project: process.cwd(),
+      })
+      if (!prompt) {
+        UI.error(`Proposal not found: proposal/${changeID}/task.md or proposal/${changeID}/tasks.md`)
+        process.exit(1)
+      }
+      message = prompt
+    }
 
     if (message.trim().length === 0 && !args.command) {
       UI.error("You must provide a message or a command")
@@ -300,13 +426,13 @@ export const RunCommand = cmd({
 
       // Validate agent if specified
       const resolvedAgent = await (async () => {
-        if (!args.agent) return undefined
-        const agent = await Agent.get(args.agent)
+        if (!targetAgent) return undefined
+        const agent = await Agent.get(targetAgent)
         if (!agent) {
           UI.println(
             UI.Style.TEXT_WARNING_BOLD + "!",
             UI.Style.TEXT_NORMAL,
-            `agent "${args.agent}" not found. Falling back to default agent`,
+            `agent "${targetAgent}" not found. Falling back to default agent`,
           )
           return undefined
         }
@@ -314,11 +440,11 @@ export const RunCommand = cmd({
           UI.println(
             UI.Style.TEXT_WARNING_BOLD + "!",
             UI.Style.TEXT_NORMAL,
-            `agent "${args.agent}" is a subagent, not a primary agent. Falling back to default agent`,
+            `agent "${targetAgent}" is a subagent, not a primary agent. Falling back to default agent`,
           )
           return undefined
         }
-        return args.agent
+        return targetAgent
       })()
 
       if (args.command) {
