@@ -115,11 +115,11 @@ task.md路径：\`${taskcheckText}\`
 
 export const RunCommand = cmd({
   command: "run [message..]",
-  describe: "run costrict-cli with a message",
+  describe: "run costrict-cli with a message (omit message when using --change-id)",
   builder: (yargs: Argv) => {
     return yargs
       .positional("message", {
-        describe: "message to send",
+        describe: "message to send (not required when using --change-id)",
         type: "string",
         array: true,
         default: [],
@@ -239,7 +239,7 @@ export const RunCommand = cmd({
       }
     }
 
-    if (!process.stdin.isTTY) message += "\n" + (await Bun.stdin.text())
+    if (!process.stdin.isTTY && !changeID) message += "\n" + (await Bun.stdin.text())
 
     if (changeID) {
       if (!targetAgent) {
