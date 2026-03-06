@@ -9,7 +9,7 @@
     "typecheck": "tsgo --noEmit",
     "test": "bun test",
     "build": "bun run script/build.ts",
-    "dev": "bun run --conditions=browser ./src/index.ts",
+    "dev": "bun run --preload @opentui/solid/preload --conditions=browser ./src/index.ts",
     "postinstall": "bun run script/extract-lint-tools.ts && bun run script/extract-precompiled-tools.ts",
     "pack-lint": "bun run script/pack-lint-tools.ts",
     "pack-precompiled": "bun run script/pack-precompiled-tools.ts",

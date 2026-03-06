@@ -10,22 +10,29 @@ const isDir = (value: string) => {
   }
 }
 
+const execPath = () => {
+  try {
+    return fs.realpathSync(process.execPath)
+  } catch {
+    return process.execPath
+  }
+}
+
 export function resolveResourcesPath(importMetaUrl: string, subdir?: string) {
   const sourceDir = path.dirname(fileURLToPath(importMetaUrl))
-  const execRoot = path.resolve(path.dirname(process.execPath), "..", "resources")
+  const exec = execPath()
+  const execAttempts = [
+    path.resolve(path.dirname(exec), "..", "resources"),
+    path.resolve(path.dirname(exec), "resources"),
+  ]
   const sourceAttempts = [
     path.resolve(sourceDir, "..", "..", "resources"),
     path.resolve(sourceDir, "..", "..", "..", "resources"),
     path.resolve(sourceDir, "..", "resources"),
   ]
-  const binary = path.basename(process.execPath)
+  const binary = path.basename(exec)
   const bundled = /^costrict-cli(?:\.exe)?$/i.test(binary)
-  const attempts = bundled
-    ? [execRoot, ...sourceAttempts]
-    : [
-        ...sourceAttempts,
-    execRoot,
-      ]
+  const attempts = bundled ? [...execAttempts, ...sourceAttempts] : [...sourceAttempts, ...execAttempts]
 
   const root = attempts.find((value) => isDir(value)) || attempts[0]
   if (!subdir) return root

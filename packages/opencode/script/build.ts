@@ -230,6 +230,21 @@ const prepareResourcesForTarget = async (
   await fsp.rm(path.join(outRoot, "search", "bundles"), { recursive: true, force: true })
 }
 
+const buildWeb = async () => {
+  const app = path.join(dir, "..", "app")
+  const out = path.join(dir, "dist", "_web")
+  await fsp.rm(out, { recursive: true, force: true })
+  console.log("Building bundled web app...")
+  await $`bun run build -- --outDir ${out}`.cwd(app)
+  return out
+}
+
+const prepareWebForTarget = async (name: string, root: string) => {
+  const out = path.join(dir, "dist", name, "resources", "web")
+  await fsp.rm(out, { recursive: true, force: true })
+  await fsp.cp(root, out, { recursive: true })
+}
+
 const allTargets: {
   os: string
   arch: "arm64" | "x64"
@@ -328,16 +343,24 @@ await $`bun run script/generate-agents.ts`
 console.log("Generating builtin components...")
 await $`bun run script/generate-components.ts`
 
+const web = await buildWeb()
+
 const binaries: Record<string, string> = {}
 if (!skipInstall) {
-  const coreInstall = await $`bun install --os="*" --cpu="*" @opentui/core@${pkg.dependencies["@opentui/core"]}`.nothrow()
+  const coreInstall =
+    await $`bun install --os="*" --cpu="*" @opentui/core@${pkg.dependencies["@opentui/core"]}`.nothrow()
   if (coreInstall.exitCode !== 0) {
-    console.warn("[build] warning: failed to install @opentui/core for all targets, continuing with existing dependencies")
+    console.warn(
+      "[build] warning: failed to install @opentui/core for all targets, continuing with existing dependencies",
+    )
   }
 
-  const watcherInstall = await $`bun install --os="*" --cpu="*" @parcel/watcher@${pkg.dependencies["@parcel/watcher"]}`.nothrow()
+  const watcherInstall =
+    await $`bun install --os="*" --cpu="*" @parcel/watcher@${pkg.dependencies["@parcel/watcher"]}`.nothrow()
   if (watcherInstall.exitCode !== 0) {
-    console.warn("[build] warning: failed to install @parcel/watcher for all targets, continuing with existing dependencies")
+    console.warn(
+      "[build] warning: failed to install @parcel/watcher for all targets, continuing with existing dependencies",
+    )
   }
 }
 for (const item of targets) {
@@ -384,6 +407,7 @@ for (const item of targets) {
 
   await $`rm -rf ./dist/${name}/bin/tui`
   await prepareResourcesForTarget(name, item)
+  await prepareWebForTarget(name, web)
   await Bun.file(`dist/${name}/package.json`).write(
     JSON.stringify(
       {
@@ -398,5 +422,7 @@ for (const item of targets) {
   )
   binaries[name] = Script.version
 }
+
+await fsp.rm(web, { recursive: true, force: true })
 
 export { binaries }

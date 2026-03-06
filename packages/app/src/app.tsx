@@ -86,6 +86,11 @@ function ServerKey(props: ParentProps) {
 
 export function AppInterface(props: { defaultUrl?: string }) {
   const platform = usePlatform()
+  const query = (() => {
+    const value = new URLSearchParams(window.location.search).get("server")
+    if (!value) return
+    return normalizeServerUrl(value)
+  })()
 
   const stored = (() => {
     if (platform.platform !== "web") return
@@ -97,6 +102,7 @@ export function AppInterface(props: { defaultUrl?: string }) {
 
   const defaultServerUrl = () => {
     if (props.defaultUrl) return props.defaultUrl
+    if (query) return query
     if (stored) return stored
     if (location.hostname.includes("costrict.ai")) return "http://localhost:4096"
     if (import.meta.env.DEV)

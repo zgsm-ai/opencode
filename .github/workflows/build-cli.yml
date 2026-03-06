@@ -41,15 +41,7 @@ jobs:
       - name: Create archives for GitHub release
         run: |
           cd packages/opencode
-          mkdir -p dist/release
-          for key in dist/opencode-*/; do
-            key=$(basename "$key")
-            if [[ "$key" == *"linux"* ]]; then
-              (cd "dist/${key}" && tar -czf "../release/${key}.tar.gz" *)
-            else
-              (cd "dist/${key}" && zip -r "../release/${key}.zip" *)
-            fi
-          done
+          bun run script/archive.ts
           ls -lh dist/release
 
       - name: Upload artifacts

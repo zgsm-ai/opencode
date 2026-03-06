@@ -181,6 +181,126 @@ export type ToolInfo = {
   subtitle?: string
 }
 
+const SEQUENTIAL_THINKING_TOOLS = [
+  "sequentialthinking",
+  "sequential-thinking",
+  "sequential_thinking",
+  "sequence_thinking",
+] as const
+
+type SummaryItem = {
+  id: string
+  tool: string
+  state: {
+    status: string
+    title?: string
+  }
+}
+
+function isSequentialThinkingTool(tool: string) {
+  return SEQUENTIAL_THINKING_TOOLS.includes(tool as (typeof SEQUENTIAL_THINKING_TOOLS)[number])
+}
+
+function titlecase(value: string) {
+  return value
+    .replaceAll(/[_-]+/g, " ")
+    .replaceAll(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (char) => char.toUpperCase())
+}
+
+function getStrReplaceCommand(input: Record<string, any>) {
+  return typeof input.command === "string" && input.command.trim() ? input.command.trim() : "view"
+}
+
+function summarizeLineCount(name: string, value: unknown) {
+  if (typeof value !== "string") return undefined
+  const text = value.trim()
+  if (!text) return undefined
+  const count = text.split("\n").length
+  return `${name}=${count} ${count === 1 ? "line" : "lines"}`
+}
+
+function summarizeViewRange(value: unknown) {
+  if (!Array.isArray(value) || value.length !== 2) return undefined
+  const [start, end] = value
+  if (typeof start !== "number" || typeof end !== "number") return undefined
+  return `lines=${start}-${end === -1 ? "end" : end}`
+}
+
+function getStrReplaceArgs(input: Record<string, any>) {
+  const command = getStrReplaceCommand(input)
+  const args = [command]
+  const range = summarizeViewRange(input.view_range)
+  if (range) args.push(range)
+  if (typeof input.insert_line === "number") args.push(`line=${input.insert_line}`)
+  const oldText = summarizeLineCount("match", input.old_str)
+  if (oldText) args.push(oldText)
+  const newText =
+    input.new_str === null
+      ? "replace=delete"
+      : summarizeLineCount(command === "create" ? "content" : "replace", input.new_str ?? input.file_text)
+  if (newText) args.push(newText)
+  return args
+}
+
+function getSummaryItems(value: unknown) {
+  if (!Array.isArray(value)) return [] as SummaryItem[]
+  return value.filter(
+    (item): item is SummaryItem =>
+      !!item &&
+      typeof item === "object" &&
+      "id" in item &&
+      "tool" in item &&
+      "state" in item &&
+      typeof (item as SummaryItem).id === "string" &&
+      typeof (item as SummaryItem).tool === "string" &&
+      !!(item as SummaryItem).state &&
+      typeof (item as SummaryItem).state.status === "string",
+  )
+}
+
+function getSubagentLabel(
+  tool: string,
+  input: Record<string, any>,
+  metadata: Record<string, any>,
+  i18n: ReturnType<typeof useI18n>,
+) {
+  if (tool === "task") {
+    return i18n.t("ui.tool.agent", { type: input.subagent_type || tool })
+  }
+  if (typeof metadata.agentCode === "string" && metadata.agentCode.trim()) return metadata.agentCode.trim()
+  if (tool === "quick_explore") return "QuickExploreAgent"
+  if (tool === "sub_coding") return "SubCodingAgent"
+  return titlecase(tool)
+}
+
+function getSubagentDescription(tool: string, input: Record<string, any>, metadata: Record<string, any>) {
+  if (typeof metadata.description === "string" && metadata.description.trim()) return metadata.description.trim()
+  if (typeof input.description === "string" && input.description.trim()) return input.description.trim()
+  if (tool === "quick_explore" && typeof input.exploration_target === "string" && input.exploration_target.trim()) {
+    return input.exploration_target.trim()
+  }
+  if (tool === "sub_coding" && Array.isArray(input.sub_tasks) && input.sub_tasks.length > 0) {
+    return `${input.sub_tasks.length} tasks`
+  }
+  return ""
+}
+
+function getChildSessionId(metadata: Record<string, any>) {
+  if (typeof metadata.sessionId === "string" && metadata.sessionId.trim()) return metadata.sessionId
+  return undefined
+}
+
+function getLatestChildToolPart(store: ReturnType<typeof useData>["store"], sessionId: string) {
+  const parts = getSessionToolParts(store, sessionId)
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const part = parts[i]
+    if (part.state.status === "running" || part.state.status === "pending" || part.state.status === "error") return part
+  }
+  return parts.at(-1)
+}
+
 export function getToolInfo(tool: string, input: any = {}): ToolInfo {
   const i18n = useI18n()
   switch (tool) {
@@ -219,6 +339,18 @@ export function getToolInfo(tool: string, input: any = {}): ToolInfo {
         icon: "task",
         title: i18n.t("ui.tool.agent", { type: input.subagent_type || "task" }),
         subtitle: input.description,
+      }
+    case "sub_coding":
+      return {
+        icon: "task",
+        title: "SubCodingAgent",
+        subtitle: typeof input.agent_code === "string" ? input.agent_code : undefined,
+      }
+    case "quick_explore":
+      return {
+        icon: "task",
+        title: "QuickExploreAgent",
+        subtitle: typeof input.exploration_target === "string" ? input.exploration_target : undefined,
       }
     case "bash":
       return {
@@ -261,7 +393,22 @@ export function getToolInfo(tool: string, input: any = {}): ToolInfo {
         icon: "bubble-5",
         title: i18n.t("ui.tool.questions"),
       }
+    case "str_replace_based_edit_tool":
+      return {
+        icon: "code-lines",
+        title: titlecase(getStrReplaceCommand(input) === "str_replace" ? "replace" : getStrReplaceCommand(input)),
+        subtitle: input.path ? getFilename(input.path) : undefined,
+      }
     default:
+      if (isSequentialThinkingTool(tool)) {
+        const current = typeof input.thought_number === "number" ? input.thought_number : undefined
+        const total = typeof input.total_thoughts === "number" ? input.total_thoughts : undefined
+        return {
+          icon: "brain",
+          title: "Sequential Thinking",
+          subtitle: current && total ? `${current}/${total}` : undefined,
+        }
+      }
       return {
         icon: "mcp",
         title: tool,
@@ -863,163 +1010,162 @@ ToolRegistry.register({
   },
 })
 
-ToolRegistry.register({
-  name: "task",
-  render(props) {
-    const data = useData()
-    const i18n = useI18n()
-    const summary = () =>
-      (props.metadata.summary ?? []) as { id: string; tool: string; state: { status: string; title?: string } }[]
+function ChildAgentTool(props: ToolProps) {
+  const data = useData()
+  const i18n = useI18n()
+  const summary = createMemo(() => getSummaryItems(props.metadata.summary))
+  const label = createMemo(() => getSubagentLabel(props.tool, props.input, props.metadata, i18n))
+  const description = createMemo(() => getSubagentDescription(props.tool, props.input, props.metadata))
+  const childSessionId = createMemo(() => getChildSessionId(props.metadata))
 
-    const autoScroll = createAutoScroll({
-      working: () => true,
-      overflowAnchor: "auto",
-    })
+  const autoScroll = createAutoScroll({
+    working: () => props.status !== "completed",
+    overflowAnchor: "auto",
+  })
 
-    const childSessionId = () => props.metadata.sessionId as string | undefined
+  const childPermission = createMemo(() => {
+    const sessionId = childSessionId()
+    if (!sessionId) return undefined
+    const permissions = data.store.permission?.[sessionId] ?? []
+    return permissions[0]
+  })
 
-    const childPermission = createMemo(() => {
-      const sessionId = childSessionId()
-      if (!sessionId) return undefined
-      const permissions = data.store.permission?.[sessionId] ?? []
-      return permissions[0]
-    })
-
-    const childToolPart = createMemo(() => {
-      const perm = childPermission()
-      if (!perm || !perm.tool) return undefined
-      const sessionId = childSessionId()
-      if (!sessionId) return undefined
-      // Find the tool part that matches the permission's callID
+  const childToolPart = createMemo(() => {
+    const perm = childPermission()
+    const sessionId = childSessionId()
+    if (perm?.tool && sessionId) {
       const messages = data.store.message[sessionId] ?? []
       const message = findLast(messages, (m) => m.id === perm.tool!.messageID)
-      if (!message) return undefined
-      const parts = data.store.part[message.id] ?? []
-      for (const part of parts) {
-        if (part.type === "tool" && (part as ToolPart).callID === perm.tool!.callID) {
-          return { part: part as ToolPart, message }
+      if (message) {
+        const parts = data.store.part[message.id] ?? []
+        for (const part of parts) {
+          if (part.type === "tool" && (part as ToolPart).callID === perm.tool!.callID) {
+            return part as ToolPart
+          }
         }
       }
+    }
 
-      return undefined
+    if (!sessionId) return undefined
+    return getLatestChildToolPart(data.store, sessionId)
+  })
+
+  const respond = (response: "once" | "always" | "reject") => {
+    const perm = childPermission()
+    if (!perm || !data.respondToPermission) return
+    data.respondToPermission({
+      sessionID: perm.sessionID,
+      permissionID: perm.id,
+      response,
     })
+  }
 
-    const respond = (response: "once" | "always" | "reject") => {
-      const perm = childPermission()
-      if (!perm || !data.respondToPermission) return
-      data.respondToPermission({
-        sessionID: perm.sessionID,
-        permissionID: perm.id,
-        response,
-      })
+  const handleSubtitleClick = () => {
+    const sessionId = childSessionId()
+    if (sessionId && data.navigateToSession) {
+      data.navigateToSession(sessionId)
     }
+  }
 
-    const handleSubtitleClick = () => {
-      const sessionId = childSessionId()
-      if (sessionId && data.navigateToSession) {
-        data.navigateToSession(sessionId)
-      }
-    }
-
-    const renderChildToolPart = () => {
-      const toolData = childToolPart()
-      if (!toolData) return null
-      const { part } = toolData
-      const render = ToolRegistry.render(part.tool) ?? GenericTool
-      // @ts-expect-error
-      const metadata = part.state?.metadata ?? {}
-      const input = part.state?.input ?? {}
-      return (
-        <Dynamic
-          component={render}
-          input={input}
-          tool={part.tool}
-          metadata={metadata}
-          // @ts-expect-error
-          output={part.state.output}
-          status={part.state.status}
-          defaultOpen={true}
-        />
-      )
-    }
-
+  const renderChildToolPart = () => {
+    const part = childToolPart()
+    if (!part) return null
+    const render = ToolRegistry.render(part.tool) ?? GenericTool
     return (
-      <div data-component="tool-part-wrapper" data-permission={!!childPermission()}>
-        <Switch>
-          <Match when={childPermission()}>
-            <>
-              <Show
-                when={childToolPart()}
-                fallback={
-                  <BasicTool
-                    icon="task"
-                    defaultOpen={true}
-                    trigger={{
-                      title: i18n.t("ui.tool.agent", { type: props.input.subagent_type || props.tool }),
-                      titleClass: "capitalize",
-                      subtitle: props.input.description,
-                    }}
-                    onSubtitleClick={handleSubtitleClick}
-                  />
-                }
-              >
-                {renderChildToolPart()}
-              </Show>
-              <div data-component="permission-prompt">
-                <div data-slot="permission-actions">
-                  <Button variant="ghost" size="small" onClick={() => respond("reject")}>
-                    {i18n.t("ui.permission.deny")}
-                  </Button>
-                  <Button variant="secondary" size="small" onClick={() => respond("always")}>
-                    {i18n.t("ui.permission.allowAlways")}
-                  </Button>
-                  <Button variant="primary" size="small" onClick={() => respond("once")}>
-                    {i18n.t("ui.permission.allowOnce")}
-                  </Button>
-                </div>
-              </div>
-            </>
-          </Match>
-          <Match when={true}>
-            <BasicTool
-              icon="task"
-              defaultOpen={true}
-              trigger={{
-                title: i18n.t("ui.tool.agent", { type: props.input.subagent_type || props.tool }),
-                titleClass: "capitalize",
-                subtitle: props.input.description,
-              }}
-              onSubtitleClick={handleSubtitleClick}
-            >
-              <div
-                ref={autoScroll.scrollRef}
-                onScroll={autoScroll.handleScroll}
-                data-component="tool-output"
-                data-scrollable
-              >
-                <div ref={autoScroll.contentRef} data-component="task-tools">
-                  <For each={summary()}>
-                    {(item) => {
-                      const info = getToolInfo(item.tool)
-                      return (
-                        <div data-slot="task-tool-item">
-                          <Icon name={info.icon} size="small" />
-                          <span data-slot="task-tool-title">{info.title}</span>
-                          <Show when={item.state.title}>
-                            <span data-slot="task-tool-subtitle">{item.state.title}</span>
-                          </Show>
-                        </div>
-                      )
-                    }}
-                  </For>
-                </div>
-              </div>
-            </BasicTool>
-          </Match>
-        </Switch>
-      </div>
+      <Dynamic
+        component={render}
+        input={part.state?.input ?? {}}
+        tool={part.tool}
+        // @ts-expect-error
+        metadata={part.state?.metadata ?? {}}
+        // @ts-expect-error
+        output={part.state?.output}
+        status={part.state.status}
+        defaultOpen={true}
+      />
     )
-  },
+  }
+
+  return (
+    <div data-component="tool-part-wrapper" data-permission={!!childPermission()}>
+      <BasicTool
+        icon="task"
+        defaultOpen={true}
+        trigger={{
+          title: label(),
+          titleClass: props.tool === "task" ? "capitalize" : undefined,
+          subtitle: description(),
+        }}
+        onSubtitleClick={handleSubtitleClick}
+      >
+        <Show when={childToolPart()}>
+          <div data-component="tool-output">{renderChildToolPart()}</div>
+        </Show>
+        <Show when={summary().length > 0}>
+          <div
+            ref={autoScroll.scrollRef}
+            onScroll={autoScroll.handleScroll}
+            data-component="tool-output"
+            data-scrollable
+          >
+            <div ref={autoScroll.contentRef} data-component="task-tools">
+              <For each={summary()}>
+                {(item) => {
+                  const info = getToolInfo(item.tool)
+                  return (
+                    <div data-slot="task-tool-item">
+                      <Icon name={info.icon} size="small" />
+                      <span data-slot="task-tool-title">{info.title}</span>
+                      <Show when={item.state.title}>
+                        <span data-slot="task-tool-subtitle">{item.state.title}</span>
+                      </Show>
+                    </div>
+                  )
+                }}
+              </For>
+            </div>
+          </div>
+        </Show>
+        <Show when={props.tool !== "task" ? props.output : undefined}>
+          {(output) => (
+            <div data-component="tool-output" data-scrollable>
+              <Markdown text={output()} />
+            </div>
+          )}
+        </Show>
+      </BasicTool>
+      <Show when={childPermission()}>
+        <div data-component="permission-prompt">
+          <div data-slot="permission-actions">
+            <Button variant="ghost" size="small" onClick={() => respond("reject")}>
+              {i18n.t("ui.permission.deny")}
+            </Button>
+            <Button variant="secondary" size="small" onClick={() => respond("always")}>
+              {i18n.t("ui.permission.allowAlways")}
+            </Button>
+            <Button variant="primary" size="small" onClick={() => respond("once")}>
+              {i18n.t("ui.permission.allowOnce")}
+            </Button>
+          </div>
+        </div>
+      </Show>
+    </div>
+  )
+}
+
+ToolRegistry.register({
+  name: "task",
+  render: ChildAgentTool,
+})
+
+ToolRegistry.register({
+  name: "sub_coding",
+  render: ChildAgentTool,
+})
+
+ToolRegistry.register({
+  name: "quick_explore",
+  render: ChildAgentTool,
 })
 
 ToolRegistry.register({
@@ -1140,6 +1286,51 @@ ToolRegistry.register({
           </div>
         </Show>
         <DiagnosticsDisplay diagnostics={diagnostics()} />
+      </BasicTool>
+    )
+  },
+})
+
+ToolRegistry.register({
+  name: "str_replace_based_edit_tool",
+  render(props) {
+    const diffComponent = useDiffComponent()
+    const command = createMemo(() => getStrReplaceCommand(props.input))
+    const filePath = createMemo(() => props.input.path ?? props.metadata.filediff?.file ?? "")
+    const filename = createMemo(() => getFilename(filePath() ?? ""))
+    const filediff = createMemo(() => props.metadata.filediff)
+    const summary = createMemo(() => getStrReplaceArgs(props.input))
+    return (
+      <BasicTool
+        {...props}
+        icon="code-lines"
+        trigger={{
+          title: titlecase(command() === "str_replace" ? "replace" : command()),
+          subtitle: filename(),
+          args: summary(),
+        }}
+      >
+        <Show when={filediff()}>
+          {(diff) => (
+            <div data-component="edit-content">
+              <Dynamic
+                component={diffComponent}
+                before={{ name: diff().file || filePath(), contents: diff().before ?? props.input.old_str ?? "" }}
+                after={{
+                  name: diff().file || filePath(),
+                  contents: diff().after ?? props.input.new_str ?? props.input.file_text ?? "",
+                }}
+              />
+            </div>
+          )}
+        </Show>
+        <Show when={!filediff() && props.output}>
+          {(output) => (
+            <div data-component="tool-output" data-scrollable>
+              <Markdown text={output()} />
+            </div>
+          )}
+        </Show>
       </BasicTool>
     )
   },
@@ -1281,6 +1472,83 @@ ToolRegistry.register({
     )
   },
 })
+
+function SequentialThinkingTool(props: ToolProps) {
+  const thought = createMemo(() => {
+    if (typeof props.input.thought === "string" && props.input.thought.trim()) return props.input.thought.trim()
+    return ""
+  })
+  const step = createMemo(() => {
+    const value = props.metadata.thought_number ?? props.input.thought_number
+    return typeof value === "number" ? value : undefined
+  })
+  const total = createMemo(() => {
+    const value = props.metadata.total_thoughts ?? props.input.total_thoughts
+    return typeof value === "number" ? value : undefined
+  })
+  const next = createMemo(() => {
+    const value = props.metadata.next_thought_needed ?? props.input.next_thought_needed
+    return typeof value === "boolean" ? value : undefined
+  })
+  const subtitle = createMemo(() => {
+    if (next() === false) return "Complete"
+    if (props.input.needs_more_thoughts === true) return "Extending"
+    return "Thinking"
+  })
+  const details = createMemo(() => {
+    return [
+      props.input.is_revision === true ? "revision" : undefined,
+      typeof props.input.revises_thought === "number" ? `revises #${props.input.revises_thought}` : undefined,
+      typeof props.input.branch_from_thought === "number"
+        ? `branch from #${props.input.branch_from_thought}`
+        : undefined,
+      typeof props.input.branch_id === "string" && props.input.branch_id.trim()
+        ? `branch ${props.input.branch_id.trim()}`
+        : undefined,
+      props.input.needs_more_thoughts === true ? "needs more thoughts" : undefined,
+      next() === false ? "final thought" : undefined,
+      typeof props.metadata.thought_history_length === "number"
+        ? `history=${props.metadata.thought_history_length}`
+        : undefined,
+    ].filter((item): item is string => Boolean(item))
+  })
+  const branches = createMemo(() => {
+    if (!Array.isArray(props.metadata.branches)) return [] as string[]
+    return props.metadata.branches.filter((item): item is string => typeof item === "string" && !!item.trim())
+  })
+  const title = createMemo(() => {
+    if (step() && total()) return `Sequential Thinking (${step()}/${total()})`
+    return "Sequential Thinking"
+  })
+  const args = createMemo(() => {
+    const items = [...details()]
+    if (branches().length > 0) items.push(`branches=${branches().join(", ")}`)
+    return items
+  })
+  return (
+    <BasicTool
+      {...props}
+      icon="brain"
+      defaultOpen={props.defaultOpen ?? props.status !== "completed"}
+      trigger={{
+        title: title(),
+        subtitle: subtitle(),
+        args: args(),
+      }}
+    >
+      <div data-component="tool-output" data-scrollable>
+        <Markdown text={thought() || "_No thought content._"} />
+      </div>
+    </BasicTool>
+  )
+}
+
+for (const name of SEQUENTIAL_THINKING_TOOLS) {
+  ToolRegistry.register({
+    name,
+    render: SequentialThinkingTool,
+  })
+}
 
 ToolRegistry.register({
   name: "question",

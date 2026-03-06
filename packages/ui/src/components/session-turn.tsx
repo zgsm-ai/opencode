@@ -17,7 +17,7 @@ import { getDirectory, getFilename } from "@opencode-ai/util/path"
 import { Binary } from "@opencode-ai/util/binary"
 import { createEffect, createMemo, createSignal, For, Match, on, onCleanup, ParentProps, Show, Switch } from "solid-js"
 import { DiffChanges } from "./diff-changes"
-import { Message, Part } from "./message-part"
+import { getSessionToolParts, Message, Part } from "./message-part"
 import { Markdown } from "./markdown"
 import { Accordion } from "./accordion"
 import { StickyAccordionHeader } from "./sticky-accordion-header"
@@ -42,12 +42,18 @@ function computeStatusFromPart(part: PartType | undefined, t: Translator): strin
   if (part.type === "tool") {
     switch (part.tool) {
       case "task":
+      case "sub_coding":
+      case "quick_explore":
         return t("ui.sessionTurn.status.delegating")
       case "todowrite":
       case "todoread":
         return t("ui.sessionTurn.status.planning")
       case "read":
         return t("ui.sessionTurn.status.gatheringContext")
+      case "str_replace_based_edit_tool":
+        return (part as ToolPart).state?.input?.command === "view"
+          ? t("ui.sessionTurn.status.gatheringContext")
+          : t("ui.sessionTurn.status.makingEdits")
       case "list":
       case "grep":
       case "glob":
@@ -56,9 +62,15 @@ function computeStatusFromPart(part: PartType | undefined, t: Translator): strin
         return t("ui.sessionTurn.status.searchingWeb")
       case "edit":
       case "write":
+      case "apply_patch":
         return t("ui.sessionTurn.status.makingEdits")
       case "bash":
         return t("ui.sessionTurn.status.runningCommands")
+      case "sequentialthinking":
+      case "sequential-thinking":
+      case "sequential_thinking":
+      case "sequence_thinking":
+        return t("ui.sessionTurn.status.thinking")
       default:
         return undefined
     }
@@ -312,7 +324,6 @@ export function SessionTurn(
 
         if (
           part.type === "tool" &&
-          part.tool === "task" &&
           part.state &&
           "metadata" in part.state &&
           part.state.metadata?.sessionId &&
@@ -331,6 +342,14 @@ export function SessionTurn(
         : undefined
 
     if (taskSessionId) {
+      const childToolParts = getSessionToolParts(data.store, taskSessionId)
+      for (let i = childToolParts.length - 1; i >= 0; i--) {
+        const part = childToolParts[i]
+        if (part.state.status === "running" || part.state.status === "pending" || part.state.status === "error") {
+          return computeStatusFromPart(part, i18n.t)
+        }
+      }
+
       const taskMessages = data.store.message[taskSessionId] ?? emptyMessages
       for (let mi = taskMessages.length - 1; mi >= 0; mi--) {
         const msg = taskMessages[mi]
