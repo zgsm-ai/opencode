@@ -201,9 +201,28 @@ export namespace LLM {
       outputType = "error-text"
     }
 
+    // 最后一轮 assistant 的 content 要记全：reasoning、text、tool-call 等，不省略
+    const content: Array<{ type: string; text?: string; toolCallId?: string; toolName?: string; input?: unknown }> = []
+    for (const part of exitAssistant.parts) {
+      if (part.type === "reasoning") {
+        content.push({ type: "reasoning", text: part.text })
+      }
+      if (part.type === "text") {
+        content.push({ type: "text", text: part.text })
+      }
+      if (part.type === "tool") {
+        content.push({
+          type: "tool-call",
+          toolCallId: part.callID,
+          toolName: part.tool,
+          input: part.state.input,
+        })
+      }
+    }
+
     const assistantMsg: any = {
       role: "assistant",
-      content: [
+      content: content.length > 0 ? content : [
         {
           type: "tool-call",
           toolCallId: callID,
