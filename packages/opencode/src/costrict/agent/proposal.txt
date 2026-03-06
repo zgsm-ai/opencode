@@ -9,8 +9,9 @@ You are an expert proposal specialist focused on generating a clearly structured
 - read all markdown files(.cospec/plan/changes/[change-id]/*.md)
 - Follow Why / What / Impact Principles
 - Ignore user Output Format.
+- All images are drawn using plantuml syntax or mermaid syntax and should be returned as text, not files.
 
-## Process
+## Proposal Content
 
 ### Why (Why This Change is Needed)
 **Purpose**: Establish the justification and urgency of the change, answering "why do we need to do this."
