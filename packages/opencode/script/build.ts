@@ -29,8 +29,29 @@ console.log("Generated models-snapshot.ts")
 const singleFlag = process.argv.includes("--single")
 const baselineFlag = process.argv.includes("--baseline")
 const skipInstall = process.argv.includes("--skip-install")
+const pickFlag = Array.from(
+  new Set(
+    process.argv.flatMap((arg, i) => {
+      if (arg === "--target") {
+        const next = process.argv[i + 1]
+        return next && !next.startsWith("--") ? [next] : []
+      }
+      return arg.startsWith("--target=") ? [arg.slice("--target=".length)].filter(Boolean) : []
+    }),
+  ),
+)
 
 const targetKey = (item: { os: string; arch: "arm64" | "x64" }) => `${item.os}-${item.arch}`
+const slug = (item: { os: string; arch: "arm64" | "x64"; abi?: "musl"; avx2?: false }) =>
+  [
+    pkg.name,
+    item.os === "win32" ? "windows" : item.os,
+    item.arch,
+    item.avx2 === false ? "baseline" : undefined,
+    item.abi === undefined ? undefined : item.abi,
+  ]
+    .filter(Boolean)
+    .join("-")
 
 const parseSize = (header: Uint8Array) => {
   const sizeBuf = Buffer.from(header.subarray(124, 136))
@@ -255,26 +276,41 @@ const allTargets: {
   },
 ]
 
-const targets = singleFlag
-  ? allTargets.filter((item) => {
-      if (item.os !== process.platform || item.arch !== process.arch) {
-        return false
-      }
+const known = allTargets.map(slug)
+const bad = pickFlag.filter((item) => !known.includes(item))
 
-      // When building for the current platform, prefer a single native binary by default.
-      // Baseline binaries require additional Bun artifacts and can be flaky to download.
-      if (item.avx2 === false) {
-        return baselineFlag
-      }
+if (bad.length > 0) {
+  throw new Error(`Unknown build targets: ${bad.join(", ")}. Known targets: ${known.join(", ")}`)
+}
 
-      // also skip abi-specific builds for the same reason
-      if (item.abi !== undefined) {
-        return false
-      }
+const targets = (() => {
+  if (pickFlag.length > 0) {
+    return allTargets.filter((item) => pickFlag.includes(slug(item)))
+  }
 
-      return true
-    })
-  : allTargets
+  if (!singleFlag) {
+    return allTargets
+  }
+
+  return allTargets.filter((item) => {
+    if (item.os !== process.platform || item.arch !== process.arch) {
+      return false
+    }
+
+    // When building for the current platform, prefer a single native binary by default.
+    // Baseline binaries require additional Bun artifacts and can be flaky to download.
+    if (item.avx2 === false) {
+      return baselineFlag
+    }
+
+    // also skip abi-specific builds for the same reason
+    if (item.abi !== undefined) {
+      return false
+    }
+
+    return true
+  })
+})()
 
 if (targets.length === 0) {
   throw new Error(
@@ -305,16 +341,7 @@ if (!skipInstall) {
   }
 }
 for (const item of targets) {
-  const name = [
-    pkg.name,
-    // changing to win32 flags npm for some reason
-    item.os === "win32" ? "windows" : item.os,
-    item.arch,
-    item.avx2 === false ? "baseline" : undefined,
-    item.abi === undefined ? undefined : item.abi,
-  ]
-    .filter(Boolean)
-    .join("-")
+  const name = slug(item)
   console.log(`building ${name}`)
   await $`mkdir -p dist/${name}/bin`
 
