@@ -15,9 +15,8 @@ import { Config } from "@/config/config"
 import { SessionCompaction } from "./compaction"
 import { PermissionNext } from "@/permission/next"
 import { Question } from "@/question"
-import { toolInputFormatter, toolNameFormatter } from "@/costrict/utils/tool-transform-v2" // costrict change
+import { ToolInputRecordError, toolInputFormatter, toolNameFormatter } from "@/costrict/utils/tool-transform-v2" // costrict change
 import { ToolExecution } from "./tool-execution"
-import { Storage } from "@/storage/storage"
 import { Instance } from "@/project/instance"
 import { Budget } from "./budget"
 
@@ -31,8 +30,10 @@ export namespace SessionProcessor {
   }
   const MAX_RETRY_ATTEMPTS = 5
   const MAX_JSON_PARSE_RETRIES = 5
+  const MAX_RECORD_RETRIES = 5
   const TEMPERATURE_SEQUENCE = [0.2, 0.4, 0.6, 0.8, 1.0]
   const JSON_PARSE_RETRY_DELAY_MS = 150
+  const RECORD_RETRY_DELAY_MS = 150
 
   /**
    * 检查是否需要强制使用 sequentialthinking 工具
@@ -68,6 +69,13 @@ export namespace SessionProcessor {
     return content.includes("chat.completion.chunk")
   }
 
+  function isRecordFailure(error: unknown) {
+    if (error instanceof ToolInputRecordError) return true
+    if (!(error instanceof Error)) return false
+    const content = [error.name, error.message].filter(Boolean).join(" ").toLowerCase()
+    return content.includes("expected record") && content.includes("received string")
+  }
+
   export type Info = Awaited<ReturnType<typeof create>>
   export type Result = Awaited<ReturnType<Info["process"]>>
 
@@ -87,7 +95,10 @@ export namespace SessionProcessor {
     let retrySnapshot: RetrySnapshot | undefined
     let retryAttemptCount = 0
     let jsonParseRetryCount = 0
+    let recordRetryCount = 0
     let isSilentMode = false  // Silent 模式：重试时不发布事件
+    let shouldReplaySilentParts = false
+    let shouldStopForRecordError = false
 
     // 预算机制相关状态（从参数传入，如果没有则初始化为无预算）
     let budgetState: Budget.BudgetState = input.budgetState ?? {
@@ -116,7 +127,11 @@ export namespace SessionProcessor {
       // 删除快照后创建的所有 parts
       for (const part of currentParts) {
         if (!snapshotPartIds.has(part.id)) {
-          await Storage.remove(["part", messageId, part.id])
+          await Session.removePart({
+            sessionID: sessionId,
+            messageID: messageId,
+            partID: part.id,
+          })
         }
       }
 
@@ -125,6 +140,21 @@ export namespace SessionProcessor {
         messageID: messageId,
         removedParts: currentParts.length - snapshot.messagePartIds.length
       })
+    }
+
+    async function replaySilentParts(snapshot: RetrySnapshot, messageId: string) {
+      const parts = await MessageV2.parts(messageId)
+      const ids = new Set(snapshot.messagePartIds)
+      for (const part of parts) {
+        if (ids.has(part.id)) continue
+        Bus.publish(MessageV2.Event.PartUpdated, { part })
+      }
+    }
+
+    function clearToolcalls() {
+      for (const key of Object.keys(toolcalls)) {
+        delete toolcalls[key]
+      }
     }
 
     // 包装 Session.updatePart，在 silent 模式下不发布事件
@@ -341,11 +371,12 @@ export namespace SessionProcessor {
                 case "tool-result": {
                   const match = toolcalls[value.toolCallId]
                   if (match && match.state.status === "running") {
+                    const cleanedInput = toolInputFormatter(value.input ?? match.state.input, value.toolCallId)
                     await updatePart({
                       ...match,
                       state: {
                         status: "completed",
-                        input: value.input ?? match.state.input,
+                        input: cleanedInput,
                         output: value.output.output,
                         metadata: value.output.metadata,
                         title: value.output.title,
@@ -365,11 +396,12 @@ export namespace SessionProcessor {
                 case "tool-error": {
                   const match = toolcalls[value.toolCallId]
                   if (match && match.state.status === "running") {
+                    const cleanedInput = toolInputFormatter(value.input ?? match.state.input, value.toolCallId)
                     await updatePart({
                       ...match,
                       state: {
                         status: "error",
-                        input: value.input ?? match.state.input,
+                        input: cleanedInput,
                         error: (value.error as any).toString(),
                         time: {
                           start: match.state.time.start,
@@ -504,6 +536,8 @@ export namespace SessionProcessor {
 
             // 流式成功结束后，重置 JSON 解析失败重试计数
             jsonParseRetryCount = 0
+            recordRetryCount = 0
+            shouldStopForRecordError = false
 
             // 每次 LLM 流式响应完成后立即保存最新消息历史（覆盖式），
             // 确保即使 Agent 中途退出也能保留最新记录
@@ -527,9 +561,7 @@ export namespace SessionProcessor {
               if (retrySnapshot) {
                 await rollbackToSnapshot(retrySnapshot, input.assistantMessage.id, input.sessionID)
               }
-              for (const key of Object.keys(toolcalls)) {
-                delete toolcalls[key]
-              }
+              clearToolcalls()
               const delay = Math.min(JSON_PARSE_RETRY_DELAY_MS * jsonParseRetryCount, 1000)
               log.warn("retrying stream after json parse failure", {
                 sessionID: input.sessionID,
@@ -543,7 +575,36 @@ export namespace SessionProcessor {
               continue
             }
 
+            if (isRecordFailure(e) && recordRetryCount < MAX_RECORD_RETRIES) {
+              recordRetryCount++
+              shouldReplaySilentParts = true
+              isSilentMode = true
+              if (retrySnapshot) {
+                await rollbackToSnapshot(retrySnapshot, input.assistantMessage.id, input.sessionID)
+              }
+              clearToolcalls()
+              const temperature =
+                TEMPERATURE_SEQUENCE[recordRetryCount - 1] ??
+                TEMPERATURE_SEQUENCE[TEMPERATURE_SEQUENCE.length - 1] ??
+                1
+              streamInput.temperatureOverride = temperature
+              const delay = Math.min(RECORD_RETRY_DELAY_MS * recordRetryCount, 1000)
+              log.warn("retrying stream after invalid tool input", {
+                sessionID: input.sessionID,
+                providerID: input.model.providerID,
+                modelID: input.model.id,
+                retry: recordRetryCount,
+                maxRetries: MAX_RECORD_RETRIES,
+                temperature,
+                delay,
+                silentMode: true,
+              })
+              await SessionRetry.sleep(delay, input.abort).catch(() => {})
+              continue
+            }
+
             // Publish LLM error event for plugins to handle
+            shouldStopForRecordError = isRecordFailure(e)
             Bus.publish(Session.Event.LLMError, {
               providerID: input.model.providerID,
               modelID: input.model.id,
@@ -555,6 +616,8 @@ export namespace SessionProcessor {
             })
 
             jsonParseRetryCount = 0
+            recordRetryCount = 0
+            shouldReplaySilentParts = false
             const error = MessageV2.fromError(e, { providerID: input.model.providerID })
             const retry = SessionRetry.retryable(error)
             if (retry !== undefined) {
@@ -674,6 +737,10 @@ export namespace SessionProcessor {
             })
           }
 
+          if (shouldStopForRecordError && input.assistantMessage.error) {
+            return "stop"
+          }
+
           // 调用封装的工具执行验证函数
           const executionResult = await ToolExecution.executeToolsWithValidation({
             assistantMessage: input.assistantMessage,
@@ -712,6 +779,7 @@ export namespace SessionProcessor {
             retrySnapshot = undefined
             retryAttemptCount = 0
             isSilentMode = false  // 退出 silent 模式
+            shouldReplaySilentParts = false
 
             // 标记当前 assistant message 为完成状态
             input.assistantMessage.time.completed = Date.now()
@@ -722,9 +790,13 @@ export namespace SessionProcessor {
           }
 
           // 正常情况 - 有工具调用，重置重试状态
+          if (shouldReplaySilentParts && retrySnapshot) {
+            await replaySilentParts(retrySnapshot, input.assistantMessage.id)
+          }
           retrySnapshot = undefined
           retryAttemptCount = 0
           isSilentMode = false  // 退出 silent 模式
+          shouldReplaySilentParts = false
 
           // 【预算扣减】- 在工具执行成功后扣减预算
           if (executionResult.hasToolCalls) {

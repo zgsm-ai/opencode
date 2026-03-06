@@ -39,40 +39,71 @@ export const toolNameFormatter = (toolname: string, availableTools?: Set<string>
   return toolAlias(fixedToolname, availableTools)
 }
 
+const isRecord = (input: unknown): input is Record<string, unknown> => {
+  if (input === null) return false
+  if (Array.isArray(input)) return false
+  return typeof input === "object"
+}
+
+export class ToolInputRecordError extends Error {
+  constructor(toolCallId: string) {
+    super(`Tool input must be a record for tool call ${toolCallId}`)
+    this.name = "ToolInputRecordError"
+  }
+}
+
+const parseTextInput = (input: string, toolCallId: string) => {
+  const text = input.trim()
+  if (text === "") return {}
+
+  try {
+    const value = JSON.parse(text)
+    if (isRecord(value)) return value
+    throw new ToolInputRecordError(toolCallId)
+  } catch {
+    throw new ToolInputRecordError(toolCallId)
+  }
+}
+
+export const toolInputRecord = (input: unknown, toolCallId: string) => {
+  if (isRecord(input)) return input
+  if (typeof input === "string") return parseTextInput(input, toolCallId)
+  if (input === undefined || input === null) return {}
+  throw new ToolInputRecordError(toolCallId)
+}
+
 /**
  * Clean XML tags from tool input parameters
  *
  * Some AI models may include XML tags in parameter key names.
  * This function removes these tags and returns a clean parameter object.
  *
- * @param input - Original tool input object with keys that may contain XML tags
+ * @param input - Original tool input payload, can be object or string
  * @param toolCallId - Tool call ID for logging purposes
  * @returns Cleaned tool input object
  *
  * @example
  * toolInputFormatter({ "<path>": "src/index.ts" }, "call-1")
  * // returns { "path": "src/index.ts" }
- * toolInputFormatter({ "path": "src/index.ts" }, "call-2")
+ * toolInputFormatter("{\"path\":\"src/index.ts\"}", "call-2")
  * // returns { "path": "src/index.ts" }
  */
-export const toolInputFormatter = (input: Record<string, any>, toolCallId: string) => {
-  try {
-    const cleanedInput = {} as Record<string, any>
-    Object.entries(input).forEach(([key, value]) => {
-      if (!key.includes("<arg_key>")) {
-        cleanedInput[key] = value
-        return
-      }
+export const toolInputFormatter = (input: unknown, toolCallId: string) => {
+  const data = toolInputRecord(input, toolCallId)
+  const cleaned = {} as Record<string, unknown>
 
-      const newKey = key.split("<arg_key>").pop() as string
-      cleanedInput[newKey] = value
-      console.log("toolInputFormatter", `${key} -> ${newKey}`)
-    })
-    return cleanedInput
-  } catch (error: any) {
-    console.log(toolCallId + " | toolInputFormatter error", error)
-    return input
-  }
+  Object.entries(data).forEach(([key, value]) => {
+    if (!key.includes("<arg_key>")) {
+      cleaned[key] = value
+      return
+    }
+
+    const next = key.split("<arg_key>").pop() as string
+    cleaned[next] = value
+    console.log("toolInputFormatter", `${toolCallId} | ${key} -> ${next}`)
+  })
+
+  return cleaned
 }
 
 /**
