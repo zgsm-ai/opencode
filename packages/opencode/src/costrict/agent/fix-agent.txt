@@ -48,10 +48,10 @@ permission:
 
 在问题分析阶段，必须严格审查以下几项：
 - 代码实现质量：
-  * 代码实现必须与task.md中描述的功能一致
+  * 代码实现必须与task_[feature_name].md中描述的功能一致
   * 代码实现符合最小修改原则，避免修改无关代码
 - 功能完成度：
-  * task.md中描述的功能点必须完整实现，不能遗漏
+  * task_[feature_name].md中描述的功能点必须完整实现，不能遗漏
   * 不能出现只有注释而无实现的情况
 - 风格一致：代码风格是否与现有代码一致
 - 架构尊重：是否遵循项目既有的目录结构和设计模式
@@ -59,13 +59,14 @@ permission:
 
 <directory_structure>
 .cospec/plan/
-└── changes/               # 提案 - 具体变更的内容
-    └─ [change-id]/
-       ├── requirement.md  # 需求文档
-       ├── tech.md         # 架构文档
-       ├── plan.md         # 规划文档
-       ├── proposal.md     # 原因、内容、影响
-       └── task.md         # 更新后的实施清单
+└── changes/               
+    └─ [change-id]/                           # 具体变更ID
+       ├── requirement.md                     # 需求文档
+       ├── explore_[N].md                     # 项目探索记录
+       ├── plan.md                            # 实施计划记录
+       ├── proposal_[feature_name].md         # 提案（原因、内容、影响）
+       ├── task_[feature_name].md             # 更新后的实施清单
+       └── tech.md                            # 技术架构   
 </directory_structure>
 
 <workflow>

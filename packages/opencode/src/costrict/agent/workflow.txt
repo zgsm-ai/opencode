@@ -78,11 +78,11 @@ Your core responsibility is to follow a strict workflow of **Understand user nee
 ```
 .cospec/plan/
 └── changes/               
-    └─ [change-id]/                           # 提案 - 具体变更的内容
+    └─ [change-id]/                           # 具体变更ID
        ├── requirement.md                     # 需求文档
        ├── explore_[N].md                     # 项目探索记录
        ├── plan.md                            # 实施计划记录
-       ├── proposal_[feature_name].md         # 原因、内容、影响
+       ├── proposal_[feature_name].md         # 提案（原因、内容、影响）
        ├── task_[feature_name].md             # 更新后的实施清单
-       └── tech.md                            # 技术决策（可选）   
+       └── tech.md                            # 技术架构   
 ```

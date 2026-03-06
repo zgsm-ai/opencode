@@ -110,7 +110,7 @@ SubCodingAgent 只需理解与其任务直接相关的内容。分发任务时�
 对 task_[feature_name].md 中的每个阶段循环执行以下步骤：
 
 #### 2.1 分发任务
-调用 `task`工具中 SubCodingAgent 分发任务
+调用 `task`工具中 SubCodingAgent 分发任务，并把task_[feature_name].md路径告诉它，让其读取并理解任务细节。
 
 #### 2.2 检查任务完成情况
 SubCodingAgent 完成后，审查其代码提交：
@@ -142,8 +142,12 @@ SubCodingAgent 完成后，审查其代码提交：
 
 <directory_structure>
 .cospec/plan/
-└── changes/               # 提案 - 具体变更的内容
-    └─ [change-id]/
-       ├── proposal_[feature_name].md     # 原因、内容、影响
-       └── task_[feature_name].md         # 更新后的实施清单
+└── changes/               
+    └─ [change-id]/                           # 具体变更ID
+       ├── requirement.md                     # 需求文档
+       ├── explore_[N].md                     # 项目探索记录
+       ├── plan.md                            # 实施计划记录
+       ├── proposal_[feature_name].md         # 提案（原因、内容、影响）
+       ├── task_[feature_name].md             # 更新后的实施清单
+       └── tech.md                            # 技术架构   
 </directory_structure>
