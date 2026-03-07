@@ -101,6 +101,7 @@ export async function resolveLintExecutable(language: string): Promise<string | 
 
   if (language === "java") {
     const javaDir = path.join(lintRoot, "java")
+    await fs.mkdir(path.join(javaDir, "pmd-7.19.0", "conf"), { recursive: true }).catch(() => {})
     const exeName = isWindows ? "pmd.bat" : "pmd"
     const binDir = path.join(javaDir, "pmd-7.19.0", "bin")
     const exePath = path.join(binDir, exeName)
@@ -520,12 +521,18 @@ async function runPmd(filePath: string): Promise<{ output: string; error?: strin
     const stderr = await new Response(proc.stderr).text()
     await proc.exited
 
+    const filteredStdout = stdout.split("\n").filter(line => {
+      const normalized = line.replace(/\\/g, "/")
+      if (normalized.includes("The configuration directory [") && normalized.includes("pmd-7.19.0/conf") && normalized.includes("does not exist")) return false
+      return true
+    }).join("\n").trim()
+
     const outputLines: string[] = []
-    if (stdout) {
+    if (filteredStdout) {
       outputLines.push("=== 发现 Lint 问题 ===")
-      outputLines.push(stdout)
+      outputLines.push(filteredStdout)
       outputLines.push("\n=== 概览 ===")
-      outputLines.push(`问题总数：${stdout.split("\n").filter(l => l.trim()).length}`)
+      outputLines.push(`问题总数：${filteredStdout.split("\n").filter(l => l.trim()).length}`)
     } else {
       outputLines.push("未发现 Lint 问题。")
     }

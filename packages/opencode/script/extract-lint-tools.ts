@@ -90,6 +90,9 @@ async function extractBundle(bundleName: string) {
 	// 解压
 	await fs.mkdir(toolDir, { recursive: true });
 	await extractTarGz(bundlePath, toolDir);
+	if (toolName === "java") {
+		await ensurePmdConf(toolDir);
+	}
 
 	// 设置可执行权限（Unix 系统）
 	if (currentPlatform !== "win32") {
@@ -221,6 +224,10 @@ async function setExecutablePermissions(dir: string) {
 	}
 
 	await walk(dir);
+}
+
+async function ensurePmdConf(dir: string) {
+	await fs.mkdir(path.join(dir, "pmd-7.19.0", "conf"), { recursive: true });
 }
 
 async function main() {

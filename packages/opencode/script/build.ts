@@ -155,6 +155,10 @@ const setExecutablePermissions = async (dir: string) => {
   await walk(dir)
 }
 
+const ensurePmdConf = async (dir: string) => {
+  await fsp.mkdir(path.join(dir, "pmd-7.19.0", "conf"), { recursive: true })
+}
+
 const extractLintResourcesForTarget = async (
   outRoot: string,
   item: {
@@ -178,6 +182,9 @@ const extractLintResourcesForTarget = async (
     await fsp.rm(dest, { recursive: true, force: true })
     await fsp.mkdir(dest, { recursive: true })
     await extractTarGz(path.join(bundlesDir, bundleName), dest)
+    if (tool === "java") {
+      await ensurePmdConf(dest)
+    }
     if (item.os !== "win32") {
       await setExecutablePermissions(dest)
     }

@@ -6,8 +6,7 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 
-const rootDir = path.resolve(__dirname, "..", "..", "..");
-const sourceDir = path.join(rootDir, "trae_agent", "utils", "lint");
+const sourceDir = path.resolve(__dirname, "..", "resources", "lint");
 const bundlesDir = path.resolve(__dirname, "..", "resources", "lint", "bundles");
 
 // 定义打包配置
