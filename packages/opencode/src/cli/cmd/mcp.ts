@@ -1,4 +1,5 @@
 import { cmd } from "./cmd"
+import { McpServeCommand } from "./mcp-serve"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js"
 import { UnauthorizedError } from "@modelcontextprotocol/sdk/client/auth.js"
@@ -60,6 +61,7 @@ export const McpCommand = cmd({
       .command(McpAuthCommand)
       .command(McpLogoutCommand)
       .command(McpDebugCommand)
+      .command(McpServeCommand)
       .demandCommand(),
   async handler() {},
 })
