@@ -5,9 +5,56 @@ import { MCP } from "../../mcp"
 import { Config } from "../../config/config"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
+import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js"
+import { McpServe } from "../../mcp/serve"
+import { ToolRegistry } from "../../tool/registry"
+import { Installation } from "../../installation"
 
-export const McpRoutes = lazy(() =>
-  new Hono()
+export const McpRoutes = lazy(() => {
+  const sessions = new Map<string, WebStandardStreamableHTTPServerTransport>()
+  const schema = z
+    .object({
+      id: z.string(),
+      description: z.string(),
+      parameters: z.any(),
+    })
+    .meta({ ref: "McpToolDefinition" })
+
+  async function getTransport(sessionId: string | undefined) {
+    if (sessionId) {
+      const existing = sessions.get(sessionId)
+      if (existing) return existing
+    }
+    const transport: WebStandardStreamableHTTPServerTransport = new WebStandardStreamableHTTPServerTransport({
+      sessionIdGenerator: () => crypto.randomUUID(),
+      onsessioninitialized: (id) => {
+        sessions.set(id, transport)
+      },
+    })
+    transport.onclose = () => {
+      if (transport.sessionId) sessions.delete(transport.sessionId)
+    }
+    const server = await McpServe.createServer()
+    await server.connect(transport)
+    return transport
+  }
+
+  async function tools(id?: string) {
+    return (await ToolRegistry.tools({ providerID: "", modelID: "" }))
+      .filter((tool) => {
+        if (tool.id === "invalid" || tool.id === "question") return false
+        if (!(tool.parameters instanceof z.ZodObject)) return false
+        if (id) return tool.id === id
+        return true
+      })
+      .map((tool) => ({
+        id: tool.id,
+        description: tool.description,
+        parameters: z.toJSONSchema(tool.parameters),
+      }))
+  }
+
+  return new Hono()
     .get(
       "/",
       describeRoute({
@@ -221,5 +268,43 @@ export const McpRoutes = lazy(() =>
         await MCP.disconnect(name)
         return c.json(true)
       },
-    ),
-)
+    )
+    .get(
+      "/tool",
+      describeRoute({
+        summary: "Get MCP tool definitions",
+        description: "Get tool definitions exposed by the local MCP server. Optionally filter by tool ID.",
+        operationId: "mcp.tool",
+        responses: {
+          200: {
+            description: "MCP tool definitions",
+            content: {
+              "application/json": {
+                schema: resolver(z.array(schema).meta({ ref: "McpToolDefinitionList" })),
+              },
+            },
+          },
+          ...errors(400),
+        },
+      }),
+      validator(
+        "query",
+        z.object({
+          id: z.string().optional(),
+        }),
+      ),
+      async (c) => {
+        const { id } = c.req.valid("query")
+        return c.json(await tools(id))
+      },
+    )
+    .get("/health", async (c) => {
+      const tools = await ToolRegistry.tools({ providerID: "", modelID: "" })
+      const count = tools.filter((t) => t.id !== "invalid" && t.id !== "question").length
+      return c.json({ status: "ok", version: Installation.VERSION, toolCount: count })
+    })
+    .all("/rpc", async (c) => {
+      const sessionId = c.req.header("mcp-session-id")
+      return (await getTransport(sessionId)).handleRequest(c.req.raw)
+    })
+})
