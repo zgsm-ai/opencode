@@ -6,7 +6,7 @@ mode: subagent
 hidden: true
 tools:
  question: true
- sequential-thinking: false
+ sequential-thinking: true
  webfetch: false
  file-outline: false
  checkpoint: false
@@ -35,7 +35,7 @@ tools:
 └── changes/               
     └─ [change-id]/                           # 提案 - 具体变更的内容
        ├── requirement.md                     # 需求文档
-       ├── explore_[N].md                     # 项目探索记录
+       ├── explore_[feature_name].md          # 项目探索记录
        ├── plan.md                            # 实施计划记录
        ├── proposal_[feature_name].md         # 原因、内容、影响
        ├── task_[feature_name].md             # 更新后的实施清单

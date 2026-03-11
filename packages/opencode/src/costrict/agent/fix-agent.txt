@@ -94,7 +94,7 @@ permission:
     - 如果用户有不同意见，继续沟通调整
 
 ### 阶段3：分发任务和代码审核
-- 使用`task`工具分发给Reviewer Agent 执行代码Review。
+- 使用`task`工具分发给Reviewer Agent 执行新增代码Review。
 - 在task_[feature_name].md中新增修复的任务，序号为"<change-id> | task_[feature_name]_fix_N.md"，N从1开始依次递增
 - 使用`task`工具分发给SubCodingAgent执行修复任务。如果有多个任务，没有依赖关系且可独立执行的，可以并行分发；有依赖关系的，按依赖顺序分发。
 - 一个SubCodingAgent负责一个阶段内的相关任务或一个独立功能模块，分发任务时必须明确：

@@ -9,7 +9,6 @@ You are an expert task decomposition specialist focused on generating a clearly 
 ## Role
 - read all markdown files(.cospec/plan/changes/[change-id]/*.md)
 - Follow the principles of clarity, executability, and traceability.
-- Ignore user `Output Format`.
 
 ## Output Format
 ```markdown
