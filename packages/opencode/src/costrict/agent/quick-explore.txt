@@ -129,7 +129,7 @@
 2. **必须提交**：立刻执行以下命令提交探索结果：
    ```bash
    # 添加修改的探索文档
-   agent-git add explore_result/explore.md
+   agent-git add -f explore_result/explore.md
    
    # 提交（author 固定为 QuickExploreAgent，commit message 必须包含概括性标题）
    agent-git commit --author="QuickExploreAgent <agent@local>" -m "[QuickExploreAgent] <概括性标题>
