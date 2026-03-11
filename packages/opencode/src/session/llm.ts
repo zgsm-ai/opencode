@@ -190,17 +190,6 @@ export namespace LLM {
 
     if (alreadyHasToolCall && alreadyHasToolResult) return baseMessages
 
-    let outputText = ""
-    let outputType = "text"
-
-    if (exitToolPart.state.status === "completed") {
-      outputText = exitToolPart.state.output ?? ""
-      outputType = "text"
-    } else {
-      outputText = exitToolPart.state.error ?? ""
-      outputType = "error-text"
-    }
-
     // 最后一轮 assistant 的 content 要记全：reasoning、text、tool-call 等，不省略
     const content: Array<{ type: string; text?: string; toolCallId?: string; toolName?: string; input?: unknown }> = []
     for (const part of exitAssistant.parts) {
@@ -232,19 +221,53 @@ export namespace LLM {
       ],
     }
 
+    const toolResults = exitAssistant.parts
+      .filter((part): part is MessageV2.ToolPart => part.type === "tool")
+      .map((part) => {
+        let text = ""
+        let type = "text"
+        if (part.state.status === "completed") {
+          text = part.state.output ?? ""
+          type = "text"
+        } else if (part.state.status === "error") {
+          text = part.state.error ?? ""
+          type = "error-text"
+        } else {
+          return null
+        }
+        return {
+          type: "tool-result",
+          toolCallId: part.callID,
+          toolName: part.tool,
+          output: {
+            type,
+            value: String(text),
+          },
+        }
+      })
+      .filter((x): x is { type: string; toolCallId: string; toolName: string; output: { type: string; value: string } } => !!x)
+
+    const toolContent = toolResults.length
+      ? toolResults
+      : [
+          {
+            type: "tool-result",
+            toolCallId: callID,
+            toolName,
+            output: {
+              type: exitToolPart.state.status === "completed" ? "text" : "error-text",
+              value: String(
+                exitToolPart.state.status === "completed"
+                  ? exitToolPart.state.output ?? ""
+                  : exitToolPart.state.error ?? "",
+              ),
+            },
+          },
+        ]
+
     const toolMsg: any = {
       role: "tool",
-      content: [
-        {
-          type: "tool-result",
-          toolCallId: callID,
-          toolName,
-          output: {
-            type: outputType,
-            value: String(outputText),
-          },
-        },
-      ],
+      content: toolContent,
     }
 
     return [...baseMessages, assistantMsg, toolMsg]
