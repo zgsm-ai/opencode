@@ -175,6 +175,45 @@ afterAll(() => {
 Log.init({ print: false })
 
 describe("server openai chat completions", () => {
+   test("lists available models in OpenAI shape", async () => {
+      await using tmp = await project()
+      await Instance.provide({
+         directory: tmp.path,
+         fn: async () => {
+            const app = Server.App()
+            const res = await app.request("/cs/v1/models", {
+               headers: { "x-opencode-directory": tmp.path },
+            })
+
+            expect(res.status).toBe(200)
+            expect(res.headers.get("content-type")).toContain("application/json")
+
+            const body = await res.json()
+            expect(body).toMatchObject({
+               object: "list",
+            })
+            expect(Array.isArray(body.data)).toBe(true)
+
+            const data = body.data as Array<{
+               id: string
+               object: string
+               created: number
+               owned_by: string
+            }>
+            const item = data.find((item) => item.id === "compat/gpt-5.2")
+
+            expect(data.map((item) => item.id)).toContain("compat/gpt-5.2")
+            expect(data.map((item) => item.id)).not.toContain("gpt-5.2")
+            expect(item).toMatchObject({
+               id: "compat/gpt-5.2",
+               object: "model",
+               created: expect.any(Number),
+               owned_by: "compat",
+            })
+         },
+      })
+   })
+
    test("streams OpenAI chunks and ends with DONE", async () => {
       const sent = wait(
          "/chat/completions",
@@ -189,7 +228,7 @@ describe("server openai chat completions", () => {
          fn: async () => {
             const app = Server.App()
             const stop = new AbortController()
-            const res = await app.request("/v1/chat/completions", {
+            const res = await app.request("/cs/v1/chat/completions", {
                method: "POST",
                headers: { "Content-Type": "application/json", "x-opencode-directory": tmp.path },
                body: JSON.stringify({
@@ -258,7 +297,7 @@ describe("server openai chat completions", () => {
          fn: async () => {
             const app = Server.App()
             const stop = new AbortController()
-            const res = await app.request("/v1/chat/completions", {
+            const res = await app.request("/cs/v1/chat/completions", {
                method: "POST",
                headers: { "Content-Type": "application/json", "x-opencode-directory": tmp.path },
                body: JSON.stringify({
@@ -324,7 +363,7 @@ describe("server openai chat completions", () => {
          directory: tmp.path,
          fn: async () => {
             const app = Server.App()
-            const res = await app.request("/v1/chat/completions", {
+            const res = await app.request("/cs/v1/chat/completions", {
                method: "POST",
                headers: { "Content-Type": "application/json", "x-opencode-directory": tmp.path },
                body: JSON.stringify({
@@ -380,7 +419,7 @@ describe("server openai chat completions", () => {
          directory: tmp.path,
          fn: async () => {
             const app = Server.App()
-            const res = await app.request("/v1/chat/completions", {
+            const res = await app.request("/cs/v1/chat/completions", {
                method: "POST",
                headers: { "Content-Type": "application/json", "x-opencode-directory": tmp.path },
                body: JSON.stringify({
@@ -402,7 +441,7 @@ describe("server openai chat completions", () => {
          directory: tmp.path,
          fn: async () => {
             const app = Server.App()
-            const res = await app.request("/v1/chat/completions", {
+            const res = await app.request("/cs/v1/chat/completions", {
                method: "POST",
                headers: { "Content-Type": "application/json", "x-opencode-directory": tmp.path },
                body: JSON.stringify({
@@ -424,7 +463,7 @@ describe("server openai chat completions", () => {
          directory: tmp.path,
          fn: async () => {
             const app = Server.App()
-            const res = await app.request("/v1/chat/completions", {
+            const res = await app.request("/cs/v1/chat/completions", {
                method: "POST",
                headers: { "Content-Type": "application/json", "x-opencode-directory": tmp.path },
                body: JSON.stringify({

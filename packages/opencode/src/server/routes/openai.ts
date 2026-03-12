@@ -198,6 +198,26 @@ const Res = z
       ref: "OpenAIChatCompletionResponse",
    })
 
+const ModelItem = z
+   .object({
+      id: z.string(),
+      object: z.literal("model"),
+      created: z.number(),
+      owned_by: z.string(),
+   })
+   .meta({
+      ref: "OpenAIModel",
+   })
+
+const ModelsRes = z
+   .object({
+      object: z.literal("list"),
+      data: z.array(ModelItem),
+   })
+   .meta({
+      ref: "OpenAIModelList",
+   })
+
 function bad(message: string): never {
    throw new HTTPException(400, { message })
 }
@@ -377,6 +397,29 @@ async function model(input: string) {
    })
 }
 
+function stamp(input: string) {
+   const next = Date.parse(input)
+   return Number.isNaN(next) ? 0 : Math.floor(next / 1000)
+}
+
+async function models() {
+   const data = Object.entries(await Provider.list())
+      .flatMap(([providerID, provider]) =>
+         Object.entries(provider.models).map(([modelID, model]) => ({
+            id: `${providerID}/${modelID}`,
+            object: "model" as const,
+            created: stamp(model.release_date),
+            owned_by: providerID,
+         })),
+      )
+      .sort((a, b) => a.id.localeCompare(b.id))
+
+   return {
+      object: "list" as const,
+      data,
+   }
+}
+
 async function seed(input: {
    sessionID: string
    messages: Msg[]
@@ -489,283 +532,305 @@ async function prep(input: Req) {
 }
 
 export const OpenAIRoutes = lazy(() =>
-   new Hono().post(
-      "/chat/completions",
-      describeRoute({
-         summary: "OpenAI-compatible chat completions",
-         description: "Create a chat completion using an OpenAI-compatible request and response shape.",
-         operationId: "openai.chat.completions.create",
-         responses: {
-            200: {
-               description: "Chat completion response",
-               content: {
-                  "application/json": {
-                     schema: resolver(Res),
-                  },
-                  "text/event-stream": {
-                     schema: resolver(Chunk),
+   new Hono()
+      .get(
+         "/models",
+         describeRoute({
+            summary: "OpenAI-compatible model list",
+            description: "List the currently available models using an OpenAI-compatible response shape.",
+            operationId: "openai.models.list",
+            responses: {
+               200: {
+                  description: "Available models",
+                  content: {
+                     "application/json": {
+                        schema: resolver(ModelsRes),
+                     },
                   },
                },
             },
-            ...errors(400, 404),
+         }),
+         async (c) => {
+            return c.json(await models())
          },
-      }),
-      validator("json", Req),
-      async (c) => {
-         const body = c.req.valid("json")
-         const init = await prep(body)
-
-         if (!body.stream) {
-            const result = await SessionPrompt.prompt(init.prompt)
-            if (result.info.role !== "assistant") {
-               throw new Error("prompt did not produce an assistant message")
-            }
-            if (result.info.error) {
-               throw new HTTPException(500, {
-                  message: error(result.info.error),
-               })
-            }
-            return c.json({
-               id: init.id,
-               object: "chat.completion" as const,
-               created: init.created,
-               model: body.model,
-               choices: [
-                  {
-                     index: 0 as const,
-                     message: message(result),
-                     finish_reason: finish(result),
+      )
+      .post(
+         "/chat/completions",
+         describeRoute({
+            summary: "OpenAI-compatible chat completions",
+            description: "Create a chat completion using an OpenAI-compatible request and response shape.",
+            operationId: "openai.chat.completions.create",
+            responses: {
+               200: {
+                  description: "Chat completion response",
+                  content: {
+                     "application/json": {
+                        schema: resolver(Res),
+                     },
+                     "text/event-stream": {
+                        schema: resolver(Chunk),
+                     },
                   },
-               ],
-               usage: usage(result.info),
-            })
-         }
+               },
+               ...errors(400, 404),
+            },
+         }),
+         validator("json", Req),
+         async (c) => {
+            const body = c.req.valid("json")
+            const init = await prep(body)
 
-         c.header("X-Accel-Buffering", "no")
-         c.header("X-Content-Type-Options", "nosniff")
-         return streamSSE(c, async (stream) => {
-            let aid = ""
-            let open = false
-            let fail: string | undefined
-            let sent = false
-            const kind = new Map<string, MessageV2.Part["type"]>()
-            const text = new Map<string, string>()
-            const think = new Map<string, string>()
-            const tool = new Map<string, string>()
-            const slot = new Map<string, number>()
-            const emit = async (data: string | object) => {
-               await stream.writeSSE({
-                  data: typeof data === "string" ? data : JSON.stringify(data),
-               })
-            }
-            const role = async () => {
-               if (open) return
-               open = true
-               await emit(
-                  chunk({
-                     id: init.id,
-                     created: init.created,
-                     model: body.model,
-                     choices: [{ index: 0 as const, delta: { role: "assistant" } }],
-                  }),
-               )
-            }
-            const patch = (part: MessageV2.Part, delta: Delta) => {
-               const hint = "metadata" in part ? opaque(part) : undefined
-               if (!hint || sent) return delta
-               sent = true
-               return { ...delta, reasoning_opaque: hint }
-            }
-            const push = async (part: MessageV2.Part, delta: Delta) => {
-               const next = patch(part, delta)
-               if (Object.keys(next).length === 0) return
-               await role()
-               await emit(
-                  chunk({
-                     id: init.id,
-                     created: init.created,
-                     model: body.model,
-                     choices: [{ index: 0 as const, delta: next }],
-                  }),
-               )
-            }
-            const textdelta = async (part: MessageV2.TextPart, delta: string) => {
-               if (!delta) return
-               text.set(part.id, (text.get(part.id) ?? "") + delta)
-               await push(part, { content: delta })
-            }
-            const reasondelta = async (part: MessageV2.ReasoningPart, delta: string) => {
-               if (!delta) return
-               think.set(part.id, (think.get(part.id) ?? "") + delta)
-               await push(part, { reasoning_text: delta })
-            }
-            const tooldelta = async (part: MessageV2.ToolPart) => {
-               if (part.state.status === "pending") return
-               const raw = JSON.stringify(part.state.input ?? {})
-               if (tool.get(part.callID) === raw) return
-               tool.set(part.callID, raw)
-               const index = slot.get(part.callID) ?? slot.size
-               slot.set(part.callID, index)
-               await push(part, {
-                  tool_calls: [
-                     {
-                        index,
-                        id: part.callID,
-                        function: {
-                           name: part.tool,
-                           arguments: raw,
-                        },
-                     },
-                  ],
-               })
-            }
-            const tail = async (part: MessageV2.Part) => {
-               if (part.type === "text") {
-                  const seen = text.get(part.id) ?? ""
-                  if (!part.text.startsWith(seen)) {
-                     text.set(part.id, part.text)
-                     await push(part, { content: part.text })
-                     return
-                  }
-                  await textdelta(part, part.text.slice(seen.length))
-                  return
-               }
-               if (part.type === "reasoning") {
-                  const seen = think.get(part.id) ?? ""
-                  if (!part.text.startsWith(seen)) {
-                     think.set(part.id, part.text)
-                     await push(part, { reasoning_text: part.text })
-                     return
-                  }
-                  await reasondelta(part, part.text.slice(seen.length))
-                  if (!sent && opaque(part)) {
-                     await push(part, {})
-                  }
-                  return
-               }
-               if (part.type === "tool") {
-                  await tooldelta(part)
-               }
-            }
-            const done = () => {
-               SessionPrompt.cancel(init.session.id)
-            }
-
-            stream.onAbort(done)
-            const off = [
-               Bus.subscribe(MessageV2.Event.Updated, async (evt) => {
-                  const info = evt.properties.info
-                  if (info.sessionID !== init.session.id) return
-                  if (info.role !== "assistant") return
-                  if (info.parentID !== init.prompt.messageID) return
-                  aid = info.id
-                  await role()
-               }),
-               Bus.subscribe(MessageV2.Event.PartUpdated, async (evt) => {
-                  const next = evt.properties.part
-                  if (next.sessionID !== init.session.id) return
-                  kind.set(next.id, next.type)
-                  if (!aid || next.messageID !== aid) return
-                  if (next.type === "tool") {
-                     await tooldelta(next)
-                     return
-                  }
-                  if (next.type === "text") {
-                     const seen = text.get(next.id) ?? ""
-                     if (!next.text.startsWith(seen)) return
-                     await textdelta(next, next.text.slice(seen.length))
-                     if (!sent && opaque(next)) {
-                        await push(next, {})
-                     }
-                     return
-                  }
-                  if (next.type !== "reasoning") return
-                  const seen = think.get(next.id) ?? ""
-                  if (!next.text.startsWith(seen)) return
-                  await reasondelta(next, next.text.slice(seen.length))
-                  if (!sent && opaque(next)) {
-                     await push(next, {})
-                  }
-               }),
-               Bus.subscribe(MessageV2.Event.PartDelta, async (evt) => {
-                  if (evt.properties.sessionID !== init.session.id) return
-                  if (!aid || evt.properties.messageID !== aid) return
-                  if (evt.properties.field !== "text") return
-                  const type = kind.get(evt.properties.partID)
-                  if (type === "text") {
-                     await textdelta(
-                        {
-                           id: evt.properties.partID,
-                           messageID: evt.properties.messageID,
-                           sessionID: evt.properties.sessionID,
-                           type: "text",
-                           text: "",
-                        },
-                        evt.properties.delta,
-                     )
-                     return
-                  }
-                  if (type !== "reasoning") return
-                  await reasondelta(
-                     {
-                        id: evt.properties.partID,
-                        messageID: evt.properties.messageID,
-                        sessionID: evt.properties.sessionID,
-                        type: "reasoning",
-                        text: "",
-                        time: { start: 0 },
-                     },
-                     evt.properties.delta,
-                  )
-               }),
-               Bus.subscribe(Session.Event.Error, async (evt) => {
-                  if (evt.properties.sessionID !== init.session.id) return
-                  if (!evt.properties.error) return
-                  fail = error(evt.properties.error)
-               }),
-            ]
-
-            try {
+            if (!body.stream) {
                const result = await SessionPrompt.prompt(init.prompt)
                if (result.info.role !== "assistant") {
                   throw new Error("prompt did not produce an assistant message")
                }
                if (result.info.error) {
-                  throw new Error(error(result.info.error))
+                  throw new HTTPException(500, {
+                     message: error(result.info.error),
+                  })
                }
-               if (fail) {
-                  throw new Error(fail)
-               }
+               return c.json({
+                  id: init.id,
+                  object: "chat.completion" as const,
+                  created: init.created,
+                  model: body.model,
+                  choices: [
+                     {
+                        index: 0 as const,
+                        message: message(result),
+                        finish_reason: finish(result),
+                     },
+                  ],
+                  usage: usage(result.info),
+               })
+            }
 
-               aid = result.info.id
-               for (const part of result.parts) {
-                  await tail(part)
+            c.header("X-Accel-Buffering", "no")
+            c.header("X-Content-Type-Options", "nosniff")
+            return streamSSE(c, async (stream) => {
+               let aid = ""
+               let open = false
+               let fail: string | undefined
+               let sent = false
+               const kind = new Map<string, MessageV2.Part["type"]>()
+               const text = new Map<string, string>()
+               const think = new Map<string, string>()
+               const tool = new Map<string, string>()
+               const slot = new Map<string, number>()
+               const emit = async (data: string | object) => {
+                  await stream.writeSSE({
+                     data: typeof data === "string" ? data : JSON.stringify(data),
+                  })
                }
-               await role()
-               await emit(
-                  chunk({
-                     id: init.id,
-                     created: init.created,
-                     model: body.model,
-                     choices: [{ index: 0 as const, delta: {}, finish_reason: finish(result) }],
-                  }),
-               )
-               if (init.include) {
+               const role = async () => {
+                  if (open) return
+                  open = true
                   await emit(
                      chunk({
                         id: init.id,
                         created: init.created,
                         model: body.model,
-                        choices: [],
-                        usage: usage(result.info),
+                        choices: [{ index: 0 as const, delta: { role: "assistant" } }],
                      }),
                   )
                }
-               await emit("[DONE]")
-            } finally {
-               off.forEach((item) => item())
-            }
-         })
-      },
-   ),
+               const patch = (part: MessageV2.Part, delta: Delta) => {
+                  const hint = "metadata" in part ? opaque(part) : undefined
+                  if (!hint || sent) return delta
+                  sent = true
+                  return { ...delta, reasoning_opaque: hint }
+               }
+               const push = async (part: MessageV2.Part, delta: Delta) => {
+                  const next = patch(part, delta)
+                  if (Object.keys(next).length === 0) return
+                  await role()
+                  await emit(
+                     chunk({
+                        id: init.id,
+                        created: init.created,
+                        model: body.model,
+                        choices: [{ index: 0 as const, delta: next }],
+                     }),
+                  )
+               }
+               const textdelta = async (part: MessageV2.TextPart, delta: string) => {
+                  if (!delta) return
+                  text.set(part.id, (text.get(part.id) ?? "") + delta)
+                  await push(part, { content: delta })
+               }
+               const reasondelta = async (part: MessageV2.ReasoningPart, delta: string) => {
+                  if (!delta) return
+                  think.set(part.id, (think.get(part.id) ?? "") + delta)
+                  await push(part, { reasoning_text: delta })
+               }
+               const tooldelta = async (part: MessageV2.ToolPart) => {
+                  if (part.state.status === "pending") return
+                  const raw = JSON.stringify(part.state.input ?? {})
+                  if (tool.get(part.callID) === raw) return
+                  tool.set(part.callID, raw)
+                  const index = slot.get(part.callID) ?? slot.size
+                  slot.set(part.callID, index)
+                  await push(part, {
+                     tool_calls: [
+                        {
+                           index,
+                           id: part.callID,
+                           function: {
+                              name: part.tool,
+                              arguments: raw,
+                           },
+                        },
+                     ],
+                  })
+               }
+               const tail = async (part: MessageV2.Part) => {
+                  if (part.type === "text") {
+                     const seen = text.get(part.id) ?? ""
+                     if (!part.text.startsWith(seen)) {
+                        text.set(part.id, part.text)
+                        await push(part, { content: part.text })
+                        return
+                     }
+                     await textdelta(part, part.text.slice(seen.length))
+                     return
+                  }
+                  if (part.type === "reasoning") {
+                     const seen = think.get(part.id) ?? ""
+                     if (!part.text.startsWith(seen)) {
+                        think.set(part.id, part.text)
+                        await push(part, { reasoning_text: part.text })
+                        return
+                     }
+                     await reasondelta(part, part.text.slice(seen.length))
+                     if (!sent && opaque(part)) {
+                        await push(part, {})
+                     }
+                     return
+                  }
+                  if (part.type === "tool") {
+                     await tooldelta(part)
+                  }
+               }
+               const done = () => {
+                  SessionPrompt.cancel(init.session.id)
+               }
+
+               stream.onAbort(done)
+               const off = [
+                  Bus.subscribe(MessageV2.Event.Updated, async (evt) => {
+                     const info = evt.properties.info
+                     if (info.sessionID !== init.session.id) return
+                     if (info.role !== "assistant") return
+                     if (info.parentID !== init.prompt.messageID) return
+                     aid = info.id
+                     await role()
+                  }),
+                  Bus.subscribe(MessageV2.Event.PartUpdated, async (evt) => {
+                     const next = evt.properties.part
+                     if (next.sessionID !== init.session.id) return
+                     kind.set(next.id, next.type)
+                     if (!aid || next.messageID !== aid) return
+                     if (next.type === "tool") {
+                        await tooldelta(next)
+                        return
+                     }
+                     if (next.type === "text") {
+                        const seen = text.get(next.id) ?? ""
+                        if (!next.text.startsWith(seen)) return
+                        await textdelta(next, next.text.slice(seen.length))
+                        if (!sent && opaque(next)) {
+                           await push(next, {})
+                        }
+                        return
+                     }
+                     if (next.type !== "reasoning") return
+                     const seen = think.get(next.id) ?? ""
+                     if (!next.text.startsWith(seen)) return
+                     await reasondelta(next, next.text.slice(seen.length))
+                     if (!sent && opaque(next)) {
+                        await push(next, {})
+                     }
+                  }),
+                  Bus.subscribe(MessageV2.Event.PartDelta, async (evt) => {
+                     if (evt.properties.sessionID !== init.session.id) return
+                     if (!aid || evt.properties.messageID !== aid) return
+                     if (evt.properties.field !== "text") return
+                     const type = kind.get(evt.properties.partID)
+                     if (type === "text") {
+                        await textdelta(
+                           {
+                              id: evt.properties.partID,
+                              messageID: evt.properties.messageID,
+                              sessionID: evt.properties.sessionID,
+                              type: "text",
+                              text: "",
+                           },
+                           evt.properties.delta,
+                        )
+                        return
+                     }
+                     if (type !== "reasoning") return
+                     await reasondelta(
+                        {
+                           id: evt.properties.partID,
+                           messageID: evt.properties.messageID,
+                           sessionID: evt.properties.sessionID,
+                           type: "reasoning",
+                           text: "",
+                           time: { start: 0 },
+                        },
+                        evt.properties.delta,
+                     )
+                  }),
+                  Bus.subscribe(Session.Event.Error, async (evt) => {
+                     if (evt.properties.sessionID !== init.session.id) return
+                     if (!evt.properties.error) return
+                     fail = error(evt.properties.error)
+                  }),
+               ]
+
+               try {
+                  const result = await SessionPrompt.prompt(init.prompt)
+                  if (result.info.role !== "assistant") {
+                     throw new Error("prompt did not produce an assistant message")
+                  }
+                  if (result.info.error) {
+                     throw new Error(error(result.info.error))
+                  }
+                  if (fail) {
+                     throw new Error(fail)
+                  }
+
+                  aid = result.info.id
+                  for (const part of result.parts) {
+                     await tail(part)
+                  }
+                  await role()
+                  await emit(
+                     chunk({
+                        id: init.id,
+                        created: init.created,
+                        model: body.model,
+                        choices: [{ index: 0 as const, delta: {}, finish_reason: finish(result) }],
+                     }),
+                  )
+                  if (init.include) {
+                     await emit(
+                        chunk({
+                           id: init.id,
+                           created: init.created,
+                           model: body.model,
+                           choices: [],
+                           usage: usage(result.info),
+                        }),
+                     )
+                  }
+                  await emit("[DONE]")
+               } finally {
+                  off.forEach((item) => item())
+               }
+            })
+         },
+      ),
 )
