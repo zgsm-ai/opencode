@@ -14,12 +14,14 @@ import { Agent } from "../../agent/agent"
 import { Instance } from "../../project/instance"
 import { Bus } from "../../bus"
 
+const Json = z.record(z.string(), z.unknown())
+
 const Text = z
    .object({
       type: z.literal("text"),
       text: z.string(),
    })
-   .strict()
+   .passthrough()
 
 const Image = z
    .object({
@@ -28,13 +30,82 @@ const Image = z
          .object({
             url: z.string(),
          })
-         .strict(),
+         .passthrough(),
    })
-   .strict()
+   .passthrough()
 
 const Sys = z.union([z.string(), z.array(Text).min(1)])
 const Usr = z.union([z.string(), z.array(z.union([Text, Image])).min(1)])
 const Asst = z.union([z.string(), z.array(Text).min(1)])
+
+const Call = z
+   .object({
+      type: z.literal("function"),
+      id: z.string(),
+      function: z
+         .object({
+            name: z.string(),
+            arguments: z.string(),
+         })
+         .passthrough(),
+   })
+   .passthrough()
+   .meta({
+      ref: "OpenAIChatCompletionToolCall",
+   })
+
+const Tool = z
+   .object({
+      role: z.literal("tool"),
+      tool_call_id: z.string(),
+      content: z.string(),
+   })
+   .passthrough()
+
+const ToolDef = z
+   .object({
+      type: z.literal("function"),
+      function: z
+         .object({
+            name: z.string(),
+            description: z.string().optional(),
+            parameters: Json.optional(),
+         })
+         .passthrough(),
+   })
+   .passthrough()
+
+const Choice = z.union([
+   z.enum(["none", "auto", "required"]),
+   z
+      .object({
+         type: z.literal("function"),
+         function: z
+            .object({
+               name: z.string(),
+            })
+            .passthrough(),
+      })
+      .passthrough(),
+])
+
+const Format = z.discriminatedUnion("type", [
+   z.object({ type: z.literal("text") }).passthrough(),
+   z.object({ type: z.literal("json_object") }).passthrough(),
+   z
+      .object({
+         type: z.literal("json_schema"),
+         json_schema: z
+            .object({
+               name: z.string().optional(),
+               description: z.string().optional(),
+               schema: Json,
+               strict: z.boolean().optional(),
+            })
+            .passthrough(),
+      })
+      .passthrough(),
+])
 
 const Msg = z.discriminatedUnion("role", [
    z
@@ -42,25 +113,29 @@ const Msg = z.discriminatedUnion("role", [
          role: z.literal("system"),
          content: Sys,
       })
-      .strict(),
+      .passthrough(),
    z
       .object({
          role: z.literal("developer"),
          content: Sys,
       })
-      .strict(),
+      .passthrough(),
    z
       .object({
          role: z.literal("user"),
          content: Usr,
       })
-      .strict(),
+      .passthrough(),
    z
       .object({
          role: z.literal("assistant"),
-         content: Asst,
+         content: z.union([Asst, z.null()]).optional(),
+         tool_calls: z.array(Call).optional(),
+         reasoning_text: z.string().optional(),
+         reasoning_opaque: z.string().optional(),
       })
-      .strict(),
+      .passthrough(),
+   Tool,
 ])
 
 const Opts = z
@@ -75,6 +150,22 @@ const Req = z
       messages: z.array(Msg).min(1),
       stream: z.boolean().optional().default(false),
       stream_options: Opts.optional(),
+      tools: z.array(ToolDef).optional(),
+      tool_choice: Choice.optional(),
+      parallel_tool_calls: z.boolean().optional(),
+      extra_body: Json.optional(),
+      temperature: z.number().optional(),
+      top_p: z.number().optional(),
+      max_tokens: z.number().int().optional(),
+      stop: z.union([z.string(), z.array(z.string())]).optional(),
+      seed: z.number().int().optional(),
+      response_format: Format.optional(),
+      user: z.string().optional(),
+      presence_penalty: z.number().optional(),
+      frequency_penalty: z.number().optional(),
+      reasoning_effort: z.string().optional(),
+      verbosity: z.string().optional(),
+      thinking_budget: z.number().int().optional(),
    })
    .strict()
    .superRefine((input, ctx) => {
@@ -91,20 +182,6 @@ const Req = z
 
 type Req = z.infer<typeof Req>
 type Msg = z.infer<typeof Msg>
-
-const Call = z
-   .object({
-      type: z.literal("function"),
-      id: z.string(),
-      function: z.object({
-         name: z.string(),
-         arguments: z.string(),
-      }),
-   })
-   .meta({
-      ref: "OpenAIChatCompletionToolCall",
-   })
-
 const Delta = z
    .object({
       role: z.literal("assistant").optional(),
@@ -222,9 +299,33 @@ function bad(message: string): never {
    throw new HTTPException(400, { message })
 }
 
-function join(input: z.infer<typeof Sys> | z.infer<typeof Asst>) {
+function join(input: string | Array<{ text: string }>) {
    if (typeof input === "string") return input
    return input.map((item) => item.text).join("")
+}
+
+function meta(input?: string) {
+   return input ? { copilot: { reasoningOpaque: input } } : undefined
+}
+
+function args(input: string, label: string) {
+   try {
+      const next = JSON.parse(input)
+      if (next && typeof next === "object" && !Array.isArray(next)) {
+         return next as Record<string, unknown>
+      }
+   } catch { }
+   bad(`${label} must be a JSON object`)
+}
+
+function format(input: Req["response_format"]): z.infer<typeof MessageV2.Format> | undefined {
+   if (!input || input.type !== "json_schema") return
+   // Only json_schema maps cleanly to the internal structured-output contract.
+   return {
+      type: "json_schema",
+      schema: input.json_schema.schema,
+      retryCount: 2,
+   }
 }
 
 function mime(input: string) {
@@ -427,6 +528,8 @@ async function seed(input: {
    agent: string
 }) {
    let parent: string | undefined
+   const seen = new Set<string>()
+   const tool = new Map<string, MessageV2.ToolPart>()
    const path = {
       cwd: Instance.directory,
       root: Instance.worktree,
@@ -449,11 +552,35 @@ async function seed(input: {
       }
 
       if (!parent) {
-         bad("assistant messages must follow a user message")
+         bad(item.role === "tool" ? "tool messages must follow an assistant tool call" : "assistant messages must follow a user message")
+      }
+
+      if (item.role === "tool") {
+         const match = tool.get(item.tool_call_id)
+         if (!match || match.state.status !== "running") {
+            bad(`tool message has no matching tool_call_id: ${item.tool_call_id}`)
+         }
+         await Session.updatePart({
+            ...match,
+            state: {
+               status: "completed",
+               input: match.state.input,
+               output: item.content,
+               metadata: {},
+               title: match.tool,
+               time: {
+                  start: match.state.time.start,
+                  end: Date.now(),
+               },
+            },
+         })
+         tool.delete(item.tool_call_id)
+         continue
       }
 
       const id = Identifier.ascending("message")
       const now = Date.now()
+      const hint = meta(item.reasoning_opaque)
       await Session.updateMessage({
          id,
          sessionID: input.sessionID,
@@ -475,19 +602,61 @@ async function seed(input: {
             created: now,
             completed: now,
          },
-         finish: "stop",
+         finish: item.tool_calls?.length ? "tool-calls" : "stop",
       })
-      await Session.updatePart({
-         id: Identifier.ascending("part"),
-         sessionID: input.sessionID,
-         messageID: id,
-         type: "text",
-         text: join(item.content),
-         time: {
-            start: now,
-            end: now,
-         },
-      })
+
+      const text = item.content ? join(item.content) : ""
+      if (text) {
+         await Session.updatePart({
+            id: Identifier.ascending("part"),
+            sessionID: input.sessionID,
+            messageID: id,
+            type: "text",
+            text,
+            ...(hint ? { metadata: hint } : {}),
+            time: {
+               start: now,
+               end: now,
+            },
+         })
+      }
+
+      if (item.reasoning_text) {
+         await Session.updatePart({
+            id: Identifier.ascending("part"),
+            sessionID: input.sessionID,
+            messageID: id,
+            type: "reasoning",
+            text: item.reasoning_text,
+            ...(hint ? { metadata: hint } : {}),
+            time: {
+               start: now,
+               end: now,
+            },
+         })
+      }
+
+      for (const call of item.tool_calls ?? []) {
+         if (seen.has(call.id)) bad(`duplicate tool_call_id in history: ${call.id}`)
+         seen.add(call.id)
+         const part = (await Session.updatePart({
+            id: Identifier.ascending("part"),
+            sessionID: input.sessionID,
+            messageID: id,
+            type: "tool",
+            callID: call.id,
+            tool: call.function.name,
+            ...(hint ? { metadata: hint } : {}),
+            state: {
+               status: "running",
+               input: args(call.function.arguments, `tool call ${call.id} arguments`),
+               time: {
+                  start: now,
+               },
+            },
+         })) as MessageV2.ToolPart
+         tool.set(call.id, part)
+      }
    }
 }
 
@@ -502,6 +671,7 @@ async function prep(input: Req) {
       .join("\n\n")
    const messages = input.messages.filter((item) => item.role !== "system" && item.role !== "developer")
    const last = messages.at(-1)
+   const fmt = format(input.response_format)
 
    if (!last || last.role !== "user") {
       bad("messages must end with a user message")
@@ -526,6 +696,7 @@ async function prep(input: Req) {
          model: next,
          agent,
          ...(system ? { system } : {}),
+         ...(fmt ? { format: fmt } : {}),
          parts: parts(last.content),
       },
    }
