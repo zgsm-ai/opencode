@@ -73,6 +73,36 @@ export namespace ModelsDev {
       },
     },
   }
+  const aiCodeQwenProvider: Provider = {
+    id: "ai-code-qwen",
+    name: "AI Code 测评 Qwen-Code 服务",
+    api: "http://10.72.1.12:8898/v1",
+    npm: "@ai-sdk/openai-compatible",
+    env: [],
+    models: {
+      "qwen3-coder-lora": {
+        id: "qwen3-coder-lora",
+        name: "qwen3-coder-lora",
+        release_date: "2026-03-11",
+        attachment: false,
+        reasoning: true,
+        temperature: true,
+        tool_call: true,
+        interleaved: {
+          field: "reasoning_content",
+        },
+        limit: {
+          context: 200000,
+          output: 10240,
+        },
+        modalities: {
+          input: ["text"],
+          output: ["text"],
+        },
+        options: {},
+      },
+    },
+  }
 
   export const Model = z.object({
     id: z.string(),
@@ -166,6 +196,7 @@ export namespace ModelsDev {
       ...result,
       ...(result["ai-code-glm"] ? {} : { "ai-code-glm": glmProvider }),
       ...(result["ai-code-glm-5"] ? {} : { "ai-code-glm-5": glm5Provider }),
+      ...(result["ai-code-qwen"] ? {} : { "ai-code-qwen": aiCodeQwenProvider }),
     }
   }
 
