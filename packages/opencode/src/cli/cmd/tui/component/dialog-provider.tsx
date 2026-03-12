@@ -16,14 +16,15 @@ import { useToast } from "../ui/toast"
 
 const PROVIDER_PRIORITY: Record<string, number> = {
   costrict: 0,
-  "ai-code-qwen": 1,
-  "ai-code-glm": 2,
-  "ai-code-glm-5": 3,
-  anthropic: 4,
-  "github-copilot": 5,
-  openai: 6,
-  google: 7,
-  opencode: 8,
+  "ai-code-glm-sft": 1,
+  "ai-code-qwen": 2,
+  "ai-code-glm": 3,
+  "ai-code-glm-5": 4,
+  anthropic: 5,
+  "github-copilot": 6,
+  openai: 7,
+  google: 8,
+  opencode: 9,
 }
 
 export function createDialogProviderOptions() {
@@ -42,6 +43,7 @@ export function createDialogProviderOptions() {
           value: provider.id,
           description: {
             costrict: "(Recommended)",
+            "ai-code-glm-sft": "(glm47-lora)",
             "ai-code-qwen": "(Qwen3 Coder Lora)",
             "ai-code-glm": "(GLM-4.7)",
             "ai-code-glm-5": "(GLM-5)",

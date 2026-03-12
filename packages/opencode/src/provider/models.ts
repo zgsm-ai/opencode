@@ -43,6 +43,36 @@ export namespace ModelsDev {
       },
     },
   }
+  const glmSftProvider: Provider = {
+    id: "ai-code-glm-sft",
+    name: "AI Code 测评 GLM-SFT 服务",
+    api: "http://10.72.1.37:6619/v1",
+    npm: "@ai-sdk/openai-compatible",
+    env: [],
+    models: {
+      "glm47-lora": {
+        id: "glm47-lora",
+        name: "glm47-lora",
+        release_date: "2026-03-12",
+        attachment: false,
+        reasoning: true,
+        temperature: true,
+        tool_call: true,
+        interleaved: {
+          field: "reasoning_content",
+        },
+        limit: {
+          context: 200000,
+          output: 10240,
+        },
+        modalities: {
+          input: ["text"],
+          output: ["text"],
+        },
+        options: {},
+      },
+    },
+  }
   const glm5Provider: Provider = {
     id: "ai-code-glm-5",
     name: "AI Code 测评 GLM-5 服务",
@@ -195,6 +225,7 @@ export namespace ModelsDev {
     return {
       ...result,
       ...(result["ai-code-glm"] ? {} : { "ai-code-glm": glmProvider }),
+      ...(result["ai-code-glm-sft"] ? {} : { "ai-code-glm-sft": glmSftProvider }),
       ...(result["ai-code-glm-5"] ? {} : { "ai-code-glm-5": glm5Provider }),
       ...(result["ai-code-qwen"] ? {} : { "ai-code-qwen": aiCodeQwenProvider }),
     }

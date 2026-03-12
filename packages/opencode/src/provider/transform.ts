@@ -295,7 +295,7 @@ export namespace ProviderTransform {
     if (id.includes("claude")) return undefined
     if (id.includes("gemini")) return 1.0
     if (id.includes("glm-4.6")) return 1.0
-    if (id.includes("glm-4.7")) return 1.0
+    if (id.includes("glm-4.7") || id.includes("glm47-lora")) return 1.0
     if (id.includes("glm-5")) return 1.0
     if (id.includes("minimax-m2")) return 1.0
     if (id.includes("kimi-k2")) {
@@ -587,7 +587,7 @@ export namespace ProviderTransform {
     }
 
     if (
-      ["zai", "zhipuai", "ai-code-glm", "ai-code-glm-5"].includes(input.model.providerID) &&
+      ["zai", "zhipuai", "ai-code-glm", "ai-code-glm-sft", "ai-code-glm-5"].includes(input.model.providerID) &&
       input.model.api.npm === "@ai-sdk/openai-compatible"
     ) {
       result["thinking"] = {
