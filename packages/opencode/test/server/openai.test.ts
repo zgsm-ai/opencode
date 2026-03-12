@@ -413,7 +413,14 @@ describe("server openai chat completions", () => {
       })
    })
 
-   test("rejects unsupported request fields explicitly", async () => {
+   test("accepts common compatible request fields and part metadata", async () => {
+      const sent = wait(
+         "/chat/completions",
+         new Response(chat("Hello"), {
+            status: 200,
+            headers: { "Content-Type": "text/event-stream" },
+         }),
+      )
       await using tmp = await project()
       await Instance.provide({
          directory: tmp.path,
@@ -424,13 +431,142 @@ describe("server openai chat completions", () => {
                headers: { "Content-Type": "application/json", "x-opencode-directory": tmp.path },
                body: JSON.stringify({
                   model: "compat/gpt-5.2",
-                  messages: [{ role: "user", content: "Hello" }],
+                  messages: [
+                     {
+                        role: "user",
+                        content: [
+                           {
+                              type: "text",
+                              text: "Hello",
+                              cache_control: { type: "ephemeral" },
+                              copilot_cache_control: { type: "ephemeral" },
+                           },
+                        ],
+                     },
+                  ],
+                  tools: [
+                     {
+                        type: "function",
+                        function: {
+                           name: "lookup",
+                           description: "Lookup docs",
+                           parameters: {
+                              type: "object",
+                              properties: {
+                                 id: { type: "string" },
+                              },
+                           },
+                        },
+                     },
+                  ],
+                  tool_choice: "auto",
+                  parallel_tool_calls: true,
+                  extra_body: { trace: { id: "abc" }, tags: ["compat"] },
                   temperature: 0.2,
+                  top_p: 0.9,
+                  max_tokens: 128,
+                  stop: ["END"],
+                  seed: 7,
+                  response_format: { type: "json_object" },
+                  user: "alice",
+                  presence_penalty: 0.1,
+                  frequency_penalty: 0.2,
+                  reasoning_effort: "medium",
+                  verbosity: "low",
+                  thinking_budget: 32,
+               }),
+            })
+
+            expect(res.status).toBe(200)
+            expect(await res.json()).toMatchObject({
+               object: "chat.completion",
+               model: "compat/gpt-5.2",
+            })
+
+            const req = await sent
+            expect(JSON.stringify(req.body.messages)).toContain("Hello")
+         },
+      })
+   })
+
+   test("replays assistant tool call history and tool results", async () => {
+      const sent = wait(
+         "/chat/completions",
+         new Response(chat("Done"), {
+            status: 200,
+            headers: { "Content-Type": "text/event-stream" },
+         }),
+      )
+      await using tmp = await project()
+      await Instance.provide({
+         directory: tmp.path,
+         fn: async () => {
+            const app = Server.App()
+            const res = await app.request("/cs/v1/chat/completions", {
+               method: "POST",
+               headers: { "Content-Type": "application/json", "x-opencode-directory": tmp.path },
+               body: JSON.stringify({
+                  model: "compat/gpt-5.2",
+                  messages: [
+                     { role: "user", content: "Find status" },
+                     {
+                        role: "assistant",
+                        content: null,
+                        tool_calls: [
+                           {
+                              type: "function",
+                              id: "call_1",
+                              function: {
+                                 name: "lookup",
+                                 arguments: '{"id":"42"}',
+                              },
+                           },
+                        ],
+                        reasoning_text: "Need lookup",
+                        reasoning_opaque: "opaque-1",
+                     },
+                     { role: "tool", tool_call_id: "call_1", content: '{"status":"ok"}' },
+                     { role: "user", content: "What happened?" },
+                  ],
+               }),
+            })
+
+            expect(res.status).toBe(200)
+
+            const req = await sent
+            const raw = JSON.stringify(req.body.messages)
+            expect(raw).toContain("Find status")
+            expect(raw).toContain("Need lookup")
+            expect(raw).toContain("lookup")
+            expect(raw).toContain('"call_1"')
+            expect(raw).toContain('"role":"tool"')
+            expect(raw).toContain('{\\"status\\":\\"ok\\"}')
+            expect(raw).toContain("What happened?")
+         },
+      })
+   })
+
+   test("rejects tool messages without a matching assistant tool call", async () => {
+      await using tmp = await project()
+      await Instance.provide({
+         directory: tmp.path,
+         fn: async () => {
+            const app = Server.App()
+            const res = await app.request("/cs/v1/chat/completions", {
+               method: "POST",
+               headers: { "Content-Type": "application/json", "x-opencode-directory": tmp.path },
+               body: JSON.stringify({
+                  model: "compat/gpt-5.2",
+                  messages: [
+                     { role: "user", content: "Hello" },
+                     { role: "tool", tool_call_id: "call_1", content: '{}' },
+                     { role: "user", content: "Continue" },
+                  ],
                }),
             })
 
             expect(res.status).toBe(400)
-            expect(await res.text()).toContain("temperature")
+            expect(await res.text()).toContain("tool_call_id")
          },
       })
    })
