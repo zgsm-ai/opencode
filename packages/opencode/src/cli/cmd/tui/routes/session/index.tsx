@@ -1633,21 +1633,19 @@ function SequentialThinking(props: ToolProps<any>) {
                 <text fg={theme.textMuted}>known branches: {branches().join(", ")}</text>
               </Show>
             </box>
-            <Show when={ctx.showThinking()} fallback={<text fg={theme.textMuted}>Thinking hidden</text>}>
-              <code
-                filetype="markdown"
-                drawUnstyledText={false}
-                streaming={false}
-                syntaxStyle={subtleSyntax()}
-                content={display()}
-                conceal={ctx.conceal()}
-                fg={theme.textMuted}
-              />
-              <Show when={overflow()}>
-                <text fg={marker()}>
-                  {expanded() ? "Click to collapse thought" : `Click to expand thought (${hidden()} more lines)`}
-                </text>
-              </Show>
+            <code
+              filetype="markdown"
+              drawUnstyledText={false}
+              streaming={false}
+              syntaxStyle={subtleSyntax()}
+              content={display()}
+              conceal={ctx.conceal()}
+              fg={theme.textMuted}
+            />
+            <Show when={overflow()}>
+              <text fg={marker()}>
+                {expanded() ? "Click to collapse thought" : `Click to expand thought (${hidden()} more lines)`}
+              </text>
             </Show>
           </box>
         </BlockTool>
