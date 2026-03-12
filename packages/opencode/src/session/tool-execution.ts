@@ -8,7 +8,7 @@ import { toolAlias } from "@/costrict/utils/tool-transform-v2"
 import { Truncate } from "@/tool/truncation"
 
 const log = Log.create({ service: "tool-execution" })
-const DOOM_LOOP_THRESHOLD = 3
+const DOOM_LOOP_THRESHOLD = 2
 
 export namespace ToolExecution {
   export type ExecutionResult = {
@@ -67,6 +67,45 @@ export namespace ToolExecution {
           })
         }
       }
+    }
+  }
+
+  /**
+   * 将一条 assistant 消息里的 tool parts 归一化为“签名集合”（tool + input）。
+   * - 只统计 completed/error（跨轮次判断用）
+   * - 同一轮内多次重复调用同一个工具（AAA）不会额外计数（Set 去重）
+   */
+  function toolSignatures(toolParts: MessageV2.ToolPart[]): Set<string> {
+    const set = new Set<string>()
+    for (const part of toolParts) {
+      if (part.state.status !== "completed" && part.state.status !== "error") continue
+      set.add(`${part.tool}\n${JSON.stringify(part.state.input)}`)
+    }
+    return set
+  }
+
+  function intersect(a: Set<string>, b: Set<string>): Set<string> {
+    const out = new Set<string>()
+    for (const x of a) {
+      if (b.has(x)) out.add(x)
+    }
+    return out
+  }
+
+  function signatureParts(signature: string): { toolName: string; toolInput: unknown } | null {
+    const index = signature.indexOf("\n")
+    if (index === -1) return null
+    const toolName = signature.slice(0, index)
+    const json = signature.slice(index + 1)
+    return {
+      toolName,
+      toolInput: (() => {
+        try {
+          return JSON.parse(json)
+        } catch {
+          return json
+        }
+      })(),
     }
   }
 
@@ -168,39 +207,49 @@ export namespace ToolExecution {
     // 2.5. 拦截过长的工具结果（在批准之后，doom loop 检查之前）
     await interceptToolResults(toolParts)
 
-    // 3. 重复工具检查 (Doom Loop)
-    if (toolParts.length >= DOOM_LOOP_THRESHOLD) {
-      const lastThree = toolParts.slice(-DOOM_LOOP_THRESHOLD)
-      const firstTool = lastThree[0]
+    // 3. 重复工具检查 (Doom Loop) —— 跨轮次检测
+    // 规则：
+    // 1) 若跨轮次 assistant 消息不足 DOOM_LOOP_THRESHOLD 条：不检查
+    // 2) 若最近 DOOM_LOOP_THRESHOLD 条 assistant 消息中存在“共同的工具+相同参数”（任意一个匹配即可）：触发
+    // 3) 同一轮内的重复工具（AAA）不检查（这里按“跨轮次”实现）
+    const messages = (await Session.messages({ sessionID: input.sessionID }))
+      .filter((m: MessageV2.WithParts) => m.info.role === "assistant")
 
-      const isDoomLoop = lastThree.every(p =>
-        p.tool === firstTool.tool &&
-        p.state.status !== "pending" &&
-        JSON.stringify(p.state.input) === JSON.stringify(firstTool.state.input)
-      )
+    const recentAssistants = messages.slice(-DOOM_LOOP_THRESHOLD)
+    if (recentAssistants.length === DOOM_LOOP_THRESHOLD) {
+      const sets = recentAssistants.map((m) => {
+        const parts = m.parts.filter((p): p is MessageV2.ToolPart => p.type === "tool")
+        return toolSignatures(parts)
+      })
 
-      if (isDoomLoop) {
+      const common = sets.reduce((acc, next) => intersect(acc, next))
+      const hit = common.values().next().value as string | undefined
+
+      if (hit) {
+        const parsed = signatureParts(hit)
+        const toolName = parsed?.toolName ?? hit.split("\n")[0] ?? "unknown"
+        const toolInput = parsed?.toolInput
+
         log.warn("doom loop detected", {
           sessionID: input.sessionID,
-          tool: firstTool.tool,
-          input: firstTool.state.input,
-          occurrences: DOOM_LOOP_THRESHOLD
+          tool: toolName,
+          input: toolInput,
+          occurrences: DOOM_LOOP_THRESHOLD,
         })
 
-        // 直接插入user消息，不询问用户
         await insertDoomLoopMessage(
           input.sessionID,
           input.assistantMessage,
-          firstTool.tool,
-          firstTool.state.input
+          toolName,
+          toolInput,
         )
 
         return {
-          shouldContinue: true,   // 继续循环，让模型看到doom loop提示后调整策略
+          shouldContinue: true,
           hasToolCalls: true,
           shouldRetry: false,
           needsReminder: false,
-          blocked: false
+          blocked: false,
         }
       }
     }
