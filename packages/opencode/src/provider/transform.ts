@@ -291,7 +291,7 @@ export namespace ProviderTransform {
 
   export function temperature(model: Provider.Model) {
     const id = model.id.toLowerCase()
-    if (id.includes("qwen")) return 0.55
+    if (model.providerID === "ai-code-qwen" && id === "qwen3-coder-lora") return 1
     if (id.includes("claude")) return undefined
     if (id.includes("gemini")) return 1.0
     if (id.includes("glm-4.6")) return 1.0
@@ -307,7 +307,7 @@ export namespace ProviderTransform {
 
   export function topP(model: Provider.Model) {
     const id = model.id.toLowerCase()
-    if (id.includes("qwen")) return 1
+    if (model.providerID === "ai-code-qwen" && id === "qwen3-coder-lora") return 0.95
     if (id.includes("minimax-m2")) {
       return 0.95
     }
@@ -317,6 +317,7 @@ export namespace ProviderTransform {
 
   export function topK(model: Provider.Model) {
     const id = model.id.toLowerCase()
+    if (model.providerID === "ai-code-qwen" && id === "qwen3-coder-lora") return 40
     if (id.includes("minimax-m2")) {
       if (id.includes("m2.1")) return 40
       return 20
