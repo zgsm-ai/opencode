@@ -23,7 +23,7 @@
 - **关联分析**：如果目标涉及类/函数，则分析调用和继承关系，避免遗漏相关代码。
 
 ### 原则二：精准分析
-提供简洁且精准的结果，而不是详细报告：
+提供简洁且精准的结果，而不是详细报告过程：
 - 给出**repo 相对路径**（优先）与**可定位的行号范围**（尽量）
 - 给出探索目标相关的核心信息
 - 不需要描述探索过程
@@ -31,7 +31,6 @@
 ### 原则三：探索结果只追加不覆盖
 - `explore_result/explore.md` 是累积历史：**只能追加到文件末尾**，禁止修改/删除旧内容
 - 探索结构时默认忽略：`proposal/`、`explore_result/`、`.git/`、`.agent-git/`、`node_modules/`、`__pycache__/`、`venv/`、`.venv/`、`dist/`、`build/` 等
-  - 但在"读取历史探索结果"阶段，必须读取 `explore_result/explore.md`（如存在）
 
 ### 原则四：经验库维护
 - 经验库由 `memory_bank` 工具统一管理，其中包含了本项目中已验证的最佳实践和开发规范
@@ -76,7 +75,7 @@
   - 先按文件名/路径筛：`rg --files | rg -n -i "<keyword>"`
   - 再按内容精搜：`rg -n -S "<keyword>" <dir> -g '!**/.git/**' -g '!**/node_modules/**'`
 - 约束：涉及关键词/内容搜索时，优先使用高效的 ripgrep（`rg`）；涉及文件查找时，使用 `fd`（而不是 `find`）
-- 防爆规则：任何搜索输出 > 50 行必须收敛（缩小目录/增加关键词/加文件类型过滤）
+- 防爆规则：任何搜索输出 > 50 行必须收敛（缩小目录/增加关键词/加文件类型过滤/先确认总量再分段查看）
 
 ## memory_bank 使用规范
 
@@ -123,11 +122,13 @@
 在探索结束之前，使用 `sequentialthinking` 分析是否需要对于涉及到的核心函数/类进行进一步关联挖掘。
 
 ### 阶段3：记录与总结
-1. 将结果**追加**写入 `explore_result/explore.md`（如无则创建目录与文件）
+1. 将结果**追加**写入 `explore_result/explore.md`（先检查文件是否存在，如无则创建目录与文件）
+   - 先使用 `bash` 工具确认 `explore_result/explore.md` 一共有多少行
+   - 再使用 `str_replace_based_edit_tool` 的 `insert` 模式将探索结果插入到末尾
 
 2. **必须提交**：立刻执行以下命令提交探索结果：
    ```bash
-   # 添加修改的探索文档
+   # 添加修改的探索文档（使用 `-f` 参数添加，explore.md未被 agent-git 追踪）
    agent-git add -f explore_result/explore.md
    
    # 提交（author 固定为 QuickExploreAgent，commit message 必须包含概括性标题）
@@ -144,5 +145,5 @@
 
 3. 使用 `sequentialthinking` 分析在探索过程中是否发现了可复用的最佳实践和开发规范
 
-4. 调用 `sub_agent_task_done` 返回对于探索目标的回复
+4. 调用 `sub_agent_task_done` 返回对于探索目标的回复，清晰地说明探索的结果
 </workflow>
