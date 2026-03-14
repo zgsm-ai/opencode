@@ -157,6 +157,7 @@ const Req = z
       temperature: z.number().optional(),
       top_p: z.number().optional(),
       max_tokens: z.number().int().optional(),
+      max_completion_tokens: z.number().int().optional(),
       stop: z.union([z.string(), z.array(z.string())]).optional(),
       seed: z.number().int().optional(),
       response_format: Format.optional(),
@@ -673,13 +674,17 @@ async function prep(input: Req) {
    const last = messages.at(-1)
    const fmt = format(input.response_format)
 
-   if (!last || last.role !== "user") {
-      bad("messages must end with a user message")
+   const user_index = messages.findLastIndex((item) => item.role === "user")
+   if (user_index === -1) {
+      bad("messages must contain at least one user message")
    }
+
+   const last_user_message = messages[user_index]
+   const seed_messages = messages.slice(0, user_index)
 
    await seed({
       sessionID: session.id,
-      messages: messages.slice(0, -1),
+      messages: seed_messages,
       model: next,
       agent,
    })
@@ -697,7 +702,7 @@ async function prep(input: Req) {
          agent,
          ...(system ? { system } : {}),
          ...(fmt ? { format: fmt } : {}),
-         parts: parts(last.content),
+         parts: parts((last_user_message as any).content),
       },
    }
 }
