@@ -32,6 +32,9 @@ import { CheckpointTool } from "../costrict/tool/checkpoint"
 import { ApplyPatchTool } from "./apply_patch"
 import { Glob } from "../util/glob"
 import { pathToFileURL } from "url"
+import { AttemptCompletionTool } from "../costrict/tool/attempt_completion"
+import { SwitchModeTool } from "../costrict/tool/switch_mode"
+import { NewTaskTool } from "../costrict/tool/new_task"
 
 export namespace ToolRegistry {
   const log = Log.create({ service: "tool.registry" })
@@ -127,6 +130,9 @@ export namespace ToolRegistry {
       ApplyPatchTool,
       ...(config.experimental?.batch_tool === true ? [BatchTool] : []),
       ...(Flag.COSTRICT_EXPERIMENTAL_PLAN_MODE && Flag.OPENCODE_CLIENT === "cli" ? [PlanExitTool] : []),
+      AttemptCompletionTool,
+      SwitchModeTool,
+      NewTaskTool,
       ...custom,
     ]
   }
