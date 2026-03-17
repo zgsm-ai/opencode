@@ -32,14 +32,14 @@ import { Dynamic } from "solid-js/web"
 
 const Home = lazy(() => import("@/pages/home"))
 const Session = lazy(() => import("@/pages/session"))
-const StoreLayout = lazy(() => import("@opencode-ai/store").then((m) => ({ default: m.StoreLayout })))
-const StoreHome = lazy(() => import("@opencode-ai/store").then((m) => ({ default: m.StoreHome })))
-const StoreSkills = lazy(() => import("@opencode-ai/store").then((m) => ({ default: m.StoreSkills })))
-const StoreSubagents = lazy(() => import("@opencode-ai/store").then((m) => ({ default: m.StoreSubagents })))
-const StoreCommands = lazy(() => import("@opencode-ai/store").then((m) => ({ default: m.StoreCommands })))
-const StoreMcpServers = lazy(() => import("@opencode-ai/store").then((m) => ({ default: m.StoreMcpServers })))
-const StoreItemDetail = lazy(() => import("@opencode-ai/store").then((m) => ({ default: m.StoreItemDetail })))
-const StoreDashboard = lazy(() => import("@opencode-ai/store").then((m) => ({ default: m.StoreDashboard })))
+const StoreLayout = lazy(() => import("./pages/store").then((m) => ({ default: m.StoreLayout })))
+const StoreHome = lazy(() => import("./pages/store").then((m) => ({ default: m.StoreHome })))
+const StoreSkills = lazy(() => import("./pages/store").then((m) => ({ default: m.StoreSkills })))
+const StoreSubagents = lazy(() => import("./pages/store").then((m) => ({ default: m.StoreSubagents })))
+const StoreCommands = lazy(() => import("./pages/store").then((m) => ({ default: m.StoreCommands })))
+const StoreMcpServers = lazy(() => import("./pages/store").then((m) => ({ default: m.StoreMcpServers })))
+const StoreItemDetail = lazy(() => import("./pages/store").then((m) => ({ default: m.StoreItemDetail })))
+const StoreDashboard = lazy(() => import("./pages/store").then((m) => ({ default: m.StoreDashboard })))
 const Loading = () => <div class="size-full" />
 
 const HomeRoute = () => (

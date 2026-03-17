@@ -30,7 +30,6 @@
       "dependencies": {
         "@kobalte/core": "catalog:",
         "@opencode-ai/sdk": "workspace:*",
-        "@opencode-ai/store": "workspace:*",
         "@opencode-ai/ui": "workspace:*",
         "@opencode-ai/util": "workspace:*",
         "@shikijs/transformers": "3.9.2",
@@ -458,24 +457,6 @@
       "devDependencies": {
         "@types/node": "catalog:",
         "@typescript/native-preview": "catalog:",
-        "typescript": "catalog:",
-      },
-    },
-    "packages/store": {
-      "name": "@opencode-ai/store",
-      "version": "1.2.20",
-      "dependencies": {
-        "@opencode-ai/sdk": "workspace:*",
-        "@opencode-ai/ui": "workspace:*",
-        "@opencode-ai/util": "workspace:*",
-        "@solidjs/router": "catalog:",
-        "solid-js": "catalog:",
-      },
-      "devDependencies": {
-        "@tsconfig/bun": "catalog:",
-        "@tsconfig/node22": "catalog:",
-        "@types/bun": "catalog:",
-        "@types/node": "catalog:",
         "typescript": "catalog:",
       },
     },
@@ -1431,8 +1412,6 @@
     "@opencode-ai/sdk": ["@opencode-ai/sdk@workspace:packages/sdk/js"],
 
     "@opencode-ai/slack": ["@opencode-ai/slack@workspace:packages/slack"],
-
-    "@opencode-ai/store": ["@opencode-ai/store@workspace:packages/store"],
 
     "@opencode-ai/storybook": ["@opencode-ai/storybook@workspace:packages/storybook"],
 
