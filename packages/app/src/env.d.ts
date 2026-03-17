@@ -3,6 +3,7 @@ import "solid-js"
 interface ImportMetaEnv {
   readonly VITE_COSTRICT_SERVER_HOST: string
   readonly VITE_COSTRICT_SERVER_PORT: string
+  readonly VITE_STORE_URL: string
 }
 
 interface ImportMeta {

@@ -50,6 +50,8 @@ export function Titlebar() {
   const web = createMemo(() => platform.platform === "web")
   const zoom = () => platform.webviewZoom?.() ?? 1
   const minHeight = () => (mac() ? `${40 / zoom()}px` : undefined)
+  const inStore = createMemo(() => location.pathname.startsWith("/store"))
+  if (inStore()) return null
 
   const [history, setHistory] = createStore({
     stack: [] as string[],
@@ -193,77 +195,85 @@ export function Titlebar() {
           </div>
         </Show>
         <div class="flex items-center gap-1 shrink-0">
-          <TooltipKeybind
-            class={web() ? "hidden xl:flex shrink-0 ml-14" : "hidden xl:flex shrink-0 ml-2"}
-            placement="bottom"
-            title={language.t("command.sidebar.toggle")}
-            keybind={command.keybind("sidebar.toggle")}
-          >
-            <Button
-              variant="ghost"
-              class="group/sidebar-toggle titlebar-icon w-8 h-6 p-0 box-border"
-              onClick={layout.sidebar.toggle}
-              aria-label={language.t("command.sidebar.toggle")}
-              aria-expanded={layout.sidebar.opened()}
+          <Show when={!inStore()}>
+            <TooltipKeybind
+              class={web() ? "hidden xl:flex shrink-0 ml-14" : "hidden xl:flex shrink-0 ml-2"}
+              placement="bottom"
+              title={language.t("command.sidebar.toggle")}
+              keybind={command.keybind("sidebar.toggle")}
             >
-              <div class="relative flex items-center justify-center size-4 [&>*]:absolute [&>*]:inset-0">
-                <Icon
-                  size="small"
-                  name={layout.sidebar.opened() ? "layout-left-partial" : "layout-left"}
-                  class="group-hover/sidebar-toggle:hidden"
-                />
-                <Icon size="small" name="layout-left-partial" class="hidden group-hover/sidebar-toggle:inline-block" />
-                <Icon
-                  size="small"
-                  name={layout.sidebar.opened() ? "layout-left" : "layout-left-partial"}
-                  class="hidden group-active/sidebar-toggle:inline-block"
-                />
-              </div>
-            </Button>
-          </TooltipKeybind>
-          <div class="hidden xl:flex items-center shrink-0">
-            <Show when={params.dir}>
-              <TooltipKeybind
-                placement="bottom"
-                title={language.t("command.session.new")}
-                keybind={command.keybind("session.new")}
-                openDelay={2000}
+              <Button
+                variant="ghost"
+                class="group/sidebar-toggle titlebar-icon w-8 h-6 p-0 box-border"
+                onClick={layout.sidebar.toggle}
+                aria-label={language.t("command.sidebar.toggle")}
+                aria-expanded={layout.sidebar.opened()}
               >
-                <Button
-                  variant="ghost"
-                  icon="new-session"
-                  class="titlebar-icon w-8 h-6 p-0 box-border"
-                  onClick={() => {
-                    if (!params.dir) return
-                    navigate(`/${params.dir}/session`)
-                  }}
-                  aria-label={language.t("command.session.new")}
-                />
-              </TooltipKeybind>
-            </Show>
-            <div class="flex items-center gap-0" classList={{ "ml-1": !!params.dir }}>
-              <Tooltip placement="bottom" value={language.t("common.goBack")} openDelay={2000}>
-                <Button
-                  variant="ghost"
-                  icon="chevron-left"
-                  class="titlebar-icon w-6 h-6 p-0 box-border"
-                  disabled={!canBack()}
-                  onClick={back}
-                  aria-label={language.t("common.goBack")}
-                />
-              </Tooltip>
-              <Tooltip placement="bottom" value={language.t("common.goForward")} openDelay={2000}>
-                <Button
-                  variant="ghost"
-                  icon="chevron-right"
-                  class="titlebar-icon w-6 h-6 p-0 box-border"
-                  disabled={!canForward()}
-                  onClick={forward}
-                  aria-label={language.t("common.goForward")}
-                />
-              </Tooltip>
+                <div class="relative flex items-center justify-center size-4 [&>*]:absolute [&>*]:inset-0">
+                  <Icon
+                    size="small"
+                    name={layout.sidebar.opened() ? "layout-left-partial" : "layout-left"}
+                    class="group-hover/sidebar-toggle:hidden"
+                  />
+                  <Icon
+                    size="small"
+                    name="layout-left-partial"
+                    class="hidden group-hover/sidebar-toggle:inline-block"
+                  />
+                  <Icon
+                    size="small"
+                    name={layout.sidebar.opened() ? "layout-left" : "layout-left-partial"}
+                    class="hidden group-active/sidebar-toggle:inline-block"
+                  />
+                </div>
+              </Button>
+            </TooltipKeybind>
+          </Show>
+          <Show when={!inStore()}>
+            <div class="hidden xl:flex items-center shrink-0">
+              <Show when={params.dir}>
+                <TooltipKeybind
+                  placement="bottom"
+                  title={language.t("command.session.new")}
+                  keybind={command.keybind("session.new")}
+                  openDelay={2000}
+                >
+                  <Button
+                    variant="ghost"
+                    icon="new-session"
+                    class="titlebar-icon w-8 h-6 p-0 box-border"
+                    onClick={() => {
+                      if (!params.dir) return
+                      navigate(`/${params.dir}/session`)
+                    }}
+                    aria-label={language.t("command.session.new")}
+                  />
+                </TooltipKeybind>
+              </Show>
+              <div class="flex items-center gap-0" classList={{ "ml-1": !!params.dir }}>
+                <Tooltip placement="bottom" value={language.t("common.goBack")} openDelay={2000}>
+                  <Button
+                    variant="ghost"
+                    icon="chevron-left"
+                    class="titlebar-icon w-6 h-6 p-0 box-border"
+                    disabled={!canBack()}
+                    onClick={back}
+                    aria-label={language.t("common.goBack")}
+                  />
+                </Tooltip>
+                <Tooltip placement="bottom" value={language.t("common.goForward")} openDelay={2000}>
+                  <Button
+                    variant="ghost"
+                    icon="chevron-right"
+                    class="titlebar-icon w-6 h-6 p-0 box-border"
+                    disabled={!canForward()}
+                    onClick={forward}
+                    aria-label={language.t("common.goForward")}
+                  />
+                </Tooltip>
+              </div>
             </div>
-          </div>
+          </Show>
         </div>
         <div id="opencode-titlebar-left" class="flex items-center gap-3 min-w-0 px-2" />
       </div>

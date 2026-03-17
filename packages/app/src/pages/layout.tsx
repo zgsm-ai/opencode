@@ -12,7 +12,7 @@ import {
   untrack,
   type JSX,
 } from "solid-js"
-import { A, useNavigate, useParams } from "@solidjs/router"
+import { A, useLocation, useNavigate, useParams, useSearchParams } from "@solidjs/router"
 import { useLayout, LocalProject } from "@/context/layout"
 import { useGlobalSync } from "@/context/global-sync"
 import { Persist, persisted } from "@/utils/persist"
@@ -114,6 +114,8 @@ export default function Layout(props: ParentProps) {
   const notification = useNotification()
   const permission = usePermission()
   const navigate = useNavigate()
+  const location = useLocation()
+  const [searchParams, setSearchParams] = useSearchParams<{ settings?: string }>()
   setNavigate(navigate)
   const providers = useProviders()
   const dialog = useDialog()
@@ -207,6 +209,7 @@ export default function Layout(props: ParentProps) {
 
   const autoselecting = createMemo(() => {
     if (params.dir) return false
+    if (location.pathname.startsWith("/store")) return false
     if (!state.autoselect) return false
     if (!pageReady()) return true
     if (!layoutReady()) return true
@@ -497,6 +500,7 @@ export default function Layout(props: ParentProps) {
         if (!value.layoutReady) return
         if (!state.autoselect) return
         if (value.dir) return
+        if (location.pathname.startsWith("/store")) return
 
         const last = server.projects.last()
 
@@ -1045,6 +1049,14 @@ export default function Layout(props: ParentProps) {
   function openSettings() {
     dialog.show(() => <DialogSettings />)
   }
+
+  // Handle settings URL parameter from store navigation
+  createEffect(() => {
+    if (searchParams.settings === "true") {
+      openSettings()
+      setSearchParams({ settings: undefined })
+    }
+  })
 
   function projectRoot(directory: string) {
     const project = layout.projects
@@ -2042,7 +2054,8 @@ export default function Layout(props: ParentProps) {
           aria-label={language.t("sidebar.nav.projectsAndSessions")}
           data-component="sidebar-nav-desktop"
           classList={{
-            "hidden xl:block": true,
+            "hidden xl:block": !location.pathname.startsWith("/store"),
+            hidden: location.pathname.startsWith("/store"),
             "relative shrink-0": true,
           }}
           style={{ width: layout.sidebar.opened() ? `${Math.max(layout.sidebar.width(), 244)}px` : "64px" }}
@@ -2088,6 +2101,8 @@ export default function Layout(props: ParentProps) {
               onOpenSettings={openSettings}
               helpLabel={() => language.t("sidebar.help")}
               onOpenHelp={() => platform.openLink("https://docs.costrict.ai/cli/guide/installation")}
+              storeLabel={() => language.t("sidebar.store")}
+              onOpenStore={() => navigate("/store")}
               renderPanel={() => <SidebarPanel project={currentProject()} />}
             />
           </div>
@@ -2110,7 +2125,7 @@ export default function Layout(props: ParentProps) {
             />
           </Show>
         </nav>
-        <div class="xl:hidden">
+        <div classList={{ "xl:hidden": true, hidden: location.pathname.startsWith("/store") }}>
           <div
             classList={{
               "fixed inset-x-0 top-10 bottom-0 z-40 transition-opacity duration-200": true,
@@ -2153,6 +2168,8 @@ export default function Layout(props: ParentProps) {
               onOpenSettings={openSettings}
               helpLabel={() => language.t("sidebar.help")}
               onOpenHelp={() => platform.openLink("https://docs.costrict.ai/cli/guide/installation")}
+              storeLabel={() => language.t("sidebar.store")}
+              onOpenStore={() => navigate("/store")}
               renderPanel={() => <SidebarPanel project={currentProject()} mobile />}
             />
           </nav>
