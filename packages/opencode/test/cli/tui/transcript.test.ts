@@ -3,6 +3,7 @@ import {
   formatAssistantHeader,
   formatMessage,
   formatPart,
+  formatReasoningText,
   formatTranscript,
 } from "../../../src/cli/cmd/tui/util/transcript"
 import type { AssistantMessage, Part, UserMessage } from "@opencode-ai/sdk/v2"
@@ -86,6 +87,19 @@ describe("transcript", () => {
       }
       const result = formatPart(part, options)
       expect(result).toBe("_Thinking:_\n\nLet me think...\n\n")
+    })
+
+    test("strips xml-style tool tags from reasoning output", () => {
+      const part: Part = {
+        id: "part_1",
+        sessionID: "ses_123",
+        messageID: "msg_123",
+        type: "reasoning",
+        text: "Thinking...\n\n<tool_call>quick\n# Quick Explore Task\n\nThen continue",
+        time: { start: 1000 },
+      }
+      const result = formatPart(part, options)
+      expect(result).toBe("_Thinking:_\n\nThinking...\n\nThen continue\n\n")
     })
 
     test("skips reasoning when thinking disabled", () => {
@@ -292,6 +306,13 @@ describe("transcript", () => {
       expect(result).toContain("## Assistant\n\n")
       expect(result).not.toContain("Build")
       expect(result).not.toContain("claude-sonnet-4-20250514")
+    })
+  })
+
+  describe("formatReasoningText", () => {
+    test("removes redacted and tool-call markers", () => {
+      const result = formatReasoningText("[REDACTED]\n<tool_call>bash\n<arg_key>command</arg_key><arg_value>ls</arg_value>")
+      expect(result).toBe("")
     })
   })
 })

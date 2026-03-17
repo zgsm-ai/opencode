@@ -24,7 +24,6 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
     mcp: true,
     diff: true,
     todo: true,
-    lsp: true,
   })
 
   // Sort MCP servers alphabetically for consistent display order
@@ -159,49 +158,6 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                 </Show>
               </box>
             </Show>
-            <box>
-              <box
-                flexDirection="row"
-                gap={1}
-                onMouseDown={() => sync.data.lsp.length > 2 && setExpanded("lsp", !expanded.lsp)}
-              >
-                <Show when={sync.data.lsp.length > 2}>
-                  <text fg={theme.text}>{expanded.lsp ? "▼" : "▶"}</text>
-                </Show>
-                <text fg={theme.text}>
-                  <b>LSP</b>
-                </text>
-              </box>
-              <Show when={sync.data.lsp.length <= 2 || expanded.lsp}>
-                <Show when={sync.data.lsp.length === 0}>
-                  <text fg={theme.textMuted}>
-                    {sync.data.config.lsp === false
-                      ? "LSPs have been disabled in settings"
-                      : "LSPs will activate as files are read"}
-                  </text>
-                </Show>
-                <For each={sync.data.lsp}>
-                  {(item) => (
-                    <box flexDirection="row" gap={1}>
-                      <text
-                        flexShrink={0}
-                        style={{
-                          fg: {
-                            connected: theme.success,
-                            error: theme.error,
-                          }[item.status],
-                        }}
-                      >
-                        •
-                      </text>
-                      <text fg={theme.textMuted}>
-                        {item.id} {item.root}
-                      </text>
-                    </box>
-                  )}
-                </For>
-              </Show>
-            </box>
             <Show when={todo().length > 0 && todo().some((t) => t.status !== "completed")}>
               <box>
                 <box
@@ -238,10 +194,11 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                 <Show when={diff().length <= 2 || expanded.diff}>
                   <For each={diff() || []}>
                     {(item) => {
+                      const file = formatDiffFile(item.file, directory())
                       return (
                         <box flexDirection="row" gap={1} justifyContent="space-between">
-                          <text fg={theme.textMuted} wrapMode="none">
-                            {item.file}
+                          <text fg={theme.textMuted} wrapMode="none" flexGrow={1}>
+                            {file}
                           </text>
                           <box flexDirection="row" gap={1} flexShrink={0}>
                             <Show when={item.additions}>
@@ -310,4 +267,20 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
       </box>
     </Show>
   )
+}
+
+function formatDiffFile(input: string, cwd: string) {
+  const absolute = path.isAbsolute(input) ? input : path.resolve(cwd, input)
+  const relative = path.relative(cwd, absolute)
+  const base = relative && !relative.startsWith("..") ? relative : absolute
+  const normalized = base.replaceAll("\\", "/")
+  const parts = normalized.split("/")
+  const name = parts.at(-1) ?? normalized
+  const dir = parts.slice(0, -1).join("/")
+  if (!dir) return Locale.truncateMiddle(name, 28)
+
+  const size = Math.max(8, 28 - Math.min(name.length, 18) - 1)
+  const head = Locale.truncateMiddle(dir, size)
+  const tail = Locale.truncateMiddle(name, 18)
+  return `${head}/${tail}`
 }

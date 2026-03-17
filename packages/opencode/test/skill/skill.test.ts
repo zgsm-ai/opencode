@@ -50,7 +50,7 @@ Instructions here.
       const testSkill = skills.find((s) => s.name === "test-skill")
       expect(testSkill).toBeDefined()
       expect(testSkill!.description).toBe("A test skill for verification.")
-      expect(testSkill!.location).toContain("skill/test-skill/SKILL.md")
+      expect(testSkill!.location).toContain(path.join("skill", "test-skill", "SKILL.md"))
     },
   })
 })
@@ -144,7 +144,7 @@ description: A skill in the .claude/skills directory.
       expect(skills.length).toBe(1)
       const claudeSkill = skills.find((s) => s.name === "claude-skill")
       expect(claudeSkill).toBeDefined()
-      expect(claudeSkill!.location).toContain(".claude/skills/claude-skill/SKILL.md")
+      expect(claudeSkill!.location).toContain(path.join(".claude", "skills", "claude-skill", "SKILL.md"))
     },
   })
 })
@@ -164,7 +164,7 @@ test("discovers global skills from ~/.claude/skills/ directory", async () => {
         expect(skills.length).toBe(1)
         expect(skills[0].name).toBe("global-test-skill")
         expect(skills[0].description).toBe("A global skill from ~/.claude/skills for testing.")
-        expect(skills[0].location).toContain(".claude/skills/global-test-skill/SKILL.md")
+        expect(skills[0].location).toContain(path.join(".claude", "skills", "global-test-skill", "SKILL.md"))
       },
     })
   } finally {

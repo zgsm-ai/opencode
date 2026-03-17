@@ -1,6 +1,7 @@
 import { useFilteredList } from "@opencode-ai/ui/hooks"
 import {
   createEffect,
+  createResource,
   on,
   Component,
   Show,
@@ -58,6 +59,7 @@ import { createOpencodeClient, type Message, type Part } from "@opencode-ai/sdk/
 import { Binary } from "@opencode-ai/util/binary"
 import { showToast } from "@opencode-ai/ui/toast"
 import { base64Encode } from "@opencode-ai/util/encode"
+import { buildProposalPrompt, isChangeAgent, scanProposals, type ProposalInfo } from "@/utils/proposal"
 
 const ACCEPTED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"]
 const ACCEPTED_FILE_TYPES = [...ACCEPTED_IMAGE_TYPES, "application/pdf"]
@@ -235,6 +237,39 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   const imageAttachments = createMemo(
     () => prompt.current().filter((part) => part.type === "image") as ImageAttachmentPart[],
   )
+  const proposalDirectory = createMemo(() => {
+    const worktree = props.newSessionWorktree
+    if (worktree && worktree !== "main" && worktree !== "create") return worktree
+    return sdk.directory
+  })
+  const proposalClient = createMemo(() => {
+    if (proposalDirectory() === sdk.directory) return sdk.client
+    return createOpencodeClient({
+      baseUrl: sdk.url,
+      fetch: platform.fetch,
+      directory: proposalDirectory(),
+      throwOnError: true,
+    })
+  })
+  const changeAgent = createMemo(() => {
+    if (params.id) return
+    const name = local.agent.current()?.name
+    if (!isChangeAgent(name)) return
+    return name
+  })
+  const changeMode = createMemo(() => !!changeAgent())
+  const changeLabel = createMemo(() => {
+    if (changeAgent() === "coding") return "Coding"
+    if (changeAgent() === "FixAgent") return "Fix"
+    if (changeAgent() === "taskcheck") return "TaskCheck"
+    return "Proposal"
+  })
+  const [proposalStart, setProposalStart] = createSignal<{ agent: string; changeId: string } | undefined>()
+  const [proposals] = createResource(
+    () => (changeMode() ? proposalDirectory() : undefined),
+    () => scanProposals(proposalClient()),
+  )
+  const proposalItems = createMemo(() => (proposals() ?? []).flatMap((item) => (item ? [item] : [])))
 
   const [store, setStore] = createStore<{
     popover: "at" | "slash" | null
@@ -282,6 +317,200 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
         selection: part.selection ? { ...part.selection } : undefined,
       }
     })
+
+  const errorMessage = (err: unknown) => {
+    if (err && typeof err === "object" && "data" in err) {
+      const data = (err as { data?: { message?: string } }).data
+      if (data?.message) return data.message
+    }
+    if (err instanceof Error) return err.message
+    return language.t("common.requestFailed")
+  }
+
+  const resolveStartTarget = async () => {
+    const projectDirectory = sdk.directory
+    const worktree = props.newSessionWorktree ?? "main"
+    const created =
+      worktree === "create"
+        ? await sdk.client.worktree
+            .create({ directory: projectDirectory })
+            .then((x) => x.data)
+            .catch((err) => {
+              showToast({
+                title: language.t("prompt.toast.worktreeCreateFailed.title"),
+                description: errorMessage(err),
+              })
+              return undefined
+            })
+        : undefined
+
+    if (worktree === "create" && !created?.directory) {
+      showToast({
+        title: language.t("prompt.toast.worktreeCreateFailed.title"),
+        description: language.t("common.requestFailed"),
+      })
+      return
+    }
+
+    if (created?.directory) WorktreeState.pending(created.directory)
+
+    const sessionDirectory =
+      created?.directory ??
+      (() => {
+        if (worktree !== "main" && worktree !== "create") return worktree
+        return projectDirectory
+      })()
+
+    if (sessionDirectory !== projectDirectory) {
+      globalSync.child(sessionDirectory)
+    }
+
+    props.onNewSessionWorktreeReset?.()
+
+    return {
+      projectDirectory,
+      sessionDirectory,
+      client:
+        sessionDirectory === projectDirectory
+          ? sdk.client
+          : createOpencodeClient({
+              baseUrl: sdk.url,
+              fetch: platform.fetch,
+              directory: sessionDirectory,
+              throwOnError: true,
+            }),
+    }
+  }
+
+  const waitForWorktree = async (sessionID: string, sessionDirectory: string, projectDirectory: string) => {
+    const worktree = WorktreeState.get(sessionDirectory)
+    if (!worktree || worktree.status !== "pending") return
+
+    if (sessionDirectory === projectDirectory) {
+      sync.set("session_status", sessionID, { type: "busy" })
+    }
+
+    const timeout = new Promise<Awaited<ReturnType<typeof WorktreeState.wait>>>((resolve) => {
+      setTimeout(
+        () => {
+          resolve({ status: "failed", message: language.t("workspace.error.stillPreparing") })
+        },
+        5 * 60 * 1000,
+      )
+    })
+
+    const result = await Promise.race([WorktreeState.wait(sessionDirectory), timeout])
+
+    if (sessionDirectory === projectDirectory) {
+      sync.set("session_status", sessionID, { type: "idle" })
+    }
+
+    if (result.status === "failed") {
+      throw new Error(result.message)
+    }
+  }
+
+  const startChangeAgent = async (item: ProposalInfo | undefined) => {
+    const agent = changeAgent()
+    const currentModel = local.model.current()
+    if (!item || !agent || !currentModel || proposalStart()) {
+      if (!currentModel || !agent) {
+        showToast({
+          title: language.t("prompt.toast.modelAgentRequired.title"),
+          description: language.t("prompt.toast.modelAgentRequired.description"),
+        })
+      }
+      return
+    }
+
+    setProposalStart({ agent, changeId: item.changeId })
+
+    const target = await resolveStartTarget()
+    if (!target) {
+      setProposalStart(undefined)
+      return
+    }
+
+    const promptText = await buildProposalPrompt(target.client, {
+      agent,
+      changeId: item.changeId,
+      project: target.sessionDirectory,
+    })
+    if (!promptText) {
+      showToast({
+        title: "Proposal not found",
+        description: `proposal/${item.changeId}/task.md or proposal/${item.changeId}/tasks.md`,
+      })
+      setProposalStart(undefined)
+      return
+    }
+
+    const session = await target.client.session
+      .create()
+      .then((x) => x.data ?? undefined)
+      .catch((err) => {
+        showToast({
+          title: language.t("prompt.toast.sessionCreateFailed.title"),
+          description: errorMessage(err),
+        })
+        return undefined
+      })
+
+    if (!session) {
+      setProposalStart(undefined)
+      return
+    }
+
+    prompt.reset()
+    setStore("mode", "normal")
+    setStore("popover", null)
+    props.onSubmit?.()
+    navigate(`/${base64Encode(target.sessionDirectory)}/session/${session.id}`)
+
+    const ready = await waitForWorktree(session.id, target.sessionDirectory, target.projectDirectory)
+      .then(() => true)
+      .catch((err) => {
+        showToast({
+          title: language.t("prompt.toast.promptSendFailed.title"),
+          description: errorMessage(err),
+        })
+        return false
+      })
+
+    if (!ready) {
+      setProposalStart(undefined)
+      return
+    }
+
+    const messageID = Identifier.ascending("message")
+    const variant = local.model.variant.current()
+
+    target.client.session
+      .prompt({
+        sessionID: session.id,
+        agent,
+        model: {
+          modelID: currentModel.id,
+          providerID: currentModel.provider.id,
+        },
+        messageID,
+        parts: [
+          {
+            id: Identifier.ascending("part"),
+            type: "text",
+            text: promptText,
+          },
+        ],
+        variant,
+      })
+      .catch((err) => {
+        showToast({
+          title: language.t("prompt.toast.promptSendFailed.title"),
+          description: errorMessage(err),
+        })
+      })
+      .finally(() => setProposalStart(undefined))
+  }
 
   const promptLength = (prompt: Prompt) =>
     prompt.reduce((len, part) => len + ("content" in part ? part.content.length : 0), 0)
@@ -1127,6 +1356,8 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   const handleSubmit = async (event: Event) => {
     event.preventDefault()
 
+    if (changeMode()) return
+
     const currentPrompt = prompt.current()
     const text = currentPrompt.map((part) => ("content" in part ? part.content : "")).join("")
     const images = imageAttachments().slice()
@@ -1145,15 +1376,6 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
         description: language.t("prompt.toast.modelAgentRequired.description"),
       })
       return
-    }
-
-    const errorMessage = (err: unknown) => {
-      if (err && typeof err === "object" && "data" in err) {
-        const data = (err as { data?: { message?: string } }).data
-        if (data?.message) return data.message
-      }
-      if (err instanceof Error) return err.message
-      return language.t("common.requestFailed")
     }
 
     addToHistory(currentPrompt, mode)
@@ -1726,7 +1948,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
           [props.class ?? ""]: !!props.class,
         }}
       >
-        <Show when={store.dragging}>
+        <Show when={store.dragging && !changeMode()}>
           <div class="absolute inset-0 z-10 flex items-center justify-center bg-surface-raised-stronger-non-alpha/90 pointer-events-none">
             <div class="flex flex-col items-center gap-2 text-text-weak">
               <Icon name="photo" class="size-8" />
@@ -1734,7 +1956,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
             </div>
           </div>
         </Show>
-        <Show when={prompt.context.items().length > 0}>
+        <Show when={!changeMode() && prompt.context.items().length > 0}>
           <div class="flex flex-nowrap items-start gap-2 p-2 overflow-x-auto no-scrollbar">
             <For each={prompt.context.items()}>
               {(item) => {
@@ -1812,7 +2034,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
             </For>
           </div>
         </Show>
-        <Show when={imageAttachments().length > 0}>
+        <Show when={!changeMode() && imageAttachments().length > 0}>
           <div class="flex flex-wrap gap-2 px-3 pt-3">
             <For each={imageAttachments()}>
               {(attachment) => (
@@ -1850,50 +2072,122 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
             </For>
           </div>
         </Show>
-        <div class="relative max-h-[240px] overflow-y-auto" ref={(el) => (scrollRef = el)}>
-          <div
-            data-component="prompt-input"
-            ref={(el) => {
-              editorRef = el
-              props.ref?.(el)
-            }}
-            role="textbox"
-            aria-multiline="true"
-            aria-label={
-              store.mode === "shell"
-                ? language.t("prompt.placeholder.shell")
-                : commentCount() > 1
-                  ? language.t("prompt.placeholder.summarizeComments")
-                  : commentCount() === 1
-                    ? language.t("prompt.placeholder.summarizeComment")
-                    : language.t("prompt.placeholder.normal", { example: language.t(EXAMPLES[store.placeholder]) })
-            }
-            contenteditable="true"
-            onInput={handleInput}
-            onPaste={handlePaste}
-            onCompositionStart={() => setComposing(true)}
-            onCompositionEnd={() => setComposing(false)}
-            onKeyDown={handleKeyDown}
-            classList={{
-              "select-text": true,
-              "w-full p-3 pr-12 text-14-regular text-text-strong focus:outline-none whitespace-pre-wrap": true,
-              "[&_[data-type=file]]:text-syntax-property": true,
-              "[&_[data-type=agent]]:text-syntax-type": true,
-              "font-mono!": store.mode === "shell",
-            }}
-          />
-          <Show when={!prompt.dirty()}>
-            <div class="absolute top-0 inset-x-0 p-3 pr-12 text-14-regular text-text-weak pointer-events-none whitespace-nowrap truncate">
-              {store.mode === "shell"
-                ? language.t("prompt.placeholder.shell")
-                : commentCount() > 1
-                  ? language.t("prompt.placeholder.summarizeComments")
-                  : commentCount() === 1
-                    ? language.t("prompt.placeholder.summarizeComment")
-                    : language.t("prompt.placeholder.normal", { example: language.t(EXAMPLES[store.placeholder]) })}
+        <Show
+          when={changeMode()}
+          fallback={
+            <div class="relative max-h-[240px] overflow-y-auto" ref={(el) => (scrollRef = el)}>
+              <div
+                data-component="prompt-input"
+                ref={(el) => {
+                  editorRef = el
+                  props.ref?.(el)
+                }}
+                role="textbox"
+                aria-multiline="true"
+                aria-label={
+                  store.mode === "shell"
+                    ? language.t("prompt.placeholder.shell")
+                    : commentCount() > 1
+                      ? language.t("prompt.placeholder.summarizeComments")
+                      : commentCount() === 1
+                        ? language.t("prompt.placeholder.summarizeComment")
+                        : language.t("prompt.placeholder.normal", { example: language.t(EXAMPLES[store.placeholder]) })
+                }
+                contenteditable="true"
+                onInput={handleInput}
+                onPaste={handlePaste}
+                onCompositionStart={() => setComposing(true)}
+                onCompositionEnd={() => setComposing(false)}
+                onKeyDown={handleKeyDown}
+                classList={{
+                  "select-text": true,
+                  "w-full p-3 pr-12 text-14-regular text-text-strong focus:outline-none whitespace-pre-wrap": true,
+                  "[&_[data-type=file]]:text-syntax-property": true,
+                  "[&_[data-type=agent]]:text-syntax-type": true,
+                  "font-mono!": store.mode === "shell",
+                }}
+              />
+              <Show when={!prompt.dirty()}>
+                <div class="absolute top-0 inset-x-0 p-3 pr-12 text-14-regular text-text-weak pointer-events-none whitespace-nowrap truncate">
+                  {store.mode === "shell"
+                    ? language.t("prompt.placeholder.shell")
+                    : commentCount() > 1
+                      ? language.t("prompt.placeholder.summarizeComments")
+                      : commentCount() === 1
+                        ? language.t("prompt.placeholder.summarizeComment")
+                        : language.t("prompt.placeholder.normal", { example: language.t(EXAMPLES[store.placeholder]) })}
+                </div>
+              </Show>
             </div>
-          </Show>
-        </div>
+          }
+        >
+          <div data-component="change-agent-picker" class="p-3 flex flex-col gap-3">
+            <div class="flex flex-col gap-1">
+              <span class="text-13-medium text-text-strong">
+                {language.t("prompt.change.title", { agent: changeLabel() })}
+              </span>
+              <span class="text-12-regular text-text-weak">{language.t("prompt.change.description")}</span>
+            </div>
+            <Select
+              options={proposalItems()}
+              current={undefined}
+              value={(item) => item?.changeId ?? ""}
+              label={(item) => item?.changeId ?? ""}
+              placeholder={
+                proposalStart()
+                  ? language.t("prompt.change.starting", { changeId: proposalStart()!.changeId })
+                  : proposals.loading
+                    ? language.t("prompt.change.loading")
+                    : proposalItems().length > 0
+                      ? language.t("prompt.change.select")
+                      : language.t("prompt.change.empty")
+              }
+              disabled={proposals.loading || proposalItems().length === 0 || !!proposalStart()}
+              onSelect={(item) => {
+                void startChangeAgent(item)
+              }}
+              class="w-full justify-between"
+              variant="ghost"
+            >
+              {(item) => (
+                <div class="min-w-0 flex flex-col">
+                  <span class="text-13-medium text-text-strong">{item?.changeId}</span>
+                  <Show when={item?.description}>
+                    <span class="text-12-regular text-text-weak truncate">{item?.description}</span>
+                  </Show>
+                </div>
+              )}
+            </Select>
+            <Show when={proposalItems().length > 0}>
+              <div class="max-h-36 overflow-y-auto rounded-lg border border-border-base bg-background-stronger">
+                <For each={proposalItems()}>
+                  {(item) => (
+                    <button
+                      type="button"
+                      class="w-full px-3 py-2 text-left border-b border-border-base last:border-b-0 hover:bg-surface-raised-base-hover disabled:opacity-60"
+                      disabled={!!proposalStart()}
+                      onClick={() => {
+                        void startChangeAgent(item)
+                      }}
+                    >
+                      <div class="flex items-center justify-between gap-3">
+                        <span class="text-13-medium text-text-strong">{item.changeId}</span>
+                        <Show when={proposalStart()?.changeId === item.changeId}>
+                          <span class="text-11-regular text-text-weak">
+                            {language.t("prompt.change.startingShort")}
+                          </span>
+                        </Show>
+                      </div>
+                      <Show when={item.description}>
+                        <div class="text-12-regular text-text-weak mt-0.5 truncate">{item.description}</div>
+                      </Show>
+                    </button>
+                  )}
+                </For>
+              </div>
+            </Show>
+          </div>
+        </Show>
         <div class="relative p-3 flex items-center justify-between">
           <div class="flex items-center justify-start gap-0.5">
             <Switch>
@@ -2010,8 +2304,10 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
               }}
             />
             <div class="flex items-center gap-2">
-              <SessionContextUsage />
-              <Show when={store.mode === "normal"}>
+              <Show when={!changeMode()}>
+                <SessionContextUsage />
+              </Show>
+              <Show when={store.mode === "normal" && !changeMode()}>
                 <Tooltip placement="top" value={language.t("prompt.action.attachFile")}>
                   <Button
                     type="button"
@@ -2025,35 +2321,46 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                 </Tooltip>
               </Show>
             </div>
-            <Tooltip
-              placement="top"
-              inactive={!prompt.dirty() && !working()}
-              value={
-                <Switch>
-                  <Match when={working()}>
-                    <div class="flex items-center gap-2">
-                      <span>{language.t("prompt.action.stop")}</span>
-                      <span class="text-icon-base text-12-medium text-[10px]!">{language.t("common.key.esc")}</span>
-                    </div>
-                  </Match>
-                  <Match when={true}>
-                    <div class="flex items-center gap-2">
-                      <span>{language.t("prompt.action.send")}</span>
-                      <Icon name="enter" size="small" class="text-icon-base" />
-                    </div>
-                  </Match>
-                </Switch>
+            <Show
+              when={!changeMode()}
+              fallback={
+                <span class="text-12-regular text-text-weak whitespace-nowrap">
+                  {proposalStart()
+                    ? language.t("prompt.change.starting", { changeId: proposalStart()!.changeId })
+                    : language.t("prompt.change.footer")}
+                </span>
               }
             >
-              <IconButton
-                type="submit"
-                disabled={!prompt.dirty() && !working()}
-                icon={working() ? "stop" : "arrow-up"}
-                variant="primary"
-                class="h-6 w-4.5"
-                aria-label={working() ? language.t("prompt.action.stop") : language.t("prompt.action.send")}
-              />
-            </Tooltip>
+              <Tooltip
+                placement="top"
+                inactive={!prompt.dirty() && !working()}
+                value={
+                  <Switch>
+                    <Match when={working()}>
+                      <div class="flex items-center gap-2">
+                        <span>{language.t("prompt.action.stop")}</span>
+                        <span class="text-icon-base text-12-medium text-[10px]!">{language.t("common.key.esc")}</span>
+                      </div>
+                    </Match>
+                    <Match when={true}>
+                      <div class="flex items-center gap-2">
+                        <span>{language.t("prompt.action.send")}</span>
+                        <Icon name="enter" size="small" class="text-icon-base" />
+                      </div>
+                    </Match>
+                  </Switch>
+                }
+              >
+                <IconButton
+                  type="submit"
+                  disabled={!prompt.dirty() && !working()}
+                  icon={working() ? "stop" : "arrow-up"}
+                  variant="primary"
+                  class="h-6 w-4.5"
+                  aria-label={working() ? language.t("prompt.action.stop") : language.t("prompt.action.send")}
+                />
+              </Tooltip>
+            </Show>
           </div>
         </div>
       </form>

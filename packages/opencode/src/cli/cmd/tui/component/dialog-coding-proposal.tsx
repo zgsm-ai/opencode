@@ -1,0 +1,185 @@
+import { createEffect, createMemo, createResource, createSignal, onMount } from "solid-js"
+import { useKeyboard } from "@opentui/solid"
+import { useLocal } from "@tui/context/local"
+import { useSync } from "@tui/context/sync"
+import { useSDK } from "@tui/context/sdk"
+import { useRoute } from "@tui/context/route"
+import { useDialog } from "@tui/ui/dialog"
+import { useToast } from "@tui/ui/toast"
+import { DialogSelect } from "@tui/ui/dialog-select"
+import { useTheme } from "@tui/context/theme"
+import { Identifier } from "@/id/id"
+import { TextAttributes } from "@opentui/core"
+import { DialogFixProposal } from "@tui/component/dialog-fix-proposal"
+import { DialogTaskcheckProposal } from "@tui/component/dialog-taskcheck-proposal"
+import { scanProposals } from "@tui/util/proposal"
+import path from "path"
+
+function DialogCodingStarting(props: { changeId?: string }) {
+  const { theme } = useTheme()
+  useKeyboard((evt) => {
+    if (evt.name !== "escape" && evt.name !== "tab") return
+    evt.preventDefault()
+    evt.stopPropagation()
+  })
+  return (
+    <box paddingLeft={4} paddingRight={4} gap={1} paddingBottom={1}>
+      <text fg={theme.text} attributes={TextAttributes.BOLD}>
+        Coding agent 启动中
+      </text>
+      <text fg={theme.textMuted}>change-id: {props.changeId ?? "-"}</text>
+      <text fg={theme.textMuted}>正在创建会话并提交任务，请稍候...</text>
+    </box>
+  )
+}
+
+export function DialogCodingProposal() {
+  const local = useLocal()
+  const sync = useSync()
+  const sdk = useSDK()
+  const route = useRoute()
+  const dialog = useDialog()
+  const toast = useToast()
+  const [busy, setBusy] = createSignal(false)
+  const [selected, setSelected] = createSignal<string | undefined>()
+
+  const directory = createMemo(() => sync.data.path.directory || process.cwd())
+
+  onMount(() => {
+    dialog.setSize("wide")
+  })
+
+  function moveAgent(direction: 1 | -1) {
+    const list = local.agent.list()
+    const size = list.length
+    if (!size) return
+    const currentName = "coding"
+    const currentIndex = list.findIndex((item) => item.name === currentName)
+    const fallbackIndex = list.findIndex((item) => item.name === local.agent.current().name)
+    const start = currentIndex !== -1 ? currentIndex : fallbackIndex
+    if (start === -1) return
+    const nextIndex = (start + direction + size) % size
+    const next = list[nextIndex]
+    if (!next) return
+    if (next.name === "coding") return
+    if (next.name === "FixAgent") {
+      dialog.replace(() => <DialogFixProposal />)
+      return
+    }
+    if (next.name === "taskcheck") {
+      dialog.replace(() => <DialogTaskcheckProposal />)
+      return
+    }
+    local.agent.set(next.name)
+    dialog.clear()
+  }
+
+  useKeyboard((evt) => {
+    if (busy()) return
+    if (evt.name !== "tab") return
+    evt.preventDefault()
+    evt.stopPropagation()
+    moveAgent(evt.shift ? -1 : 1)
+  })
+
+  const [proposals] = createResource(directory, (dir) => scanProposals(dir))
+
+  createEffect(() => {
+    const list = proposals()
+    if (proposals.loading) return
+    if (!list || list.length > 0) return
+    toast.show({
+      variant: "warning",
+      message: "No proposals found under proposal/",
+      duration: 3000,
+    })
+  })
+
+  const options = createMemo(() => {
+    const list = proposals() ?? []
+    if (list.length === 0) return []
+    return list.map((item) => ({
+      value: item.changeId,
+      title: item.changeId,
+      description: item.description,
+    }))
+  })
+  const proposalMap = createMemo(() => new Map((proposals() ?? []).map((item) => [item.changeId, item.taskPath])))
+
+  if (busy()) {
+    return <DialogCodingStarting changeId={selected()} />
+  }
+
+  return (
+    <DialogSelect
+      title="Coding agent: select proposal (change-id)"
+      placeholder="Search change-id under proposal/"
+      options={options()}
+      onSelect={async (option) => {
+        if (busy()) return
+        setBusy(true)
+        setSelected(option.value)
+
+        const model = local.model.current()
+        if (!model) {
+          toast.show({
+            variant: "warning",
+            message: "No model selected",
+            duration: 3000,
+          })
+          setBusy(false)
+          setSelected(undefined)
+          return
+        }
+
+        local.agent.set("coding")
+
+        const project = directory()
+        const tasks = proposalMap().get(option.value) ?? path.join(project, "proposal", option.value, "task.md")
+        const projectText = project.split(path.sep).join("/")
+        const tasksText = tasks.split(path.sep).join("/")
+        const promptText = `项目路径：\`${projectText}\`\n任务文件路径：\`${tasksText}\`\n\n请确保本次编码任务高质量完成`
+        const variant = local.model.variant.current()
+
+        try {
+          const sessionID = await sdk.client.session.create({}).then((x) => x.data!.id)
+          const messageID = Identifier.ascending("message")
+
+          sdk.client.session
+            .prompt({
+              sessionID,
+              ...model,
+              messageID,
+              agent: "coding",
+              model: model,
+              variant,
+              parts: [
+                {
+                  id: Identifier.ascending("part"),
+                  type: "text",
+                  text: promptText,
+                },
+              ],
+            })
+            .catch(() => {})
+
+          setTimeout(() => {
+            route.navigate({
+              type: "session",
+              sessionID,
+            })
+            dialog.clear()
+          }, 50)
+        } catch (err) {
+          setBusy(false)
+          setSelected(undefined)
+          toast.show({
+            variant: "error",
+            message: `Failed to start coding session: ${err}`,
+            duration: 5000,
+          })
+        }
+      }}
+    />
+  )
+}

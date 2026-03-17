@@ -8,10 +8,12 @@ const dir = fileURLToPath(new URL("..", import.meta.url))
 process.chdir(dir)
 
 const { binaries } = await import("./build.ts")
+const { archive } = await import("./archive.ts")
+const bin = Object.keys(pkg.bin)[0] || pkg.name
 {
   const name = `${pkg.name}-${process.platform}-${process.arch}`
-  console.log(`smoke test: running dist/${name}/bin/opencode --version`)
-  await $`./dist/${name}/bin/opencode --version`
+  console.log(`smoke test: running dist/${name}/bin/${bin} --version`)
+  await $`./dist/${name}/bin/${bin} --version`
 }
 
 await $`mkdir -p ./dist/${pkg.name}`
@@ -23,7 +25,7 @@ await Bun.file(`./dist/${pkg.name}/package.json`).write(
     {
       name: pkg.name + "-ai",
       bin: {
-        [pkg.name]: `./bin/${pkg.name}`,
+        [bin]: `./bin/${bin}`,
       },
       scripts: {
         postinstall: "bun ./postinstall.mjs || node ./postinstall.mjs",
@@ -53,14 +55,7 @@ for (const tag of tags) {
 }
 
 if (!Script.preview) {
-  // Create archives for GitHub release
-  for (const key of Object.keys(binaries)) {
-    if (key.includes("linux")) {
-      await $`tar -czf ../../${key}.tar.gz *`.cwd(`dist/${key}/bin`)
-    } else {
-      await $`zip -r ../../${key}.zip *`.cwd(`dist/${key}/bin`)
-    }
-  }
+  await archive(Object.keys(binaries))
 
   const image = "ghcr.io/zgsm-ai/costrict-cli"
   const platforms = "linux/amd64,linux/arm64"

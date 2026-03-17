@@ -31,6 +31,8 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
   gotoSession: async ({ page, directory }, use) => {
     await page.addInitScript(
       (input: { directory: string; serverUrl: string }) => {
+        localStorage.setItem("opencode.settings.dat:defaultServerUrl", input.serverUrl)
+
         const key = "opencode.global.dat:server"
         const raw = localStorage.getItem(key)
         const parsed = (() => {

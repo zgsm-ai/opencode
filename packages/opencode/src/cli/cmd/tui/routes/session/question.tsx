@@ -1,5 +1,5 @@
 import { createStore } from "solid-js/store"
-import { createMemo, For, Show } from "solid-js"
+import { createMemo, For, onCleanup, onMount, Show } from "solid-js"
 import { useKeyboard } from "@opentui/solid"
 import type { TextareaRenderable } from "@opentui/core"
 import { useKeybind } from "../../context/keybind"
@@ -9,11 +9,13 @@ import { useSDK } from "../../context/sdk"
 import { SplitBorder } from "../../component/border"
 import { useTextareaKeybindings } from "../../component/textarea-keybindings"
 import { useDialog } from "../../ui/dialog"
+import { useCommandDialog } from "../../component/dialog-command"
 
 export function QuestionPrompt(props: { request: QuestionRequest }) {
   const sdk = useSDK()
   const { theme } = useTheme()
   const keybind = useKeybind()
+  const command = useCommandDialog()
   const bindings = useTextareaKeybindings()
 
   const questions = createMemo(() => props.request.questions)
@@ -120,6 +122,14 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
   }
 
   const dialog = useDialog()
+
+  onMount(() => {
+    command.keybinds(false)
+  })
+
+  onCleanup(() => {
+    command.keybinds(true)
+  })
 
   useKeyboard((evt) => {
     // Skip processing if a dialog (e.g., command palette) is open
@@ -354,7 +364,7 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
                     </box>
                     <box backgroundColor={other() ? theme.backgroundElement : undefined}>
                       <text fg={other() ? theme.secondary : customPicked() ? theme.success : theme.text}>
-                        {multi() ? `[${customPicked() ? "✓" : " "}] Type your own answer` : "Type your own answer"}
+                        {multi() ? `[${customPicked() ? "✓" : " "}] 输入以告诉 costrict 怎么做` : "输入以告诉 costrict 怎么做"}
                       </text>
                     </box>
 
@@ -373,7 +383,7 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
                           })
                         }}
                         initialValue={input()}
-                        placeholder="Type your own answer"
+                        placeholder="输入以告诉 costrict 怎么做"
                         minHeight={1}
                         maxHeight={6}
                         textColor={theme.text}

@@ -1,5 +1,6 @@
 [install]
 exact = true
+registry = "https://registry.npmmirror.com"
 
 [test]
 root = "./do-not-run-tests-from-root"

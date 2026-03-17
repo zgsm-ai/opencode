@@ -13,6 +13,126 @@ import { lazy } from "@/util/lazy"
 export namespace ModelsDev {
   const log = Log.create({ service: "models.dev" })
   const filepath = path.join(Global.Path.cache, "models.json")
+  const glmProvider: Provider = {
+    id: "ai-code-glm",
+    name: "AI Code 测评 GLM 服务",
+    api: "http://10.72.1.37:8510/v1",
+    npm: "@ai-sdk/openai-compatible",
+    env: [],
+    models: {
+      "glm-4.7": {
+        id: "glm-4.7",
+        name: "GLM-4.7",
+        release_date: "2026-02-28",
+        attachment: false,
+        reasoning: true,
+        temperature: true,
+        tool_call: true,
+        interleaved: {
+          field: "reasoning_content",
+        },
+        limit: {
+          context: 200000,
+          output: 10240,
+        },
+        modalities: {
+          input: ["text"],
+          output: ["text"],
+        },
+        options: {},
+      },
+    },
+  }
+  const glmSftProvider: Provider = {
+    id: "ai-code-glm-sft",
+    name: "AI Code 测评 GLM-SFT 服务",
+    api: "http://10.72.1.37:6619/v1",
+    npm: "@ai-sdk/openai-compatible",
+    env: [],
+    models: {
+      "glm47-lora": {
+        id: "glm47-lora",
+        name: "glm47-lora",
+        release_date: "2026-03-12",
+        attachment: false,
+        reasoning: true,
+        temperature: true,
+        tool_call: true,
+        interleaved: {
+          field: "reasoning_content",
+        },
+        limit: {
+          context: 200000,
+          output: 10240,
+        },
+        modalities: {
+          input: ["text"],
+          output: ["text"],
+        },
+        options: {},
+      },
+    },
+  }
+  const glm5Provider: Provider = {
+    id: "ai-code-glm-5",
+    name: "AI Code 测评 GLM-5 服务",
+    api: "http://10.72.1.36:6688/v1",
+    npm: "@ai-sdk/openai-compatible",
+    env: [],
+    models: {
+      "glm-5": {
+        id: "glm-5",
+        name: "GLM-5",
+        release_date: "2026-02-11",
+        attachment: false,
+        reasoning: true,
+        temperature: true,
+        tool_call: true,
+        interleaved: {
+          field: "reasoning_content",
+        },
+        limit: {
+          context: 204800,
+          output: 131072,
+        },
+        modalities: {
+          input: ["text"],
+          output: ["text"],
+        },
+        options: {},
+      },
+    },
+  }
+  const aiCodeQwenProvider: Provider = {
+    id: "ai-code-qwen",
+    name: "AI Code 测评 Qwen-Code 服务",
+    api: "http://10.72.1.12:8898/v1",
+    npm: "@ai-sdk/openai-compatible",
+    env: [],
+    models: {
+      "qwen3-coder-lora": {
+        id: "qwen3-coder-lora",
+        name: "qwen3-coder-lora",
+        release_date: "2026-03-11",
+        attachment: false,
+        reasoning: true,
+        temperature: true,
+        tool_call: true,
+        interleaved: {
+          field: "reasoning_content",
+        },
+        limit: {
+          context: 200000,
+          output: 10240,
+        },
+        modalities: {
+          input: ["text"],
+          output: ["text"],
+        },
+        options: {},
+      },
+    },
+  }
 
   export const Model = z.object({
     id: z.string(),
@@ -100,9 +220,15 @@ export namespace ModelsDev {
     return JSON.parse(json)
   })
 
-  export async function get() {
-    const result = await Data()
-    return result as Record<string, Provider>
+  export async function get(): Promise<Record<string, Provider>> {
+    const result = (await Data()) as Record<string, Provider>
+    return {
+      ...result,
+      ...(result["ai-code-glm"] ? {} : { "ai-code-glm": glmProvider }),
+      ...(result["ai-code-glm-sft"] ? {} : { "ai-code-glm-sft": glmSftProvider }),
+      ...(result["ai-code-glm-5"] ? {} : { "ai-code-glm-5": glm5Provider }),
+      ...(result["ai-code-qwen"] ? {} : { "ai-code-qwen": aiCodeQwenProvider }),
+    }
   }
 
   export async function refresh() {

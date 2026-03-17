@@ -1,0 +1,32 @@
+<fd_usage>
+
+<critical_rule>
+### fd cheatsheet（文件名搜索）
+
+**核心规则**：所有 `fd` 命令必须显式指定搜索目录（如 `<project_path>` 或其子目录）。禁止执行不带目录参数的 `fd "pattern"`。
+</critical_rule>
+
+<basic_usage>
+### 常用命令模板（直接替换 PATTERN/目录）
+
+```bash
+# 1) 按"文件名"搜索（PATTERN 是正则）
+fd "PATTERN" <project_path>
+
+# 2) 按扩展名过滤
+fd -e py <project_path>
+fd -e js -e ts <project_path>
+
+# 3) 只搜文件/只搜目录
+fd -t f "PATTERN" <project_path>
+fd -t d "PATTERN" <project_path>
+
+# 4) 排除常见无关目录
+fd "PATTERN" <project_path> -E .git -E node_modules -E .venv -E venv
+
+# 5) 限制深度（先粗扫再加深）
+fd -d 2 "PATTERN" <project_path>
+```
+</basic_usage>
+
+</fd_usage>

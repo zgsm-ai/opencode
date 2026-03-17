@@ -29,7 +29,6 @@ export const PlanExitTool = Tool.define("plan_exit", {
         {
           question: `Plan at ${plan} is complete. Would you like to switch to the build agent and start implementing?`,
           header: "Build Agent",
-          custom: false,
           options: [
             { label: "Yes", description: "Switch to build agent and start implementing the plan" },
             { label: "No", description: "Stay with plan agent to continue refining the plan" },
@@ -85,7 +84,6 @@ export const PlanEnterTool = Tool.define("plan_enter", {
         {
           question: `Would you like to switch to the plan agent and create a plan saved to ${plan}?`,
           header: "Plan Mode",
-          custom: false,
           options: [
             { label: "Yes", description: "Switch to plan agent for research and planning" },
             { label: "No", description: "Stay with build agent to continue making changes" },

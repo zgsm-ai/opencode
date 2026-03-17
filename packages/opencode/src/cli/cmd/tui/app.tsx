@@ -17,6 +17,9 @@ import { DialogThemeList } from "@tui/component/dialog-theme-list"
 import { DialogHelp } from "./ui/dialog-help"
 import { CommandProvider, useCommandDialog } from "@tui/component/dialog-command"
 import { DialogAgent } from "@tui/component/dialog-agent"
+import { DialogCodingProposal } from "@tui/component/dialog-coding-proposal"
+import { DialogFixProposal } from "@tui/component/dialog-fix-proposal"
+import { DialogTaskcheckProposal } from "@tui/component/dialog-taskcheck-proposal"
 import { DialogSessionList } from "@tui/component/dialog-session-list"
 import { KeybindProvider } from "@tui/context/keybind"
 import { ThemeProvider, useTheme } from "@tui/context/theme"
@@ -196,6 +199,58 @@ function App() {
   const exit = useExit()
   const promptRef = usePromptRef()
 
+  function openCodingDialog() {
+    dialog.replace(() => <DialogCodingProposal />)
+  }
+
+  function openFixDialog() {
+    dialog.replace(() => <DialogFixProposal />)
+  }
+
+  function openTaskcheckDialog() {
+    dialog.replace(() => <DialogTaskcheckProposal />)
+  }
+
+  function moveAgent(direction: 1 | -1) {
+    const list = local.agent.list()
+    if (!list.length) return
+    const index = list.findIndex((item) => item.name === local.agent.current().name)
+    if (index === -1) {
+      const first = list[0]
+      if (!first) return
+      if (first.name === "coding") {
+        openCodingDialog()
+        return
+      }
+      if (first.name === "FixAgent") {
+        openFixDialog()
+        return
+      }
+      if (first.name === "taskcheck") {
+        openTaskcheckDialog()
+        return
+      }
+      local.agent.set(first.name)
+      return
+    }
+    const nextIndex = (index + direction + list.length) % list.length
+    const next = list[nextIndex]
+    if (!next) return
+    if (next.name === "coding") {
+      openCodingDialog()
+      return
+    }
+    if (next.name === "FixAgent") {
+      openFixDialog()
+      return
+    }
+    if (next.name === "taskcheck") {
+      openTaskcheckDialog()
+      return
+    }
+    local.agent.set(next.name)
+  }
+
   // Wire up console copy-to-clipboard via opentui's onCopySelection callback
   renderer.console.onCopySelection = async (text: string) => {
     if (!text || text.length === 0) return
@@ -206,6 +261,7 @@ function App() {
     renderer.clearSelection()
   }
   const [terminalTitleEnabled, setTerminalTitleEnabled] = createSignal(kv.get("terminal_title_enabled", true))
+  const [autoAllowPermissions, setAutoAllowPermissions] = kv.mem("permissions_auto_allow_all", false)
 
   createEffect(() => {
     console.log(JSON.stringify(route.data))
@@ -236,7 +292,18 @@ function App() {
   const args = useArgs()
   onMount(() => {
     batch(() => {
-      if (args.agent) local.agent.set(args.agent)
+      if (args.agent === "coding") {
+        openCodingDialog()
+      }
+      if (args.agent === "FixAgent") {
+        openFixDialog()
+      }
+      if (args.agent === "taskcheck") {
+        openTaskcheckDialog()
+      }
+      if (args.agent && args.agent !== "coding" && args.agent !== "FixAgent" && args.agent !== "taskcheck") {
+        local.agent.set(args.agent)
+      }
       if (args.model) {
         const { providerID, modelID } = Provider.parseModel(args.model)
         if (!providerID || !modelID)
@@ -384,6 +451,40 @@ function App() {
       },
     },
     {
+      title: "Start coding from proposal",
+      value: "coding.start",
+      category: "Agent",
+      slash: {
+        name: "coding",
+        aliases: ["code"],
+      },
+      onSelect: () => {
+        openCodingDialog()
+      },
+    },
+    {
+      title: "Start fix from proposal",
+      value: "fix.start",
+      category: "Agent",
+      slash: {
+        name: "fix",
+      },
+      onSelect: () => {
+        openFixDialog()
+      },
+    },
+    {
+      title: "Start task check from proposal",
+      value: "taskcheck.start",
+      category: "Agent",
+      slash: {
+        name: "taskcheck",
+      },
+      onSelect: () => {
+        openTaskcheckDialog()
+      },
+    },
+    {
       title: "Toggle MCPs",
       value: "mcp.list",
       category: "Agent",
@@ -401,7 +502,7 @@ function App() {
       category: "Agent",
       hidden: true,
       onSelect: () => {
-        local.agent.move(1)
+        moveAgent(1)
       },
     },
     {
@@ -421,7 +522,7 @@ function App() {
       category: "Agent",
       hidden: true,
       onSelect: () => {
-        local.agent.move(-1)
+        moveAgent(-1)
       },
     },
     {
@@ -465,6 +566,25 @@ function App() {
       value: "theme.switch_mode",
       onSelect: (dialog) => {
         setMode(mode() === "dark" ? "light" : "dark")
+        dialog.clear()
+      },
+      category: "System",
+    },
+    {
+      title: autoAllowPermissions() ? "Disable auto-allow permissions" : "Enable auto-allow permissions",
+      value: "permission.auto_approve.toggle",
+      slash: {
+        name: "auto-approve",
+      },
+      onSelect: (dialog) => {
+        setAutoAllowPermissions((prev) => {
+          const next = !prev
+          toast.show({
+            variant: "info",
+            message: next ? "Auto-allow permissions enabled" : "Auto-allow permissions disabled",
+          })
+          return next
+        })
         dialog.clear()
       },
       category: "System",

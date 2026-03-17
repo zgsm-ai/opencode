@@ -16,21 +16,477 @@ import {
   jsonSchema,
 } from "ai"
 import { clone, mergeDeep, pipe } from "remeda"
+import { jsonrepair } from "jsonrepair"
 import { ProviderTransform } from "@/provider/transform"
 import { Config } from "@/config/config"
 import { Instance } from "@/project/instance"
 import type { Agent } from "@/agent/agent"
-import type { MessageV2 } from "./message-v2"
+import { MessageV2 } from "./message-v2"
 import { Plugin } from "@/plugin"
 import { SystemPrompt } from "./system"
 import { Flag } from "@/flag/flag"
 import { PermissionNext } from "@/permission/next"
 import { Auth } from "@/auth"
+import path from "path"
+import fs from "fs/promises"
+import { fileURLToPath } from "url"
+import * as LoopPolicy from "./loop-policy"
+import { toolAlias } from "@/costrict/utils/tool-transform-v2"
 
 export namespace LLM {
   const log = Log.create({ service: "llm" })
 
-  export const OUTPUT_TOKEN_MAX = Flag.COSTRICT_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 32_000
+  // 本地开发（bun dev）保存在仓库根目录；打包后保存在 bin/resources 同级目录
+  let HISTORY_DIR = path.join(
+    Installation.isLocal()
+      ? path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../../")
+      : path.resolve(path.dirname(process.execPath), ".."),
+    ".history_message",
+  )
+
+  /**
+   * 设置 history message 保存目录
+   * @param dir 目录路径，如果未提供则使用默认路径
+   */
+  export function setHistoryDir(dir?: string) {
+    if (dir) {
+      HISTORY_DIR = path.resolve(dir)
+      log.info("history directory set", { dir: HISTORY_DIR })
+    }
+  }
+
+  /**
+   * 获取当前 history message 保存目录
+   */
+  export function getHistoryDir(): string {
+    return HISTORY_DIR
+  }
+
+  // 存储每个轨迹键（session + agent）的最新 system 提示词（经过 Plugin 处理后的完整版本）
+  const sessionSystemCache = new Map<string, string[]>()
+  const requestMessageCache = new Map<string, ModelMessage[]>()
+
+  // 存储每个轨迹键（session + agent）的初始北京时间戳（首次记录时生成，后续复用，格式 YYYYMMDD_hhmmss）
+  const sessionInitTime = new Map<string, string>()
+  const trajectoryAlias = new Map<string, string>()
+  const trajectoryChangeID = new Map<string, string>()
+
+  function beijingTimeString() {
+    const now = new Date()
+    // 北京时间 UTC+8
+    const offset = 8 * 60 * 60 * 1000
+    const t = new Date(now.getTime() + offset)
+    const pad = (n: number) => String(n).padStart(2, "0")
+    return (
+      `${t.getUTCFullYear()}${pad(t.getUTCMonth() + 1)}${pad(t.getUTCDate())}` +
+      `_${pad(t.getUTCHours())}${pad(t.getUTCMinutes())}${pad(t.getUTCSeconds())}`
+    )
+  }
+
+  function beijingTimeWithMs(timestamp: number) {
+    const offset = 8 * 60 * 60 * 1000
+    const t = new Date(timestamp + offset)
+    const pad = (n: number, size = 2) => String(n).padStart(size, "0")
+    return (
+      `${t.getUTCFullYear()}-${pad(t.getUTCMonth() + 1)}-${pad(t.getUTCDate())} ` +
+      `${pad(t.getUTCHours())}:${pad(t.getUTCMinutes())}:${pad(t.getUTCSeconds())}.${pad(t.getUTCMilliseconds(), 3)}`
+    )
+  }
+
+  function toolStart(state: MessageV2.ToolPart["state"]) {
+    if (state.status === "pending") return
+    return state.time.start
+  }
+
+  function toolEnd(state: MessageV2.ToolPart["state"]) {
+    if (state.status === "completed") return state.time.end
+    if (state.status === "error") return state.time.end
+  }
+
+  function collectToolExecutions(messages: MessageV2.WithParts[]) {
+    return messages.flatMap((msg) =>
+      msg.parts
+        .filter((part): part is MessageV2.ToolPart => part.type === "tool")
+        .map((part) => {
+          const start = toolStart(part.state)
+          const end = toolEnd(part.state)
+          const durationMs = start !== undefined && end !== undefined ? Math.max(0, end - start) : undefined
+          return {
+            messageID: part.messageID,
+            partID: part.id,
+            callID: part.callID,
+            tool: part.tool,
+            status: part.state.status,
+            startedAt: start,
+            startedAtBeijing: start === undefined ? undefined : beijingTimeWithMs(start),
+            durationMs,
+          }
+        }),
+    )
+  }
+
+  function collectErrorTurns(messages: MessageV2.WithParts[]) {
+    return structuredClone(
+      messages.filter(
+        (msg) => msg.info.role === "assistant" && !!msg.info.error,
+      ),
+    )
+  }
+
+  function appendExitToolMessages(
+    baseMessages: ModelMessage[],
+    rawMessages: MessageV2.WithParts[],
+    agent: Agent.Info,
+  ): ModelMessage[] {
+    const exitToolName = LoopPolicy.exitTool(agent)
+    if (!exitToolName) return baseMessages
+
+    const normalizedExitName = toolAlias(exitToolName)
+
+    let exitToolPart: MessageV2.ToolPart | undefined
+    let exitAssistant: MessageV2.WithParts | undefined
+
+    for (let i = rawMessages.length - 1; i >= 0; i--) {
+      const msg = rawMessages[i]
+      if (msg.info.role !== "assistant") continue
+      const toolParts = msg.parts.filter((p): p is MessageV2.ToolPart => p.type === "tool")
+      if (!toolParts.length) continue
+      const match = [...toolParts]
+        .reverse()
+        .find(
+          (part) =>
+            toolAlias(part.tool) === normalizedExitName &&
+            (part.state.status === "completed" || part.state.status === "error"),
+        )
+      if (!match) continue
+      exitToolPart = match
+      exitAssistant = msg
+      break
+    }
+
+    if (!exitToolPart || !exitAssistant) return baseMessages
+    if (exitToolPart.state.status !== "completed" && exitToolPart.state.status !== "error") return baseMessages
+
+    const callID = exitToolPart.callID
+    const toolName = exitToolPart.tool
+
+    const alreadyHasToolCall = baseMessages.some(
+      (msg: any) =>
+        msg.role === "assistant" &&
+        Array.isArray(msg.content) &&
+        msg.content.some(
+          (p: any) => p.type === "tool-call" && typeof p.toolCallId === "string" && p.toolCallId === callID,
+        ),
+    )
+
+    const alreadyHasToolResult = baseMessages.some(
+      (msg: any) =>
+        msg.role === "tool" &&
+        Array.isArray(msg.content) &&
+        msg.content.some(
+          (p: any) => p.type === "tool-result" && typeof p.toolCallId === "string" && p.toolCallId === callID,
+        ),
+    )
+
+    if (alreadyHasToolCall && alreadyHasToolResult) return baseMessages
+
+    // 最后一轮 assistant 的 content 要记全：reasoning、text、tool-call 等，不省略
+    const content: Array<{ type: string; text?: string; toolCallId?: string; toolName?: string; input?: unknown }> = []
+    for (const part of exitAssistant.parts) {
+      if (part.type === "reasoning") {
+        content.push({ type: "reasoning", text: part.text })
+      }
+      if (part.type === "text") {
+        content.push({ type: "text", text: part.text })
+      }
+      if (part.type === "tool") {
+        content.push({
+          type: "tool-call",
+          toolCallId: part.callID,
+          toolName: part.tool,
+          input: part.state.input,
+        })
+      }
+    }
+
+    const assistantMsg: any = {
+      role: "assistant",
+      content: content.length > 0 ? content : [
+        {
+          type: "tool-call",
+          toolCallId: callID,
+          toolName,
+          input: exitToolPart.state.input,
+        },
+      ],
+    }
+
+    const toolResults = exitAssistant.parts
+      .filter((part): part is MessageV2.ToolPart => part.type === "tool")
+      .map((part) => {
+        let text = ""
+        let type = "text"
+        if (part.state.status === "completed") {
+          text = part.state.output ?? ""
+          type = "text"
+        } else if (part.state.status === "error") {
+          text = part.state.error ?? ""
+          type = "error-text"
+        } else {
+          return null
+        }
+        return {
+          type: "tool-result",
+          toolCallId: part.callID,
+          toolName: part.tool,
+          output: {
+            type,
+            value: String(text),
+          },
+        }
+      })
+      .filter((x): x is { type: string; toolCallId: string; toolName: string; output: { type: string; value: string } } => !!x)
+
+    const toolContent = toolResults.length
+      ? toolResults
+      : [
+          {
+            type: "tool-result",
+            toolCallId: callID,
+            toolName,
+            output: {
+              type: exitToolPart.state.status === "completed" ? "text" : "error-text",
+              value: String(
+                exitToolPart.state.status === "completed"
+                  ? exitToolPart.state.output ?? ""
+                  : exitToolPart.state.error ?? "",
+              ),
+            },
+          },
+        ]
+
+    const toolMsg: any = {
+      role: "tool",
+      content: toolContent,
+    }
+
+    return [...baseMessages, assistantMsg, toolMsg]
+  }
+
+  function trajectoryAgentName(name: string) {
+    const key = name.trim().toLowerCase().replace(/[\s_-]+/g, "")
+    if (key === "proposal" || key === "proposalagent") return "ProposalAgent"
+    if (key === "taskcheck" || key === "taskcheckagent") return "TaskCheckAgent"
+    if (key === "coding" || key === "codingagent") return "CodingAgent"
+    if (key === "fix" || key === "fixagent") return "FixAgent"
+    if (key === "quickexplore" || key === "quickexploreagent") return "QuickExploreAgent"
+    if (key === "subcoding" || key === "subcodingagent") return "SubCodingAgent"
+    return name.trim() || "UnknownAgent"
+  }
+
+  function skipTrajectory(name: string) {
+    const key = name.trim().toLowerCase().replace(/[\s_-]+/g, "")
+    return key === "title" || key === "titleagent"
+  }
+
+  export function normalizeTrajectoryAgentName(name: string) {
+    return trajectoryAgentName(name)
+  }
+
+  export function setTrajectoryAgentAlias(sessionID: string, alias: string) {
+    const val = alias.trim()
+    if (!val) return
+    trajectoryAlias.set(sessionID, val)
+  }
+
+  export function clearTrajectoryAgentAlias(sessionID: string) {
+    trajectoryAlias.delete(sessionID)
+  }
+
+  function normalizeTrajectoryChangeID(changeID: string) {
+    const val = changeID
+      .trim()
+      .replace(/^["'`]+|["'`]+$/g, "")
+      .replace(/[\\/]/g, "-")
+      .replace(/\s+/g, "-")
+      .replace(/[^A-Za-z0-9._-]/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-+|-+$/g, "")
+    if (!val) return
+    return val
+  }
+
+  export function detectTrajectoryChangeID(text: string) {
+    const val = text.trim()
+    if (!val) return
+    const patterns = [
+      /(?:change[_-]?id)\s*[:=：]\s*`?([A-Za-z0-9][A-Za-z0-9._-]*)`?/gi,
+      /proposal\/([A-Za-z0-9][A-Za-z0-9._-]*)\//gi,
+      /proposal\\([A-Za-z0-9][A-Za-z0-9._-]*)\\/gi,
+      /changes\/([A-Za-z0-9][A-Za-z0-9._-]*)\//gi,
+    ]
+    for (const pattern of patterns) {
+      const matches = [...val.matchAll(pattern)]
+      const latest = matches.at(-1)?.[1]
+      if (!latest) continue
+      const normalized = normalizeTrajectoryChangeID(latest)
+      if (normalized) return normalized
+    }
+  }
+
+  function detectTrajectoryChangeIDFromMessages(messages: ModelMessage[]) {
+    if (!messages.length) return
+    const text = messages
+      .map((msg) => {
+        if (typeof msg.content === "string") return msg.content
+        return JSON.stringify(msg.content)
+      })
+      .join("\n")
+    return detectTrajectoryChangeID(text)
+  }
+
+  export function setTrajectoryChangeID(sessionID: string, changeID: string) {
+    const val = normalizeTrajectoryChangeID(changeID)
+    if (!val) return
+    trajectoryChangeID.set(sessionID, val)
+    return val
+  }
+
+  async function resolveTrajectoryChangeID(
+    sessionID: string,
+    visited = new Set<string>(),
+  ): Promise<string | undefined> {
+    if (visited.has(sessionID)) return
+    visited.add(sessionID)
+    const cached = trajectoryChangeID.get(sessionID)
+    if (cached) return cached
+    const session = await Session.get(sessionID).catch(() => undefined)
+    const parentID = session?.parentID
+    if (!parentID) return
+    const parent = await resolveTrajectoryChangeID(parentID, visited)
+    if (!parent) return
+    trajectoryChangeID.set(sessionID, parent)
+    return parent
+  }
+
+  async function renameTrajectoryFilesForSession(sessionID: string) {
+    const changeID = trajectoryChangeID.get(sessionID)
+    if (!changeID) return
+    await fs.mkdir(HISTORY_DIR, { recursive: true }).catch(() => {})
+    const files = await fs.readdir(HISTORY_DIR).catch(() => [] as string[])
+    for (const file of files) {
+      const parsed = parseTrajectoryFile(file)
+      if (!parsed || parsed.sessionID !== sessionID) continue
+      const key = trajectoryKey(sessionID, parsed.agentName)
+      const initTime = parsed.initTime || sessionInitTime.get(key) || beijingTimeString()
+      sessionInitTime.set(key, initTime)
+      const target = sessionFilename(sessionID, parsed.agentName, changeID)
+      if (target === file) continue
+      const fromPath = path.join(HISTORY_DIR, file)
+      const toPath = path.join(HISTORY_DIR, target)
+      await fs.unlink(toPath).catch(() => {})
+      await fs.rename(fromPath, toPath).catch(() => {})
+    }
+  }
+
+  export async function applyTrajectoryChangeID(sessionID: string, changeID: string) {
+    const val = setTrajectoryChangeID(sessionID, changeID)
+    if (!val) return
+    await renameTrajectoryFilesForSession(sessionID)
+    const children = await Session.children(sessionID).catch(() => [] as Session.Info[])
+    for (const child of children) {
+      await applyTrajectoryChangeID(child.id, val)
+    }
+  }
+
+  export async function inheritTrajectoryChangeID(sessionID: string, parentSessionID: string) {
+    const parent = await resolveTrajectoryChangeID(parentSessionID)
+    if (!parent) return
+    trajectoryChangeID.set(sessionID, parent)
+  }
+
+  export async function ensureTrajectoryChangeID(sessionID: string, hint?: string) {
+    const hinted = hint ? detectTrajectoryChangeID(hint) : undefined
+    if (hinted) {
+      trajectoryChangeID.set(sessionID, hinted)
+      return hinted
+    }
+    const cached = trajectoryChangeID.get(sessionID)
+    if (cached) return cached
+    return resolveTrajectoryChangeID(sessionID)
+  }
+
+  export function setSubCodingTrajectoryAlias(sessionID: string, alias: string) {
+    setTrajectoryAgentAlias(sessionID, alias)
+  }
+
+  export function clearSubCodingTrajectoryAlias(sessionID: string) {
+    clearTrajectoryAgentAlias(sessionID)
+  }
+
+  function effectiveAgentName(sessionID: string, name: string) {
+    const alias = trajectoryAlias.get(sessionID)?.trim()
+    if (alias) return alias
+    return trajectoryAgentName(name)
+  }
+
+  function trajectoryKey(sessionID: string, agentName: string) {
+    return `${sessionID}::${agentName}`
+  }
+
+  function parseTrajectoryFile(filename: string) {
+    const current = filename.match(
+      /^trajectory_([A-Za-z0-9][A-Za-z0-9._-]*)_(ses_[A-Za-z0-9]+)_(\d{8}_\d{6})_(.+)\.json$/,
+    )
+    if (current?.[1] && current?.[2] && current?.[3] && current?.[4]) {
+      return {
+        sessionID: current[2],
+        changeID: current[1],
+        initTime: current[3],
+        agentName: current[4],
+      }
+    }
+
+    const previous = filename.match(
+      /^trajectory_(ses_[A-Za-z0-9]+)(?:_([A-Za-z0-9][A-Za-z0-9._-]*))?_(\d{8}_\d{6})_(.+)\.json$/,
+    )
+    if (previous?.[1] && previous?.[3] && previous?.[4]) {
+      return {
+        sessionID: previous[1],
+        changeID: previous[2],
+        initTime: previous[3],
+        agentName: previous[4],
+      }
+    }
+
+    const legacy = filename.match(/^context-(.+?)-(ses_[A-Za-z0-9]+)-\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}\.json$/)
+    if (legacy?.[1] && legacy?.[2]) {
+      return {
+        sessionID: legacy[2],
+        agentName: legacy[1],
+      }
+    }
+  }
+
+  function isSameTrajectoryFile(filename: string, sessionID: string, agentName: string) {
+    if (!filename.endsWith(".json")) return false
+    const parsed = parseTrajectoryFile(filename)
+    if (!parsed) return false
+    return parsed.sessionID === sessionID && parsed.agentName === agentName
+  }
+
+  function sessionFilename(sessionID: string, agentName: string, changeID?: string) {
+    const key = trajectoryKey(sessionID, agentName)
+    if (!sessionInitTime.has(key)) {
+      sessionInitTime.set(key, beijingTimeString())
+    }
+    if (changeID) {
+      return `trajectory_${changeID}_${sessionID}_${sessionInitTime.get(key)}_${agentName}.json`
+    }
+    return `trajectory_${sessionID}_${sessionInitTime.get(key)}_${agentName}.json`
+  }
+
+  export const OUTPUT_TOKEN_MAX = Flag.COSTRICT_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 10_240
 
   export type StreamInput = {
     user: MessageV2.User
@@ -43,9 +499,42 @@ export namespace LLM {
     small?: boolean
     tools: Record<string, Tool>
     retries?: number
+    temperatureOverride?: number  // 用于重试时覆盖温度
+    silent?: boolean  // 用于在重试时抑制事件发布
   }
 
   export type StreamOutput = StreamTextResult<ToolSet, unknown>
+
+  function parse(text: string) {
+    try {
+      const data = JSON.parse(text)
+      if (!data || typeof data !== "object" || Array.isArray(data)) return
+      return data
+    } catch {
+      return
+    }
+  }
+
+  function repair(text: string) {
+    try {
+      return jsonrepair(text)
+    } catch {
+      return
+    }
+  }
+
+  export function repairToolInput(input: unknown) {
+    if (typeof input !== "string") return
+    const raw = input.trim()
+    if (!raw) return
+    const direct = parse(raw)
+    if (direct) return JSON.stringify(direct)
+    const fixed = repair(raw)
+    if (!fixed) return
+    const parsed = parse(fixed)
+    if (!parsed) return
+    return JSON.stringify(parsed)
+  }
 
   export async function stream(input: StreamInput) {
     const l = log
@@ -100,6 +589,13 @@ export namespace LLM {
       system.push(header, rest.join("\n"))
     }
 
+    // 保存经过 Plugin 处理后的完整 system 数组，供 saveContextAfterResponse 使用
+    const ignored = skipTrajectory(input.agent.name)
+    const agentName = effectiveAgentName(input.sessionID, input.agent.name)
+    if (!ignored) {
+      sessionSystemCache.set(trajectoryKey(input.sessionID, agentName), clone(system))
+    }
+
     const variant =
       !input.small && input.model.variants && input.user.variant ? input.model.variants[input.user.variant] : {}
     const base = input.small
@@ -129,9 +625,11 @@ export namespace LLM {
         message: input.user,
       },
       {
-        temperature: input.model.capabilities.temperature
-          ? (input.agent.temperature ?? ProviderTransform.temperature(input.model))
-          : undefined,
+        temperature: input.temperatureOverride ?? (
+          input.model.capabilities.temperature
+            ? (input.agent.temperature ?? ProviderTransform.temperature(input.model))
+            : undefined
+        ),
         topP: input.agent.topP ?? ProviderTransform.topP(input.model),
         topK: ProviderTransform.topK(input.model),
         options,
@@ -224,6 +722,9 @@ export namespace LLM {
           )),
       ...input.messages,
     ]
+    if (!ignored) {
+      requestMessageCache.set(trajectoryKey(input.sessionID, agentName), clone(requestMessages))
+    }
 
     const requestBody = {
       temperature: params.temperature,
@@ -235,6 +736,22 @@ export namespace LLM {
       maxOutputTokens,
       messages: requestMessages,
       maxRetries: input.retries ?? 0,
+    }
+
+    // 保存实际发送给LLM的请求上下文
+    if (!ignored) {
+      await saveActualContext({
+        sessionID: input.sessionID,
+        requestMessages,
+        requestHeaders,
+        requestBody,
+        system,
+        isCodex,
+        agent: input.agent,
+        model: input.model,
+      }).catch((err) => {
+        l.error("failed to save actual context", { error: err })
+      })
     }
 
     return streamText({
@@ -259,14 +776,25 @@ export namespace LLM {
       },
       async experimental_repairToolCall(failed) {
         const lower = failed.toolCall.toolName.toLowerCase()
-        if (lower !== failed.toolCall.toolName && tools[lower]) {
+        const name = lower !== failed.toolCall.toolName && tools[lower] ? lower : failed.toolCall.toolName
+        if (name !== failed.toolCall.toolName) {
           l.info("repairing tool call", {
             tool: failed.toolCall.toolName,
-            repaired: lower,
+            repaired: name,
           })
+        }
+        const input = repairToolInput(failed.toolCall.input)
+        if (input) {
           return {
             ...failed.toolCall,
-            toolName: lower,
+            toolName: name,
+            input,
+          }
+        }
+        if (name !== failed.toolCall.toolName) {
+          return {
+            ...failed.toolCall,
+            toolName: name,
           }
         }
         return {
@@ -350,5 +878,416 @@ export namespace LLM {
       }
     }
     return false
+  }
+
+  /**
+   * 保存实际发送给LLM的请求上下文
+   * 这个函数保存的是真正发送给LLM的消息，包含所有provider特殊处理
+   */
+  export async function saveActualContext(input: {
+    sessionID: string
+    requestMessages: ModelMessage[]
+    requestHeaders: Record<string, any>
+    requestBody: Record<string, any>
+    system: string[]
+    isCodex: boolean
+    agent: Agent.Info
+    model: Provider.Model
+    responseMessage?: ModelMessage  // 可选：LLM 的响应消息
+  }) {
+    if (skipTrajectory(input.agent.name)) return
+    await fs.mkdir(HISTORY_DIR, { recursive: true })
+    const history = await Session.messages({ sessionID: input.sessionID }).catch(() => [] as MessageV2.WithParts[])
+    const toolExecutions = collectToolExecutions(history)
+
+    // 转换消息格式为 OpenAI 标准格式
+    const convertedMessages = input.requestMessages.map((msg) => {
+      if (msg.role === "assistant" && Array.isArray(msg.content)) {
+        return {
+          ...msg,
+          content: msg.content.map((part: any) => {
+            if (part.type === "tool-call") {
+              // toolName -> name, input -> arguments
+              const { toolName, input: toolInput, ...rest } = part
+              return {
+                ...rest,
+                name: toolName,
+                arguments: toolInput,
+              }
+            }
+            return part
+          }),
+        }
+      }
+      return msg
+    })
+
+    // 如果有响应消息，添加到消息列表中
+    const messagesWithResponse = input.responseMessage
+      ? [...convertedMessages, input.responseMessage]
+      : convertedMessages
+
+    // 提取工具信息并转换为 OpenAI 格式
+    const availableTools = input.requestBody.activeTools.map((toolName: string) => {
+      const toolDef = input.requestBody.tools[toolName]
+      if (!toolDef) {
+        return {
+          type: "function",
+          function: {
+            name: toolName,
+            description: "",
+            parameters: {
+              type: "object",
+              properties: {},
+              required: [],
+            },
+          },
+        }
+      }
+
+      // 从 AI SDK 的 Tool 对象中提取 inputSchema
+      let schema = toolDef.inputSchema || toolDef.parameters || {}
+
+      // 如果 inputSchema 包含 jsonSchema 字段，提取它
+      if (schema.jsonSchema) {
+        schema = schema.jsonSchema
+      }
+
+      // 删除不需要的字段
+      if (schema.$schema || schema.additionalProperties !== undefined) {
+        const { $schema, additionalProperties, ...rest } = schema
+        schema = rest
+      }
+
+      return {
+        type: "function",
+        function: {
+          name: toolName,
+          description: toolDef.description || "",
+          parameters: schema,
+        },
+      }
+    })
+
+    const agentName = effectiveAgentName(input.sessionID, input.agent.name)
+
+    // 构建完整的上下文对象
+    const context = {
+      timestamp: Date.now(),
+      sessionID: input.sessionID,
+
+      // 元信息
+      meta: {
+        agent: agentName,
+        agentMode: input.agent.mode,
+        modelID: input.model.id,
+        providerID: input.model.providerID,
+        isCodex: input.isCodex,
+      },
+
+      // 实际发送的请求（这是最关键的部分）
+      actualRequest: {
+        messages: messagesWithResponse,  // 转换后的消息（OpenAI格式），包含响应
+        headers: input.requestHeaders,    // 包含provider特殊headers
+        parameters: {
+          temperature: input.requestBody.temperature,
+          topP: input.requestBody.topP,
+          topK: input.requestBody.topK,
+          maxOutputTokens: input.requestBody.maxOutputTokens,
+          providerOptions: input.requestBody.providerOptions,
+        },
+        tools: availableTools,  // OpenAI格式的工具定义
+      },
+
+      // System消息的原始形式（用于对比）
+      systemPrompts: {
+        array: input.system,  // 可能是拼接前的数组
+        isCodexFormat: input.isCodex,  // 标记是否使用Codex格式
+      },
+      // 仅用于轨迹分析，不会发送给模型
+      toolExecutions,
+    }
+
+    const changeID = await ensureTrajectoryChangeID(
+      input.sessionID,
+      detectTrajectoryChangeIDFromMessages(input.requestMessages),
+    )
+    const filename = sessionFilename(input.sessionID, agentName, changeID)
+    const contextFile = path.join(HISTORY_DIR, filename)
+
+    // 删除旧的轨迹文件（同一会话内只保留最新的，兼容旧格式）
+    try {
+      const files = await fs.readdir(HISTORY_DIR)
+      for (const file of files) {
+        if (isSameTrajectoryFile(file, input.sessionID, agentName) && file !== filename) {
+          await fs.unlink(path.join(HISTORY_DIR, file)).catch(() => {})
+        }
+      }
+    } catch {
+      // 忽略错误
+    }
+
+    // 保存context到文件
+    await fs.writeFile(contextFile, JSON.stringify(context, null, 2), "utf-8")
+
+    log.info("saved actual LLM request context", {
+      sessionID: input.sessionID,
+      file: contextFile,
+      messageCount: input.requestMessages.length,
+      isCodex: input.isCodex,
+      hasResponse: !!input.responseMessage,
+    })
+  }
+
+  /**
+   * 保存包含 LLM 响应的完整上下文
+   * 在 LLM 响应完成后调用此函数
+   * 这个函数会读取当前 session 的所有消息，并保存完整的上下文
+   */
+  export async function saveContextAfterResponse(input: {
+    sessionID: string
+    agent: Agent.Info
+    model: Provider.Model
+    tools: Record<string, any>  // AI SDK 工具对象
+    system?: string[]  // 可选：系统提示词数组，如果没有提供则从 sessionSystemCache 读取
+  }) {
+    try {
+      if (skipTrajectory(input.agent.name)) return
+      log.info("saveContextAfterResponse called", {
+        sessionID: input.sessionID,
+        agent: input.agent.name,
+      })
+
+      const agentName = effectiveAgentName(input.sessionID, input.agent.name)
+      const key = trajectoryKey(input.sessionID, agentName)
+
+      // 获取系统提示词：优先使用传入的，否则从当前轨迹键缓存读取
+      const systemPrompts = input.system || sessionSystemCache.get(key) || []
+      const cachedRequestMessages = requestMessageCache.get(key)
+      if (!input.system && systemPrompts.length === 0) {
+        log.warn("No system prompts available", {
+          sessionID: input.sessionID,
+          agent: agentName,
+        })
+      } else {
+        log.info("Using system prompts", {
+          sessionID: input.sessionID,
+          agent: agentName,
+          source: input.system ? "provided" : "cache",
+          count: systemPrompts.length,
+        })
+      }
+
+      // 读取当前 session 的所有消息
+      const messages = await Session.messages({ sessionID: input.sessionID })
+      const toolExecutions = collectToolExecutions(messages)
+      const errorTurns = collectErrorTurns(messages)
+      log.info("messages read from DB", {
+        count: messages.length,
+      })
+
+      // 检查最后一条消息
+      const lastMessage = messages[messages.length - 1]
+      if (lastMessage?.info.role === "assistant") {
+        log.info("last message is assistant", {
+          partsCount: lastMessage.parts.length,
+          parts: lastMessage.parts.map((p: any) => ({
+            type: p.type,
+            tool: p.type === "tool" ? p.tool : undefined,
+            status: p.type === "tool" ? p.state?.status : undefined,
+          })),
+        })
+      }
+
+      // 转换为 ModelMessage 格式
+      const modelMessages = MessageV2.toModelMessages(messages, input.model)
+      log.info("converted to ModelMessages", {
+        count: modelMessages.length,
+      })
+
+      // 检查最后一条 ModelMessage
+      const lastModelMsg = modelMessages[modelMessages.length - 1]
+      if (lastModelMsg?.role === "assistant") {
+        log.info("last ModelMessage details", {
+          role: lastModelMsg.role,
+          contentType: Array.isArray(lastModelMsg.content) ? "array" : typeof lastModelMsg.content,
+          contentParts: Array.isArray(lastModelMsg.content)
+            ? lastModelMsg.content.map((p: any) => ({
+                type: p.type,
+                toolName: p.type === "tool-call" ? p.toolName : undefined,
+              }))
+            : undefined,
+        })
+      }
+
+      // 转换消息格式为 OpenAI 标准格式（与 saveActualContext 一致）
+      const convertedMessages = modelMessages.map((msg) => {
+        if (msg.role === "assistant" && Array.isArray(msg.content)) {
+          return {
+            ...msg,
+            content: msg.content.map((part: any) => {
+              if (part.type === "tool-call") {
+                // toolName -> name, input -> arguments
+                const { toolName, input: toolInput, ...rest } = part
+                return {
+                  ...rest,
+                  name: toolName,
+                  arguments: toolInput,
+                }
+              }
+              return part
+            }),
+          }
+        }
+        return msg
+      })
+
+      log.info("converted to OpenAI format", {
+        count: convertedMessages.length,
+      })
+
+      const lastConvertedMsg = convertedMessages[convertedMessages.length - 1]
+      if (lastConvertedMsg?.role === "assistant" && Array.isArray(lastConvertedMsg.content)) {
+        log.info("last converted message details", {
+          role: lastConvertedMsg.role,
+          contentParts: lastConvertedMsg.content.map((p: any) => ({
+            type: p.type,
+            name: p.type === "tool-call" ? p.name : undefined,
+          })),
+        })
+      }
+
+      // 构建与 saveActualContext 一致的 context 对象
+      await fs.mkdir(HISTORY_DIR, { recursive: true })
+
+      // 将系统提示词转换为 system 消息（放在 messages 最开头）
+      const systemMessages = systemPrompts.map(
+        (x): ModelMessage => ({
+          role: "system",
+          content: x,
+        }),
+      )
+
+      // 合并系统提示词和对话消息（system 放在最开头）
+      const messagesWithSystem = [...systemMessages, ...convertedMessages]
+      const messagesWithRequestContextBase = (() => {
+        if (!cachedRequestMessages) return messagesWithSystem
+        const base = clone(cachedRequestMessages)
+        const last = convertedMessages[convertedMessages.length - 1]
+        if (!last || last.role !== "assistant") return base
+        const tail = base[base.length - 1]
+        const duplicated = !!tail && JSON.stringify(tail) === JSON.stringify(last)
+        if (!duplicated) base.push(last as ModelMessage)
+        return base
+      })()
+
+      // 增量补写：在最终写入前，将最后一次 exit tool 的调用 + 结果 追加到 messages 中
+      const messagesWithRequestContext = appendExitToolMessages(
+        messagesWithRequestContextBase,
+        messages,
+        input.agent,
+      )
+
+      // 提取工具信息并转换为 OpenAI 格式（与 saveActualContext 一致）
+      const activeToolNames = Object.keys(input.tools).filter((x) => x !== "invalid")
+      const availableTools = activeToolNames.map((toolName: string) => {
+        const toolDef = input.tools[toolName]
+        if (!toolDef) {
+          return {
+            type: "function",
+            function: {
+              name: toolName,
+              description: "",
+              parameters: {
+                type: "object",
+                properties: {},
+                required: [],
+              },
+            },
+          }
+        }
+
+        // 从 AI SDK 的 Tool 对象中提取 inputSchema
+        let schema = toolDef.inputSchema || toolDef.parameters || {}
+
+        // 如果 inputSchema 包含 jsonSchema 字段，提取它
+        if (schema.jsonSchema) {
+          schema = schema.jsonSchema
+        }
+
+        // 删除不需要的字段
+        if (schema.$schema || schema.additionalProperties !== undefined) {
+          const { $schema, additionalProperties, ...rest } = schema
+          schema = rest
+        }
+
+        return {
+          type: "function",
+          function: {
+            name: toolName,
+            description: toolDef.description || "",
+            parameters: schema,
+          },
+        }
+      })
+
+      const context = {
+        timestamp: Date.now(),
+        sessionID: input.sessionID,
+        meta: {
+          agent: agentName,
+          agentMode: input.agent.mode,
+          modelID: input.model.id,
+          providerID: input.model.providerID,
+        },
+        // 使用 actualRequest 格式，与 saveActualContext 保持一致
+        actualRequest: {
+          messages: messagesWithRequestContext,  // 优先保留真实请求上下文（含 MAX_STEPS 等临时注入消息）并补上最后响应
+          tools: availableTools,  // OpenAI格式的工具定义
+        },
+        // System消息的原始形式（用于对比）
+        systemPrompts: {
+          array: systemPrompts,  // 经过 Plugin 处理后的完整系统提示词数组
+        },
+        // 仅用于轨迹分析，不会发送给模型
+        toolExecutions,
+        // Preserve assistant error turns that are intentionally excluded from actualRequest.messages.
+        errorTurns,
+      }
+
+      const changeID = await ensureTrajectoryChangeID(
+        input.sessionID,
+        detectTrajectoryChangeIDFromMessages(messagesWithRequestContext),
+      )
+      const filename = sessionFilename(input.sessionID, agentName, changeID)
+      const contextFile = path.join(HISTORY_DIR, filename)
+
+      // 删除旧的轨迹文件（同一会话内只保留最新的，兼容旧格式）
+      try {
+        const files = await fs.readdir(HISTORY_DIR)
+        for (const file of files) {
+          if (isSameTrajectoryFile(file, input.sessionID, agentName) && file !== filename) {
+            await fs.unlink(path.join(HISTORY_DIR, file)).catch(() => {})
+          }
+        }
+      } catch {
+        // 忽略错误
+      }
+
+      // 保存context到文件
+      await fs.writeFile(contextFile, JSON.stringify(context, null, 2), "utf-8")
+      log.info("context file saved successfully", {
+        file: contextFile,
+      })
+
+      log.info("saved context with LLM response", {
+        sessionID: input.sessionID,
+        file: contextFile,
+        messageCount: convertedMessages.length,
+        errorTurnCount: errorTurns.length,
+      })
+    } catch (error) {
+      log.error("failed to save context after response", { error, sessionID: input.sessionID })
+    }
   }
 }

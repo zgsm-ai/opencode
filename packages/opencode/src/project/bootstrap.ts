@@ -14,6 +14,8 @@ import { ShareNext } from "@/share/share-next"
 import { Snapshot } from "../snapshot"
 import { Truncate } from "../tool/truncation"
 import { initializeParentProcessDetection, initializeEncodingCache } from "@/plugin/tdd/tools/shell"
+import { AutoTaskCheck } from "../session/auto-taskcheck"
+import { Config } from "../config/config"
 
 export async function InstanceBootstrap() {
   Log.Default.info("bootstrapping", { directory: Instance.directory })
@@ -36,6 +38,10 @@ export async function InstanceBootstrap() {
   Vcs.init()
   Snapshot.init()
   Truncate.init()
+  const cfg = await Config.get()
+  if (cfg.experimental?.auto_taskcheck === true) {
+    AutoTaskCheck.init()
+  }
 
   Bus.subscribe(Command.Event.Executed, async (payload) => {
     if (payload.properties.name === Command.Default.INIT) {

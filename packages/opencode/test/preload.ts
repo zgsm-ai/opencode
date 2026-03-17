@@ -25,7 +25,7 @@ process.env["XDG_STATE_HOME"] = path.join(dir, "state")
 // Write the cache version file to prevent global/index.ts from clearing the cache
 const cacheDir = path.join(dir, "cache", "opencode")
 await fs.mkdir(cacheDir, { recursive: true })
-await fs.writeFile(path.join(cacheDir, "version"), "14")
+await fs.writeFile(path.join(cacheDir, "version"), "19")
 const url = process.env.OPENCODE_MODELS_URL || "https://models.dev"
 const response = await fetch(`${url}/api.json`)
 if (response.ok) {
@@ -54,6 +54,8 @@ delete process.env["DEEPSEEK_API_KEY"]
 delete process.env["FIREWORKS_API_KEY"]
 delete process.env["CEREBRAS_API_KEY"]
 delete process.env["SAMBANOVA_API_KEY"]
+delete process.env["OPENCODE_DISABLE_PROJECT_CONFIG"]
+delete process.env["COSTRICT_DISABLE_PROJECT_CONFIG"]
 
 // Now safe to import from src/
 const { Log } = await import("../src/util/log")

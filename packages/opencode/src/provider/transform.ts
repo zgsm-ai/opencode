@@ -136,15 +136,29 @@ export namespace ProviderTransform {
 
           // Include reasoning_content | reasoning_details directly on the message for all assistant messages
           if (reasoningText) {
+            const currentOptions = (msg.providerOptions as Record<string, any> | undefined) ?? {}
+            const openaiCompatible = {
+              ...(currentOptions["openaiCompatible"] ?? {}),
+              [field]: reasoningText,
+            }
+            const providerKey =
+              model.api.npm === "@ai-sdk/openai-compatible" && model.providerID !== "openaiCompatible"
+                ? model.providerID
+                : undefined
             return {
               ...msg,
               content: filteredContent,
               providerOptions: {
-                ...msg.providerOptions,
-                openaiCompatible: {
-                  ...(msg.providerOptions as any)?.openaiCompatible,
-                  [field]: reasoningText,
-                },
+                ...currentOptions,
+                openaiCompatible,
+                ...(providerKey
+                  ? {
+                      [providerKey]: {
+                        ...(currentOptions[providerKey] ?? {}),
+                        [field]: reasoningText,
+                      },
+                    }
+                  : {}),
               },
             }
           }
@@ -277,11 +291,12 @@ export namespace ProviderTransform {
 
   export function temperature(model: Provider.Model) {
     const id = model.id.toLowerCase()
-    if (id.includes("qwen")) return 0.55
+    if (model.providerID === "ai-code-qwen" && id === "qwen3-coder-lora") return 1
     if (id.includes("claude")) return undefined
     if (id.includes("gemini")) return 1.0
     if (id.includes("glm-4.6")) return 1.0
-    if (id.includes("glm-4.7")) return 1.0
+    if (id.includes("glm-4.7") || id.includes("glm47-lora")) return 1.0
+    if (id.includes("glm-5")) return 1.0
     if (id.includes("minimax-m2")) return 1.0
     if (id.includes("kimi-k2")) {
       if (id.includes("thinking")) return 1.0
@@ -292,7 +307,7 @@ export namespace ProviderTransform {
 
   export function topP(model: Provider.Model) {
     const id = model.id.toLowerCase()
-    if (id.includes("qwen")) return 1
+    if (model.providerID === "ai-code-qwen" && id === "qwen3-coder-lora") return 0.95
     if (id.includes("minimax-m2")) {
       return 0.95
     }
@@ -302,6 +317,7 @@ export namespace ProviderTransform {
 
   export function topK(model: Provider.Model) {
     const id = model.id.toLowerCase()
+    if (model.providerID === "ai-code-qwen" && id === "qwen3-coder-lora") return 40
     if (id.includes("minimax-m2")) {
       if (id.includes("m2.1")) return 40
       return 20
@@ -570,7 +586,10 @@ export namespace ProviderTransform {
       // undefined: don't set chat_template_kwargs (use default behavior)
     }
 
-    if (["zai", "zhipuai"].includes(input.model.providerID) && input.model.api.npm === "@ai-sdk/openai-compatible") {
+    if (
+      ["zai", "zhipuai", "ai-code-glm", "ai-code-glm-sft", "ai-code-glm-5"].includes(input.model.providerID) &&
+      input.model.api.npm === "@ai-sdk/openai-compatible"
+    ) {
       result["thinking"] = {
         type: "enabled",
         clear_thinking: false,

@@ -3,16 +3,22 @@ import { BusEvent } from "@/bus/bus-event"
 import { Identifier } from "@/id/id"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
-import { Config } from "@/config/config"
 import z from "zod"
 
 export namespace Question {
   const log = Log.create({ service: "question" })
+  const AUTO_SELECT_ENV = "OPENCODE_QUESTION_AUTO_SELECT_FIRST_OPTION"
 
   export const Option = z
     .object({
-      label: z.string().describe("Display text (1-5 words, concise)"),
-      description: z.string().describe("Explanation of choice"),
+      label: z
+        .string()
+        .describe(
+          "Short selectable label (1-5 words). Must be a concrete choice, not placeholders like 'Other', 'Custom', or 'Need changes'. If recommended, place first and add '(Recommended)'.",
+        ),
+      description: z
+        .string()
+        .describe("One-sentence consequence of this option (what will happen if selected), concise and actionable."),
     })
     .meta({
       ref: "QuestionOption",
@@ -21,22 +27,50 @@ export namespace Question {
 
   export const Info = z
     .object({
-      question: z.string().describe("Complete question"),
-      header: z.string().describe("Very short label (max 30 chars)"),
-      options: z.array(Option).describe("Available choices"),
-      multiple: z.boolean().optional().describe("Allow selecting multiple choices"),
-      custom: z.boolean().optional().describe("Allow typing a custom answer (default: true)"),
+      question: z
+        .string()
+        .describe(
+          "Decision-focused prompt shown to user. Keep it short (prefer 1 sentence, max 2). Do not include long analysis/background.",
+        ),
+      header: z
+        .string()
+        .describe("Very short section title for quick scanning (prefer <= 30 chars), without long context."),
+      options: z
+        .array(Option)
+        .describe(
+          "Built-in selectable choices (1-4 items). Keep choices mutually exclusive and directly actionable. Do not add a custom/free-text option here.",
+        ),
+      multiple: z
+        .preprocess((v) => (v === "true" ? true : v === "false" ? false : v), z.boolean())
+        .optional()
+        .describe("Whether multi-select is allowed. Enable only when user may intentionally pick more than one option."),
     })
     .meta({
       ref: "QuestionInfo",
     })
   export type Info = z.infer<typeof Info>
 
+  export const Public = Info.describe("Question item for explicit user decision")
+  export const Publics = z
+    .array(Public)
+    .describe("Questions to ask the user. Keep each question concise and avoid long background text.")
+  const Internal = Public.extend({
+    custom: z.literal(true),
+  })
+  type PublicQuestion = Omit<z.infer<typeof Internal>, "custom">
+
+  export function withCustom(questions: PublicQuestion[]) {
+    return questions.map((question) => ({
+      ...question,
+      custom: true as const,
+    }))
+  }
+
   export const Request = z
     .object({
       id: Identifier.schema("question"),
       sessionID: Identifier.schema("session"),
-      questions: z.array(Info).describe("Questions to ask"),
+      questions: z.array(Internal),
       tool: z
         .object({
           messageID: z.string(),
@@ -80,7 +114,7 @@ export namespace Question {
     ),
   }
 
-  const state = Instance.state(async () => {
+  const state = Instance.state(() => {
     const pending: Record<
       string,
       {
@@ -97,20 +131,40 @@ export namespace Question {
 
   export async function ask(input: {
     sessionID: string
-    questions: Info[]
+    questions: PublicQuestion[]
     tool?: { messageID: string; callID: string }
   }): Promise<Answer[]> {
-    const s = await state()
+    const questions = withCustom(input.questions)
+    const s = state()
     const id = Identifier.ascending("question")
 
     log.info("asking", { id, questions: input.questions.length })
 
-    // Check if auto-select mode is enabled
-    const configState = await Config.state()
-    const autoSelectEnabled = configState.config.question?.autoSelectFirstOption ?? false
+    const info: Request = {
+      id,
+      sessionID: input.sessionID,
+      questions,
+      tool: input.tool,
+    }
+    const pending = {
+      resolve: (_answers: Answer[]) => {},
+      reject: (_error: unknown) => {},
+    }
+    const promise = new Promise<Answer[]>((resolve, reject) => {
+      pending.resolve = resolve
+      pending.reject = reject
+    })
+    s.pending[id] = {
+      info,
+      resolve: pending.resolve,
+      reject: pending.reject,
+    }
+
+    const autoSelectValue = process.env[AUTO_SELECT_ENV]
+    const autoSelectEnabled = autoSelectValue === "1" || autoSelectValue?.toLowerCase() === "true"
 
     if (autoSelectEnabled) {
-      log.info("auto-select mode enabled", { id })
+      log.info("auto-select mode enabled", { id, source: AUTO_SELECT_ENV })
       // Auto-select first option for each question
       const autoAnswers: Answer[] = input.questions.map((question) => {
         if (question.options.length > 0) {
@@ -118,27 +172,17 @@ export namespace Question {
         }
         return []
       })
-      return autoAnswers
+      delete s.pending[id]
+      pending.resolve(autoAnswers)
+      return promise
     }
 
-    return new Promise<Answer[]>((resolve, reject) => {
-      const info: Request = {
-        id,
-        sessionID: input.sessionID,
-        questions: input.questions,
-        tool: input.tool,
-      }
-      s.pending[id] = {
-        info,
-        resolve,
-        reject,
-      }
-      Bus.publish(Event.Asked, info)
-    })
+    Bus.publish(Event.Asked, info)
+    return promise
   }
 
   export async function reply(input: { requestID: string; answers: Answer[] }): Promise<void> {
-    const s = await state()
+    const s = state()
     const existing = s.pending[input.requestID]
     if (!existing) {
       log.warn("reply for unknown request", { requestID: input.requestID })
@@ -158,7 +202,7 @@ export namespace Question {
   }
 
   export async function reject(requestID: string): Promise<void> {
-    const s = await state()
+    const s = state()
     const existing = s.pending[requestID]
     if (!existing) {
       log.warn("reject for unknown request", { requestID })
@@ -183,6 +227,7 @@ export namespace Question {
   }
 
   export async function list() {
-    return state().then((x) => Object.values(x.pending).map((x) => x.info))
+    const s = state()
+    return Object.values(s.pending).map((x) => x.info)
   }
 }

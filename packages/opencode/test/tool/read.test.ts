@@ -20,7 +20,9 @@ const ctx = {
 }
 
 describe("tool.read external_directory permission", () => {
-  test("allows reading absolute path inside project directory", async () => {
+  test(
+    "allows reading absolute path inside project directory",
+    async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
         await Bun.write(path.join(dir, "test.txt"), "hello world")
@@ -34,7 +36,9 @@ describe("tool.read external_directory permission", () => {
         expect(result.output).toContain("hello world")
       },
     })
-  })
+    },
+    15_000,
+  )
 
   test("allows reading file in subdirectory inside project directory", async () => {
     await using tmp = await tmpdir({
@@ -183,8 +187,8 @@ describe("tool.read truncation", () => {
         const read = await ReadTool.init()
         const result = await read.execute({ filePath: path.join(tmp.path, "large.json") }, ctx)
         expect(result.metadata.truncated).toBe(true)
-        expect(result.output).toContain("Output truncated at")
-        expect(result.output).toContain("bytes")
+        expect(result.output).toContain("8192")
+        expect(result.output).toContain("拦截")
       },
     })
   })

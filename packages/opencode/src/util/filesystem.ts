@@ -1,7 +1,22 @@
 import { realpathSync } from "fs"
-import { dirname, join, relative } from "path"
+import { dirname, join, relative, resolve } from "path"
 
 export namespace Filesystem {
+  const normalizeMsys = (value: string) => {
+    if (process.platform !== "win32") return value
+    if (value.match(/^\/cygdrive\/[a-z]\//i)) {
+      return value
+        .replace(/^\/cygdrive\/([a-z])\//i, (_match, drive) => `${String(drive).toUpperCase()}:\\`)
+        .replace(/\//g, "\\")
+    }
+    if (value.match(/^\/[a-z]\//i)) {
+      return value
+        .replace(/^\/([a-z])\//i, (_match, drive) => `${String(drive).toUpperCase()}:\\`)
+        .replace(/\//g, "\\")
+    }
+    return value
+  }
+
   export const exists = (p: string) =>
     Bun.file(p)
       .stat()
@@ -20,10 +35,11 @@ export namespace Filesystem {
    */
   export function normalizePath(p: string): string {
     if (process.platform !== "win32") return p
+    const normalized = normalizeMsys(p)
     try {
-      return realpathSync.native(p)
+      return realpathSync.native(normalized)
     } catch {
-      return p
+      return normalized
     }
   }
   export function overlaps(a: string, b: string) {
@@ -33,13 +49,20 @@ export namespace Filesystem {
   }
 
   export function contains(parent: string, child: string) {
+    const base = resolve(normalizePath(parent))
+    const target = resolve(normalizePath(child))
     // On Windows, check if drives match first
     if (process.platform === "win32") {
-      const parentDrive = parent.split(":")[0]?.toLowerCase()
-      const childDrive = child.split(":")[0]?.toLowerCase()
-      if (parentDrive !== childDrive) return false
+      const drivePattern = /^[a-zA-Z]:/
+      const parentHasDrive = drivePattern.test(base)
+      const childHasDrive = drivePattern.test(target)
+      if (parentHasDrive && childHasDrive) {
+        const parentDrive = base.split(":")[0]?.toLowerCase()
+        const childDrive = target.split(":")[0]?.toLowerCase()
+        if (parentDrive !== childDrive) return false
+      }
     }
-    return !relative(parent, child).startsWith("..")
+    return !relative(base, target).startsWith("..")
   }
 
   export async function findUp(target: string, start: string, stop?: string) {

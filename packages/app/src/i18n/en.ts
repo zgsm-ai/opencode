@@ -223,6 +223,15 @@ export const dict = {
   "prompt.attachment.remove": "Remove attachment",
   "prompt.action.send": "Send",
   "prompt.action.stop": "Stop",
+  "prompt.change.title": "{{agent}} requires a change-id",
+  "prompt.change.description":
+    "Select a change-id from proposal/ to auto-start the task. Free-text input is disabled here.",
+  "prompt.change.loading": "Scanning proposal/...",
+  "prompt.change.select": "Select a change-id",
+  "prompt.change.empty": "No change-id found in proposal/",
+  "prompt.change.footer": "Choose a change-id to start",
+  "prompt.change.starting": "Starting {{changeId}}...",
+  "prompt.change.startingShort": "Starting...",
 
   "prompt.toast.pasteUnsupported.title": "Unsupported paste",
   "prompt.toast.pasteUnsupported.description": "Only images or PDFs can be pasted here.",

@@ -79,9 +79,9 @@ describe("/test command", () => {
         const cmd = await Command.get("test")
         const template = await Promise.resolve(cmd!.template)
 
-        // Should have workflow phases
-        expect(template).toContain("Phase")
-        expect(template).toMatch(/Phase 1|Phase 2|Phase 3/i)
+        // Should have workflow steps
+        expect(template).toContain("Step")
+        expect(template).toMatch(/Step 1|Step 2|Step 3/i)
       },
     })
   })

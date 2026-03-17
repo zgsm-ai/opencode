@@ -1,3 +1,6 @@
+[install]
+registry = "https://registry.npmmirror.com"
+
 preload = ["@opentui/solid/preload"]
 
 [test]

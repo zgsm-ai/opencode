@@ -11,6 +11,7 @@ import { createOpencodeClient, type OpencodeClient } from "@opencode-ai/sdk/v2"
 import { Server } from "../../server/server"
 import { Provider } from "../../provider/provider"
 import { Agent } from "../../agent/agent"
+import { LLM } from "../../session/llm"
 
 const TOOL: Record<string, [string, string]> = {
   todowrite: ["Todo", UI.Style.TEXT_WARNING_BOLD],
@@ -25,13 +26,100 @@ const TOOL: Record<string, [string, string]> = {
   websearch: ["Search", UI.Style.TEXT_DIM_BOLD],
 }
 
+const CHANGE_ID_AGENTS = new Set(["taskcheck", "coding", "FixAgent"])
+
+function normalizeAgent(name?: string) {
+  if (!name) return undefined
+  if (name === "fix") return "FixAgent"
+  return name
+}
+
+function normalizePath(value: string) {
+  return value.split(path.sep).join("/")
+}
+
+function trimExcerpt(value: string) {
+  const text = value.trim()
+  if (text.length <= 500) return text
+  return text.slice(0, 497) + "..."
+}
+
+function extractTaskcheckUserInput(content: string) {
+  const bgMatch = content.match(/##\s*(背景|需求|用户需求|目标)[^\n]*\n([\s\S]*?)(?=\n##|$)/i)
+  if (bgMatch?.[2]) return trimExcerpt(bgMatch[2])
+
+  const paragraphs = content
+    .split("\n\n")
+    .filter((line) => line.trim() && !line.trim().startsWith("#"))
+    .slice(0, 2)
+    .join("\n\n")
+    .trim()
+
+  if (paragraphs.length > 0) return trimExcerpt(paragraphs)
+  return "（无法提取用户原始需求）"
+}
+
+async function resolveTaskPath(project: string, changeID: string) {
+  const root = path.join(project, "proposal", changeID)
+  const tasks = path.join(root, "tasks.md")
+  if (await Bun.file(tasks).exists()) return tasks
+  const task = path.join(root, "task.md")
+  if (await Bun.file(task).exists()) return task
+  return undefined
+}
+
+async function promptFromChangeID(input: { agent: string; changeID: string; project: string }) {
+  const taskPath = await resolveTaskPath(input.project, input.changeID)
+  if (!taskPath) return undefined
+
+  const projectText = normalizePath(input.project)
+  const taskText = normalizePath(taskPath)
+  if (input.agent === "coding") {
+    return `项目路径：\`${projectText}\`\n任务文件路径：\`${taskText}\`\n\n请确保本次编码任务高质量完成`
+  }
+
+  if (input.agent === "FixAgent") {
+    return `项目路径：\`${projectText}\`\n任务文件路径：\`${taskText}\`\n\n请认真收集用户反馈并进行代码修复和改进`
+  }
+
+  const proposalDir = path.join(input.project, "proposal", input.changeID)
+  const proposalPath = path.join(proposalDir, "proposal.md")
+  const userInputPath = path.join(proposalDir, "user_input.md")
+  const proposalText = normalizePath(proposalPath)
+  const taskcheckText = normalizePath(taskPath)
+  const userInputText = await Bun.file(userInputPath)
+    .text()
+    .then((text) => text.trim())
+    .catch(() => undefined)
+  const userTaskText = userInputText
+    ? trimExcerpt(userInputText)
+    : await Bun.file(proposalPath)
+        .text()
+        .then((text) => extractTaskcheckUserInput(text))
+        .catch(() => "（无法提取用户原始需求）")
+
+  return `## 用户原始需求
+
+\`\`\`text
+${userTaskText}
+\`\`\`
+
+## 任务上下文
+
+项目路径：\`${projectText}\`
+proposal.md路径：\`${proposalText}\`
+task.md路径：\`${taskcheckText}\`
+
+请以"用户原始需求"为覆盖基准，认真检查 task.md 文件是否需要调整。`
+}
+
 export const RunCommand = cmd({
   command: "run [message..]",
-  describe: "run costrict-cli with a message",
+  describe: "run costrict-cli with a message (omit message when using --change-id)",
   builder: (yargs: Argv) => {
     return yargs
       .positional("message", {
-        describe: "message to send",
+        describe: "message to send (not required when using --change-id)",
         type: "string",
         array: true,
         default: [],
@@ -63,6 +151,10 @@ export const RunCommand = cmd({
         type: "string",
         describe: "agent to use",
       })
+      .option("change-id", {
+        type: "string",
+        describe: "proposal change-id for taskcheck/coding/fix agents",
+      })
       .option("format", {
         type: "string",
         choices: ["default", "json"],
@@ -91,11 +183,32 @@ export const RunCommand = cmd({
         type: "string",
         describe: "model variant (provider-specific reasoning effort, e.g., high, max, minimal)",
       })
+      .option("auto-allow-permissions", {
+        type: "boolean",
+        describe: "automatically allow permission requests without prompting",
+        default: false,
+      })
+      .option("auto-answer-questions", {
+        type: "boolean",
+        describe: "automatically answer question prompts using their first option",
+        default: false,
+      })
+      .option("history-dir", {
+        type: "string",
+        describe: "directory to save history messages (default: .history_message)",
+      })
   },
   handler: async (args) => {
+    // 设置 history message 保存目录
+    if (args["history-dir"]) {
+      LLM.setHistoryDir(args["history-dir"])
+    }
+
     let message = [...args.message, ...(args["--"] || [])]
       .map((arg) => (arg.includes(" ") ? `"${arg.replace(/"/g, '\\"')}"` : arg))
       .join(" ")
+    const targetAgent = normalizeAgent(args.agent)
+    const changeID = args["change-id"]?.trim()
 
     const fileParts: any[] = []
     if (args.file) {
@@ -126,7 +239,40 @@ export const RunCommand = cmd({
       }
     }
 
-    if (!process.stdin.isTTY) message += "\n" + (await Bun.stdin.text())
+    if (!process.stdin.isTTY && !changeID) message += "\n" + (await Bun.stdin.text())
+
+    if (changeID) {
+      if (!targetAgent) {
+        UI.error("`--change-id` requires `--agent` (taskcheck/coding/fix)")
+        process.exit(1)
+      }
+
+      if (!CHANGE_ID_AGENTS.has(targetAgent)) {
+        UI.error("`--change-id` only supports taskcheck, coding, and fix agents")
+        process.exit(1)
+      }
+
+      if (args.command) {
+        UI.error("`--change-id` cannot be used with `--command`")
+        process.exit(1)
+      }
+
+      if (message.trim().length > 0) {
+        UI.error("`--change-id` mode does not accept a manual message")
+        process.exit(1)
+      }
+
+      const prompt = await promptFromChangeID({
+        agent: targetAgent,
+        changeID,
+        project: process.cwd(),
+      })
+      if (!prompt) {
+        UI.error(`Proposal not found: proposal/${changeID}/task.md or proposal/${changeID}/tasks.md`)
+        process.exit(1)
+      }
+      message = prompt
+    }
 
     if (message.trim().length === 0 && !args.command) {
       UI.error("You must provide a message or a command")
@@ -141,6 +287,36 @@ export const RunCommand = cmd({
           "",
           UI.Style.TEXT_NORMAL + title,
         )
+      }
+
+      const parent = new Map<string, string | null>([[sessionID, null]])
+      const tracked = new Map<string, boolean>([[sessionID, true]])
+
+      const fetchParent = async (id: string) => {
+        if (parent.has(id)) {
+          const cached = parent.get(id)
+          if (cached === null) return undefined
+          return cached
+        }
+        const result = await sdk.session.get({ sessionID: id }).catch(() => undefined)
+        const next = result?.data?.parentID
+        parent.set(id, next ?? null)
+        return next
+      }
+
+      const inTree = async (id: string): Promise<boolean> => {
+        const known = tracked.get(id)
+        if (known !== undefined) return known
+
+        const pid = await fetchParent(id)
+        if (!pid) {
+          tracked.set(id, false)
+          return false
+        }
+
+        const ok = await inTree(pid)
+        tracked.set(id, ok)
+        return ok
       }
 
       const outputJsonEvent = (type: string, data: any) => {
@@ -208,35 +384,55 @@ export const RunCommand = cmd({
 
           if (event.type === "permission.asked") {
             const permission = event.properties
-            if (permission.sessionID !== sessionID) continue
-            const result = await select({
-              message: `Permission required: ${permission.permission} (${permission.patterns.join(", ")})`,
-              options: [
-                { value: "once", label: "Allow once" },
-                { value: "always", label: "Always allow: " + permission.always.join(", ") },
-                { value: "reject", label: "Reject" },
-              ],
-              initialValue: "once",
-            }).catch(() => "reject")
-            const response = (result.toString().includes("cancel") ? "reject" : result) as "once" | "always" | "reject"
+            if (!(await inTree(permission.sessionID))) continue
+            const response: "once" | "always" | "reject" = args["auto-allow-permissions"]
+              ? "always"
+              : await (async () => {
+              const result = await select({
+                message: `Permission required: ${permission.permission} (${permission.patterns.join(", ")})`,
+                options: [
+                  { value: "once", label: "Allow once" },
+                  { value: "always", label: "Always allow: " + permission.always.join(", ") },
+                  { value: "reject", label: "Reject" },
+                ],
+                initialValue: "once",
+              }).catch(() => "reject")
+                  return result.toString().includes("cancel") ? "reject" : (result as "once" | "always" | "reject")
+                })()
             await sdk.permission.respond({
-              sessionID,
+              sessionID: permission.sessionID,
               permissionID: permission.id,
               response,
             })
+          }
+
+          if (event.type === "question.asked") {
+            const question = event.properties
+            if (!(await inTree(question.sessionID))) continue
+            if (args["auto-answer-questions"]) {
+              // Auto-select first option for each question
+              const answers = question.questions.map((q) => {
+                if (q.options.length > 0) return [q.options[0].label]
+                return []
+              })
+              await sdk.question.reply({
+                requestID: question.id,
+                answers,
+              })
+            }
           }
         }
       })()
 
       // Validate agent if specified
       const resolvedAgent = await (async () => {
-        if (!args.agent) return undefined
-        const agent = await Agent.get(args.agent)
+        if (!targetAgent) return undefined
+        const agent = await Agent.get(targetAgent)
         if (!agent) {
           UI.println(
             UI.Style.TEXT_WARNING_BOLD + "!",
             UI.Style.TEXT_NORMAL,
-            `agent "${args.agent}" not found. Falling back to default agent`,
+            `agent "${targetAgent}" not found. Falling back to default agent`,
           )
           return undefined
         }
@@ -244,11 +440,11 @@ export const RunCommand = cmd({
           UI.println(
             UI.Style.TEXT_WARNING_BOLD + "!",
             UI.Style.TEXT_NORMAL,
-            `agent "${args.agent}" is a subagent, not a primary agent. Falling back to default agent`,
+            `agent "${targetAgent}" is a subagent, not a primary agent. Falling back to default agent`,
           )
           return undefined
         }
-        return args.agent
+        return targetAgent
       })()
 
       if (args.command) {
@@ -292,28 +488,8 @@ export const RunCommand = cmd({
               : args.title
             : undefined
 
-        const result = await sdk.session.create(
-          title
-            ? {
-                title,
-                permission: [
-                  {
-                    permission: "question",
-                    action: "deny",
-                    pattern: "*",
-                  },
-                ],
-              }
-            : {
-                permission: [
-                  {
-                    permission: "question",
-                    action: "deny",
-                    pattern: "*",
-                  },
-                ],
-              },
-        )
+        const permissionRules = [{ permission: "question", action: "deny" as const, pattern: "*" }]
+        const result = await sdk.session.create(title ? { title, permission: permissionRules } : { permission: permissionRules })
         return result.data?.id
       })()
 

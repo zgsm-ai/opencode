@@ -5,12 +5,13 @@
     "jsx": "preserve",
     "jsxImportSource": "@opentui/solid",
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
-    "types": [],
+    "types": ["bun", "node"],
     "noUncheckedIndexedAccess": false,
     "customConditions": ["browser"],
     "paths": {
       "@/*": ["./src/*"],
       "@tui/*": ["./src/cli/cmd/tui/*"]
     }
-  }
+  },
+  "include": ["src", "test", "../../.opencode/env.d.ts"]
 }

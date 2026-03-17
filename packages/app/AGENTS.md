@@ -4,11 +4,12 @@
 
 ## Local Dev
 
-- `opencode dev web` proxies `https://app.opencode.ai`, so local UI/CSS changes will not show there.
-- For local UI changes, run the backend and app dev servers separately.
+- `bun run dev web` now starts the local backend and the local `packages/app` Vite server together in a local checkout.
+- Packaged `costrict-cli web` will also start the local app automatically when run inside this repo. Outside the repo, set `COSTRICT_APP_DEV_PATH` to the repo root or `packages/app` directory.
+- If you need to debug them separately, run:
 - Backend (from `packages/opencode`): `bun run --conditions=browser ./src/index.ts serve --port 4096`
 - App (from `packages/app`): `bun dev -- --port 4444`
-- Open `http://localhost:4444` to verify UI changes (it targets the backend at `http://localhost:4096`).
+- Open `http://localhost:4444` to verify UI changes against `http://localhost:4096`.
 
 ## SolidJS
 

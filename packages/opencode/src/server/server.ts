@@ -40,18 +40,72 @@ import { QuestionRoutes } from "./routes/question"
 import { PermissionRoutes } from "./routes/permission"
 import { GlobalRoutes } from "./routes/global"
 import { MDNS } from "./mdns"
+import path from "path"
+import { Filesystem } from "../util/filesystem"
+import { resolveResourcesPath } from "../util/resources"
 
 // @ts-ignore This global is needed to prevent ai-sdk from logging warnings to stdout https://github.com/vercel/ai/blob/2dc67e0ef538307f21368db32d5a12345d98831b/packages/ai/src/logger/log-warnings.ts#L85
 globalThis.AI_SDK_LOG_WARNINGS = false
 
 export namespace Server {
   const log = Log.create({ service: "server" })
+  const csp = {
+    "Content-Security-Policy":
+      "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' data:; media-src 'self' data: blob:;",
+  }
 
   let _url: URL | undefined
   let _corsWhitelist: string[] = []
 
   export function url(): URL {
     return _url ?? new URL("http://localhost:4096")
+  }
+
+  function route(pathname: string) {
+    const match = pathname.match(/^[A-Za-z0-9_=\/+-]+\/session\/(.*)/)
+    if (!match) return pathname
+    if (match[1] && match[1].includes(".")) return "/" + match[1]
+    return "/"
+  }
+
+  async function bundled(pathname: string) {
+    const root = resolveResourcesPath(import.meta.url, "web")
+    const index = path.join(root, "index.html")
+    if (!(await Bun.file(index).exists())) return
+
+    const next = pathname.replace(/^\/+/, "")
+    if (!next || !next.includes(".")) {
+      const file = Bun.file(index)
+      return new Response(file, {
+        headers: {
+          ...csp,
+          ...(file.type ? { "Content-Type": file.type } : {}),
+        },
+      })
+    }
+
+    const file = path.resolve(root, next)
+    if (!Filesystem.contains(root, file)) {
+      return new Response("Not Found", {
+        status: 404,
+        headers: csp,
+      })
+    }
+
+    if (!(await Bun.file(file).exists())) {
+      return new Response("Not Found", {
+        status: 404,
+        headers: csp,
+      })
+    }
+
+    const body = Bun.file(file)
+    return new Response(body, {
+      headers: {
+        ...csp,
+        ...(body.type ? { "Content-Type": body.type } : {}),
+      },
+    })
   }
 
   const app = new Hono()
@@ -342,7 +396,7 @@ export namespace Server {
           }),
           async (c) => {
             const modes = await Agent.list()
-            return c.json(modes)
+            return c.json(modes.filter((agent) => !agent.hidden))
           },
         )
         .get(
@@ -528,35 +582,19 @@ export namespace Server {
           },
         )
         .all("/*", async (c) => {
-          let path = c.req.path
+          const pathname = route(c.req.path)
+          const local = await bundled(pathname)
+          if (local) return local
+
           const appUrl = new URL(Flag.COSTRICT_APP_URL)
-          
-          // 如果路径中包含会话ID（base64编码）和 /session/，需要移除它以便资源能够正确代理
-          // 例如：/RDovY29kZS9ob3N0bWFu/session/assets/index.js -> /assets/index.js (静态资源)
-          // /RDovY29kZS9ob3N0bWFu/session/ses_xxx -> / (前端路由，加载 index.html)
-          const sessionMatch = path.match(/^[A-Za-z0-9_=\/+-]+\/session\/(.*)/)
-          if (sessionMatch) {
-            const subPath = sessionMatch[1]
-            // 如果是静态资源请求（包含 .），则保留路径
-            // 否则（前端路由），代理到根路径 /
-            if (subPath && subPath.includes('.')) {
-              path = '/' + subPath
-            } else {
-              path = '/'
-            }
-          }
-          
-          const response = await proxy(`${appUrl.href.replace(/\/$/, '')}${path}`, {
+          const response = await proxy(`${appUrl.href.replace(/\/$/, "")}${pathname}`, {
             ...c.req,
             headers: {
               ...c.req.raw.headers,
               host: appUrl.host,
             },
           })
-          response.headers.set(
-            "Content-Security-Policy",
-            "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' data:; media-src 'self' data: blob:;",
-          )
+          response.headers.set("Content-Security-Policy", csp["Content-Security-Policy"])
           return response
         }) as unknown as Hono,
   )
@@ -618,4 +656,3 @@ export namespace Server {
     return server
   }
 }
-
