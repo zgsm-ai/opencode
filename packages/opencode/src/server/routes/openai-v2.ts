@@ -461,6 +461,13 @@ export const OpenAIRoutes = lazy(() =>
           parts: promptParts,
           system: systemText,
           agent,
+          tools: input?.tools?.reduce((acc, cur) => {
+            if (cur.type === "function") {
+              // @ts-ignore
+              acc[cur.function.name] = true
+            }
+            return acc
+          }, {}),
           model: { providerID: model.providerID, modelID: model.id },
         })
       }

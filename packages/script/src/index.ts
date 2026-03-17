@@ -32,7 +32,12 @@ const IS_PREVIEW = CHANNEL !== "latest"
 
 const VERSION = await (async () => {
   if (env.COSTRICT_VERSION) return env.COSTRICT_VERSION
-  if (IS_PREVIEW) return `0.0.0-${CHANNEL}-${new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "")}`
+  if (IS_PREVIEW) {
+    // For CoStrict, read version from packages/opencode/package.json
+    const opencodePkgPath = path.resolve(import.meta.dir, "../../opencode/package.json")
+    const opencodePkg = await Bun.file(opencodePkgPath).json()
+    return opencodePkg.version || `0.0.0-${CHANNEL}-${new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "")}`
+  }
   const version = await fetch("https://registry.npmjs.org/opencode-ai/latest")
     .then((res) => {
       if (!res.ok) throw new Error(res.statusText)
