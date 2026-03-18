@@ -24,7 +24,7 @@ export function Logo() {
 
       if (markerIndex === -1) {
         elements.push(
-          <text fg={fg} attributes={attrs} selectable={false}>
+          <text fg={fg} attributes={attrs} selectable={false} wrapMode="none">
             {rest}
           </text>,
         )
@@ -33,7 +33,7 @@ export function Logo() {
 
       if (markerIndex > 0) {
         elements.push(
-          <text fg={fg} attributes={attrs} selectable={false}>
+          <text fg={fg} attributes={attrs} selectable={false} wrapMode="none">
             {rest.slice(0, markerIndex)}
           </text>,
         )
@@ -43,21 +43,21 @@ export function Logo() {
       switch (marker) {
         case "_":
           elements.push(
-            <text fg={fg} bg={shadow} attributes={attrs} selectable={false}>
+            <text fg={fg} bg={shadow} attributes={attrs} selectable={false} wrapMode="none">
               {" "}
             </text>,
           )
           break
         case "^":
           elements.push(
-            <text fg={fg} bg={shadow} attributes={attrs} selectable={false}>
+            <text fg={fg} bg={shadow} attributes={attrs} selectable={false} wrapMode="none">
               ▀
             </text>,
           )
           break
         case "~":
           elements.push(
-            <text fg={shadow} attributes={attrs} selectable={false}>
+            <text fg={shadow} attributes={attrs} selectable={false} wrapMode="none">
               ▀
             </text>,
           )
