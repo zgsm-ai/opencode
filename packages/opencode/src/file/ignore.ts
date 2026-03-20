@@ -1,4 +1,3 @@
-import { sep } from "node:path"
 import { Glob } from "../util/glob"
 
 export namespace FileIgnore {
@@ -63,18 +62,19 @@ export namespace FileIgnore {
       whitelist?: string[]
     },
   ) {
+    const normalized = filepath.replaceAll("\\", "/")
     for (const pattern of opts?.whitelist || []) {
-      if (Glob.match(pattern, filepath)) return false
+      if (Glob.match(pattern, normalized)) return false
     }
 
-    const parts = filepath.split(/[/\\]/)
+    const parts = normalized.split(/[/\\]/)
     for (let i = 0; i < parts.length; i++) {
       if (FOLDERS.has(parts[i])) return true
     }
 
     const extra = opts?.extra || []
     for (const pattern of [...FILES, ...extra]) {
-      if (Glob.match(pattern, filepath)) return true
+      if (Glob.match(pattern, normalized)) return true
     }
 
     return false

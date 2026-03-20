@@ -1,0 +1,55 @@
+<agent_git_usage>
+
+<common_commands>
+### agent-git 常用命令
+
+```bash
+# 查看最近的提交记录
+agent-git --no-pager log -5
+
+# 查看指定 agent 的提交
+agent-git --no-pager log --author="{{author_example}}"
+
+# 查看某次提交的详细修改
+agent-git --no-pager show <commit-id>
+
+# 查看是否有未提交的修改
+agent-git status -s
+
+# 查看文件差异
+agent-git --no-pager diff
+```
+</common_commands>
+{% if show_revert_commands %}
+
+<revert_commands>
+### 回退操作
+
+```bash
+# 回退某次提交
+agent-git revert <commit-id>
+```
+</revert_commands>
+{% endif %}
+{% if show_commit_rules %}
+
+<commit_rules>
+### Commit 信息格式
+```
+{% if require_subtask_id_in_commit %}
+<sub_task_id>,<sub_task_id>,...: <简要描述>
+<具体内容说明>
+```
+例如`agent-git commit --author="{{agent_code}} <agent@local>" -m "1.2,1.3: 修改 dispatch_request 方法以支持并发请求`
+为每个被修改的文件单独提交一个commit；若多个任务的修改涉及同一文件，则将这些修改合并到一次提交中。
+{% else %}
+```
+<简要描述>
+<具体内容说明>
+{% endif %}
+```
+
+</commit_rules>
+{% endif %}
+
+</agent_git_usage>

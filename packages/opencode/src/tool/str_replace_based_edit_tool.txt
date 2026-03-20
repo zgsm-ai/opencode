@@ -1,0 +1,14 @@
+查看、创建和编辑文件。状态在多次调用之间保持。
+
+命令：
+- view：显示文件（cat -n）或列出目录（2层，非隐藏）
+- create：创建新文件。如果路径存在则失败——请先删除！
+- str_replace：用 new_str 替换 old_str
+- insert：在指定行号之后插入 new_str
+
+str_replace 规则（关键）：
+- old_str 必须精确匹配一行或多行连续内容。注意空白字符！
+- old_str 必须在文件中唯一——如果不唯一请包含更多上下文
+- new_str 包含替换内容
+
+长输出会被截断（<response clipped>）。

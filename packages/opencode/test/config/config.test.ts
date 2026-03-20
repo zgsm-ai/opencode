@@ -71,7 +71,7 @@ test("loads JSON config file", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await Bun.write(
-        path.join(dir, "opencode.json"),
+        path.join(dir, "costrict.json"),
         JSON.stringify({
           $schema: "https://costrict.ai/config.json",
           model: "test/model",
@@ -157,7 +157,7 @@ test("merges multiple config files with correct precedence", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await Bun.write(
-        path.join(dir, "opencode.jsonc"),
+        path.join(dir, "costrict.jsonc"),
         JSON.stringify({
           $schema: "https://costrict.ai/config.json",
           model: "base",
@@ -165,7 +165,7 @@ test("merges multiple config files with correct precedence", async () => {
         }),
       )
       await Bun.write(
-        path.join(dir, "opencode.json"),
+        path.join(dir, "costrict.json"),
         JSON.stringify({
           $schema: "https://costrict.ai/config.json",
           model: "override",
@@ -191,7 +191,7 @@ test("handles environment variable substitution", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
         await Bun.write(
-          path.join(dir, "opencode.json"),
+          path.join(dir, "costrict.json"),
           JSON.stringify({
             $schema: "https://costrict.ai/config.json",
             theme: "{env:TEST_VAR}",
@@ -341,7 +341,7 @@ test("validates config schema and throws on invalid fields", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await Bun.write(
-        path.join(dir, "opencode.json"),
+        path.join(dir, "costrict.json"),
         JSON.stringify({
           $schema: "https://costrict.ai/config.json",
           invalid_field: "should cause error",
@@ -376,7 +376,7 @@ test("handles agent configuration", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await Bun.write(
-        path.join(dir, "opencode.json"),
+        path.join(dir, "costrict.json"),
         JSON.stringify({
           $schema: "https://costrict.ai/config.json",
           agent: {
@@ -409,7 +409,7 @@ test("handles command configuration", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await Bun.write(
-        path.join(dir, "opencode.json"),
+        path.join(dir, "costrict.json"),
         JSON.stringify({
           $schema: "https://costrict.ai/config.json",
           command: {
@@ -1767,7 +1767,7 @@ describe("deduplicatePlugins", () => {
     expect(result).toEqual(["a-plugin@1.0.0", "b-plugin@1.0.0", "c-plugin@1.0.0"])
   })
 
-  test("local plugin directory overrides global opencode.json plugin", async () => {
+  test("local plugin directory overrides global costrict.json plugin", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
         const projectDir = path.join(dir, "project")

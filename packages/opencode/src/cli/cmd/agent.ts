@@ -233,7 +233,7 @@ const AgentListCommand = cmd({
       directory: process.cwd(),
       async fn() {
         const agents = await Agent.list()
-        const sortedAgents = agents.sort((a, b) => {
+        const sortedAgents = agents.filter((agent) => !agent.hidden).sort((a, b) => {
           if (a.native !== b.native) {
             return a.native ? -1 : 1
           }

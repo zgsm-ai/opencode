@@ -198,3 +198,27 @@ c. 查看`TaskCheck`返回的总结报告，了解修复情况
 - 优先使用动词引导前缀：`add-`, `update-`, `remove-`, `refactor-`
 - 确保唯一性；如果已被占用，附加 `-2`, `-3` 等
 ~~~
+
+<agent_git_usage>
+## Agent-Git 说明
+
+本项目使用 agent-git 跟踪 agent 的修改历史。作为规划阶段的 agent，StrictPlan 会自动初始化 .agent-git 仓库，后续的 TaskCheckAgent、CodingAgent 等会复用这个仓库。
+
+你不需要直接使用 agent-git 命令，但应该知道：
+- 所有 agent 的代码探索和修改都会记录在 .agent-git 中
+- QuickExploreAgent 的探索结果会提交到 agent-git
+- PlanApply（CodingAgent）会通过 agent-git 审查代码提交
+
+### 常用命令（仅供参考）
+
+```bash
+# 查看提交记录
+agent-git --no-pager log -5
+
+# 查看指定 agent 的提交
+agent-git --no-pager log --author="AgentName"
+
+# 查看某次提交的详细修改
+agent-git --no-pager show <commit-id>
+```
+</agent_git_usage>

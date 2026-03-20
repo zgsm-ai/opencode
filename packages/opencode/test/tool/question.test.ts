@@ -65,6 +65,46 @@ describe("tool.question", () => {
     expect(result.output).toContain(`"What is your favorite animal?"="Dog"`)
   })
 
+  test("should reject questions with more than 4 options", async () => {
+    const tool = await QuestionTool.init()
+    const questions = [
+      {
+        question: "Select one approach",
+        header: "Approach",
+        options: [
+          { label: "A", description: "Option A" },
+          { label: "B", description: "Option B" },
+          { label: "C", description: "Option C" },
+          { label: "D", description: "Option D" },
+          { label: "E", description: "Option E" },
+        ],
+      },
+    ]
+
+    const result = await tool.execute({ questions }, ctx)
+    expect(askSpy).not.toHaveBeenCalled()
+    expect(result.output).toContain("Maximum is 4")
+    expect(result.output).toContain("5 options")
+    expect(result.metadata).toHaveProperty("error")
+  })
+
+  test("should keep free-text reply available", async () => {
+    const tool = await QuestionTool.init()
+    const questions = [
+      {
+        question: "What is your favorite color?",
+        header: "Color",
+        options: [{ label: "Red", description: "The color of passion" }],
+      },
+    ]
+
+    askSpy.mockResolvedValueOnce([["Red"]])
+
+    const result = await tool.execute({ questions }, ctx)
+    expect(askSpy).toHaveBeenCalledTimes(1)
+    expect(result.output).toContain(`"What is your favorite color?"="Red"`)
+  })
+
   // intentionally removed the zod validation due to tool call errors, hoping prompting is gonna be good enough
   //   test("should throw an Error for header exceeding 30 characters", async () => {
   //     const tool = await QuestionTool.init()

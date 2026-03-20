@@ -1,7 +1,7 @@
 import { InputRenderable, RGBA, ScrollBoxRenderable, TextAttributes } from "@opentui/core"
 import { useTheme, selectedForeground } from "@tui/context/theme"
 import { entries, filter, flatMap, groupBy, pipe, take } from "remeda"
-import { batch, createEffect, createMemo, For, Show, type JSX, on } from "solid-js"
+import { batch, createEffect, createMemo, For, Show, type JSX, on, onCleanup } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useKeyboard, useTerminalDimensions } from "@opentui/solid"
 import * as fuzzysort from "fuzzysort"
@@ -71,6 +71,16 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
   )
 
   let input: InputRenderable
+  let focusTimeout: NodeJS.Timeout | undefined
+
+  function focusInput() {
+    if (focusTimeout) clearTimeout(focusTimeout)
+    focusTimeout = setTimeout(() => {
+      if (!input) return
+      if (input.isDestroyed) return
+      input.focus()
+    }, 1)
+  }
 
   const filtered = createMemo(() => {
     if (props.skipFilter) return props.options.filter((x) => x.disabled !== true)
@@ -229,6 +239,10 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
 
   const keybinds = createMemo(() => props.keybind?.filter((x) => !x.disabled && x.keybind) ?? [])
 
+  onCleanup(() => {
+    if (focusTimeout) clearTimeout(focusTimeout)
+  })
+
   return (
     <box gap={1} paddingBottom={1}>
       <box paddingLeft={4} paddingRight={4}>
@@ -253,11 +267,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
             focusedTextColor={theme.textMuted}
             ref={(r) => {
               input = r
-              setTimeout(() => {
-                if (!input) return
-                if (input.isDestroyed) return
-                input.focus()
-              }, 1)
+              focusInput()
             }}
             placeholder={props.placeholder ?? "Search"}
           />

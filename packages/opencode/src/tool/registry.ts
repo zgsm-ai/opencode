@@ -1,17 +1,20 @@
 import { PlanExitTool } from "./plan"
 import { QuestionTool } from "./question"
-import { BashTool } from "../plugin/tdd/tools/bash"
-import { EditTool } from "./edit"
-import { GlobTool } from "./glob"
-import { GrepTool } from "./grep"
+import { BashTool } from "./bash"
+import { StrReplaceBasedEditTool } from "./str_replace_based_edit_tool"
+// import { GlobTool } from "./glob"
+// import { GrepTool } from "./grep"
 import { BatchTool } from "./batch"
-import { ReadTool } from "./read"
 import { TaskTool } from "./task"
+import { TaskDoneTool } from "./task_done"
+import { SubAgentTaskDoneTool } from "./sub_agent_task_done"
+import { TaskDoneWithChangeIdTool } from "./task_done_with_change_id"
 import { TodoWriteTool, TodoReadTool } from "./todo"
 import { WebFetchTool } from "./webfetch"
-import { WriteTool } from "./write"
 import { InvalidTool } from "./invalid"
 import { SkillTool } from "./skill"
+import { SubCodingTool } from "./sub_coding"
+import { QuickExploreTool } from "./quick_explore"
 import type { Agent } from "../agent/agent"
 import { Tool } from "./tool"
 import { Instance } from "../project/instance"
@@ -33,6 +36,9 @@ import { CheckpointTool } from "../costrict/tool/checkpoint"
 import { ApplyPatchTool } from "./apply_patch"
 import { Glob } from "../util/glob"
 import { pathToFileURL } from "url"
+import { MemoryBankTool } from "./memory-bank"
+import { LintTool } from "./lint"
+import { ShowMarkdownToUserTool } from "./show_markdown_to_user"
 
 export namespace ToolRegistry {
   const log = Log.create({ service: "tool.registry" })
@@ -80,8 +86,8 @@ export namespace ToolRegistry {
           const out = await Truncate.output(result, {}, initCtx?.agent)
           return {
             title: "",
-            output: out.truncated ? out.content : result,
-            metadata: { truncated: out.truncated, outputPath: out.truncated ? out.outputPath : undefined },
+            output: out.content,
+            metadata: { truncated: out.truncated },
           }
         },
       }),
@@ -105,29 +111,36 @@ export namespace ToolRegistry {
 
     return [
       InvalidTool,
+      TaskDoneTool,
+      SubAgentTaskDoneTool,
+      TaskDoneWithChangeIdTool,
       ...(question ? [QuestionTool] : []),
       BashTool,
-      ReadTool,
-      GlobTool,
-      GrepTool,
-      EditTool,
-      WriteTool,
-      TaskTool,
-      WebFetchTool,
-      TodoWriteTool,
-      // TodoReadTool,
-      WebSearchTool,
-      CodeSearchTool,
-      SkillTool,
+      StrReplaceBasedEditTool,
+      // GlobTool,  // 已注释
+      // GrepTool,  // 已注释
+      // TaskTool,  // 已注释
+      // WebFetchTool,  // 不需要
+      // TodoWriteTool,  // 不需要
+      MemoryBankTool,
+      ShowMarkdownToUserTool,
+      // TodoReadTool,  // 不需要
+      // WebSearchTool,  // 不需要
+      // CodeSearchTool,  // 不需要
+      // SkillTool,  // 不需要
       SequentialThinkingTool,
       FileOutlineTool,
-      // CallGraphTool, // deprecate
-      // FileImportanceTool, // deprecate
-      ...(config.experimental?.checkpoint !== false ? [CheckpointTool] : []),
-      ...(Flag.COSTRICT_EXPERIMENTAL_LSP_TOOL ? [LspTool] : []),
-      ApplyPatchTool,
-      ...(config.experimental?.batch_tool === true ? [BatchTool] : []),
-      ...(Flag.COSTRICT_EXPERIMENTAL_PLAN_MODE && Flag.OPENCODE_CLIENT === "cli" ? [PlanExitTool] : []),
+      // CallGraphTool,  // 已废弃
+      // FileImportanceTool,  // 已废弃
+      // ...(config.experimental?.checkpoint !== false ? [CheckpointTool] : []),  // 不需要
+      // ...(Flag.COSTRICT_EXPERIMENTAL_LSP_TOOL ? [LspTool] : []),  // 不需要
+      // ApplyPatchTool,  // 不需要
+      // ...(config.experimental?.batch_tool === true ? [BatchTool] : []),  // 不需要
+      // ...(Flag.COSTRICT_EXPERIMENTAL_PLAN_MODE && Flag.OPENCODE_CLIENT === "cli" ? [PlanExitTool] : []),  // 不需要
+      LintTool,
+      // TaskDoneWithChangeIdTool,  // 已在第109行注册，删除重复
+      SubCodingTool,
+      QuickExploreTool,
       ...custom,
     ]
   }
@@ -144,37 +157,17 @@ export namespace ToolRegistry {
     agent?: Agent.Info,
   ) {
     const tools = await all()
+
+    // 工具过滤现在完全由 agent 的 permission 配置控制
+    // 不再需要硬编码的过滤逻辑
     const result = await Promise.all(
-      tools
-        .filter((t) => {
-          // Enable websearch/codesearch for zen users OR via enable flag
-          if (t.id === "codesearch" || t.id === "websearch") {
-            return model.providerID === ProviderID.opencode || Flag.COSTRICT_ENABLE_EXA
-          }
-
-          // use apply tool in same format as codex
-          const usePatch =
-            model.modelID.includes("gpt-") && !model.modelID.includes("oss") && !model.modelID.includes("gpt-4")
-          if (t.id === "apply_patch") return usePatch
-          if (t.id === "edit" || t.id === "write") return !usePatch
-
-          return true
-        })
-        .map(async (t) => {
-          using _ = log.time(t.id)
-          const tool = await t.init({ agent })
-          const output = {
-            description: tool.description,
-            parameters: tool.parameters,
-          }
-          await Plugin.trigger("tool.definition", { toolID: t.id }, output)
-          return {
-            id: t.id,
-            ...tool,
-            description: output.description,
-            parameters: output.parameters,
-          }
-        }),
+      tools.map(async (t) => {
+        using _ = log.time(t.id)
+        return {
+          id: t.id,
+          ...(await t.init({ agent })),
+        }
+      }),
     )
     return result
   }

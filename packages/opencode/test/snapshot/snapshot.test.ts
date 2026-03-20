@@ -313,7 +313,7 @@ test("unicode filenames", async () => {
       expect(patch.files.length).toBe(4)
 
       for (const file of unicodeFiles) {
-        expect(patch.files).toContain(file.path)
+        expect(patch.files).toContain(norm(file.path))
       }
 
       await Snapshot.revert([patch])
@@ -348,8 +348,8 @@ test.skip("unicode filenames modification and restore", async () => {
       await Filesystem.write(cyrillicFile, "modified cyrillic")
 
       const patch = await Snapshot.patch(before!)
-      expect(patch.files).toContain(chineseFile)
-      expect(patch.files).toContain(cyrillicFile)
+      expect(patch.files).toContain(norm(chineseFile))
+      expect(patch.files).toContain(norm(cyrillicFile))
 
       await Snapshot.revert([patch])
 
@@ -372,7 +372,7 @@ test("unicode filenames in subdirectories", async () => {
       await Filesystem.write(deepFile, "deep unicode content")
 
       const patch = await Snapshot.patch(before!)
-      expect(patch.files).toContain(deepFile)
+      expect(patch.files).toContain(norm(deepFile))
 
       await Snapshot.revert([patch])
       expect(
@@ -399,7 +399,7 @@ test("very long filenames", async () => {
       await Filesystem.write(longFile, "long filename content")
 
       const patch = await Snapshot.patch(before!)
-      expect(patch.files).toContain(longFile)
+      expect(patch.files).toContain(norm(longFile))
 
       await Snapshot.revert([patch])
       expect(
@@ -657,7 +657,7 @@ test("patch detects changes in secondary worktree", async () => {
         await Filesystem.write(worktreeFile, "worktree content")
 
         const patch = await Snapshot.patch(before!)
-        expect(patch.files).toContain(worktreeFile)
+        expect(patch.files).toContain(norm(worktreeFile))
       },
     })
   } finally {

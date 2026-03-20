@@ -21,6 +21,15 @@ export type MessageWithParts = {
   parts: Part[]
 }
 
+export function formatReasoningText(text: string) {
+  return text
+    .replaceAll("[REDACTED]", "")
+    .replace(/<tool_call>[\s\S]*?(?:<\/tool_call>|(?=\n\s*\n)|$)/g, "")
+    .replace(/<\/?arg_key>|<\/?arg_value>/g, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+}
+
 export function formatTranscript(
   session: SessionInfo,
   messages: MessageWithParts[],
@@ -74,7 +83,9 @@ export function formatPart(part: Part, options: TranscriptOptions): string {
 
   if (part.type === "reasoning") {
     if (options.thinking) {
-      return `_Thinking:_\n\n${part.text}\n\n`
+      const text = formatReasoningText(part.text)
+      if (!text) return ""
+      return `_Thinking:_\n\n${text}\n\n`
     }
     return ""
   }

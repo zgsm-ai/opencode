@@ -6,11 +6,23 @@ import { MessageV2 } from "./message-v2"
 import { Identifier } from "@/id/id"
 import { SessionID, MessageID } from "./schema"
 import { Snapshot } from "@/snapshot"
+import { diffLines } from "diff"
 
+import path from "path"
+import { Instance } from "@/project/instance"
 import { Storage } from "@/storage/storage"
 import { Bus } from "@/bus"
 
 export namespace SessionSummary {
+
+  function normalizeFile(input: string) {
+    const unquoted = unquoteGitPath(input).replaceAll("\\", "/")
+    if (path.isAbsolute(unquoted)) {
+      return path.relative(Instance.worktree, unquoted).replaceAll("\\", "/")
+    }
+    return unquoted
+  }
+
   function unquoteGitPath(input: string) {
     if (!input.startsWith('"')) return input
     if (!input.endsWith('"')) return input
@@ -98,6 +110,46 @@ export namespace SessionSummary {
     })
   }
 
+  function computeToolDiff(messages: MessageV2.WithParts[]) {
+    const state = new Map<string, { file: string; before: string; after: string }>()
+    for (const msg of messages) {
+      for (const part of msg.parts) {
+        if (part.type !== "tool") continue
+        if (part.state.status !== "completed") continue
+        const metadata = part.state.metadata as Record<string, unknown> | undefined
+        const item = metadata?.filediff as Record<string, unknown> | undefined
+        if (!item) continue
+        const fileRaw = typeof item.file === "string" ? item.file : ""
+        const file = normalizeFile(fileRaw)
+        if (!file) continue
+        const before = typeof item.before === "string" ? item.before : ""
+        const after = typeof item.after === "string" ? item.after : ""
+        const prev = state.get(file)
+        if (!prev) {
+          state.set(file, { file, before, after })
+          continue
+        }
+        state.set(file, { file, before: prev.before, after })
+      }
+    }
+    return Array.from(state.values()).map((item) => {
+      const counts = diffLines(item.before, item.after).reduce(
+        (agg, part) => ({
+          additions: agg.additions + (part.added ? (part.count ?? 0) : 0),
+          deletions: agg.deletions + (part.removed ? (part.count ?? 0) : 0),
+        }),
+        { additions: 0, deletions: 0 },
+      )
+      return {
+        file: item.file,
+        before: item.before,
+        after: item.after,
+        additions: counts.additions,
+        deletions: counts.deletions,
+      }
+    })
+  }
+
   async function summarizeMessage(input: { messageID: string; messages: MessageV2.WithParts[] }) {
     const messages = input.messages.filter(
       (m) => m.info.id === input.messageID || (m.info.role === "assistant" && m.info.parentID === input.messageID),
@@ -120,7 +172,7 @@ export namespace SessionSummary {
     async (input) => {
       const diffs = await Storage.read<Snapshot.FileDiff[]>(["session_diff", input.sessionID]).catch(() => [])
       const next = diffs.map((item) => {
-        const file = unquoteGitPath(item.file)
+        const file = normalizeFile(item.file)
         if (file === item.file) return item
         return {
           ...item,

@@ -27,6 +27,7 @@ import { Installation } from "@/installation"
 import { ConfigMarkdown } from "./markdown"
 import { BUILTIN_AGENTS, type AgentEntry } from "../costrict/agent/builtin"
 import { constants, existsSync } from "fs"
+import { COMPONENTS } from "../costrict/agent/components"
 import { Bus } from "@/bus"
 import { GlobalBus } from "@/bus/global"
 import { Event } from "../server/event"
@@ -39,6 +40,8 @@ import { ConfigPaths } from "./paths"
 import { Filesystem } from "@/util/filesystem"
 import { Process } from "@/util/process"
 import { Lock } from "@/util/lock"
+import { AgentToolsConfig } from "../costrict/agent/config"
+import { PermissionNext } from "@/permission/next"
 
 export namespace Config {
   const ModelId = z.string().meta({ $ref: "https://models.dev/model-schema.json#/$defs/Model" })
@@ -63,6 +66,7 @@ export namespace Config {
   }
 
   const managedDir = managedConfigDir()
+  const CONFIG_FILES = ["opencode.jsonc", "opencode.json", "costrict.jsonc", "costrict.json"]
 
   // Custom merge function that concatenates array fields instead of replacing them
   function mergeConfigConcatArrays(target: Info, source: Info): Info {
@@ -78,6 +82,11 @@ export namespace Config {
 
   export const state = Instance.state(async () => {
     const auth = await Auth.all()
+    const configPath = Flag.COSTRICT_CONFIG ?? Flag.OPENCODE_CONFIG
+    const configContent = Flag.COSTRICT_CONFIG_CONTENT ?? Flag.OPENCODE_CONFIG_CONTENT
+    const configDir = Flag.COSTRICT_CONFIG_DIR ?? Flag.OPENCODE_CONFIG_DIR
+    const disableProjectConfig = Flag.COSTRICT_DISABLE_PROJECT_CONFIG || Flag.OPENCODE_DISABLE_PROJECT_CONFIG
+    const permissionFlag = Flag.COSTRICT_PERMISSION ?? Flag.OPENCODE_PERMISSION
 
     // Config loading order (low -> high precedence): https://opencode.ai/docs/config#precedence-order
     // 1) Remote .well-known/opencode (org defaults)
@@ -121,28 +130,36 @@ export namespace Config {
     // Global user config overrides remote config.
     result = mergeConfigConcatArrays(result, await global())
 
-    // Load OpenCode custom config path
-    if (Flag.OPENCODE_CONFIG) {
-      result = mergeConfigConcatArrays(result, await loadFile(Flag.OPENCODE_CONFIG))
-      log.debug("loaded OpenCode custom config", { path: Flag.OPENCODE_CONFIG })
+    // Custom config path overrides global
+    if (configPath) {
+      result = mergeConfigConcatArrays(result, await loadFile(configPath))
+      log.debug("loaded custom config", { path: configPath })
     }
 
-    // Load OpenCode project config
-    if (!Flag.COSTRICT_DISABLE_PROJECT_CONFIG) {
+    // Project config has highest precedence (overrides global and remote)
+    if (!disableProjectConfig) {
       for (const file of await ConfigPaths.projectFiles("opencode", Instance.directory, Instance.worktree)) {
         result = mergeConfigConcatArrays(result, await loadFile(file))
       }
+
+      for (const file of CONFIG_FILES) {
+        const found = await Filesystem.findUp(file, Instance.directory, Instance.worktree)
+        for (const resolved of found.toReversed()) {
+          result = mergeConfigConcatArrays(result, await loadFile(resolved))
+        }
+      }
     }
 
-    // Load OpenCode inline config content
-    if (Flag.OPENCODE_CONFIG_CONTENT) {
-      result = mergeDeep(result, JSON.parse(Flag.OPENCODE_CONFIG_CONTENT))
-      log.debug("loaded OpenCode custom config from OPENCODE_CONFIG_CONTENT")
+    // Inline config content has highest precedence
+    if (configContent) {
+      result = mergeDeep(result, JSON.parse(configContent))
+      log.debug("loaded custom config from COSTRICT_CONFIG_CONTENT")
     }
 
     result.agent = result.agent || {}
     result.mode = result.mode || {}
     result.plugin = result.plugin || []
+    const agentOverrides = result.agent ?? {}
 
     const directories = await ConfigPaths.directories(Instance.directory, Instance.worktree)
 
@@ -151,19 +168,16 @@ export namespace Config {
       log.debug("loading config from OPENCODE_CONFIG_DIR", { path: Flag.OPENCODE_CONFIG_DIR })
     }
 
-    if (Flag.COSTRICT_CONFIG_DIR) {
-      directories.push(Flag.COSTRICT_CONFIG_DIR)
-      log.debug("loading config from COSTRICT_CONFIG_DIR", { path: Flag.COSTRICT_CONFIG_DIR })
+    if (configDir) {
+      directories.push(configDir)
+      log.debug("loading config from COSTRICT_CONFIG_DIR", { path: configDir })
     }
     const deps = []
 
     for (const dir of unique(directories)) {
-      // Load OpenCode config files first (lower priority)
-      if (
-        Flag.COSTRICT_ENABLE_OPENCODE_CONFIG &&
-        (dir.endsWith(".opencode") || dir.endsWith("opencode") || dir === Flag.OPENCODE_CONFIG_DIR)
-      ) {
-        for (const file of ["opencode.jsonc", "opencode.json"]) {
+      const isConfigDir = dir.endsWith(".costrict") || dir.endsWith(".opencode") || dir === configDir
+      if (Flag.COSTRICT_ENABLE_OPENCODE_CONFIG && isConfigDir) {
+        for (const file of CONFIG_FILES) {
           log.debug(`loading config from ${path.join(dir, file)}`)
           result = mergeConfigConcatArrays(result, await loadFile(path.join(dir, file)))
           // to satisfy the type checker
@@ -196,6 +210,8 @@ export namespace Config {
       result.agent = mergeDeep(result.agent, await loadMode(dir))
       result.plugin.push(...(await loadPlugin(dir)))
     }
+
+    result.agent = mergeDeep(result.agent, agentOverrides)
 
     // Inline config content overrides all non-managed config sources.
     if (process.env.OPENCODE_CONFIG_CONTENT) {
@@ -255,8 +271,8 @@ export namespace Config {
       })
     }
 
-    if (Flag.COSTRICT_PERMISSION) {
-      result.permission = mergeDeep(result.permission ?? {}, JSON.parse(Flag.COSTRICT_PERMISSION))
+    if (permissionFlag) {
+      result.permission = mergeDeep(result.permission ?? {}, JSON.parse(permissionFlag))
     }
 
     // Backwards compatibility: legacy top-level `tools` config
@@ -281,10 +297,10 @@ export namespace Config {
     }
 
     // Apply flag overrides for compaction settings
-    if (Flag.COSTRICT_DISABLE_AUTOCOMPACT) {
+    if (Flag.COSTRICT_DISABLE_AUTOCOMPACT || Flag.OPENCODE_DISABLE_AUTOCOMPACT) {
       result.compaction = { ...result.compaction, auto: false }
     }
-    if (Flag.COSTRICT_DISABLE_PRUNE) {
+    if (Flag.COSTRICT_DISABLE_PRUNE || Flag.OPENCODE_DISABLE_PRUNE) {
       result.compaction = { ...result.compaction, prune: false }
     }
 
@@ -303,6 +319,7 @@ export namespace Config {
   }
 
   export async function installDependencies(dir: string) {
+    if (process.env.COSTRICT_TEST_HOME) return
     const pkg = path.join(dir, "package.json")
     const targetVersion = Installation.isLocal() ? "*" : Installation.VERSION
 
@@ -458,6 +475,7 @@ export namespace Config {
   async function loadAgent(dir: string, locale?: string) {
     const result: Record<string, Agent> = {}
     const lang = locale ?? "zh-CN"
+    const componentsDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../costrict/agent")
 
     // Load built-in agents from imported modules
     for (const [filename, entry] of Object.entries(BUILTIN_AGENTS)) {
@@ -465,12 +483,30 @@ export namespace Config {
         const content = await resolveBuiltinContent(entry, lang)
         if (!content) continue
 
-        const md = await ConfigMarkdown.parseString(content)
+        // Prepare context variables for template rendering
+        const context = {
+          // Global context variables can be added here
+          version: "1.0.0",
+          // Runtime variables will be passed when creating sessions
+        }
+
+        const md = await ConfigMarkdown.parseString(content, {
+          context,
+          baseDir: componentsDir,
+          components: COMPONENTS,
+          enableIncludes: true,
+          enableVariables: true,
+          enableConditionals: true,
+        })
         if (!md.data) continue
 
-        const config = {
-          name: filename,
-          ...(md.data as Record<string, any>),
+        const data = md.data as Record<string, any>
+        const name = typeof data.name === "string" ? data.name.trim() : ""
+        if (!name) continue
+
+        const config: Record<string, any> = {
+          ...data,
+          name,
           prompt: md.content.trim(),
           model_prompts: entry.models
             ? Object.fromEntries(
@@ -478,6 +514,25 @@ export namespace Config {
               )
             : undefined,
         }
+
+        // 应用工具配置
+        const agentName = config.name
+        const toolConfig = AgentToolsConfig.getConfig(agentName)
+        if (toolConfig) {
+          // 设置退出工具
+          config.options = config.options || {}
+          config.options.exitToolName = toolConfig.exitToolName
+
+          // 应用工具权限配置
+          const toolPermission = AgentToolsConfig.createToolPermission(toolConfig.tools)
+          // 保留原有的文件级权限配置，与工具权限合并
+          if (config.permission) {
+            config.permission = PermissionNext.merge(toolPermission, config.permission)
+          } else {
+            config.permission = toolPermission
+          }
+        }
+
         const parsed = Agent.safeParse(config)
         if (parsed.success) {
           result[config.name] = parsed.data
@@ -598,9 +653,9 @@ export namespace Config {
    * Deduplicates plugins by name, with later entries (higher priority) winning.
    * Priority order (highest to lowest):
    * 1. Local plugin/ directory
-   * 2. Local opencode.json
+   * 2. Local costrict.json (or opencode.json)
    * 3. Global plugin/ directory
-   * 4. Global opencode.json
+   * 4. Global costrict.json (or opencode.json)
    *
    * Since plugins are added in low-to-high priority order,
    * we reverse, deduplicate (keeping first occurrence), then restore order.
@@ -800,13 +855,30 @@ export namespace Config {
         ])
         .optional()
         .describe("Hex color code (e.g., #FF5733) or theme color (e.g., primary)"),
+      budget_steps: z
+        .number()
+        .int()
+        .positive()
+        .optional()
+        .describe("Tool-call budget for this agent (e.g., QuickExplore/SubCoding)."),
+      max_steps: z
+        .number()
+        .int()
+        .positive()
+        .optional()
+        .describe("Maximum number of agentic iterations before forcing text-only response (default: 500)."),
       steps: z
         .number()
         .int()
         .positive()
         .optional()
-        .describe("Maximum number of agentic iterations before forcing text-only response"),
-      maxSteps: z.number().int().positive().optional().describe("@deprecated Use 'steps' field instead."),
+        .describe("@deprecated Use 'budget_steps' for tool-call budget or 'max_steps' for outer loop limit."),
+      maxSteps: z
+        .number()
+        .int()
+        .positive()
+        .optional()
+        .describe("@deprecated Use 'max_steps' field instead."),
       permission: Permission.optional(),
     })
     .catchall(z.any())
@@ -822,6 +894,8 @@ export namespace Config {
         "mode",
         "hidden",
         "color",
+        "budget_steps",
+        "max_steps",
         "steps",
         "maxSteps",
         "options",
@@ -849,13 +923,17 @@ export namespace Config {
       }
       Object.assign(permission, agent.permission)
 
-      // Convert legacy maxSteps to steps
-      const steps = agent.steps ?? agent.maxSteps
+      // Normalize budget and max steps:
+      // - budgetSteps: prefer explicit budget_steps, fall back to legacy steps (which previously mixed meanings)
+      // - steps: unified max_steps / maxSteps with a sane default of 500
+      const budgetSteps = agent.budget_steps ?? agent.steps
+      const steps = agent.max_steps ?? agent.maxSteps ?? 500
 
-      return { ...agent, options, permission, steps } as typeof agent & {
+      return { ...agent, options, permission, steps, budgetSteps } as typeof agent & {
         options?: Record<string, unknown>
         permission?: Permission
         steps?: number
+        budgetSteps?: number
       }
     })
     .meta({
@@ -893,8 +971,8 @@ export namespace Config {
         .optional()
         .default("pagedown,ctrl+alt+f")
         .describe("Scroll messages down by one page"),
-      messages_line_up: z.string().optional().default("ctrl+alt+y").describe("Scroll messages up by one line"),
-      messages_line_down: z.string().optional().default("ctrl+alt+e").describe("Scroll messages down by one line"),
+      messages_line_up: z.string().optional().default("alt+up,ctrl+alt+y").describe("Scroll messages up by one line"),
+      messages_line_down: z.string().optional().default("alt+down,ctrl+alt+e").describe("Scroll messages down by one line"),
       messages_half_page_up: z.string().optional().default("ctrl+alt+u").describe("Scroll messages up by half page"),
       messages_half_page_down: z
         .string()
@@ -1168,7 +1246,7 @@ export namespace Config {
         .string()
         .optional()
         .describe(
-          "Default agent to use when none is specified. Must be a primary agent. Falls back to 'build' if not set or if the specified agent is invalid.",
+          "Default agent to use when none is specified. Must be a visible primary agent. Falls back to 'proposal' if not set or if the specified agent is unavailable.",
         ),
       username: z
         .string()
@@ -1309,6 +1387,10 @@ export namespace Config {
             .optional()
             .describe("Tools that should only be available to primary agents."),
           continue_loop_on_deny: z.boolean().optional().describe("Continue the agent loop when a tool call is denied"),
+          auto_taskcheck: z
+            .boolean()
+            .optional()
+            .describe("Enable auto-starting TaskCheckAgent after ProposalAgent completes"),
           mcp_timeout: z
             .number()
             .int()
@@ -1323,11 +1405,11 @@ export namespace Config {
             .boolean()
             .optional()
             .describe(
-              "Automatically select the first option for each question (default: false). Useful for CI/CD and automated scripts.",
+              "@deprecated No longer used. Set OPENCODE_QUESTION_AUTO_SELECT_FIRST_OPTION=1 to auto-select the first option for each question.",
             ),
         })
         .optional()
-        .describe("Question tool behavior configuration"),
+        .describe("Question tool behavior configuration (legacy compatibility only)"),
     })
     .strict()
     .meta({
@@ -1340,8 +1422,10 @@ export namespace Config {
     let result: Info = pipe(
       {},
       mergeDeep(await loadFile(path.join(Global.Path.config, "config.json"))),
-      mergeDeep(await loadFile(path.join(Global.Path.config, "costrict.json"))),
+      mergeDeep(await loadFile(path.join(Global.Path.config, "opencode.jsonc"))),
+      mergeDeep(await loadFile(path.join(Global.Path.config, "opencode.json"))),
       mergeDeep(await loadFile(path.join(Global.Path.config, "costrict.jsonc"))),
+      mergeDeep(await loadFile(path.join(Global.Path.config, "costrict.json"))),
     )
 
     const legacy = path.join(Global.Path.config, "config")
@@ -1359,7 +1443,7 @@ export namespace Config {
           await Filesystem.writeJson(path.join(Global.Path.config, "config.json"), result)
           await fs.unlink(legacy)
         })
-        .catch(() => {})
+        .catch(() => { })
     }
 
     return result
@@ -1426,25 +1510,12 @@ export namespace Config {
       if (!parsed.data.$schema && isFile) {
         parsed.data.$schema = "https://costrict.ai/config.json"
         const updated = original.replace(/^\s*\{/, '{\n  "$schema": "https://costrict.ai/config.json",')
-        await Filesystem.write(options.path, updated).catch(() => {})
+        await Filesystem.write(options.path, updated).catch(() => { })
       }
       const data = parsed.data
-      if (data.plugin && isFile) {
-        for (let i = 0; i < data.plugin.length; i++) {
-          const plugin = data.plugin[i]
-          try {
-            data.plugin[i] = import.meta.resolve!(plugin, options.path)
-          } catch (e) {
-            try {
-              // import.meta.resolve sometimes fails with newly created node_modules
-              const require = createRequire(options.path)
-              const resolvedPath = require.resolve(plugin)
-              data.plugin[i] = pathToFileURL(resolvedPath).href
-            } catch {
-              // Ignore, plugin might be a generic string identifier like "mcp-server"
-            }
-          }
-        }
+      if (data.plugin) {
+        const resolved = await Promise.all(data.plugin.map((plugin) => resolvePlugin(plugin, configFilepath)))
+        data.plugin = resolved
       }
       return data
     }
@@ -1481,8 +1552,8 @@ export namespace Config {
   }
 
   function globalConfigFile() {
-    const candidates = ["opencode.jsonc", "opencode.json", "config.json"].map((file) =>
-      path.join(Global.Path.config, file),
+    const candidates = ["costrict.json", "costrict.jsonc", "opencode.json", "opencode.jsonc", "config.json"].map(
+      (file) => path.join(Global.Path.config, file),
     )
     for (const file of candidates) {
       if (existsSync(file)) return file
@@ -1509,6 +1580,17 @@ export namespace Config {
       if (value === undefined) return result
       return patchJsonc(result, value, [...path, key])
     }, input)
+  }
+
+  async function resolvePlugin(plugin: string, configFilepath: string): Promise<string> {
+    if (plugin.startsWith("file://")) return plugin
+    const baseDir = path.dirname(configFilepath)
+    const pkgPath = path.join(baseDir, "node_modules", plugin, "package.json")
+    const hasPkg = await Bun.file(pkgPath).exists()
+    if (!hasPkg) return plugin
+    const pkg = await Bun.file(pkgPath).json().catch(() => null)
+    const main = isRecord(pkg) && typeof pkg.main === "string" ? pkg.main : "index.js"
+    return pathToFileURL(path.join(baseDir, "node_modules", plugin, main)).href
   }
 
   function parseConfig(text: string, filepath: string): Info {
@@ -1596,48 +1678,57 @@ export namespace Config {
    * @returns The path to the config file that exists, or the default path if none exists
    *
    * Priority order (global=true):
-   * 1. costrict.jsonc
-   * 2. costrict.json
+   * 1. costrict.json
+   * 2. costrict.jsonc
+   * 3. opencode.json
+   * 4. opencode.jsonc
    *
    * Priority order (global=false):
-   * 1. baseDir/costrict.jsonc
-   * 2. baseDir/costrict.json
-   * 3. baseDir/.opencode/costrict.jsonc
-   * 4. baseDir/.opencode/costrict.json
+   * 1. baseDir/costrict.json
+   * 2. baseDir/costrict.jsonc
+   * 3. baseDir/opencode.json
+   * 4. baseDir/opencode.jsonc
+   * 5. baseDir/.opencode/costrict.json
+   * 6. baseDir/.opencode/costrict.jsonc
+   * 7. baseDir/.opencode/opencode.json
+   * 8. baseDir/.opencode/opencode.jsonc
    *
    * Defaults to costrict.json if no file exists
    */
   export async function resolveConfigFile(baseDir: string, global: boolean): Promise<string> {
     if (global) {
-      // Global config: use costrict.json (not opencode.json) for consistency
-      const candidates = [path.join(baseDir, "costrict.jsonc"), path.join(baseDir, "costrict.json")]
-
+      const candidates = [
+        path.join(baseDir, "costrict.json"),
+        path.join(baseDir, "costrict.jsonc"),
+        path.join(baseDir, "opencode.json"),
+        path.join(baseDir, "opencode.jsonc"),
+      ]
       for (const candidate of candidates) {
         if (await Bun.file(candidate).exists()) {
           return candidate
         }
       }
-
-      // Default to costrict.json if none exist
-      return candidates[1]
-    } else {
-      // Project config: check .opencode/ subdirectory
-      const projectCandidates = [
-        path.join(baseDir, "costrict.jsonc"),
-        path.join(baseDir, "costrict.json"),
-        path.join(baseDir, ".opencode", "costrict.jsonc"),
-        path.join(baseDir, ".opencode", "costrict.json"),
-      ]
-
-      for (const candidate of projectCandidates) {
-        if (await Bun.file(candidate).exists()) {
-          return candidate
-        }
-      }
-
-      // Default to costrict.json if none exist
-      return projectCandidates[1]
+      return candidates[0]
     }
+
+    const projectCandidates = [
+      path.join(baseDir, "costrict.json"),
+      path.join(baseDir, "costrict.jsonc"),
+      path.join(baseDir, "opencode.json"),
+      path.join(baseDir, "opencode.jsonc"),
+      path.join(baseDir, ".opencode", "costrict.json"),
+      path.join(baseDir, ".opencode", "costrict.jsonc"),
+      path.join(baseDir, ".opencode", "opencode.json"),
+      path.join(baseDir, ".opencode", "opencode.jsonc"),
+    ]
+
+    for (const candidate of projectCandidates) {
+      if (await Bun.file(candidate).exists()) {
+        return candidate
+      }
+    }
+
+    return projectCandidates[0]
   }
 }
 Filesystem.write

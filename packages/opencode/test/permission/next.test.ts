@@ -28,6 +28,8 @@ async function waitForPending(count: number) {
   return PermissionNext.list()
 }
 
+const home = os.homedir().replaceAll("\\", "/")
+
 // fromConfig tests
 
 test("fromConfig - string value becomes wildcard rule", () => {
@@ -64,17 +66,17 @@ test("fromConfig - empty object", () => {
 
 test("fromConfig - expands tilde to home directory", () => {
   const result = PermissionNext.fromConfig({ external_directory: { "~/projects/*": "allow" } })
-  expect(result).toEqual([{ permission: "external_directory", pattern: `${os.homedir()}/projects/*`, action: "allow" }])
+  expect(result).toEqual([{ permission: "external_directory", pattern: `${home}/projects/*`, action: "allow" }])
 })
 
 test("fromConfig - expands $HOME to home directory", () => {
   const result = PermissionNext.fromConfig({ external_directory: { "$HOME/projects/*": "allow" } })
-  expect(result).toEqual([{ permission: "external_directory", pattern: `${os.homedir()}/projects/*`, action: "allow" }])
+  expect(result).toEqual([{ permission: "external_directory", pattern: `${home}/projects/*`, action: "allow" }])
 })
 
 test("fromConfig - expands $HOME without trailing slash", () => {
   const result = PermissionNext.fromConfig({ external_directory: { $HOME: "allow" } })
-  expect(result).toEqual([{ permission: "external_directory", pattern: os.homedir(), action: "allow" }])
+  expect(result).toEqual([{ permission: "external_directory", pattern: home, action: "allow" }])
 })
 
 test("fromConfig - does not expand tilde in middle of path", () => {
@@ -84,18 +86,18 @@ test("fromConfig - does not expand tilde in middle of path", () => {
 
 test("fromConfig - expands exact tilde to home directory", () => {
   const result = PermissionNext.fromConfig({ external_directory: { "~": "allow" } })
-  expect(result).toEqual([{ permission: "external_directory", pattern: os.homedir(), action: "allow" }])
+  expect(result).toEqual([{ permission: "external_directory", pattern: home, action: "allow" }])
 })
 
 test("evaluate - matches expanded tilde pattern", () => {
   const ruleset = PermissionNext.fromConfig({ external_directory: { "~/projects/*": "allow" } })
-  const result = PermissionNext.evaluate("external_directory", `${os.homedir()}/projects/file.txt`, ruleset)
+  const result = PermissionNext.evaluate("external_directory", `${home}/projects/file.txt`, ruleset)
   expect(result.action).toBe("allow")
 })
 
 test("evaluate - matches expanded $HOME pattern", () => {
   const ruleset = PermissionNext.fromConfig({ external_directory: { "$HOME/projects/*": "allow" } })
-  const result = PermissionNext.evaluate("external_directory", `${os.homedir()}/projects/file.txt`, ruleset)
+  const result = PermissionNext.evaluate("external_directory", `${home}/projects/file.txt`, ruleset)
   expect(result.action).toBe("allow")
 })
 

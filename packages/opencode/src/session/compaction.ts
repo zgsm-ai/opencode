@@ -35,17 +35,9 @@ export namespace SessionCompaction {
     if (config.compaction?.auto === false) return false
     const context = input.model.limit.context
     if (context === 0) return false
-
-    const count =
-      input.tokens.total ||
-      input.tokens.input + input.tokens.output + input.tokens.cache.read + input.tokens.cache.write
-
-    const reserved =
-      config.compaction?.reserved ?? Math.min(COMPACTION_BUFFER, ProviderTransform.maxOutputTokens(input.model))
-    const usable = input.model.limit.input
-      ? input.model.limit.input - reserved
-      : context - ProviderTransform.maxOutputTokens(input.model)
-    return count >= usable
+    const count = input.tokens.input + input.tokens.cache.read + input.tokens.output
+    const threshold = Math.min(150_000, Math.floor(context * 0.8))
+    return count >= threshold
   }
 
   export const PRUNE_MINIMUM = 20_000
@@ -78,10 +70,10 @@ export namespace SessionCompaction {
             if (PRUNE_PROTECTED_TOOLS.includes(part.tool)) continue
 
             if (part.state.time.compacted) break loop
-            const estimate = Token.estimate(part.state.output)
-            total += estimate
+            const size = await Token.count(part.state.output)
+            total += size
             if (total > PRUNE_PROTECT) {
-              pruned += estimate
+              pruned += size
               toPrune.push(part)
             }
           }

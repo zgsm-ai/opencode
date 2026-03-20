@@ -276,7 +276,6 @@ export const BashTool = Tool.define("bash", async () => {
           : result.output
 
       const truncateResult = await Truncate.output(formattedOutput, {}, undefined)
-
       const normalizedOutput = truncateResult.content.replace(/\r\n/g, "\n")
 
       return {
@@ -289,7 +288,6 @@ export const BashTool = Tool.define("bash", async () => {
           roots: commandRoots,
           shell: shellConfig.shell,
           truncated: truncateResult.truncated,
-          ...(truncateResult.truncated && { outputPath: truncateResult.outputPath }),
         },
         output: normalizedOutput,
       }
@@ -307,8 +305,6 @@ function EnhancedBashToolDescription(shellConfig: {
   version?: string
 }): string {
   const baseDescription = DESCRIPTION.replaceAll("${directory}", Instance.directory)
-    .replaceAll("${maxLines}", String(Truncate.MAX_LINES))
-    .replaceAll("${maxBytes}", String(Truncate.MAX_BYTES))
 
   const shellSpecific =
     shellConfig.shell === "bash"

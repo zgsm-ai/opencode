@@ -1,4 +1,4 @@
-import { test, expect } from "bun:test"
+import { afterEach, test, expect } from "bun:test"
 import { Question } from "../../src/question"
 import { Instance } from "../../src/project/instance"
 import { QuestionID } from "../../src/question/schema"
@@ -12,6 +12,17 @@ async function rejectAll() {
     await Question.reject(req.id)
   }
 }
+
+const AUTO_SELECT_ENV = "OPENCODE_QUESTION_AUTO_SELECT_FIRST_OPTION"
+const AUTO_SELECT_ORIGINAL = process.env[AUTO_SELECT_ENV]
+
+afterEach(() => {
+  if (AUTO_SELECT_ORIGINAL === undefined) {
+    delete process.env[AUTO_SELECT_ENV]
+    return
+  }
+  process.env[AUTO_SELECT_ENV] = AUTO_SELECT_ORIGINAL
+})
 
 test("ask - returns pending promise", async () => {
   await using tmp = await tmpdir({ git: true })
@@ -34,6 +45,40 @@ test("ask - returns pending promise", async () => {
       expect(promise).toBeInstanceOf(Promise)
       await rejectAll()
       await promise.catch(() => {})
+    },
+  })
+})
+
+test("ask - auto-selects first option when env var is enabled", async () => {
+  process.env[AUTO_SELECT_ENV] = "1"
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const answers = await Question.ask({
+        sessionID: "ses_test_auto",
+        questions: [
+          {
+            question: "What would you like to do?",
+            header: "Action",
+            options: [
+              { label: "Option 1", description: "First option" },
+              { label: "Option 2", description: "Second option" },
+            ],
+          },
+          {
+            question: "Which environment?",
+            header: "Env",
+            options: [
+              { label: "Dev", description: "Development" },
+              { label: "Prod", description: "Production" },
+            ],
+          },
+        ],
+      })
+      expect(answers).toEqual([["Option 1"], ["Dev"]])
+      const pending = await Question.list()
+      expect(pending.length).toBe(0)
     },
   })
 })

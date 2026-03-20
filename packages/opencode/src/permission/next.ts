@@ -16,12 +16,17 @@ import type {
 } from "./service"
 
 export namespace PermissionNext {
+
+  function normalize(pattern: string): string {
+    return pattern.replaceAll("\\", "/")
+  }
+
   function expand(pattern: string): string {
-    if (pattern.startsWith("~/")) return os.homedir() + pattern.slice(1)
-    if (pattern === "~") return os.homedir()
-    if (pattern.startsWith("$HOME/")) return os.homedir() + pattern.slice(5)
-    if (pattern.startsWith("$HOME")) return os.homedir() + pattern.slice(5)
-    return pattern
+    if (pattern.startsWith("~/")) return normalize(os.homedir() + pattern.slice(1))
+    if (pattern === "~") return normalize(os.homedir())
+    if (pattern.startsWith("$HOME/")) return normalize(os.homedir() + pattern.slice(5))
+    if (pattern.startsWith("$HOME")) return normalize(os.homedir() + pattern.slice(5))
+    return normalize(pattern)
   }
 
   function runPromise<A>(f: (service: S.PermissionService.Api) => Effect.Effect<A, PermissionError>) {

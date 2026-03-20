@@ -374,6 +374,50 @@ describe("ProviderTransform.providerOptions", () => {
   })
 })
 
+describe("ProviderTransform.options - GLM thinking", () => {
+  test("ai-code-glm enables thinking with preserved reasoning", () => {
+    const result = ProviderTransform.options({
+      model: {
+        id: "glm-4.7",
+        providerID: "ai-code-glm",
+        api: {
+          id: "glm-4.7",
+          url: "http://localhost:8510/v1",
+          npm: "@ai-sdk/openai-compatible",
+        },
+      } as any,
+      sessionID: "session-1",
+      providerOptions: {},
+    })
+
+    expect(result.thinking).toEqual({
+      type: "enabled",
+      clear_thinking: false,
+    })
+  })
+
+  test("ai-code-glm-5 enables thinking with preserved reasoning", () => {
+    const result = ProviderTransform.options({
+      model: {
+        id: "glm-5",
+        providerID: "ai-code-glm-5",
+        api: {
+          id: "glm-5",
+          url: "http://localhost:6688/v1",
+          npm: "@ai-sdk/openai-compatible",
+        },
+      } as any,
+      sessionID: "session-1",
+      providerOptions: {},
+    })
+
+    expect(result.thinking).toEqual({
+      type: "enabled",
+      clear_thinking: false,
+    })
+  })
+})
+
 describe("ProviderTransform.schema - gemini array items", () => {
   test("adds missing items for array properties", () => {
     const geminiModel = {
@@ -787,6 +831,7 @@ describe("ProviderTransform.message - DeepSeek reasoning content", () => {
       },
     ])
     expect(result[0].providerOptions?.openaiCompatible?.reasoning_content).toBe("Let me think about this...")
+    expect(result[0].providerOptions?.deepseek?.reasoning_content).toBe("Let me think about this...")
   })
 
   test("Non-DeepSeek providers leave reasoning content unchanged", () => {

@@ -39,6 +39,18 @@ export const { use: useKV, provider: KVProvider } = createSimpleContext({
           },
         ] as const
       },
+      mem<T>(name: string, defaultValue: T) {
+        if (store[name] === undefined) setStore(name, defaultValue)
+        return [
+          function () {
+            return result.get(name)
+          },
+          function setter(next: Setter<T>) {
+            const value = typeof next === "function" ? (next as (prev: T) => T)(store[name]) : next
+            setStore(name, value)
+          },
+        ] as const
+      },
       get(key: string, defaultValue?: any) {
         return store[key] ?? defaultValue
       },

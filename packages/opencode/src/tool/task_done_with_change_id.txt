@@ -1,0 +1,1 @@
+标记提案任务完成，并提供生成的 change_id。此工具专门用于结束任务进行结果汇报。必须提供在创建提案目录时使用的 change_id（例如 proposal/<change_id>/proposal.md 中的 change_id）。

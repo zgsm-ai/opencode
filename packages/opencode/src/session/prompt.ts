@@ -23,6 +23,7 @@ import PROMPT_PLAN from "../session/prompt/plan.txt"
 import BUILD_SWITCH from "../session/prompt/build-switch.txt"
 import MAX_STEPS from "../session/prompt/max-steps.txt"
 import { defer } from "../util/defer"
+import { clone } from "remeda"
 import { ToolRegistry } from "../tool/registry"
 import { MCP } from "../mcp"
 import { LSP } from "../lsp"
@@ -48,6 +49,10 @@ import { iife } from "@/util/iife"
 import { Shell } from "@/shell/shell"
 import { Truncate } from "@/tool/truncation"
 import { decodeDataUrl } from "@/util/data-url"
+import { Budget } from "./budget"
+import { AgentGitInitializer } from "@/util/agentGitInitializer"
+import { toolAlias } from "@/costrict/utils/tool-transform-v2"
+import * as LoopPolicy from "./loop-policy"
 
 // @ts-ignore
 globalThis.AI_SDK_LOG_WARNINGS = false
@@ -62,8 +67,116 @@ IMPORTANT:
 
 const STRUCTURED_OUTPUT_SYSTEM_PROMPT = `IMPORTANT: The user has requested structured output. You MUST use the StructuredOutput tool to provide your final response. Do NOT respond with plain text - you MUST call the StructuredOutput tool with your answer formatted according to the schema.`
 
+const ENABLE_HISTORY_PRUNE = false
+const ENABLE_MAX_STEPS_EPHEMERAL_INJECTION = false
+const ENABLE_QUEUED_USER_REMINDER_WRAP = false
+
+async function extractTextContent(message: MessageV2.Assistant): Promise<string | undefined> {
+  const parts = await MessageV2.parts(message.id)
+  const textPart = parts.find((part): part is MessageV2.TextPart => part.type === "text")
+  return textPart?.text
+}
+
+async function llmIndicatesTaskCompleted(
+  message: MessageV2.Assistant,
+  exitToolName: string = "task_done"
+): Promise<boolean> {
+  // 获取工具调用列表
+  const parts = await MessageV2.parts(message.id)
+  const toolParts = parts.filter((part) => part.type === "tool") as MessageV2.ToolPart[]
+  const normalizedExitToolName = toolAlias(exitToolName)
+
+  // 检查是否调用了退出工具（支持自定义退出工具名）
+  const exitToolCall = toolParts.find((part) => toolAlias(part.tool) === normalizedExitToolName)
+
+  // 只有当调用了退出工具且工具执行完成时，才认为任务完成
+  return exitToolCall !== undefined && exitToolCall.state.status === "completed"
+}
+
+function extractSummary(toolPart: MessageV2.ToolPart): string | undefined {
+  if (toolPart.state.status !== "completed") {
+    return undefined
+  }
+
+  const resultText = toolPart.state.output || ""
+  // 工具结果格式是 "Task done.\n\nSummary:\n{summary}"
+  if (resultText.includes("Summary:")) {
+    const parts = resultText.split("Summary:")
+    if (parts.length > 1) {
+      return parts[1].trim()
+    }
+  }
+
+  return resultText || undefined
+}
+
+function stopReason(message: MessageV2.Assistant, text?: string) {
+  return [
+    message.error ? `${message.error.name}: ${message.error.data.message}` : "",
+    message.finish ? `Finish reason: ${message.finish}` : "",
+    text ? `Last response:\n${text}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n")
+}
+
+function shouldRecoverStop(error?: MessageV2.Assistant["error"]) {
+  return error?.name === "UnknownError"
+}
+
+async function insertExitToolReminder(input: {
+  sessionID: string
+  agentName: string
+  model: {
+    providerID: string
+    modelID: string
+  }
+  exitToolName: string
+  reason?: string
+}) {
+  const reminderMessage: MessageV2.User = {
+    id: Identifier.ascending("message"),
+    sessionID: input.sessionID,
+    role: "user",
+    time: { created: Date.now() },
+    agent: input.agentName,
+    model: input.model,
+  }
+
+  await Session.updateMessage(reminderMessage)
+  await Session.updatePart({
+    id: Identifier.ascending("part"),
+    messageID: reminderMessage.id,
+    sessionID: input.sessionID,
+    type: "text",
+    text: LoopPolicy.unexpectedStop(input.exitToolName, input.reason),
+    synthetic: true,
+  } satisfies MessageV2.TextPart)
+}
+
 export namespace SessionPrompt {
   const log = Log.create({ service: "session.prompt" })
+export const OUTPUT_TOKEN_MAX = Flag.COSTRICT_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 10_240
+
+  const normalizeAgentName = (name: string) => name.trim().toLowerCase().replace(/[\s_-]/g, "")
+  const normalizeAgentKind = (name: string) => {
+    const normalized = normalizeAgentName(name)
+    return normalized.endsWith("agent") ? normalized.slice(0, -5) : normalized
+  }
+
+  // Agents that CREATE new agent-git (continue_run=false)
+  const AGENTS_CREATING_GIT = new Set(["proposal", "strictplan"])
+
+  // Agents that REUSE existing agent-git (continue_run=true)
+  const AGENTS_REUSING_GIT = new Set([
+    "coding",
+    "planapply",
+    "taskcheck",
+    "explore",
+    "quickexplore",
+    "subcoding",
+    "fix",
+  ])
 
   const state = Instance.state(
     () => {
@@ -164,6 +277,75 @@ export namespace SessionPrompt {
 
     const message = await createUserMessage(input)
     await Session.touch(input.sessionID)
+
+    // Initialize agent-git if needed
+    const requestedAgent = input.agent ?? (await Agent.defaultAgent())
+    const resolvedAgent = await Agent.get(requestedAgent)
+    const agentName = resolvedAgent?.name ?? requestedAgent
+    const normalizedAgentName = normalizeAgentKind(agentName)
+    if (normalizedAgentName !== "proposal") {
+      const hint = input.parts
+        .filter((part): part is MessageV2.TextPart => part.type === "text")
+        .map((part) => part.text)
+        .join("\n")
+      await LLM.ensureTrajectoryChangeID(input.sessionID, hint)
+    }
+    const shouldCreateGit = AGENTS_CREATING_GIT.has(normalizedAgentName)
+    const shouldReuseGit = AGENTS_REUSING_GIT.has(normalizedAgentName)
+    const preserveExploreResult = normalizedAgentName === "proposal"
+
+    if (shouldCreateGit || shouldReuseGit) {
+      try {
+        // Non-git projects currently expose worktree as "/".
+        // agent-git must initialize in the actual working directory, not filesystem root.
+        const projectPath = Instance.worktree === "/" ? Instance.directory : Instance.worktree
+        const gitInit = new AgentGitInitializer.AgentGitInitializer({
+          project_path: projectPath,
+          agent_name: agentName,
+          continue_run: shouldReuseGit, // Create agents use false, reuse agents use true
+        })
+        const gitReady = await gitInit.initializeAgentGit()
+
+        if (!gitReady) {
+          if (shouldCreateGit) {
+            const message = "Failed to initialize agent-git for create agent"
+            log.error(message, { agent: agentName })
+            throw new Error(message)
+          }
+          // Reuse agent failure is normal (may not have run proposal first)
+          log.debug("Agent-git not available (no previous .agent-git), continuing without it", {
+            agent: agentName,
+          })
+        }
+
+        if (gitReady) {
+          log.info("Agent-git initialized successfully", {
+            agent: agentName,
+            mode: shouldCreateGit ? "create" : "reuse",
+          })
+
+          const exploreResultReady = await gitInit.initializeExploreResultFolder({
+            preserveExisting: preserveExploreResult,
+          })
+          if (!exploreResultReady) {
+            if (shouldCreateGit) {
+              log.warn("Failed to initialize explore_result folder for create agent", {
+                agent: agentName,
+              })
+            }
+            if (shouldReuseGit) {
+              log.debug("Failed to initialize explore_result folder for reuse agent", {
+                agent: agentName,
+              })
+            }
+          }
+        }
+      } catch (error) {
+        log.error("Agent-git initialization error", { error, agent: agentName })
+        // Create agents must fail-fast when initialization fails (aligned with TraeAgent behavior)
+        if (shouldCreateGit) throw error
+      }
+    }
 
     // this is backwards compatibility for allowing `tools` to be specified when
     // prompting
@@ -294,7 +476,16 @@ export namespace SessionPrompt {
 
     let step = 0
     const session = await Session.get(sessionID)
+
+    // 预算状态（整个 session 生命周期内保持）
+    let sessionBudgetState: Budget.BudgetState | undefined = undefined
+
+    // 保存最后一次的 tools，用于轨迹存储
+    // system 提示词会从 LLM.stream 的 sessionSystemCache 中读取
+    let lastTools: Record<string, any> = {}
+
     while (true) {
+     try {
       SessionStatus.set(sessionID, { type: "busy" })
       log.info("loop", { step, sessionID })
       if (abort.aborted) break
@@ -318,7 +509,106 @@ export namespace SessionPrompt {
       }
 
       if (!lastUser) throw new Error("No user message found in stream. This should never happen.")
+      const currentAgent = lastAssistant ? await Agent.get(lastAssistant.agent) : undefined
+      const exitToolName = currentAgent ? LoopPolicy.exitTool(currentAgent) : undefined
+      
+      // 检查是否有 task 完成指示（通过退出工具）
+      if (lastAssistant && exitToolName && lastUser.id < lastAssistant.id) {
+        // 使用动态的退出工具名检查任务是否完成
+        const isTaskCompleted = await llmIndicatesTaskCompleted(lastAssistant, exitToolName)
+
+        if (isTaskCompleted) {
+          // 获取工具调用列表
+          const parts = await MessageV2.parts(lastAssistant.id)
+          const toolParts = parts.filter((part) => part.type === "tool") as MessageV2.ToolPart[]
+
+          // 查找退出工具
+          const exitToolCall = toolParts.find((part) => toolAlias(part.tool) === exitToolName)
+
+          // 从退出工具结果中提取摘要
+          const summary = exitToolCall ? extractSummary(exitToolCall) : undefined
+
+          log.info("exiting loop - task completed with exit tool", {
+            sessionID,
+            exitToolName,
+            summary: summary?.substring(0, 100),
+          })
+
+          // 当 proposal agent 通过 task_done_with_change_id 完成时，保存用户原始输入
+          if (lastAssistant.agent === "proposal" && exitToolName === "task_done_with_change_id") {
+            const changeId = exitToolCall?.state.input?.change_id
+
+            if (changeId && typeof changeId === "string") {
+              await LLM.applyTrajectoryChangeID(sessionID, changeId).catch((err) => {
+                log.warn("failed to apply trajectory change-id", {
+                  sessionID,
+                  changeId,
+                  error: err,
+                })
+              })
+              try {
+                // 查找第一条用户消息
+                const firstUserMsg = msgs.find(m => m.info.role === "user")
+                const textPart = firstUserMsg?.parts.find(
+                  (p): p is MessageV2.TextPart => p.type === "text" && !p.synthetic
+                )
+
+                if (textPart) {
+                  // 提取原始用户输入（去除模板包装）
+                  let userInput = textPart.text
+
+                  // 如果包含模板格式，提取原始内容
+                  const match = userInput.match(/## 用户需求\s*```\s*([\s\S]*?)\s*```/m)
+                  if (match && match[1]) {
+                    userInput = match[1].trim()
+                  }
+
+                  // 保存到 user_input.md¬
+                  // Non-git projects expose worktree as "/", fallback to current directory.
+                  const root = Instance.worktree === "/" ? Instance.directory : Instance.worktree
+                  const proposalDir = path.join(root, "proposal", changeId.trim())
+                  const userInputPath = path.join(proposalDir, "user_input.md")
+
+                  await fs.mkdir(proposalDir, { recursive: true })
+                  await fs.writeFile(userInputPath, userInput, "utf-8")
+
+                  log.info("saved user_input.md", {
+                    sessionID,
+                    changeId: changeId.trim(),
+                    path: userInputPath,
+                  })
+                }
+              } catch (err) {
+                // 静默失败，不影响主流程
+                log.warn("failed to save user_input.md", {
+                  sessionID,
+                  error: err,
+                })
+              }
+            }
+          }
+
+          // 保存包含 LLM 响应的完整上下文（在 break 之前）
+          // system 提示词会从 LLM.stream 保存的缓存中自动读取
+          const finalAgent = await Agent.get(lastUser.agent)
+          const finalModel = await Provider.getModel(lastUser.model.providerID, lastUser.model.modelID)
+          await LLM.saveContextAfterResponse({
+            sessionID,
+            agent: finalAgent,
+            model: finalModel,
+            tools: lastTools,
+          }).catch((err) => {
+            log.error("failed to save context after response", { error: err, sessionID })
+          })
+
+          break
+        }
+      }
+
+      // 保留原有的退出逻辑作为后备
+      const requiresExitTool = exitToolName !== undefined
       if (
+        !requiresExitTool &&
         lastAssistant?.finish &&
         !["tool-calls", "unknown"].includes(lastAssistant.finish) &&
         lastUser.id < lastAssistant.id
@@ -538,7 +828,27 @@ export namespace SessionPrompt {
           auto: task.auto,
           overflow: task.overflow,
         })
-        if (result === "stop") break
+        if (result === "stop") {
+          const agent = await Agent.get(lastUser.agent)
+          const exitToolName = agent ? LoopPolicy.exitTool(agent) : undefined
+          const failed = (await Session.messages({ sessionID })).findLast((msg) => msg.info.role === "assistant")?.info
+          if (
+            agent &&
+            exitToolName &&
+            failed?.role === "assistant" &&
+            shouldRecoverStop(failed.error)
+          ) {
+            await insertExitToolReminder({
+              sessionID,
+              agentName: agent.name,
+              model: lastUser.model,
+              exitToolName,
+              reason: stopReason(failed),
+            })
+            continue
+          }
+          break
+        }
         continue
       }
 
@@ -559,6 +869,19 @@ export namespace SessionPrompt {
 
       // normal processing
       const agent = await Agent.get(lastUser.agent)
+
+      // 初始化预算状态（仅在第一次执行时）
+      if (sessionBudgetState === undefined) {
+        // Use agent.budgetSteps as tool-call budget when configured; otherwise unlimited.
+        sessionBudgetState = Budget.calculateState(agent.budgetSteps, 0)
+        log.info("session budget initialized", {
+          sessionID,
+          agent: agent.name,
+          total: sessionBudgetState.total,
+          enabled: sessionBudgetState.total !== undefined
+        })
+      }
+
       const maxSteps = agent.steps ?? Infinity
       const isLastStep = step >= maxSteps
       msgs = await insertReminders({
@@ -596,6 +919,7 @@ export namespace SessionPrompt {
         sessionID: sessionID,
         model,
         abort,
+        budgetState: sessionBudgetState,  // 传入 session 级别的预算状态
       })
       using _ = defer(() => InstructionPrompt.clear(processor.message.id))
 
@@ -603,7 +927,7 @@ export namespace SessionPrompt {
       const lastUserMsg = msgs.findLast((m) => m.info.role === "user")
       const bypassAgentCheck = lastUserMsg?.parts.some((p) => p.type === "agent") ?? false
 
-      const tools = await resolveTools({
+      const baseTools = await resolveTools({
         agent,
         session,
         model,
@@ -612,6 +936,10 @@ export namespace SessionPrompt {
         bypassAgentCheck,
         messages: msgs,
       })
+      const maxStepState = LoopPolicy.maxStep(agent, step, Object.keys(baseTools))
+      const tools = maxStepState.forceExitTool && maxStepState.exitToolName
+        ? LoopPolicy.restrict(baseTools, maxStepState.exitToolName)
+        : baseTools
 
       // Inject StructuredOutput tool if JSON schema mode enabled
       if (lastUser.format?.type === "json_schema") {
@@ -630,8 +958,45 @@ export namespace SessionPrompt {
         })
       }
 
+      const sessionMessages = clone(msgs)
+
+      if (agent.name === "proposal") {
+        const users = sessionMessages.filter((msg) => msg.info.role === "user")
+        const first = users.length
+          ? users.reduce((best, msg) => (best.info.time.created <= msg.info.time.created ? best : msg))
+          : undefined
+        const text = first?.parts.find(
+          (part): part is MessageV2.TextPart => part.type === "text" && !part.ignored && !part.synthetic,
+        )
+        if (text && text.text.trim()) {
+          const hasTemplate = text.text.includes("## 项目信息") && text.text.includes("## 用户需求")
+          if (!hasTemplate) {
+            const root = session.directory
+            const formatted = [
+              "## 项目信息",
+              `- 项目路径：\`${root}\``,
+              `- 提案目录: \`${root}/proposal\`（如果proposal文件夹不存在，需要由你创建）`,
+              "",
+              "## 用户需求",
+              "```",
+              text.text,
+              "```",
+              "",
+              "请你认真分析用户需求，完成需求提案和任务规划",
+            ].join("\n")
+            text.text = formatted
+            // Persist proposal context so trace saving reads the same first user message.
+            await Session.updatePart({
+              ...text,
+              text: formatted,
+              silent: true,
+            })
+          }
+        }
+      }
+
       // Ephemerally wrap queued user messages with a reminder to stay on track
-      if (step > 1 && lastFinished) {
+      if (ENABLE_QUEUED_USER_REMINDER_WRAP && step > 1 && lastFinished) {
         for (const msg of msgs) {
           if (msg.info.role !== "user" || msg.info.id <= lastFinished.id) continue
           for (const part of msg.parts) {
@@ -663,15 +1028,35 @@ export namespace SessionPrompt {
         system.push(STRUCTURED_OUTPUT_SYSTEM_PROMPT)
       }
 
+      // 保存 tools 对象（用于轨迹保存）
+      lastTools = tools
+
       const result = await processor.process({
         user: lastUser,
         agent,
         abort,
         sessionID,
-        system,
+        system: [
+          // Environment info (可通过 COSTRICT_DISABLE_ENVIRONMENT=true 或 OPENCODE_DISABLE_ENVIRONMENT=true 禁用)
+          ...(!Flag.COSTRICT_DISABLE_ENVIRONMENT && !Flag.OPENCODE_DISABLE_ENVIRONMENT
+            ? await SystemPrompt.environment(model)
+            : []),
+          // Custom rules from files/URLs (可通过 COSTRICT_DISABLE_CUSTOM_RULES=true 或 OPENCODE_DISABLE_CUSTOM_RULES=true 禁用)
+          ...(!Flag.COSTRICT_DISABLE_CUSTOM_RULES && !Flag.OPENCODE_DISABLE_CUSTOM_RULES
+            ? await InstructionPrompt.system()
+            : []),
+        ],
         messages: [
           ...MessageV2.toModelMessages(msgs, model),
-          ...(isLastStep
+          ...(maxStepState.forceExitTool && maxStepState.exitToolName
+            ? [
+                {
+                  role: "user" as const,
+                  content: [{ type: "text" as const, text: LoopPolicy.reminder(maxStepState.exitToolName) }],
+                },
+              ]
+            : []),
+          ...(ENABLE_MAX_STEPS_EPHEMERAL_INJECTION && isLastStep
             ? [
                 {
                   role: "assistant" as const,
@@ -709,7 +1094,45 @@ export namespace SessionPrompt {
         }
       }
 
-      if (result === "stop") break
+
+      // 更新 session 级别的预算状态
+      sessionBudgetState = processor.budgetState
+
+      log.info("budget state updated after process", {
+        sessionID,
+        used: sessionBudgetState.used,
+        remaining: sessionBudgetState.remaining,
+        total: sessionBudgetState.total
+      })
+
+      // 没有退出工具的 agent 仍然沿用原有的最大步数保护
+      if (maxStepState.shouldBreak) {
+        log.info("max steps reached, exiting loop", {
+          sessionID,
+          agent: agent.name,
+          step,
+          maxSteps,
+        })
+        break
+      }
+
+      if (result === "stop") {
+        const exitToolName = LoopPolicy.exitTool(agent)
+        const lastText = (await MessageV2.parts(processor.message.id)).findLast(
+          (part): part is MessageV2.TextPart => part.type === "text",
+        )?.text
+        if (exitToolName && shouldRecoverStop(processor.message.error)) {
+          await insertExitToolReminder({
+            sessionID,
+            agentName: agent.name,
+            model: lastUser.model,
+            exitToolName,
+            reason: stopReason(processor.message, lastText),
+          })
+          continue
+        }
+        break
+      }
       if (result === "compact") {
         await SessionCompaction.create({
           sessionID,
@@ -720,8 +1143,21 @@ export namespace SessionPrompt {
         })
       }
       continue
+
+     } catch (fatal: any) {
+      log.error("fatal unhandled error in session loop", {
+        error: fatal,
+        stack: fatal?.stack,
+        sessionID,
+      })
+      Bus.publish(Session.Event.Error, {
+        sessionID,
+        error: { name: "UnknownError", data: { message: String(fatal) } },
+      })
+      break
+     }
     }
-    SessionCompaction.prune({ sessionID })
+    if (ENABLE_HISTORY_PRUNE) SessionCompaction.prune({ sessionID })
     for await (const item of MessageV2.stream(sessionID)) {
       if (item.info.role === "user") continue
       const queued = state()[sessionID]?.callbacks ?? []
@@ -906,10 +1342,10 @@ export namespace SessionPrompt {
         }
 
         const truncated = await Truncate.output(textParts.join("\n\n"), {}, input.agent)
+        const flagged = result.metadata?.truncated === true
         const metadata = {
           ...(result.metadata ?? {}),
-          truncated: truncated.truncated,
-          ...(truncated.truncated && { outputPath: truncated.outputPath }),
+          truncated: flagged || truncated.truncated,
         }
 
         return {
@@ -1394,8 +1830,8 @@ export namespace SessionPrompt {
 Plan mode is active. The user indicated that they do not want you to execute yet -- you MUST NOT make any edits (with the exception of the plan file mentioned below), run any non-readonly tools (including changing configs or making commits), or otherwise make any changes to the system. This supersedes any other instructions you have received.
 
 ## Plan File Info:
-${exists ? `A plan file already exists at ${plan}. You can read it and make incremental edits using the edit tool.` : `No plan file exists yet. You should create your plan at ${plan} using the write tool.`}
-You should build your plan incrementally by writing to or editing this file. NOTE that this is the only file you are allowed to edit - other than this you are only allowed to take READ-ONLY actions.
+${exists ? `A plan file already exists at ${plan}. You can view it and make incremental edits using the str_replace_based_edit_tool (command: view/str_replace).` : `No plan file exists yet. You should create your plan at ${plan} using the str_replace_based_edit_tool (command: create).`}
+You should build your plan incrementally by viewing or editing this file with str_replace_based_edit_tool. NOTE that this is the only file you are allowed to edit - other than this you are only allowed to take READ-ONLY actions.
 
 ## Plan Workflow
 

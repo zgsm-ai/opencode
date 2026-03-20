@@ -1,4 +1,4 @@
-import { createMemo } from "solid-js"
+import { createMemo, onCleanup } from "solid-js"
 import { Keybind } from "@/util/keybind"
 import { pipe, mapValues } from "remeda"
 import type { TuiConfig } from "@/config/tui"
@@ -25,27 +25,34 @@ export const { use: useKeybind, provider: KeybindProvider } = createSimpleContex
     })
     const renderer = useRenderer()
 
-    let focus: Renderable | null
-    let timeout: NodeJS.Timeout
+    let focus: Renderable | undefined
+    let timeout: NodeJS.Timeout | undefined
+
+    function refocus() {
+      if (!focus) return false
+      if (focus.isDestroyed) {
+        focus = undefined
+        return false
+      }
+      focus.focus()
+      return true
+    }
     function leader(active: boolean) {
       if (active) {
         setStore("leader", true)
-        focus = renderer.currentFocusedRenderable
+        focus = renderer.currentFocusedRenderable ?? undefined
         focus?.blur()
         if (timeout) clearTimeout(timeout)
         timeout = setTimeout(() => {
           if (!store.leader) return
           leader(false)
-          if (!focus || focus.isDestroyed) return
-          focus.focus()
+          refocus()
         }, 2000)
         return
       }
 
       if (!active) {
-        if (focus && !renderer.currentFocusedRenderable) {
-          focus.focus()
-        }
+        if (!renderer.currentFocusedRenderable) refocus()
         setStore("leader", false)
       }
     }
@@ -58,12 +65,15 @@ export const { use: useKeybind, provider: KeybindProvider } = createSimpleContex
 
       if (store.leader && evt.name) {
         setImmediate(() => {
-          if (focus && renderer.currentFocusedRenderable === focus) {
-            focus.focus()
-          }
+          if (renderer.currentFocusedRenderable === focus) refocus()
           leader(false)
         })
       }
+    })
+
+    onCleanup(() => {
+      if (timeout) clearTimeout(timeout)
+      focus = undefined
     })
 
     const result = {

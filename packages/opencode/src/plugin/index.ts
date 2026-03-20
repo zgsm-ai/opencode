@@ -117,6 +117,13 @@ export namespace Plugin {
     Output = Parameters<Required<Hooks>[Name]>[1],
   >(name: Name, input: Input, output: Output): Promise<Output> {
     if (!name) return output
+
+    // 全局 Hook 开关 (可通过 COSTRICT_DISABLE_PLUGIN_HOOKS=true 或 OPENCODE_DISABLE_PLUGIN_HOOKS=true 禁用所有 hooks)
+    if (Flag.COSTRICT_DISABLE_PLUGIN_HOOKS || Flag.OPENCODE_DISABLE_PLUGIN_HOOKS) {
+      log.debug("Plugin hooks disabled by environment variable", { hook: name })
+      return output
+    }
+
     for (const hook of await state().then((x) => x.hooks)) {
       const fn = hook[name]
       if (!fn) continue

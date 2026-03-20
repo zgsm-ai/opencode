@@ -5,3 +5,12 @@ app.log
 src/provider/models-snapshot.ts
 src/costrict/agent/builtin.ts
 src/costrict/skill/builtin.ts
+# Lint tools - extracted binaries (bundles are committed)
+resources/lint/*/
+!resources/lint/bundles/
+resources/lint/bundles/*.tmp
+
+# Search tools - extracted binaries (bundles are committed)
+resources/search/*/
+!resources/search/bundles/
+resources/search/bundles/*.tmp

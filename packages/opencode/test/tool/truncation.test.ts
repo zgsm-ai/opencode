@@ -1,4 +1,6 @@
-import { describe, test, expect, afterAll } from "bun:test"
+import { describe, test, expect } from "bun:test"
+import path from "path"
+import { Tiktoken } from "js-tiktoken/lite"
 import { Truncate } from "../../src/tool/truncation"
 import { Identifier } from "../../src/id/id"
 import { Filesystem } from "../../src/util/filesystem"
@@ -74,8 +76,7 @@ describe("Truncate", () => {
       const result = await Truncate.output(content)
 
       expect(result.truncated).toBe(true)
-      expect(result.content).toContain("bytes truncated...")
-      expect(Buffer.byteLength(content, "utf-8")).toBeGreaterThan(Truncate.MAX_BYTES)
+      expect(result.content).toContain("8192")
     })
 
     test("writes full output to file when truncated", async () => {
@@ -118,7 +119,6 @@ describe("Truncate", () => {
       const result = await Truncate.output(content)
 
       expect(result.truncated).toBe(false)
-      if (result.truncated) throw new Error("expected not truncated")
       expect("outputPath" in result).toBe(false)
     })
   })

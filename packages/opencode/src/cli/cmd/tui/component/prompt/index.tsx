@@ -776,6 +776,28 @@ export function Prompt(props: PromptProps) {
     return `Ask anything... "${PLACEHOLDERS[store.placeholder % PLACEHOLDERS.length]}"`
   })
 
+  const sessionMessages = createMemo(() => (props.sessionID ? sync.data.message[props.sessionID] ?? [] : []))
+  const latestSessionUser = createMemo(() => sessionMessages().findLast((message) => message.role === "user"))
+
+  const hasAssistantProgress = createMemo(() => {
+    const user = latestSessionUser()
+    if (!user || !props.sessionID) return false
+
+    const messages = sessionMessages()
+    return messages.some((message) => message.role === "assistant" && message.id > user.id)
+  })
+
+  const proposalInitializing = createMemo(() => {
+    if (local.agent.current().name !== "proposal") return false
+    if (hasAssistantProgress()) return false
+    const state = status()
+    return state.type !== "idle" && state.type !== "retry"
+  })
+
+  const proposalInitializingText = createMemo(
+    () => (proposalInitializing() ? "proposal agent 启动中，正在初始化 agent-git，请稍候..." : undefined),
+  )
+
   const spinnerDef = createMemo(() => {
     const color = local.agent.color(local.agent.current().name)
     return {
@@ -1132,6 +1154,9 @@ export function Prompt(props: PromptProps) {
                       </Show>
                     )
                   })()}
+                  <Show when={proposalInitializingText()}>
+                    <text fg={theme.warning}>{proposalInitializingText()}</text>
+                  </Show>
                 </box>
               </box>
               <text fg={store.interrupt > 0 ? theme.primary : theme.text}>

@@ -11,6 +11,8 @@ if (!process.argv.includes("--all")) {
   process.argv.push("--all")
 }
 const { binaries } = await import("./build.ts")
+const { archive } = await import("./archive.ts")
+const bin = Object.keys(pkg.bin)[0] || pkg.name
 {
   const name = `${pkg.name}-${process.platform}-${process.arch}`
   console.log(`smoke test: running dist/${name}/bin/cs --version`)

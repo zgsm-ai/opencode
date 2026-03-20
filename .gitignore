@@ -1,5 +1,7 @@
 .DS_Store
 node_modules
+history_message
+.history_message
 .worktrees
 .sst
 .env
@@ -28,6 +30,7 @@ target
 opencode-dev
 logs/
 *.bun-build
+trae_agent
 
 .claude
 .opencode
@@ -36,3 +39,26 @@ logs/
 tsconfig.tsbuildinfo
 .bunfig.toml
 .cache
+.history
+.cursor
+.cspell
+
+.fdignore
+.rgignore
+agent-git
+explore_result/
+agent-git.bat
+.tmp-bash-tool-test/
+
+docs/
+test-project/
+.agent-git
+.agent-worktrees
+proposal/
+.memory_bank.md
+__pycache__/
+.pytest_cache/
+.venv/
+venv/
+testcase/
+nul

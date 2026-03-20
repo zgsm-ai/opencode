@@ -44,6 +44,31 @@ test("build agent has correct default properties", async () => {
   })
 })
 
+test("build agent allows task_done for loop exit", async () => {
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const build = await Agent.get("build")
+      expect(build).toBeDefined()
+      expect(evalPerm(build, "task_done")).toBe("allow")
+    },
+  })
+})
+
+test("build agent denies other exit tools", async () => {
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const build = await Agent.get("build")
+      expect(build).toBeDefined()
+      expect(evalPerm(build, "sub_agent_task_done")).toBe("deny")
+      expect(evalPerm(build, "task_done_with_change_id")).toBe("deny")
+    },
+  })
+})
+
 test("plan agent denies edits except ..costrict/plans/*", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
@@ -676,6 +701,9 @@ test("defaultAgent throws when all primary agents are disabled", async () => {
       agent: {
         build: { disable: true },
         plan: { disable: true },
+        proposal: { disable: true },
+        coding: { disable: true },
+        StrictPlan: { disable: true },
       },
     },
   })

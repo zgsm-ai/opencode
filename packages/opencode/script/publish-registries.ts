@@ -4,10 +4,18 @@ import { Script } from "@opencode-ai/script"
 
 if (!Script.preview) {
   // Calculate SHA values
-  const arm64Sha = await $`sha256sum ./dist/costrict-cli-linux-arm64.tar.gz | cut -d' ' -f1`.text().then((x) => x.trim())
-  const x64Sha = await $`sha256sum ./dist/costrict-cli-linux-x64.tar.gz | cut -d' ' -f1`.text().then((x) => x.trim())
-  const macX64Sha = await $`sha256sum ./dist/costrict-cli-darwin-x64.zip | cut -d' ' -f1`.text().then((x) => x.trim())
-  const macArm64Sha = await $`sha256sum ./dist/costrict-cli-darwin-arm64.zip | cut -d' ' -f1`.text().then((x) => x.trim())
+  const arm64Sha = await $`sha256sum ./dist/release/costrict-cli-linux-arm64.tar.gz | cut -d' ' -f1`
+    .text()
+    .then((x) => x.trim())
+  const x64Sha = await $`sha256sum ./dist/release/costrict-cli-linux-x64.tar.gz | cut -d' ' -f1`
+    .text()
+    .then((x) => x.trim())
+  const macX64Sha = await $`sha256sum ./dist/release/costrict-cli-darwin-x64.zip | cut -d' ' -f1`
+    .text()
+    .then((x) => x.trim())
+  const macArm64Sha = await $`sha256sum ./dist/release/costrict-cli-darwin-arm64.zip | cut -d' ' -f1`
+    .text()
+    .then((x) => x.trim())
 
   const [pkgver, _subver = ""] = Script.version.split(/(-.*)/, 2)
 
@@ -36,7 +44,11 @@ if (!Script.preview) {
     `sha256sums_x86_64=('${x64Sha}')`,
     "",
     "package() {",
-    '  install -Dm755 ./costrict-cli "${pkgdir}/usr/bin/costrict-cli"',
+    '  install -dm755 "${pkgdir}/usr/lib/costrict-cli"',
+    '  cp -a ./bin "${pkgdir}/usr/lib/costrict-cli/"',
+    '  cp -a ./resources "${pkgdir}/usr/lib/costrict-cli/"',
+    '  install -dm755 "${pkgdir}/usr/bin"',
+    '  ln -s /usr/lib/costrict-cli/bin/costrict-cli "${pkgdir}/usr/bin/costrict-cli"',
     "}",
     "",
   ].join("\n")
@@ -144,7 +156,8 @@ if (!Script.preview) {
     `      sha256 "${macX64Sha}"`,
     "",
     "      def install",
-    '        bin.install "opencode"',
+    '        bin.install "bin/costrict-cli"',
+    '        prefix.install "resources"',
     "      end",
     "    end",
     "    if Hardware::CPU.arm?",
@@ -152,7 +165,8 @@ if (!Script.preview) {
     `      sha256 "${macArm64Sha}"`,
     "",
     "      def install",
-    '        bin.install "opencode"',
+    '        bin.install "bin/costrict-cli"',
+    '        prefix.install "resources"',
     "      end",
     "    end",
     "  end",
@@ -162,14 +176,16 @@ if (!Script.preview) {
     `      url "https://github.com/zgsm-ai/costrict-cli/releases/download/v${Script.version}/costrict-cli-linux-x64.tar.gz"`,
     `      sha256 "${x64Sha}"`,
     "      def install",
-    '        bin.install "opencode"',
+    '        bin.install "bin/costrict-cli"',
+    '        prefix.install "resources"',
     "      end",
     "    end",
     "    if Hardware::CPU.arm? and Hardware::CPU.is_64_bit?",
     `      url "https://github.com/zgsm-ai/costrict-cli/releases/download/v${Script.version}/costrict-cli-linux-arm64.tar.gz"`,
     `      sha256 "${arm64Sha}"`,
     "      def install",
-    '        bin.install "opencode"',
+    '        bin.install "bin/costrict-cli"',
+    '        prefix.install "resources"',
     "      end",
     "    end",
     "  end",

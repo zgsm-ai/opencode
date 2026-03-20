@@ -162,8 +162,34 @@ export const TuiThreadCommand = cmd({
           })
         })
       }
+
+      const state = { done: false }
+      const shutdown = async () => {
+        if (state.done) return
+        state.done = true
+        await client.call("shutdown", undefined).catch(() => { })
+        await Promise.resolve(worker.terminate()).catch(() => { })
+      }
+      const exit = async () => {
+        await shutdown()
+        process.exit(0)
+      }
+
       process.on("uncaughtException", error)
       process.on("unhandledRejection", error)
+
+      process.once("SIGINT", () => {
+        void exit()
+      })
+      process.once("SIGTERM", () => {
+        void exit()
+      })
+      if (process.platform === "win32") {
+        process.once("SIGBREAK", () => {
+          void exit()
+        })
+      }
+
       process.on("SIGUSR2", reload)
 
       let stopped = false
@@ -198,18 +224,18 @@ export const TuiThreadCommand = cmd({
 
       const transport = external
         ? {
-            url: (await client.call("server", network)).url,
-            fetch: undefined,
-            events: undefined,
-          }
+          url: (await client.call("server", network)).url,
+          fetch: undefined,
+          events: undefined,
+        }
         : {
-            url: "http://opencode.internal",
-            fetch: createWorkerFetch(client),
-            events: createEventSource(client),
-          }
+          url: "http://opencode.internal",
+          fetch: createWorkerFetch(client),
+          events: createEventSource(client),
+        }
 
       setTimeout(() => {
-        client.call("checkUpgrade", { directory: cwd }).catch(() => {})
+        client.call("checkUpgrade", { directory: cwd }).catch(() => { })
       }, 1000).unref?.()
 
       try {

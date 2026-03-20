@@ -15,6 +15,8 @@ import { Truncate } from "../tool/truncation"
 import { initializeParentProcessDetection, initializeEncodingCache } from "@/plugin/tdd/tools/shell"
 import { YoloMode } from "../permission/yolo"
 import { NotificationMode } from "../permission/notification"
+import { AutoTaskCheck } from "../session/auto-taskcheck"
+import { Config } from "../config/config"
 
 export async function InstanceBootstrap() {
   Log.Default.info("bootstrapping", { directory: Instance.directory })
@@ -38,6 +40,10 @@ export async function InstanceBootstrap() {
   Truncate.init()
   await YoloMode.init()
   await NotificationMode.init()
+  const cfg = await Config.get()
+  if (cfg.experimental?.auto_taskcheck === true) {
+    AutoTaskCheck.init()
+  }
 
   Bus.subscribe(Command.Event.Executed, async (payload) => {
     if (payload.properties.name === Command.Default.INIT) {
