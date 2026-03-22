@@ -522,3 +522,104 @@ export const searchApi = {
       body: JSON.stringify(params),
     }),
 }
+
+// 通知渠道类型
+export interface NotificationChannel {
+  id: string
+  name: string
+  type: "wecom" // 企业微信
+  webhook: string
+  events: string[]
+  enabled: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CreateNotificationChannelInput {
+  name: string
+  type: "wecom"
+  webhook: string
+  events: string[]
+  enabled?: boolean
+}
+
+export interface UpdateNotificationChannelInput {
+  name?: string
+  webhook?: string
+  events?: string[]
+  enabled?: boolean
+}
+
+// Mock 数据
+let mockChannels: NotificationChannel[] = [
+  {
+    id: "ch-1",
+    name: "企微通知",
+    type: "wecom",
+    webhook: "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx-xxx-xxx",
+    events: ["session.created", "session.completed", "session.failed"],
+    enabled: true,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+]
+
+// 通知渠道 API
+export const notificationChannelApi = {
+  list: async (): Promise<{ channels: NotificationChannel[] }> => {
+    // Mock: 返回模拟数据
+    return { channels: [...mockChannels] }
+  },
+
+  get: async (id: string): Promise<NotificationChannel> => {
+    // Mock: 返回模拟数据
+    const channel = mockChannels.find((c) => c.id === id)
+    if (!channel) throw new Error("Channel not found")
+    return { ...channel }
+  },
+
+  create: async (data: CreateNotificationChannelInput): Promise<NotificationChannel> => {
+    // Mock: 创建新渠道
+    const newChannel: NotificationChannel = {
+      id: `ch-${Date.now()}`,
+      name: data.name,
+      type: data.type,
+      webhook: data.webhook,
+      events: data.events,
+      enabled: data.enabled ?? true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }
+    mockChannels.push(newChannel)
+    return { ...newChannel }
+  },
+
+  update: async (id: string, data: UpdateNotificationChannelInput): Promise<NotificationChannel> => {
+    // Mock: 更新渠道
+    const index = mockChannels.findIndex((c) => c.id === id)
+    if (index === -1) throw new Error("Channel not found")
+    mockChannels[index] = {
+      ...mockChannels[index],
+      ...data,
+      updatedAt: new Date().toISOString(),
+    }
+    return { ...mockChannels[index] }
+  },
+
+  delete: async (id: string): Promise<{ message: string }> => {
+    // Mock: 删除渠道
+    const index = mockChannels.findIndex((c) => c.id === id)
+    if (index === -1) throw new Error("Channel not found")
+    mockChannels.splice(index, 1)
+    return { message: "Channel deleted" }
+  },
+
+  toggle: async (id: string, enabled: boolean): Promise<NotificationChannel> => {
+    // Mock: 切换启用状态
+    const index = mockChannels.findIndex((c) => c.id === id)
+    if (index === -1) throw new Error("Channel not found")
+    mockChannels[index].enabled = enabled
+    mockChannels[index].updatedAt = new Date().toISOString()
+    return { ...mockChannels[index] }
+  },
+}

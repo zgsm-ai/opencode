@@ -11,9 +11,11 @@ import {
   itemApi,
   repoApi,
   registryApi,
+  notificationChannelApi,
   type CapabilityItem,
   type CapabilityRegistry,
   type Repository,
+  type NotificationChannel,
 } from "../lib/api"
 import { CreateRepoDialog } from "../components/create-repo-dialog"
 import { CreateCapabilityDialog } from "../components/create-capability-dialog"
@@ -21,6 +23,8 @@ import { EditCapabilityDialog } from "../components/edit-capability-dialog"
 import { EditRepoDialog } from "../components/edit-repo-dialog"
 import { MoveCapabilityDialog } from "../components/move-capability-dialog"
 import { RepoSyncTab } from "../components/repo-sync-tab"
+import { NotificationChannelCard } from "../components/notification-channel-card"
+import { NotificationChannelDialog } from "../components/notification-channel-dialog"
 import { typeKey, categoryKey } from "../lib/constants"
 
 const ITEM_TYPE_COLORS: Record<string, string> = {
@@ -42,6 +46,9 @@ export default function Dashboard() {
     loadingItems: false,
     itemTypeFilter: "all",
     expandedSyncRepo: null as string | null,
+    notificationChannels: [] as NotificationChannel[],
+    loadingChannels: false,
+    editingChannel: null as NotificationChannel | null,
   })
 
   const userId = createMemo(() => user()?.sub ?? "")
@@ -87,11 +94,27 @@ export default function Dashboard() {
     } catch {}
   }
 
+  const loadChannels = async () => {
+    setState("loadingChannels", true)
+    try {
+      const res = await notificationChannelApi.list()
+      setState("notificationChannels", res.channels ?? [])
+    } catch (error) {
+      showToast({
+        title: language.t("store.notificationChannel.toast.loadFailed"),
+        description: error instanceof Error ? error.message : String(error),
+      })
+    } finally {
+      setState("loadingChannels", false)
+    }
+  }
+
   createEffect(() => {
     if (!userId()) return
     void loadRepos()
     void loadItems()
     void ensureRegistry()
+    void loadChannels()
   })
 
   const filteredItems = createMemo(() =>
@@ -177,6 +200,65 @@ export default function Dashboard() {
     } catch (error) {
       showToast({
         title: language.t("store.console.capabilities.toast.deleteFailed"),
+        description: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+
+  // Notification Channel handlers
+  const openCreateChannel = () => {
+    setState("editingChannel", null)
+    dialog.show(() => (
+      <NotificationChannelDialog
+        mode="create"
+        onCreated={(channel) => setState("notificationChannels", (channels) => [...channels, channel])}
+      />
+    ))
+  }
+
+  const openEditChannel = (channel: NotificationChannel) => {
+    setState("editingChannel", channel)
+    dialog.show(() => (
+      <NotificationChannelDialog
+        mode="edit"
+        channel={channel}
+        onUpdated={(updated) =>
+          setState("notificationChannels", (channels) =>
+            channels.map((c) => (c.id === updated.id ? updated : c)),
+          )
+        }
+      />
+    ))
+  }
+
+  const handleToggleChannel = async (channel: NotificationChannel) => {
+    try {
+      const updated = await notificationChannelApi.toggle(channel.id, !channel.enabled)
+      setState("notificationChannels", (channels) =>
+        channels.map((c) => (c.id === updated.id ? updated : c)),
+      )
+      showToast({
+        title: language.t(
+          updated.enabled ? "store.notificationChannel.toast.enabled" : "store.notificationChannel.toast.disabled",
+        ),
+      })
+    } catch (error) {
+      showToast({
+        title: language.t("store.notificationChannel.toast.toggleFailed"),
+        description: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+
+  const handleDeleteChannel = async (channel: NotificationChannel) => {
+    if (!window.confirm(language.t("store.notificationChannel.confirmDelete"))) return
+    try {
+      await notificationChannelApi.delete(channel.id)
+      setState("notificationChannels", (channels) => channels.filter((c) => c.id !== channel.id))
+      showToast({ title: language.t("store.notificationChannel.toast.deleteSuccess") })
+    } catch (error) {
+      showToast({
+        title: language.t("store.notificationChannel.toast.deleteFailed"),
         description: error instanceof Error ? error.message : String(error),
       })
     }
@@ -507,6 +589,48 @@ export default function Dashboard() {
                           </For>
                         </tbody>
                       </table>
+                    </div>
+                  </Show>
+                </Show>
+              </section>
+
+              <section class="rounded-2xl border border-border-weak-base bg-surface-raised-base p-5">
+                <div class="mb-5 flex items-start justify-between gap-4">
+                  <div>
+                    <h2 class="text-lg font-semibold text-text-strong">
+                      {language.t("store.notificationChannel.title")}
+                    </h2>
+                    <p class="mt-1 text-sm text-text-weak">{language.t("store.notificationChannel.description")}</p>
+                  </div>
+                  <Button size="small" variant="ghost" class="border border-border-weak-base" onClick={openCreateChannel}>
+                    <Icon name="plus" class="size-4" />
+                    {language.t("store.console.new")}
+                  </Button>
+                </div>
+
+                <Show
+                  when={!state.loadingChannels}
+                  fallback={<div class="text-sm text-text-weak">{language.t("store.loading")}</div>}
+                >
+                  <Show
+                    when={state.notificationChannels.length > 0}
+                    fallback={
+                      <div class="rounded-xl border border-dashed border-border-weak-base px-8 py-10 text-center text-sm text-text-weak">
+                        {language.t("store.notificationChannel.empty")}
+                      </div>
+                    }
+                  >
+                    <div class="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+                      <For each={state.notificationChannels}>
+                        {(channel) => (
+                          <NotificationChannelCard
+                            channel={channel}
+                            onEdit={openEditChannel}
+                            onDelete={handleDeleteChannel}
+                            onToggle={handleToggleChannel}
+                          />
+                        )}
+                      </For>
                     </div>
                   </Show>
                 </Show>
