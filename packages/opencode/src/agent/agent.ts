@@ -219,7 +219,7 @@ export namespace Agent {
               Requirement: "deny",
               SpecReSearch: "deny",
               TaskPlan: "deny",
-            }
+            },
             task_done: "allow",
           }),
           user,
@@ -254,91 +254,6 @@ export namespace Agent {
         mode: "primary",
         native: true,
         hidden: true,
-      },
-      proposal: {
-        name: "proposal",
-        description: "Creates detailed technical change proposals and architectural designs. Researches codebase, designs solutions, and produces structured proposal documents without implementing code.",
-        options: {
-          exitToolName: "task_done_with_change_id",  // ✅ 正确的退出工具
-        },
-        // No steps limit for proposal agent
-        permission: PermissionNext.merge(
-          permitEditor(
-            PermissionNext.merge(
-              defaults,
-              AgentToolsConfig.createToolPermission(
-                AgentToolsConfig.AGENT_CONFIGS.proposal.tools
-              ),
-              user,
-            ),
-          ),
-          proposalAutoAllow,
-        ),
-        mode: "primary",
-        native: true,
-        prompt: proposal,
-      },
-      taskcheck: {
-        name: "taskcheck",
-        description: "Task quality checking and improvement agent. Checks if tasks in task.md are clear, precise, and complete. Verifies requirements coverage, code location precision, and style consistency. Can only modify task.md, not code files.",
-        options: {
-          exitToolName: AgentToolsConfig.AGENT_CONFIGS.taskcheck.exitToolName,
-        },
-        permission: PermissionNext.merge(
-          permitEditor(PermissionNext.merge(
-            defaults,
-            AgentToolsConfig.createToolPermission(
-              AgentToolsConfig.AGENT_CONFIGS.taskcheck.tools
-            ),
-            user,
-          )),
-          proposalAutoAllow,
-        ),
-        mode: "primary",
-        native: true,
-        hidden: true,
-        prompt: taskcheck,
-      },
-      coding: {
-        name: "coding",
-        description: "软件开发团队的项目管理者和技术架构师。负责理解任务规划(task.md),将开发任务分发给 SubCodingAgent 执行,审查代码提交,追踪进度。不直接修改代码,通过分发任务推动项目进展。",
-        options: {
-          exitToolName: AgentToolsConfig.AGENT_CONFIGS.coding.exitToolName,
-        },
-        permission: PermissionNext.merge(
-          permitEditor(PermissionNext.merge(
-            defaults,
-            AgentToolsConfig.createToolPermission(
-              AgentToolsConfig.AGENT_CONFIGS.coding.tools
-            ),
-            user,
-          )),
-          proposalAutoAllow,
-        ),
-        mode: "primary",
-        native: true,
-        prompt: coding,
-      },
-      FixAgent: {
-        name: "FixAgent",
-        description: "代码修复和改进专家。收集用户反馈，分析问题，制定修改策略，委托SubCodingAgent执行代码修改。",
-        options: {
-          exitToolName: AgentToolsConfig.AGENT_CONFIGS.FixAgent.exitToolName,
-        },
-        permission: PermissionNext.merge(
-          permitEditor(PermissionNext.merge(
-            defaults,
-            AgentToolsConfig.createToolPermission(
-              AgentToolsConfig.AGENT_CONFIGS.FixAgent.tools
-            ),
-            user,
-          )),
-          proposalAutoAllow,
-        ),
-        mode: "primary",
-        native: true,
-        prompt: fix,
-        color: "#ff4444",
       },
       proposal: {
         name: "proposal",
