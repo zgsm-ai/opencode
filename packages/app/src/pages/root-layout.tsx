@@ -38,18 +38,22 @@ function NavButton(props: {
 
 function UserButton() {
   const { user, logout } = useAuth()
+  const navigate = useNavigate()
+  const language = useLanguage()
 
   return (
     <Show
       when={user()}
       fallback={
-        <Tooltip placement="right" value="Sign In">
+        <Tooltip placement="right" value={language.t("sidebar.user.signIn")}>
           <IconButton
             icon="glasses"
             variant="ghost"
             size="large"
-            aria-label="Sign In"
-            onClick={() => { window.location.href = getLoginUrl() }}
+            aria-label={language.t("sidebar.user.signIn")}
+            onClick={() => {
+              window.location.href = getLoginUrl()
+            }}
           />
         </Tooltip>
       }
@@ -57,11 +61,13 @@ function UserButton() {
       <DropdownMenu placement="right-end">
         <DropdownMenu.Trigger
           class="flex items-center justify-center size-8 rounded-md hover:bg-surface-base transition-colors"
-          aria-label="User menu"
+          aria-label={language.t("sidebar.user.menu")}
         >
           <Show
             when={user()?.picture}
-            fallback={<IconButton icon="eye" variant="ghost" size="large" aria-label="User" />}
+            fallback={
+              <IconButton icon="eye" variant="ghost" size="large" aria-label={language.t("sidebar.user.menu")} />
+            }
           >
             <img src={user()?.picture} alt="" class="size-6 rounded-full" />
           </Show>
@@ -76,8 +82,11 @@ function UserButton() {
                 <p class="text-11-regular text-text-weak truncate">{user()?.email}</p>
               </Show>
             </div>
+            <DropdownMenu.Item onSelect={() => navigate("/store/dashboard")}>
+              <DropdownMenu.ItemLabel>{language.t("sidebar.user.console")}</DropdownMenu.ItemLabel>
+            </DropdownMenu.Item>
             <DropdownMenu.Item onSelect={logout}>
-              <DropdownMenu.ItemLabel>Sign Out</DropdownMenu.ItemLabel>
+              <DropdownMenu.ItemLabel>{language.t("sidebar.user.signOut")}</DropdownMenu.ItemLabel>
             </DropdownMenu.Item>
           </DropdownMenu.Content>
         </DropdownMenu.Portal>
@@ -92,7 +101,6 @@ export default function RootLayout(props: ParentProps) {
   const dialog = useDialog()
   const platform = usePlatform()
   const language = useLanguage()
-  const auth = useAuth()
 
   const isWorkspace = () => location.pathname.startsWith("/workspace")
   const isStore = () => location.pathname.startsWith("/store")
@@ -100,12 +108,7 @@ export default function RootLayout(props: ParentProps) {
   return (
     <div class="flex h-full w-full overflow-hidden">
       <div class="w-12 shrink-0 bg-background-base flex flex-col items-center py-3 gap-2 border-r border-border-weak-base">
-        <NavButton
-          icon="folder"
-          label="Workspace"
-          active={isWorkspace()}
-          onClick={() => navigate("/workspace")}
-        />
+        <NavButton icon="folder" label="Workspace" active={isWorkspace()} onClick={() => navigate("/workspace")} />
         <NavButton
           icon="store"
           label={language.t("sidebar.store")}
@@ -113,17 +116,6 @@ export default function RootLayout(props: ParentProps) {
           onClick={() => navigate("/store")}
         />
         <div class="flex-1" />
-        <Show when={auth.user()}>
-          <Tooltip placement="right" value="Console">
-            <IconButton
-              icon="console"
-              variant="ghost"
-              size="large"
-              onClick={() => navigate("/store/dashboard")}
-              aria-label="Console"
-            />
-          </Tooltip>
-        </Show>
         <UserButton />
         <Tooltip placement="right" value={language.t("sidebar.settings")}>
           <IconButton
