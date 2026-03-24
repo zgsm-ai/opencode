@@ -17,6 +17,7 @@ import { CreateRepoDialog } from "../components/create-repo-dialog"
 import { CreateCapabilityDialog } from "../components/create-capability-dialog"
 import { EditCapabilityDialog } from "../components/edit-capability-dialog"
 import { EditRepoDialog } from "../components/edit-repo-dialog"
+import { InviteDialog } from "../components/invite-dialog"
 import { MoveCapabilityDialog } from "../components/move-capability-dialog"
 import { RepoSyncTab } from "../components/repo-sync-tab"
 import { typeKey, categoryKey } from "../lib/constants"
@@ -114,6 +115,10 @@ export default function Dashboard() {
         }
       />
     ))
+  }
+
+  const openInvite = (repo: Repository) => {
+    dialog.show(() => <InviteDialog repoId={repo.id} />)
   }
 
   const openEditCapability = (item: CapabilityItem) => {
@@ -276,6 +281,15 @@ export default function Dashboard() {
                                 <div class="mt-1 truncate text-xs text-text-weak">{repo.name}</div>
                               </div>
                               <div class="flex items-center gap-1">
+                                <Button
+                                  size="small"
+                                  variant="ghost"
+                                  class="h-8 w-8 p-0"
+                                  onClick={() => openInvite(repo)}
+                                  title={language.t("store.console.repositories.invite")}
+                                >
+                                  <Icon name="plus-small" size="small" />
+                                </Button>
                                 <Button
                                   size="small"
                                   variant="ghost"

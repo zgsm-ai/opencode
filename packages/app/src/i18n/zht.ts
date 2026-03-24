@@ -818,4 +818,11 @@ export const dict = {
   "common.time.daysAgo.short": "{{count}}天前",
   "settings.providers.connected.environmentDescription": "已從環境變數連線",
   "settings.providers.custom.description": "透過基本 URL 新增與 OpenAI 相容的提供者。",
+  "store.console.repositories.invite": "邀請使用者",
+  "store.inviteDialog.title": "邀請使用者",
+  "store.inviteDialog.searchPlaceholder": "搜尋使用者...",
+  "store.inviteDialog.empty": "未找到使用者。",
+  "store.inviteDialog.toast.success": "邀請已發送",
+  "store.inviteDialog.toast.successMessage": "邀請 {{name}} 成功",
+  "store.inviteDialog.toast.failed": "邀請發送失敗",
 } satisfies Partial<Record<Keys, string>>

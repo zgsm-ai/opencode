@@ -99,6 +99,32 @@ export interface RepoMember {
   createdAt: string
 }
 
+export interface SearchedUser {
+  email: string
+  id: string
+  name: string
+  owner: string
+  picture: string
+  preferred_username: string
+  sub: string
+}
+
+export interface Invitation {
+  id: string
+  inviteeId: string
+  inviteeUsername: string
+  inviterId: string
+  inviterUsername: string
+  repoId: string
+  role: string
+  status: string
+  autoAccepted: boolean
+  createdAt: string
+  updatedAt: string
+  expiresAt: string
+  repository: Repository
+}
+
 export interface CapabilityRegistry {
   id: string
   name: string
@@ -346,6 +372,16 @@ export const repoApi = {
 
   removeMember: (repoId: string, userId: string) =>
     apiFetch<{ message: string }>(`/api/repositories/${repoId}/members/${userId}`, { method: "DELETE" }),
+
+  invite: (repoId: string, data: { inviteeId: string; inviteeUsername: string; role: string }) =>
+    apiFetch<Invitation>(`/api/repositories/${repoId}/invitations`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+}
+
+export const userApi = {
+  search: (q: string) => apiFetch<{ users: SearchedUser[] }>(`/api/users/search?q=${encodeURIComponent(q)}`),
 }
 
 export const syncApi = {
