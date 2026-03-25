@@ -13,7 +13,7 @@ import {
   tool,
   jsonSchema,
 } from "ai"
-import { mergeDeep, pipe } from "remeda"
+import { mergeDeep, pipe, clone } from "remeda"
 import { jsonrepair } from "jsonrepair"
 import { ProviderTransform } from "@/provider/transform"
 import { Config } from "@/config/config"
@@ -125,11 +125,7 @@ export namespace LLM {
   }
 
   function collectErrorTurns(messages: MessageV2.WithParts[]) {
-    return structuredClone(
-      messages.filter(
-        (msg) => msg.info.role === "assistant" && !!msg.info.error,
-      ),
-    )
+    return structuredClone(messages.filter((msg) => msg.info.role === "assistant" && !!msg.info.error))
   }
 
   function appendExitToolMessages(
@@ -210,14 +206,17 @@ export namespace LLM {
 
     const assistantMsg: any = {
       role: "assistant",
-      content: content.length > 0 ? content : [
-        {
-          type: "tool-call",
-          toolCallId: callID,
-          toolName,
-          input: exitToolPart.state.input,
-        },
-      ],
+      content:
+        content.length > 0
+          ? content
+          : [
+              {
+                type: "tool-call",
+                toolCallId: callID,
+                toolName,
+                input: exitToolPart.state.input,
+              },
+            ],
     }
 
     const toolResults = exitAssistant.parts
@@ -244,7 +243,10 @@ export namespace LLM {
           },
         }
       })
-      .filter((x): x is { type: string; toolCallId: string; toolName: string; output: { type: string; value: string } } => !!x)
+      .filter(
+        (x): x is { type: string; toolCallId: string; toolName: string; output: { type: string; value: string } } =>
+          !!x,
+      )
 
     const toolContent = toolResults.length
       ? toolResults
@@ -257,8 +259,8 @@ export namespace LLM {
               type: exitToolPart.state.status === "completed" ? "text" : "error-text",
               value: String(
                 exitToolPart.state.status === "completed"
-                  ? exitToolPart.state.output ?? ""
-                  : exitToolPart.state.error ?? "",
+                  ? (exitToolPart.state.output ?? "")
+                  : (exitToolPart.state.error ?? ""),
               ),
             },
           },
@@ -273,7 +275,10 @@ export namespace LLM {
   }
 
   function trajectoryAgentName(name: string) {
-    const key = name.trim().toLowerCase().replace(/[\s_-]+/g, "")
+    const key = name
+      .trim()
+      .toLowerCase()
+      .replace(/[\s_-]+/g, "")
     if (key === "proposal" || key === "proposalagent") return "ProposalAgent"
     if (key === "taskcheck" || key === "taskcheckagent") return "TaskCheckAgent"
     if (key === "coding" || key === "codingagent") return "CodingAgent"
@@ -284,7 +289,10 @@ export namespace LLM {
   }
 
   function skipTrajectory(name: string) {
-    const key = name.trim().toLowerCase().replace(/[\s_-]+/g, "")
+    const key = name
+      .trim()
+      .toLowerCase()
+      .replace(/[\s_-]+/g, "")
     return key === "title" || key === "titleagent"
   }
 
@@ -500,8 +508,8 @@ export namespace LLM {
     retries?: number
     providerOptions?: Record<string, any>
     toolChoice?: "auto" | "required" | "none"
-    temperatureOverride?: number  // 用于重试时覆盖温度
-    silent?: boolean  // 用于在重试时抑制事件发布
+    temperatureOverride?: number // 用于重试时覆盖温度
+    silent?: boolean // 用于在重试时抑制事件发布
   }
 
   export type StreamOutput = StreamTextResult<ToolSet, unknown>
@@ -625,11 +633,11 @@ export namespace LLM {
         message: input.user,
       },
       {
-        temperature: input.temperatureOverride ?? (
-          input.model.capabilities.temperature
+        temperature:
+          input.temperatureOverride ??
+          (input.model.capabilities.temperature
             ? (input.agent.temperature ?? ProviderTransform.temperature(input.model))
-            : undefined
-        ),
+            : undefined),
         topP: input.agent.topP ?? ProviderTransform.topP(input.model),
         topK: ProviderTransform.topK(input.model),
         options,
@@ -899,7 +907,7 @@ export namespace LLM {
     isCodex: boolean
     agent: Agent.Info
     model: Provider.Model
-    responseMessage?: ModelMessage  // 可选：LLM 的响应消息
+    responseMessage?: ModelMessage // 可选：LLM 的响应消息
   }) {
     if (skipTrajectory(input.agent.name)) return
     await fs.mkdir(HISTORY_DIR, { recursive: true })
@@ -993,8 +1001,8 @@ export namespace LLM {
 
       // 实际发送的请求（这是最关键的部分）
       actualRequest: {
-        messages: messagesWithResponse,  // 转换后的消息（OpenAI格式），包含响应
-        headers: input.requestHeaders,    // 包含provider特殊headers
+        messages: messagesWithResponse, // 转换后的消息（OpenAI格式），包含响应
+        headers: input.requestHeaders, // 包含provider特殊headers
         parameters: {
           temperature: input.requestBody.temperature,
           topP: input.requestBody.topP,
@@ -1002,13 +1010,13 @@ export namespace LLM {
           maxOutputTokens: input.requestBody.maxOutputTokens,
           providerOptions: input.requestBody.providerOptions,
         },
-        tools: availableTools,  // OpenAI格式的工具定义
+        tools: availableTools, // OpenAI格式的工具定义
       },
 
       // System消息的原始形式（用于对比）
       systemPrompts: {
-        array: input.system,  // 可能是拼接前的数组
-        isCodexFormat: input.isCodex,  // 标记是否使用Codex格式
+        array: input.system, // 可能是拼接前的数组
+        isCodexFormat: input.isCodex, // 标记是否使用Codex格式
       },
       // 仅用于轨迹分析，不会发送给模型
       toolExecutions,
@@ -1054,8 +1062,8 @@ export namespace LLM {
     sessionID: string
     agent: Agent.Info
     model: Provider.Model
-    tools: Record<string, any>  // AI SDK 工具对象
-    system?: string[]  // 可选：系统提示词数组，如果没有提供则从 sessionSystemCache 读取
+    tools: Record<string, any> // AI SDK 工具对象
+    system?: string[] // 可选：系统提示词数组，如果没有提供则从 sessionSystemCache 读取
   }) {
     try {
       if (skipTrajectory(input.agent.name)) return
@@ -1188,11 +1196,7 @@ export namespace LLM {
       })()
 
       // 增量补写：在最终写入前，将最后一次 exit tool 的调用 + 结果 追加到 messages 中
-      const messagesWithRequestContext = appendExitToolMessages(
-        messagesWithRequestContextBase,
-        messages,
-        input.agent,
-      )
+      const messagesWithRequestContext = appendExitToolMessages(messagesWithRequestContextBase, messages, input.agent)
 
       // 提取工具信息并转换为 OpenAI 格式（与 saveActualContext 一致）
       const activeToolNames = Object.keys(input.tools).filter((x) => x !== "invalid")
@@ -1248,12 +1252,12 @@ export namespace LLM {
         },
         // 使用 actualRequest 格式，与 saveActualContext 保持一致
         actualRequest: {
-          messages: messagesWithRequestContext,  // 优先保留真实请求上下文（含 MAX_STEPS 等临时注入消息）并补上最后响应
-          tools: availableTools,  // OpenAI格式的工具定义
+          messages: messagesWithRequestContext, // 优先保留真实请求上下文（含 MAX_STEPS 等临时注入消息）并补上最后响应
+          tools: availableTools, // OpenAI格式的工具定义
         },
         // System消息的原始形式（用于对比）
         systemPrompts: {
-          array: systemPrompts,  // 经过 Plugin 处理后的完整系统提示词数组
+          array: systemPrompts, // 经过 Plugin 处理后的完整系统提示词数组
         },
         // 仅用于轨迹分析，不会发送给模型
         toolExecutions,

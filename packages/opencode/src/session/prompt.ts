@@ -2,6 +2,7 @@ import path from "path"
 import os from "os"
 import fs from "fs/promises"
 import z from "zod"
+import { Identifier } from "../id/id"
 import { Filesystem } from "../util/filesystem"
 import { SessionID, MessageID, PartID } from "./schema"
 import { MessageV2 } from "./message-v2"
@@ -79,7 +80,7 @@ async function extractTextContent(message: MessageV2.Assistant): Promise<string 
 
 async function llmIndicatesTaskCompleted(
   message: MessageV2.Assistant,
-  exitToolName: string = "task_done"
+  exitToolName: string = "task_done",
 ): Promise<boolean> {
   // 获取工具调用列表
   const parts = await MessageV2.parts(message.id)
@@ -156,9 +157,13 @@ async function insertExitToolReminder(input: {
 
 export namespace SessionPrompt {
   const log = Log.create({ service: "session.prompt" })
-export const OUTPUT_TOKEN_MAX = Flag.COSTRICT_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 10_240
+  export const OUTPUT_TOKEN_MAX = Flag.COSTRICT_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 10_240
 
-  const normalizeAgentName = (name: string) => name.trim().toLowerCase().replace(/[\s_-]/g, "")
+  const normalizeAgentName = (name: string) =>
+    name
+      .trim()
+      .toLowerCase()
+      .replace(/[\s_-]/g, "")
   const normalizeAgentKind = (name: string) => {
     const normalized = normalizeAgentName(name)
     return normalized.endsWith("agent") ? normalized.slice(0, -5) : normalized
@@ -485,677 +490,673 @@ export const OUTPUT_TOKEN_MAX = Flag.COSTRICT_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 1
     let lastTools: Record<string, any> = {}
 
     while (true) {
-     try {
-      SessionStatus.set(sessionID, { type: "busy" })
-      log.info("loop", { step, sessionID })
-      if (abort.aborted) break
-      let msgs = await MessageV2.filterCompacted(MessageV2.stream(sessionID))
+      try {
+        SessionStatus.set(sessionID, { type: "busy" })
+        log.info("loop", { step, sessionID })
+        if (abort.aborted) break
+        let msgs = await MessageV2.filterCompacted(MessageV2.stream(sessionID))
 
-      let lastUser: MessageV2.User | undefined
-      let lastAssistant: MessageV2.Assistant | undefined
-      let lastFinished: MessageV2.Assistant | undefined
-      let tasks: (MessageV2.CompactionPart | MessageV2.SubtaskPart)[] = []
-      for (let i = msgs.length - 1; i >= 0; i--) {
-        const msg = msgs[i]
-        if (!lastUser && msg.info.role === "user") lastUser = msg.info as MessageV2.User
-        if (!lastAssistant && msg.info.role === "assistant") lastAssistant = msg.info as MessageV2.Assistant
-        if (!lastFinished && msg.info.role === "assistant" && msg.info.finish)
-          lastFinished = msg.info as MessageV2.Assistant
-        if (lastUser && lastFinished) break
-        const task = msg.parts.filter((part) => part.type === "compaction" || part.type === "subtask")
-        if (task && !lastFinished) {
-          tasks.push(...task)
+        let lastUser: MessageV2.User | undefined
+        let lastAssistant: MessageV2.Assistant | undefined
+        let lastFinished: MessageV2.Assistant | undefined
+        let tasks: (MessageV2.CompactionPart | MessageV2.SubtaskPart)[] = []
+        for (let i = msgs.length - 1; i >= 0; i--) {
+          const msg = msgs[i]
+          if (!lastUser && msg.info.role === "user") lastUser = msg.info as MessageV2.User
+          if (!lastAssistant && msg.info.role === "assistant") lastAssistant = msg.info as MessageV2.Assistant
+          if (!lastFinished && msg.info.role === "assistant" && msg.info.finish)
+            lastFinished = msg.info as MessageV2.Assistant
+          if (lastUser && lastFinished) break
+          const task = msg.parts.filter((part) => part.type === "compaction" || part.type === "subtask")
+          if (task && !lastFinished) {
+            tasks.push(...task)
+          }
         }
-      }
 
-      if (!lastUser) throw new Error("No user message found in stream. This should never happen.")
-      const currentAgent = lastAssistant ? await Agent.get(lastAssistant.agent) : undefined
-      const exitToolName = currentAgent ? LoopPolicy.exitTool(currentAgent) : undefined
-      
-      // 检查是否有 task 完成指示（通过退出工具）
-      if (lastAssistant && exitToolName && lastUser.id < lastAssistant.id) {
-        // 使用动态的退出工具名检查任务是否完成
-        const isTaskCompleted = await llmIndicatesTaskCompleted(lastAssistant, exitToolName)
+        if (!lastUser) throw new Error("No user message found in stream. This should never happen.")
+        const currentAgent = lastAssistant ? await Agent.get(lastAssistant.agent) : undefined
+        const exitToolName = currentAgent ? LoopPolicy.exitTool(currentAgent) : undefined
 
-        if (isTaskCompleted) {
-          // 获取工具调用列表
-          const parts = await MessageV2.parts(lastAssistant.id)
-          const toolParts = parts.filter((part) => part.type === "tool") as MessageV2.ToolPart[]
+        // 检查是否有 task 完成指示（通过退出工具）
+        if (lastAssistant && exitToolName && lastUser.id < lastAssistant.id) {
+          // 使用动态的退出工具名检查任务是否完成
+          const isTaskCompleted = await llmIndicatesTaskCompleted(lastAssistant, exitToolName)
 
-          // 查找退出工具
-          const exitToolCall = toolParts.find((part) => toolAlias(part.tool) === exitToolName)
+          if (isTaskCompleted) {
+            // 获取工具调用列表
+            const parts = await MessageV2.parts(lastAssistant.id)
+            const toolParts = parts.filter((part) => part.type === "tool") as MessageV2.ToolPart[]
 
-          // 从退出工具结果中提取摘要
-          const summary = exitToolCall ? extractSummary(exitToolCall) : undefined
+            // 查找退出工具
+            const exitToolCall = toolParts.find((part) => toolAlias(part.tool) === exitToolName)
 
-          log.info("exiting loop - task completed with exit tool", {
-            sessionID,
-            exitToolName,
-            summary: summary?.substring(0, 100),
-          })
+            // 从退出工具结果中提取摘要
+            const summary = exitToolCall ? extractSummary(exitToolCall) : undefined
 
-          // 当 proposal agent 通过 task_done_with_change_id 完成时，保存用户原始输入
-          if (lastAssistant.agent === "proposal" && exitToolName === "task_done_with_change_id") {
-            const changeId = exitToolCall?.state.input?.change_id
+            log.info("exiting loop - task completed with exit tool", {
+              sessionID,
+              exitToolName,
+              summary: summary?.substring(0, 100),
+            })
 
-            if (changeId && typeof changeId === "string") {
-              await LLM.applyTrajectoryChangeID(sessionID, changeId).catch((err) => {
-                log.warn("failed to apply trajectory change-id", {
-                  sessionID,
-                  changeId,
-                  error: err,
-                })
-              })
-              try {
-                // 查找第一条用户消息
-                const firstUserMsg = msgs.find(m => m.info.role === "user")
-                const textPart = firstUserMsg?.parts.find(
-                  (p): p is MessageV2.TextPart => p.type === "text" && !p.synthetic
-                )
+            // 当 proposal agent 通过 task_done_with_change_id 完成时，保存用户原始输入
+            if (lastAssistant.agent === "proposal" && exitToolName === "task_done_with_change_id") {
+              const changeId = exitToolCall?.state.input?.change_id
 
-                if (textPart) {
-                  // 提取原始用户输入（去除模板包装）
-                  let userInput = textPart.text
-
-                  // 如果包含模板格式，提取原始内容
-                  const match = userInput.match(/## 用户需求\s*```\s*([\s\S]*?)\s*```/m)
-                  if (match && match[1]) {
-                    userInput = match[1].trim()
-                  }
-
-                  // 保存到 user_input.md¬
-                  // Non-git projects expose worktree as "/", fallback to current directory.
-                  const root = Instance.worktree === "/" ? Instance.directory : Instance.worktree
-                  const proposalDir = path.join(root, "proposal", changeId.trim())
-                  const userInputPath = path.join(proposalDir, "user_input.md")
-
-                  await fs.mkdir(proposalDir, { recursive: true })
-                  await fs.writeFile(userInputPath, userInput, "utf-8")
-
-                  log.info("saved user_input.md", {
+              if (changeId && typeof changeId === "string") {
+                await LLM.applyTrajectoryChangeID(sessionID, changeId).catch((err) => {
+                  log.warn("failed to apply trajectory change-id", {
                     sessionID,
-                    changeId: changeId.trim(),
-                    path: userInputPath,
+                    changeId,
+                    error: err,
+                  })
+                })
+                try {
+                  // 查找第一条用户消息
+                  const firstUserMsg = msgs.find((m) => m.info.role === "user")
+                  const textPart = firstUserMsg?.parts.find(
+                    (p): p is MessageV2.TextPart => p.type === "text" && !p.synthetic,
+                  )
+
+                  if (textPart) {
+                    // 提取原始用户输入（去除模板包装）
+                    let userInput = textPart.text
+
+                    // 如果包含模板格式，提取原始内容
+                    const match = userInput.match(/## 用户需求\s*```\s*([\s\S]*?)\s*```/m)
+                    if (match && match[1]) {
+                      userInput = match[1].trim()
+                    }
+
+                    // 保存到 user_input.md¬
+                    // Non-git projects expose worktree as "/", fallback to current directory.
+                    const root = Instance.worktree === "/" ? Instance.directory : Instance.worktree
+                    const proposalDir = path.join(root, "proposal", changeId.trim())
+                    const userInputPath = path.join(proposalDir, "user_input.md")
+
+                    await fs.mkdir(proposalDir, { recursive: true })
+                    await fs.writeFile(userInputPath, userInput, "utf-8")
+
+                    log.info("saved user_input.md", {
+                      sessionID,
+                      changeId: changeId.trim(),
+                      path: userInputPath,
+                    })
+                  }
+                } catch (err) {
+                  // 静默失败，不影响主流程
+                  log.warn("failed to save user_input.md", {
+                    sessionID,
+                    error: err,
                   })
                 }
-              } catch (err) {
-                // 静默失败，不影响主流程
-                log.warn("failed to save user_input.md", {
-                  sessionID,
-                  error: err,
-                })
               }
             }
+
+            // 保存包含 LLM 响应的完整上下文（在 break 之前）
+            // system 提示词会从 LLM.stream 保存的缓存中自动读取
+            const finalAgent = await Agent.get(lastUser.agent)
+            const finalModel = await Provider.getModel(lastUser.model.providerID, lastUser.model.modelID)
+            await LLM.saveContextAfterResponse({
+              sessionID,
+              agent: finalAgent,
+              model: finalModel,
+              tools: lastTools,
+            }).catch((err) => {
+              log.error("failed to save context after response", { error: err, sessionID })
+            })
+
+            break
           }
+        }
 
-          // 保存包含 LLM 响应的完整上下文（在 break 之前）
-          // system 提示词会从 LLM.stream 保存的缓存中自动读取
-          const finalAgent = await Agent.get(lastUser.agent)
-          const finalModel = await Provider.getModel(lastUser.model.providerID, lastUser.model.modelID)
-          await LLM.saveContextAfterResponse({
-            sessionID,
-            agent: finalAgent,
-            model: finalModel,
-            tools: lastTools,
-          }).catch((err) => {
-            log.error("failed to save context after response", { error: err, sessionID })
-          })
-
+        // 保留原有的退出逻辑作为后备
+        const requiresExitTool = exitToolName !== undefined
+        if (
+          !requiresExitTool &&
+          lastAssistant?.finish &&
+          !["tool-calls", "unknown"].includes(lastAssistant.finish) &&
+          lastUser.id < lastAssistant.id
+        ) {
+          log.info("exiting loop", { sessionID })
           break
         }
-      }
 
-      // 保留原有的退出逻辑作为后备
-      const requiresExitTool = exitToolName !== undefined
-      if (
-        !requiresExitTool &&
-        lastAssistant?.finish &&
-        !["tool-calls", "unknown"].includes(lastAssistant.finish) &&
-        lastUser.id < lastAssistant.id
-      ) {
-        log.info("exiting loop", { sessionID })
-        break
-      }
-
-      step++
-      if (step === 1)
-        ensureTitle({
-          session,
-          modelID: lastUser.model.modelID,
-          providerID: lastUser.model.providerID,
-          history: msgs,
-        })
-
-      const model = await Provider.getModel(lastUser.model.providerID, lastUser.model.modelID).catch((e) => {
-        if (Provider.ModelNotFoundError.isInstance(e)) {
-          const hint = e.data.suggestions?.length ? ` Did you mean: ${e.data.suggestions.join(", ")}?` : ""
-          Bus.publish(Session.Event.Error, {
-            sessionID,
-            error: new NamedError.Unknown({
-              message: `Model not found: ${e.data.providerID}/${e.data.modelID}.${hint}`,
-            }).toObject(),
+        step++
+        if (step === 1)
+          ensureTitle({
+            session,
+            modelID: lastUser.model.modelID,
+            providerID: lastUser.model.providerID,
+            history: msgs,
           })
-        }
-        throw e
-      })
-      const task = tasks.pop()
 
-      // pending subtask
-      // TODO: centralize "invoke tool" logic
-      if (task?.type === "subtask") {
-        const taskTool = await TaskTool.init()
-        const taskModel = task.model ? await Provider.getModel(task.model.providerID, task.model.modelID) : model
-        const assistantMessage = (await Session.updateMessage({
-          id: MessageID.ascending(),
-          role: "assistant",
-          parentID: lastUser.id,
-          sessionID,
-          mode: task.agent,
-          agent: task.agent,
-          variant: lastUser.variant,
-          path: {
-            cwd: Instance.directory,
-            root: Instance.worktree,
-          },
-          cost: 0,
-          tokens: {
-            input: 0,
-            output: 0,
-            reasoning: 0,
-            cache: { read: 0, write: 0 },
-          },
-          modelID: taskModel.id,
-          providerID: taskModel.providerID,
-          time: {
-            created: Date.now(),
-          },
-        })) as MessageV2.Assistant
-        let part = (await Session.updatePart({
-          id: PartID.ascending(),
-          messageID: assistantMessage.id,
-          sessionID: assistantMessage.sessionID,
-          type: "tool",
-          callID: ulid(),
-          tool: TaskTool.id,
-          state: {
-            status: "running",
-            input: {
-              prompt: task.prompt,
-              description: task.description,
-              subagent_type: task.agent,
-              command: task.command,
-            },
-            time: {
-              start: Date.now(),
-            },
-          },
-        })) as MessageV2.ToolPart
-        const taskArgs = {
-          prompt: task.prompt,
-          description: task.description,
-          subagent_type: task.agent,
-          command: task.command,
-        }
-        await Plugin.trigger(
-          "tool.execute.before",
-          {
-            tool: "task",
-            sessionID,
-            callID: part.id,
-          },
-          { args: taskArgs },
-        )
-        let executionError: Error | undefined
-        const taskAgent = await Agent.get(task.agent)
-        const taskCtx: Tool.Context = {
-          agent: task.agent,
-          messageID: assistantMessage.id,
-          sessionID: sessionID,
-          abort,
-          callID: part.callID,
-          extra: { bypassAgentCheck: true },
-          messages: msgs,
-          async metadata(input) {
-            part = (await Session.updatePart({
-              ...part,
-              type: "tool",
-              state: {
-                ...part.state,
-                ...input,
-              },
-            } satisfies MessageV2.ToolPart)) as MessageV2.ToolPart
-          },
-          async ask(req) {
-            await PermissionNext.ask({
-              ...req,
-              sessionID: sessionID,
-              ruleset: PermissionNext.merge(taskAgent.permission, session.permission ?? []),
+        const model = await Provider.getModel(lastUser.model.providerID, lastUser.model.modelID).catch((e) => {
+          if (Provider.ModelNotFoundError.isInstance(e)) {
+            const hint = e.data.suggestions?.length ? ` Did you mean: ${e.data.suggestions.join(", ")}?` : ""
+            Bus.publish(Session.Event.Error, {
+              sessionID,
+              error: new NamedError.Unknown({
+                message: `Model not found: ${e.data.providerID}/${e.data.modelID}.${hint}`,
+              }).toObject(),
             })
-          },
-        }
-        const result = await taskTool.execute(taskArgs, taskCtx).catch((error) => {
-          executionError = error
-          log.error("subtask execution failed", { error, agent: task.agent, description: task.description })
-          return undefined
+          }
+          throw e
         })
-        const attachments = result?.attachments?.map((attachment) => ({
-          ...attachment,
-          id: PartID.ascending(),
-          sessionID,
-          messageID: assistantMessage.id,
-        }))
-        await Plugin.trigger(
-          "tool.execute.after",
-          {
-            tool: "task",
-            sessionID,
-            callID: part.id,
-            args: taskArgs,
-          },
-          result,
-        )
-        assistantMessage.finish = "tool-calls"
-        assistantMessage.time.completed = Date.now()
-        await Session.updateMessage(assistantMessage)
-        if (result && part.state.status === "running") {
-          await Session.updatePart({
-            ...part,
-            state: {
-              status: "completed",
-              input: part.state.input,
-              title: result.title,
-              metadata: result.metadata,
-              output: result.output,
-              attachments,
-              time: {
-                ...part.state.time,
-                end: Date.now(),
-              },
-            },
-          } satisfies MessageV2.ToolPart)
-        }
-        if (!result) {
-          await Session.updatePart({
-            ...part,
-            state: {
-              status: "error",
-              error: executionError ? `Tool execution failed: ${executionError.message}` : "Tool execution failed",
-              time: {
-                start: part.state.status === "running" ? part.state.time.start : Date.now(),
-                end: Date.now(),
-              },
-              metadata: "metadata" in part.state ? part.state.metadata : undefined,
-              input: part.state.input,
-            },
-          } satisfies MessageV2.ToolPart)
-        }
+        const task = tasks.pop()
 
-        if (task.command) {
-          // Add synthetic user message to prevent certain reasoning models from erroring
-          // If we create assistant messages w/ out user ones following mid loop thinking signatures
-          // will be missing and it can cause errors for models like gemini for example
-          const summaryUserMsg: MessageV2.User = {
+        // pending subtask
+        // TODO: centralize "invoke tool" logic
+        if (task?.type === "subtask") {
+          const taskTool = await TaskTool.init()
+          const taskModel = task.model ? await Provider.getModel(task.model.providerID, task.model.modelID) : model
+          const assistantMessage = (await Session.updateMessage({
             id: MessageID.ascending(),
+            role: "assistant",
+            parentID: lastUser.id,
             sessionID,
-            role: "user",
+            mode: task.agent,
+            agent: task.agent,
+            variant: lastUser.variant,
+            path: {
+              cwd: Instance.directory,
+              root: Instance.worktree,
+            },
+            cost: 0,
+            tokens: {
+              input: 0,
+              output: 0,
+              reasoning: 0,
+              cache: { read: 0, write: 0 },
+            },
+            modelID: taskModel.id,
+            providerID: taskModel.providerID,
             time: {
               created: Date.now(),
             },
-            agent: lastUser.agent,
-            model: lastUser.model,
-          }
-          await Session.updateMessage(summaryUserMsg)
-          await Session.updatePart({
+          })) as MessageV2.Assistant
+          let part = (await Session.updatePart({
             id: PartID.ascending(),
-            messageID: summaryUserMsg.id,
+            messageID: assistantMessage.id,
+            sessionID: assistantMessage.sessionID,
+            type: "tool",
+            callID: ulid(),
+            tool: TaskTool.id,
+            state: {
+              status: "running",
+              input: {
+                prompt: task.prompt,
+                description: task.description,
+                subagent_type: task.agent,
+                command: task.command,
+              },
+              time: {
+                start: Date.now(),
+              },
+            },
+          })) as MessageV2.ToolPart
+          const taskArgs = {
+            prompt: task.prompt,
+            description: task.description,
+            subagent_type: task.agent,
+            command: task.command,
+          }
+          await Plugin.trigger(
+            "tool.execute.before",
+            {
+              tool: "task",
+              sessionID,
+              callID: part.id,
+            },
+            { args: taskArgs },
+          )
+          let executionError: Error | undefined
+          const taskAgent = await Agent.get(task.agent)
+          const taskCtx: Tool.Context = {
+            agent: task.agent,
+            messageID: assistantMessage.id,
+            sessionID: sessionID,
+            abort,
+            callID: part.callID,
+            extra: { bypassAgentCheck: true },
+            messages: msgs,
+            async metadata(input) {
+              part = (await Session.updatePart({
+                ...part,
+                type: "tool",
+                state: {
+                  ...part.state,
+                  ...input,
+                },
+              } satisfies MessageV2.ToolPart)) as MessageV2.ToolPart
+            },
+            async ask(req) {
+              await PermissionNext.ask({
+                ...req,
+                sessionID: sessionID,
+                ruleset: PermissionNext.merge(taskAgent.permission, session.permission ?? []),
+              })
+            },
+          }
+          const result = await taskTool.execute(taskArgs, taskCtx).catch((error) => {
+            executionError = error
+            log.error("subtask execution failed", { error, agent: task.agent, description: task.description })
+            return undefined
+          })
+          const attachments = result?.attachments?.map((attachment) => ({
+            ...attachment,
+            id: PartID.ascending(),
             sessionID,
-            type: "text",
-            text: "Summarize the task tool output above and continue with your task.",
-            synthetic: true,
-          } satisfies MessageV2.TextPart)
+            messageID: assistantMessage.id,
+          }))
+          await Plugin.trigger(
+            "tool.execute.after",
+            {
+              tool: "task",
+              sessionID,
+              callID: part.id,
+              args: taskArgs,
+            },
+            result,
+          )
+          assistantMessage.finish = "tool-calls"
+          assistantMessage.time.completed = Date.now()
+          await Session.updateMessage(assistantMessage)
+          if (result && part.state.status === "running") {
+            await Session.updatePart({
+              ...part,
+              state: {
+                status: "completed",
+                input: part.state.input,
+                title: result.title,
+                metadata: result.metadata,
+                output: result.output,
+                attachments,
+                time: {
+                  ...part.state.time,
+                  end: Date.now(),
+                },
+              },
+            } satisfies MessageV2.ToolPart)
+          }
+          if (!result) {
+            await Session.updatePart({
+              ...part,
+              state: {
+                status: "error",
+                error: executionError ? `Tool execution failed: ${executionError.message}` : "Tool execution failed",
+                time: {
+                  start: part.state.status === "running" ? part.state.time.start : Date.now(),
+                  end: Date.now(),
+                },
+                metadata: "metadata" in part.state ? part.state.metadata : undefined,
+                input: part.state.input,
+              },
+            } satisfies MessageV2.ToolPart)
+          }
+
+          if (task.command) {
+            // Add synthetic user message to prevent certain reasoning models from erroring
+            // If we create assistant messages w/ out user ones following mid loop thinking signatures
+            // will be missing and it can cause errors for models like gemini for example
+            const summaryUserMsg: MessageV2.User = {
+              id: MessageID.ascending(),
+              sessionID,
+              role: "user",
+              time: {
+                created: Date.now(),
+              },
+              agent: lastUser.agent,
+              model: lastUser.model,
+            }
+            await Session.updateMessage(summaryUserMsg)
+            await Session.updatePart({
+              id: PartID.ascending(),
+              messageID: summaryUserMsg.id,
+              sessionID,
+              type: "text",
+              text: "Summarize the task tool output above and continue with your task.",
+              synthetic: true,
+            } satisfies MessageV2.TextPart)
+          }
+
+          continue
         }
 
-        continue
-      }
+        // pending compaction
+        if (task?.type === "compaction") {
+          const result = await SessionCompaction.process({
+            messages: msgs,
+            parentID: lastUser.id,
+            abort,
+            sessionID,
+            auto: task.auto,
+            overflow: task.overflow,
+          })
+          if (result === "stop") {
+            const agent = await Agent.get(lastUser.agent)
+            const exitToolName = agent ? LoopPolicy.exitTool(agent) : undefined
+            const failed = (await Session.messages({ sessionID })).findLast(
+              (msg) => msg.info.role === "assistant",
+            )?.info
+            if (agent && exitToolName && failed?.role === "assistant" && shouldRecoverStop(failed.error)) {
+              await insertExitToolReminder({
+                sessionID,
+                agentName: agent.name,
+                model: lastUser.model,
+                exitToolName,
+                reason: stopReason(failed),
+              })
+              continue
+            }
+            break
+          }
+          continue
+        }
 
-      // pending compaction
-      if (task?.type === "compaction") {
-        const result = await SessionCompaction.process({
+        // context overflow, needs compaction
+        if (
+          lastFinished &&
+          lastFinished.summary !== true &&
+          (await SessionCompaction.isOverflow({ tokens: lastFinished.tokens, model }))
+        ) {
+          await SessionCompaction.create({
+            sessionID,
+            agent: lastUser.agent,
+            model: lastUser.model,
+            auto: true,
+          })
+          continue
+        }
+
+        // normal processing
+        const agent = await Agent.get(lastUser.agent)
+
+        // 初始化预算状态（仅在第一次执行时）
+        if (sessionBudgetState === undefined) {
+          // Use agent.budgetSteps as tool-call budget when configured; otherwise unlimited.
+          sessionBudgetState = Budget.calculateState(agent.budgetSteps, 0)
+          log.info("session budget initialized", {
+            sessionID,
+            agent: agent.name,
+            total: sessionBudgetState.total,
+            enabled: sessionBudgetState.total !== undefined,
+          })
+        }
+
+        const maxSteps = agent.steps ?? Infinity
+        const isLastStep = step >= maxSteps
+        msgs = await insertReminders({
           messages: msgs,
-          parentID: lastUser.id,
+          agent,
+          session,
+        })
+
+        const processor = SessionProcessor.create({
+          assistantMessage: (await Session.updateMessage({
+            id: MessageID.ascending(),
+            parentID: lastUser.id,
+            role: "assistant",
+            mode: agent.name,
+            agent: agent.name,
+            variant: lastUser.variant,
+            path: {
+              cwd: Instance.directory,
+              root: Instance.worktree,
+            },
+            cost: 0,
+            tokens: {
+              input: 0,
+              output: 0,
+              reasoning: 0,
+              cache: { read: 0, write: 0 },
+            },
+            modelID: model.id,
+            providerID: model.providerID,
+            time: {
+              created: Date.now(),
+            },
+            sessionID,
+          })) as MessageV2.Assistant,
+          sessionID: sessionID,
+          model,
+          abort,
+          budgetState: sessionBudgetState, // 传入 session 级别的预算状态
+        })
+        using _ = defer(() => InstructionPrompt.clear(processor.message.id))
+
+        // Check if user explicitly invoked an agent via @ in this turn
+        const lastUserMsg = msgs.findLast((m) => m.info.role === "user")
+        const bypassAgentCheck = lastUserMsg?.parts.some((p) => p.type === "agent") ?? false
+
+        const baseTools = await resolveTools({
+          agent,
+          session,
+          model,
+          tools: lastUser.tools,
+          processor,
+          bypassAgentCheck,
+          messages: msgs,
+        })
+        const maxStepState = LoopPolicy.maxStep(agent, step, Object.keys(baseTools))
+        const tools =
+          maxStepState.forceExitTool && maxStepState.exitToolName
+            ? LoopPolicy.restrict(baseTools, maxStepState.exitToolName)
+            : baseTools
+
+        // Inject StructuredOutput tool if JSON schema mode enabled
+        if (lastUser.format?.type === "json_schema") {
+          tools["StructuredOutput"] = createStructuredOutputTool({
+            schema: lastUser.format.schema,
+            onSuccess(output) {
+              structuredOutput = output
+            },
+          })
+        }
+
+        if (step === 1) {
+          SessionSummary.summarize({
+            sessionID: sessionID,
+            messageID: lastUser.id,
+          })
+        }
+
+        const sessionMessages = clone(msgs)
+
+        if (agent.name === "proposal") {
+          const users = sessionMessages.filter((msg) => msg.info.role === "user")
+          const first = users.length
+            ? users.reduce((best, msg) => (best.info.time.created <= msg.info.time.created ? best : msg))
+            : undefined
+          const text = first?.parts.find(
+            (part): part is MessageV2.TextPart => part.type === "text" && !part.ignored && !part.synthetic,
+          )
+          if (text && text.text.trim()) {
+            const hasTemplate = text.text.includes("## 项目信息") && text.text.includes("## 用户需求")
+            if (!hasTemplate) {
+              const root = session.directory
+              const formatted = [
+                "## 项目信息",
+                `- 项目路径：\`${root}\``,
+                `- 提案目录: \`${root}/proposal\`（如果proposal文件夹不存在，需要由你创建）`,
+                "",
+                "## 用户需求",
+                "```",
+                text.text,
+                "```",
+                "",
+                "请你认真分析用户需求，完成需求提案和任务规划",
+              ].join("\n")
+              text.text = formatted
+              // Persist proposal context so trace saving reads the same first user message.
+              await Session.updatePart({
+                ...text,
+                text: formatted,
+                silent: true,
+              })
+            }
+          }
+        }
+
+        // Ephemerally wrap queued user messages with a reminder to stay on track
+        if (ENABLE_QUEUED_USER_REMINDER_WRAP && step > 1 && lastFinished) {
+          for (const msg of msgs) {
+            if (msg.info.role !== "user" || msg.info.id <= lastFinished.id) continue
+            for (const part of msg.parts) {
+              if (part.type !== "text" || part.ignored || part.synthetic) continue
+              if (!part.text.trim()) continue
+              part.text = [
+                "<system-reminder>",
+                "The user sent the following message:",
+                part.text,
+                "",
+                "Please address this message and continue with your tasks.",
+                "</system-reminder>",
+              ].join("\n")
+            }
+          }
+        }
+
+        await Plugin.trigger("experimental.chat.messages.transform", {}, { messages: msgs })
+
+        // Build system prompt, adding structured output instruction if needed
+        const skills = await SystemPrompt.skills(agent)
+        const system = [
+          ...(await SystemPrompt.environment(model)),
+          ...(skills ? [skills] : []),
+          ...(await InstructionPrompt.system()),
+        ]
+        const format = lastUser.format ?? { type: "text" }
+        if (format.type === "json_schema") {
+          system.push(STRUCTURED_OUTPUT_SYSTEM_PROMPT)
+        }
+
+        // 保存 tools 对象（用于轨迹保存）
+        lastTools = tools
+
+        const result = await processor.process({
+          user: lastUser,
+          agent,
           abort,
           sessionID,
-          auto: task.auto,
-          overflow: task.overflow,
+          system: [
+            // Environment info (可通过 COSTRICT_DISABLE_ENVIRONMENT=true 或 OPENCODE_DISABLE_ENVIRONMENT=true 禁用)
+            ...(!Flag.COSTRICT_DISABLE_ENVIRONMENT && !Flag.OPENCODE_DISABLE_ENVIRONMENT
+              ? await SystemPrompt.environment(model)
+              : []),
+            // Custom rules from files/URLs (可通过 COSTRICT_DISABLE_CUSTOM_RULES=true 或 OPENCODE_DISABLE_CUSTOM_RULES=true 禁用)
+            ...(!Flag.COSTRICT_DISABLE_CUSTOM_RULES && !Flag.OPENCODE_DISABLE_CUSTOM_RULES
+              ? await InstructionPrompt.system()
+              : []),
+          ],
+          messages: [
+            ...MessageV2.toModelMessages(msgs, model),
+            ...(maxStepState.forceExitTool && maxStepState.exitToolName
+              ? [
+                  {
+                    role: "user" as const,
+                    content: [{ type: "text" as const, text: LoopPolicy.reminder(maxStepState.exitToolName) }],
+                  },
+                ]
+              : []),
+            ...(ENABLE_MAX_STEPS_EPHEMERAL_INJECTION && isLastStep
+              ? [
+                  {
+                    role: "assistant" as const,
+                    content: MAX_STEPS,
+                  },
+                ]
+              : []),
+          ],
+          tools,
+          model,
+          toolChoice: format.type === "json_schema" ? "required" : undefined,
         })
+
+        // If structured output was captured, save it and exit immediately
+        // This takes priority because the StructuredOutput tool was called successfully
+        if (structuredOutput !== undefined) {
+          processor.message.structured = structuredOutput
+          processor.message.finish = processor.message.finish ?? "stop"
+          await Session.updateMessage(processor.message)
+          break
+        }
+
+        // Check if model finished (finish reason is not "tool-calls" or "unknown")
+        const modelFinished = processor.message.finish && !["tool-calls", "unknown"].includes(processor.message.finish)
+
+        if (modelFinished && !processor.message.error) {
+          if (format.type === "json_schema") {
+            // Model stopped without calling StructuredOutput tool
+            processor.message.error = new MessageV2.StructuredOutputError({
+              message: "Model did not produce structured output",
+              retries: 0,
+            }).toObject()
+            await Session.updateMessage(processor.message)
+            break
+          }
+        }
+
+        // 更新 session 级别的预算状态
+        sessionBudgetState = processor.budgetState
+
+        log.info("budget state updated after process", {
+          sessionID,
+          used: sessionBudgetState.used,
+          remaining: sessionBudgetState.remaining,
+          total: sessionBudgetState.total,
+        })
+
+        // 没有退出工具的 agent 仍然沿用原有的最大步数保护
+        if (maxStepState.shouldBreak) {
+          log.info("max steps reached, exiting loop", {
+            sessionID,
+            agent: agent.name,
+            step,
+            maxSteps,
+          })
+          break
+        }
+
         if (result === "stop") {
-          const agent = await Agent.get(lastUser.agent)
-          const exitToolName = agent ? LoopPolicy.exitTool(agent) : undefined
-          const failed = (await Session.messages({ sessionID })).findLast((msg) => msg.info.role === "assistant")?.info
-          if (
-            agent &&
-            exitToolName &&
-            failed?.role === "assistant" &&
-            shouldRecoverStop(failed.error)
-          ) {
+          const exitToolName = LoopPolicy.exitTool(agent)
+          const lastText = (await MessageV2.parts(processor.message.id)).findLast(
+            (part): part is MessageV2.TextPart => part.type === "text",
+          )?.text
+          if (exitToolName && shouldRecoverStop(processor.message.error)) {
             await insertExitToolReminder({
               sessionID,
               agentName: agent.name,
               model: lastUser.model,
               exitToolName,
-              reason: stopReason(failed),
+              reason: stopReason(processor.message, lastText),
             })
             continue
           }
           break
         }
-        continue
-      }
-
-      // context overflow, needs compaction
-      if (
-        lastFinished &&
-        lastFinished.summary !== true &&
-        (await SessionCompaction.isOverflow({ tokens: lastFinished.tokens, model }))
-      ) {
-        await SessionCompaction.create({
-          sessionID,
-          agent: lastUser.agent,
-          model: lastUser.model,
-          auto: true,
-        })
-        continue
-      }
-
-      // normal processing
-      const agent = await Agent.get(lastUser.agent)
-
-      // 初始化预算状态（仅在第一次执行时）
-      if (sessionBudgetState === undefined) {
-        // Use agent.budgetSteps as tool-call budget when configured; otherwise unlimited.
-        sessionBudgetState = Budget.calculateState(agent.budgetSteps, 0)
-        log.info("session budget initialized", {
-          sessionID,
-          agent: agent.name,
-          total: sessionBudgetState.total,
-          enabled: sessionBudgetState.total !== undefined
-        })
-      }
-
-      const maxSteps = agent.steps ?? Infinity
-      const isLastStep = step >= maxSteps
-      msgs = await insertReminders({
-        messages: msgs,
-        agent,
-        session,
-      })
-
-      const processor = SessionProcessor.create({
-        assistantMessage: (await Session.updateMessage({
-          id: MessageID.ascending(),
-          parentID: lastUser.id,
-          role: "assistant",
-          mode: agent.name,
-          agent: agent.name,
-          variant: lastUser.variant,
-          path: {
-            cwd: Instance.directory,
-            root: Instance.worktree,
-          },
-          cost: 0,
-          tokens: {
-            input: 0,
-            output: 0,
-            reasoning: 0,
-            cache: { read: 0, write: 0 },
-          },
-          modelID: model.id,
-          providerID: model.providerID,
-          time: {
-            created: Date.now(),
-          },
-          sessionID,
-        })) as MessageV2.Assistant,
-        sessionID: sessionID,
-        model,
-        abort,
-        budgetState: sessionBudgetState,  // 传入 session 级别的预算状态
-      })
-      using _ = defer(() => InstructionPrompt.clear(processor.message.id))
-
-      // Check if user explicitly invoked an agent via @ in this turn
-      const lastUserMsg = msgs.findLast((m) => m.info.role === "user")
-      const bypassAgentCheck = lastUserMsg?.parts.some((p) => p.type === "agent") ?? false
-
-      const baseTools = await resolveTools({
-        agent,
-        session,
-        model,
-        tools: lastUser.tools,
-        processor,
-        bypassAgentCheck,
-        messages: msgs,
-      })
-      const maxStepState = LoopPolicy.maxStep(agent, step, Object.keys(baseTools))
-      const tools = maxStepState.forceExitTool && maxStepState.exitToolName
-        ? LoopPolicy.restrict(baseTools, maxStepState.exitToolName)
-        : baseTools
-
-      // Inject StructuredOutput tool if JSON schema mode enabled
-      if (lastUser.format?.type === "json_schema") {
-        tools["StructuredOutput"] = createStructuredOutputTool({
-          schema: lastUser.format.schema,
-          onSuccess(output) {
-            structuredOutput = output
-          },
-        })
-      }
-
-      if (step === 1) {
-        SessionSummary.summarize({
-          sessionID: sessionID,
-          messageID: lastUser.id,
-        })
-      }
-
-      const sessionMessages = clone(msgs)
-
-      if (agent.name === "proposal") {
-        const users = sessionMessages.filter((msg) => msg.info.role === "user")
-        const first = users.length
-          ? users.reduce((best, msg) => (best.info.time.created <= msg.info.time.created ? best : msg))
-          : undefined
-        const text = first?.parts.find(
-          (part): part is MessageV2.TextPart => part.type === "text" && !part.ignored && !part.synthetic,
-        )
-        if (text && text.text.trim()) {
-          const hasTemplate = text.text.includes("## 项目信息") && text.text.includes("## 用户需求")
-          if (!hasTemplate) {
-            const root = session.directory
-            const formatted = [
-              "## 项目信息",
-              `- 项目路径：\`${root}\``,
-              `- 提案目录: \`${root}/proposal\`（如果proposal文件夹不存在，需要由你创建）`,
-              "",
-              "## 用户需求",
-              "```",
-              text.text,
-              "```",
-              "",
-              "请你认真分析用户需求，完成需求提案和任务规划",
-            ].join("\n")
-            text.text = formatted
-            // Persist proposal context so trace saving reads the same first user message.
-            await Session.updatePart({
-              ...text,
-              text: formatted,
-              silent: true,
-            })
-          }
-        }
-      }
-
-      // Ephemerally wrap queued user messages with a reminder to stay on track
-      if (ENABLE_QUEUED_USER_REMINDER_WRAP && step > 1 && lastFinished) {
-        for (const msg of msgs) {
-          if (msg.info.role !== "user" || msg.info.id <= lastFinished.id) continue
-          for (const part of msg.parts) {
-            if (part.type !== "text" || part.ignored || part.synthetic) continue
-            if (!part.text.trim()) continue
-            part.text = [
-              "<system-reminder>",
-              "The user sent the following message:",
-              part.text,
-              "",
-              "Please address this message and continue with your tasks.",
-              "</system-reminder>",
-            ].join("\n")
-          }
-        }
-      }
-
-      await Plugin.trigger("experimental.chat.messages.transform", {}, { messages: msgs })
-
-      // Build system prompt, adding structured output instruction if needed
-      const skills = await SystemPrompt.skills(agent)
-      const system = [
-        ...(await SystemPrompt.environment(model)),
-        ...(skills ? [skills] : []),
-        ...(await InstructionPrompt.system()),
-      ]
-      const format = lastUser.format ?? { type: "text" }
-      if (format.type === "json_schema") {
-        system.push(STRUCTURED_OUTPUT_SYSTEM_PROMPT)
-      }
-
-      // 保存 tools 对象（用于轨迹保存）
-      lastTools = tools
-
-      const result = await processor.process({
-        user: lastUser,
-        agent,
-        abort,
-        sessionID,
-        system: [
-          // Environment info (可通过 COSTRICT_DISABLE_ENVIRONMENT=true 或 OPENCODE_DISABLE_ENVIRONMENT=true 禁用)
-          ...(!Flag.COSTRICT_DISABLE_ENVIRONMENT && !Flag.OPENCODE_DISABLE_ENVIRONMENT
-            ? await SystemPrompt.environment(model)
-            : []),
-          // Custom rules from files/URLs (可通过 COSTRICT_DISABLE_CUSTOM_RULES=true 或 OPENCODE_DISABLE_CUSTOM_RULES=true 禁用)
-          ...(!Flag.COSTRICT_DISABLE_CUSTOM_RULES && !Flag.OPENCODE_DISABLE_CUSTOM_RULES
-            ? await InstructionPrompt.system()
-            : []),
-        ],
-        messages: [
-          ...MessageV2.toModelMessages(msgs, model),
-          ...(maxStepState.forceExitTool && maxStepState.exitToolName
-            ? [
-                {
-                  role: "user" as const,
-                  content: [{ type: "text" as const, text: LoopPolicy.reminder(maxStepState.exitToolName) }],
-                },
-              ]
-            : []),
-          ...(ENABLE_MAX_STEPS_EPHEMERAL_INJECTION && isLastStep
-            ? [
-                {
-                  role: "assistant" as const,
-                  content: MAX_STEPS,
-                },
-              ]
-            : []),
-        ],
-        tools,
-        model,
-        toolChoice: format.type === "json_schema" ? "required" : undefined,
-      })
-
-      // If structured output was captured, save it and exit immediately
-      // This takes priority because the StructuredOutput tool was called successfully
-      if (structuredOutput !== undefined) {
-        processor.message.structured = structuredOutput
-        processor.message.finish = processor.message.finish ?? "stop"
-        await Session.updateMessage(processor.message)
-        break
-      }
-
-      // Check if model finished (finish reason is not "tool-calls" or "unknown")
-      const modelFinished = processor.message.finish && !["tool-calls", "unknown"].includes(processor.message.finish)
-
-      if (modelFinished && !processor.message.error) {
-        if (format.type === "json_schema") {
-          // Model stopped without calling StructuredOutput tool
-          processor.message.error = new MessageV2.StructuredOutputError({
-            message: "Model did not produce structured output",
-            retries: 0,
-          }).toObject()
-          await Session.updateMessage(processor.message)
-          break
-        }
-      }
-
-
-      // 更新 session 级别的预算状态
-      sessionBudgetState = processor.budgetState
-
-      log.info("budget state updated after process", {
-        sessionID,
-        used: sessionBudgetState.used,
-        remaining: sessionBudgetState.remaining,
-        total: sessionBudgetState.total
-      })
-
-      // 没有退出工具的 agent 仍然沿用原有的最大步数保护
-      if (maxStepState.shouldBreak) {
-        log.info("max steps reached, exiting loop", {
-          sessionID,
-          agent: agent.name,
-          step,
-          maxSteps,
-        })
-        break
-      }
-
-      if (result === "stop") {
-        const exitToolName = LoopPolicy.exitTool(agent)
-        const lastText = (await MessageV2.parts(processor.message.id)).findLast(
-          (part): part is MessageV2.TextPart => part.type === "text",
-        )?.text
-        if (exitToolName && shouldRecoverStop(processor.message.error)) {
-          await insertExitToolReminder({
+        if (result === "compact") {
+          await SessionCompaction.create({
             sessionID,
-            agentName: agent.name,
+            agent: lastUser.agent,
             model: lastUser.model,
-            exitToolName,
-            reason: stopReason(processor.message, lastText),
+            auto: true,
+            overflow: !processor.message.finish,
           })
-          continue
         }
+        continue
+      } catch (fatal: any) {
+        log.error("fatal unhandled error in session loop", {
+          error: fatal,
+          stack: fatal?.stack,
+          sessionID,
+        })
+        Bus.publish(Session.Event.Error, {
+          sessionID,
+          error: { name: "UnknownError", data: { message: String(fatal) } },
+        })
         break
       }
-      if (result === "compact") {
-        await SessionCompaction.create({
-          sessionID,
-          agent: lastUser.agent,
-          model: lastUser.model,
-          auto: true,
-          overflow: !processor.message.finish,
-        })
-      }
-      continue
-
-     } catch (fatal: any) {
-      log.error("fatal unhandled error in session loop", {
-        error: fatal,
-        stack: fatal?.stack,
-        sessionID,
-      })
-      Bus.publish(Session.Event.Error, {
-        sessionID,
-        error: { name: "UnknownError", data: { message: String(fatal) } },
-      })
-      break
-     }
     }
     if (ENABLE_HISTORY_PRUNE) SessionCompaction.prune({ sessionID })
     for await (const item of MessageV2.stream(sessionID)) {
@@ -1228,7 +1229,37 @@ export const OUTPUT_TOKEN_MAX = Flag.COSTRICT_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 1
       { modelID: ModelID.make(input.model.api.id), providerID: input.model.providerID },
       input.agent,
     )) {
-      const schema = ProviderTransform.schema(input.model, z.toJSONSchema(item.parameters))
+      if (!item.parameters) {
+        log.error("tool has undefined parameters, skipping", { tool: item.id })
+        continue
+      }
+      let schema
+      try {
+        const params = item.parameters as any
+        if (!params._zod) {
+          log.error("tool parameters missing _zod (zod instance mismatch?)", { tool: item.id })
+          continue
+        }
+        const shape = params._zod?.def?.shape
+        let hasMismatch = false
+        if (shape) {
+          for (const [key, val] of Object.entries(shape)) {
+            if (!(val as any)?._zod) {
+              log.error("tool parameter has zod instance mismatch", { tool: item.id, key })
+              hasMismatch = true
+              break
+            }
+          }
+        }
+        if (hasMismatch) continue
+        schema = ProviderTransform.schema(input.model, z.toJSONSchema(item.parameters))
+      } catch (e) {
+        log.error("failed to convert tool parameters to JSON schema", {
+          tool: item.id,
+          error: String(e),
+        })
+        continue
+      }
       tools[item.id] = tool({
         id: item.id as any,
         description: item.description,
