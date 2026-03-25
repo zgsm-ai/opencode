@@ -1,0 +1,60 @@
+@property --beam-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes beam-rotate {
+  to {
+    --beam-angle: 360deg;
+  }
+}
+
+.item-card-glow {
+  --glow-color: rgba(156, 163, 175, 0.3);
+  position: relative;
+  border-radius: var(--radius-lg);
+  border-top: 2px solid var(--glow-color);
+  isolation: isolate;
+  transition: border-top-color 0.3s ease;
+}
+
+/* animated beam — hollow border ring */
+.item-card-glow::before {
+  content: "";
+  position: absolute;
+  inset: -2px -1px -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: conic-gradient(
+    from var(--beam-angle),
+    transparent 0%,
+    transparent 55%,
+    color-mix(in srgb, var(--glow-color) 30%, transparent) 68%,
+    var(--glow-color) 78%,
+    color-mix(in srgb, var(--glow-color) 50%, transparent) 88%,
+    transparent 96%
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity 0.35s ease;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* hover: accent dissolves into beam */
+.item-card-glow:hover {
+  border-top-color: transparent;
+}
+
+.item-card-glow:hover::before {
+  opacity: 1;
+  animation: beam-rotate 4.5s linear infinite;
+}

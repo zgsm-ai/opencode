@@ -5,6 +5,7 @@ import { useLanguage } from "@/context/language"
 import { artifactApi, type CapabilityItem } from "../lib/api"
 import { categoryKey } from "../lib/constants"
 import SecurityTag from "./security-tag"
+import "./item-card.css"
 
 const TYPE_COLOR: Record<string, string> = {
   skill: "rgb(234,179,8)",
@@ -45,8 +46,8 @@ export default function ItemCard(props: { item: CapabilityItem }) {
   return (
     <A
       href={`/store/items/${props.item.id}?type=${props.item.itemType}`}
-      class="group flex flex-col rounded-lg border border-border-weak-base bg-background-base cursor-pointer hover:shadow-xs-border-base hover:-translate-y-px active:translate-y-0 transition-all duration-150"
-      style={{ "border-top": `2px solid ${color()}` }}
+      class="item-card-glow group flex flex-col rounded-lg border border-border-weak-base bg-background-base cursor-pointer hover:shadow-xs-border-base hover:-translate-y-px active:translate-y-0 transition-all duration-150"
+      style={{ "--glow-color": color() }}
     >
       <div class="flex flex-col flex-1 px-4 py-3.5">
         <div class="flex items-start justify-between gap-2 mb-2.5">
@@ -64,14 +65,6 @@ export default function ItemCard(props: { item: CapabilityItem }) {
                 title={language.t("store.sourceType.archive")}
               >
                 <Icon name="cloud-upload" size="small" />
-              </span>
-            </Show>
-            <Show when={props.item.version}>
-              <span
-                class="text-xs text-text-weak px-1.5 py-0.5 rounded"
-                style={{ "background-color": "rgba(156,163,175,0.12)" }}
-              >
-                v{props.item.version}
               </span>
             </Show>
           </div>

@@ -229,14 +229,6 @@ export default function ItemDetail() {
                           <Icon name="cloud-upload" size="small" />
                         </span>
                       </Show>
-                      <Show when={data().version}>
-                        <span
-                          class="text-xs text-text-weak px-1.5 py-0.5 rounded"
-                          style={{ "background-color": "rgba(156,163,175,0.12)" }}
-                        >
-                          v{data().version}
-                        </span>
-                      </Show>
                     </div>
                   </div>
 
@@ -351,7 +343,10 @@ export default function ItemDetail() {
                             language.t("store.console.capabilities.type"),
                             language.t("store.capability.type." + (data().itemType ?? "skill")),
                           ],
-                          [language.t("store.console.capabilities.visibility"), data().visibility],
+                          [
+                            language.t("store.console.capabilities.visibility"),
+                            data().registry?.visibility ?? data().visibility,
+                          ],
                           ...(data().createdByName ? [[language.t("store.detail.author"), data().createdByName]] : []),
                           [language.t("store.detail.created"), formatDate(data().createdAt)],
                           [language.t("store.detail.updated"), formatDate(data().updatedAt)],
