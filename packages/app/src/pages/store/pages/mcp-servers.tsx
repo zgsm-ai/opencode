@@ -5,10 +5,10 @@ import { itemApi, type CapabilityItem } from "../lib/api"
 import { useRepoFilter } from "../context/repo-filter"
 import { useRepoItems } from "../hooks/use-repo-items"
 import { useLanguage } from "@/context/language"
-import { categoryKey } from "../lib/constants"
 import ItemCard from "../components/item-card"
 import SearchBar from "../components/search-bar"
 import { StoreCreateButton } from "../components/store-create"
+import { CategoryFilter } from "../components/category-filter"
 
 const PER_PAGE = 24
 
@@ -150,26 +150,7 @@ export default function McpServers() {
           </div>
         </div>
       </div>
-      <div class="flex justify-center mb-6">
-        <div class="inline-flex items-center gap-1">
-          <button
-            onClick={() => setState("category", "all")}
-            class={`px-4 py-1.5 text-sm rounded-full transition-colors cursor-pointer ${state.category === "all" ? "bg-surface-inset-base border border-border-weak-base text-text-strong" : "text-text-weak hover:text-text-strong hover:bg-surface-inset-base"}`}
-          >
-            {language.t("store.console.filters.all")}
-          </button>
-          <For each={categories()}>
-            {(cat) => (
-              <button
-                onClick={() => setState("category", cat.id)}
-                class={`px-4 py-1.5 text-sm rounded-full transition-colors cursor-pointer ${state.category === cat.id ? "bg-surface-inset-base border border-border-weak-base text-text-strong" : "text-text-weak hover:text-text-strong hover:bg-surface-inset-base"}`}
-              >
-                {language.t(categoryKey(cat.id))}
-              </button>
-            )}
-          </For>
-        </div>
-      </div>
+      <CategoryFilter categories={categories()} selected={state.category} onSelect={(id) => setState("category", id)} />
       <Show
         when={!loading()}
         fallback={<div class="flex justify-center py-16 text-text-weak">{language.t("store.loading")}</div>}
