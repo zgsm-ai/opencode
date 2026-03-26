@@ -1,4 +1,6 @@
 import { createResource, createSignal, Show, For } from "solid-js"
+import { createHighlighter } from "shiki"
+import { useTheme } from "@opencode-ai/ui/theme"
 import { useParams, useNavigate } from "@solidjs/router"
 import { Icon } from "@opencode-ai/ui/icon"
 import { itemApi, artifactApi, scanApi, userApi, type CapabilityItem, type ScanResult } from "../lib/api"
@@ -33,6 +35,27 @@ function formatValue(value: unknown) {
 function installCmd(item: CapabilityItem) {
   const registry = item.registry?.name || "public"
   return `cs plugin add ${item.itemType} ${registry}/${item.slug}`
+}
+
+function tryJson(raw: string): string | null {
+  try {
+    const unescaped = raw.replace(/\\n/g, "\n").replace(/\\t/g, "\t").replace(/\\r/g, "\r")
+    const cleaned = unescaped.replace(/,\s*([\]\}])/g, "$1")
+    const parsed = JSON.parse(cleaned)
+    if (typeof parsed === "object" && parsed !== null) return JSON.stringify(parsed, null, 2)
+    return null
+  } catch {
+    return null
+  }
+}
+
+const THEMES = { light: "github-light", dark: "github-dark" } as const
+
+let _highlighter: Awaited<ReturnType<typeof createHighlighter>> | undefined
+
+async function highlight(json: string, mode: "light" | "dark") {
+  if (!_highlighter) _highlighter = await createHighlighter({ themes: [THEMES.light, THEMES.dark], langs: ["json"] })
+  return _highlighter.codeToHtml(json, { lang: "json", theme: THEMES[mode] })
 }
 
 function renderMd(content: string) {
@@ -156,6 +179,7 @@ function ScanRow(props: { scan: ScanResult }) {
 
 export default function ItemDetail() {
   const language = useLanguage()
+  const theme = useTheme()
   const auth = useAuth()
   const params = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -176,6 +200,14 @@ export default function ItemDetail() {
     (createdBy) => userApi.getNames([createdBy]).then((names) => names[createdBy] ?? createdBy),
   )
   const [copied, setCopied] = createSignal(false)
+  const [highlighted] = createResource(
+    () => {
+      const json = tryJson(item()?.content ?? "")
+      if (!json) return null
+      return { json, mode: theme.mode() } as const
+    },
+    (src) => highlight(src.json, src.mode),
+  )
 
   const meta = () => TYPE_META[item()?.itemType ?? "skill"] ?? TYPE_META.skill
 
@@ -288,9 +320,19 @@ export default function ItemDetail() {
                   <h2 class="text-16-medium text-text-strong mb-3">
                     {language.t("store.capabilityDialog.field.content")}
                   </h2>
-                  <div class="rounded-lg bg-bg-muted/50 border border-border-weak-base p-5 text-14-regular leading-7 max-h-[480px] overflow-y-auto thin-scrollbar">
-                    {renderMd(data().content)}
-                  </div>
+                  <Show
+                    when={highlighted()}
+                    fallback={
+                      <div class="rounded-lg bg-bg-muted/50 border border-border-weak-base p-5 text-14-regular leading-7 max-h-[480px] overflow-y-auto thin-scrollbar">
+                        {renderMd(data().content)}
+                      </div>
+                    }
+                  >
+                    <div
+                      class="rounded-lg bg-bg-muted/50 border border-border-weak-base p-5 text-12-mono leading-6 max-h-[480px] overflow-y-auto overflow-x-auto thin-scrollbar [&_pre]:!bg-transparent [&_pre]:!m-0 [&_pre]:!p-0"
+                      innerHTML={highlighted()}
+                    />
+                  </Show>
                 </section>
               </Show>
 
