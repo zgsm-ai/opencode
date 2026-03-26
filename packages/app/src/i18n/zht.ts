@@ -832,7 +832,7 @@ export const dict = {
   "store.itemCard.download": "下載",
   "store.detail.back": "返回",
   "store.detail.quickInstall": "安裝命令",
-  "store.allPublic": "公開倉庫",
+  "store.allPublic": "公開",
   "store.sidebar.title": "倉庫",
   "store.sidebar.source": "切換倉庫",
 } satisfies Partial<Record<Keys, string>>

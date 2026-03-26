@@ -25,7 +25,7 @@ export const dict = {
   "store.mcp-servers": "{{count}} MCP servers",
   "store.explore": "Explore",
   "store.organizations": "Organizations",
-  "store.allPublic": "Public Repository",
+  "store.allPublic": "Public",
   "store.loading": "Loading...",
   "store.noOrganizations": "No organizations",
   "store.searchSkills": "Search skills...",

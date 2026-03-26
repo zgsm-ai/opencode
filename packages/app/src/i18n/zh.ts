@@ -843,7 +843,7 @@ export const dict = {
   "store.mcp-servers": "{{count}} 个 MCP 服务器",
   "store.explore": "探索",
   "store.organizations": "组织",
-  "store.allPublic": "公开仓库",
+  "store.allPublic": "公开",
   "store.loading": "加载中...",
   "store.noOrganizations": "没有组织",
   "store.searchSkills": "搜索技能...",

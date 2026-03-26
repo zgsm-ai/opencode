@@ -58,6 +58,15 @@ export default function ItemCard(props: { item: CapabilityItem }) {
             <span class="font-semibold text-sm truncate text-text-strong">{props.item.name}</span>
           </div>
           <div class="flex items-center gap-1.5 shrink-0">
+            <Show when={props.item.repoName}>
+              <span
+                class="text-xs px-1.5 py-0.5 rounded inline-flex items-center font-medium text-text-weak truncate max-w-[120px]"
+                style={{ "background-color": "rgba(156,163,175,0.15)" }}
+                title={props.item.repoName}
+              >
+                {props.item.repoName}
+              </span>
+            </Show>
             <Show when={props.item.sourceType === "archive"}>
               <span
                 class="text-xs px-1.5 py-0.5 rounded inline-flex items-center"
