@@ -24,10 +24,8 @@ export function WorkspaceSidebar() {
   const {
     workspaces,
     devices,
-    selectedDeviceId,
     enabledWorkspaceIds,
     selectWorkspace,
-    selectDevice,
     enableWorkspace,
     disableWorkspace,
     createWorkspace,
@@ -481,8 +479,6 @@ export function WorkspaceSidebar() {
       <div class="flex-[2] min-h-0 overflow-y-auto thin-scrollbar border-t border-border-weak-base">
         <DeviceList
           devices={devices}
-          selectedDeviceId={selectedDeviceId}
-          onSelectDevice={selectDevice}
           onCreateWorkspace={handleCreateWorkspace}
           searchQuery={deviceSearchQuery}
           onSearchChange={setDeviceSearchQuery}

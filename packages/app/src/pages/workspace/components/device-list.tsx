@@ -1,4 +1,4 @@
-import { createMemo, For, Show, createSelector } from "solid-js"
+import { createMemo, For, Show } from "solid-js"
 import { Icon } from "@opencode-ai/ui/icon"
 import { IconButton } from "@opencode-ai/ui/icon-button"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
@@ -7,8 +7,6 @@ import { useLanguage } from "@/context/language"
 
 export type DeviceListProps = {
   devices: () => Device[]
-  selectedDeviceId: () => string | undefined
-  onSelectDevice: (deviceId: string) => void
   onCreateWorkspace: (device: Device) => void
   searchQuery: () => string
   onSearchChange: (query: string) => void
@@ -31,8 +29,6 @@ export function DeviceList(props: DeviceListProps) {
           device.platform.toLowerCase().includes(query),
       )
   })
-
-  const isSelected = createSelector(() => props.selectedDeviceId())
 
   const detail = (device: Device) => {
     const parts = [device.platform, device.version].filter(Boolean)
@@ -96,7 +92,6 @@ export function DeviceList(props: DeviceListProps) {
               <div
                 class="group/device flex items-center rounded-lg transition-all duration-150 hover:bg-surface-base-hover"
                 classList={{
-                  "bg-surface-base-hover": isSelected(device.id),
                   "opacity-60": device.status === "offline",
                 }}
               >
@@ -114,13 +109,12 @@ export function DeviceList(props: DeviceListProps) {
                   <button
                     class="flex-1 min-w-0 flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-150 text-left"
                     classList={{
-                      "text-text-strong font-medium": isSelected(device.id),
-                      "text-text-weak": !isSelected(device.id) && device.status !== "offline",
+                      "text-text-weak": device.status !== "offline",
                       "text-text-weaker cursor-not-allowed": device.status === "offline",
                       "cursor-pointer": device.status !== "offline",
                     }}
                     onClick={() => {
-                      if (device.status !== "offline") props.onSelectDevice(device.id)
+                      if (device.status !== "offline") props.onCreateWorkspace(device)
                     }}
                   >
                     <div

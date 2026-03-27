@@ -23,7 +23,6 @@ export default function WorkspaceLayout(props: ParentProps) {
   const [devices, setDevices] = createStore<Device[]>([])
   const [isLoading, setIsLoading] = createSignal(false)
   const [selectedWorkspaceId, setSelectedWorkspaceId] = createSignal<string | undefined>(undefined)
-  const [selectedDeviceId, setSelectedDeviceId] = createSignal<string | undefined>(undefined)
   const [enabledIds, setEnabledIds] = createSignal<string[]>([])
   const closed = new Set<string>()
   const auth = useAuth()
@@ -110,17 +109,6 @@ export default function WorkspaceLayout(props: ParentProps) {
 
   const handleSelectWorkspace = (workspaceId: string) => {
     setSelectedWorkspaceId(workspaceId)
-  }
-
-  const handleSelectDevice = (deviceId: string) => {
-    setSelectedDeviceId(deviceId)
-    const device = devices.find((d) => d.id === deviceId)
-    if (device) {
-      showToast({
-        title: t("workspace.device.selected"),
-        description: device.displayName,
-      })
-    }
   }
 
   const handleEnableWorkspace = (id: string) => {
@@ -216,12 +204,10 @@ export default function WorkspaceLayout(props: ParentProps) {
     workspaces: () => [...workspaces],
     devices: () => [...devices],
     selectedWorkspaceId,
-    selectedDeviceId,
     enabledWorkspaceIds: enabledIds,
     closedWorkspaceIds: () => Array.from(closed),
     isLoading,
     selectWorkspace: handleSelectWorkspace,
-    selectDevice: handleSelectDevice,
     enableWorkspace: handleEnableWorkspace,
     disableWorkspace: handleDisableWorkspace,
     createWorkspace: handleCreateWorkspace,
