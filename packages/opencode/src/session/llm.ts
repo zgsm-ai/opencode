@@ -22,9 +22,12 @@ import { executeDynamicContext } from "@/agent/dynamic-context"
 import type { MessageV2 } from "./message-v2"
 import { Plugin } from "@/plugin"
 import { SystemPrompt } from "./system"
+import { InstructionPrompt } from "./instruction"
+import { PromptTags } from "./prompt-tags"
 import { Flag } from "@/flag/flag"
 import { PermissionNext } from "@/permission/next"
 import { Auth } from "@/auth"
+import { Command } from "../command"
 import os from "node:os"
 
 export namespace LLM {
@@ -158,8 +161,21 @@ export namespace LLM {
 
     let maxOutputTokens =
       isCodex || provider.id.includes("github-copilot") ? undefined : ProviderTransform.maxOutputTokens(input.model)
+    let promptTags: string[] = []
     if (isCostrict) {
       maxOutputTokens = input.model.limit.output
+
+      // Detect prompt customization tags
+      const instructionRefs = await InstructionPrompt.systemRefs()
+      const command = input.user.command && !input.user.commandSource ? await Command.get(input.user.command) : undefined
+      promptTags = PromptTags.collect({
+        agent: input.agent,
+        providerID: input.model.providerID,
+        agentPrompt,
+        userSystem: input.user.system,
+        instructionRefs,
+        commandSource: input.user.commandSource ?? command?.source,
+      })
     }
 
     const tools = await resolveTools(input)
@@ -201,6 +217,9 @@ export namespace LLM {
           }
         : undefined),
       ...input.model.headers,
+      ...(promptTags.length > 0
+        ? { "zgsm-prompt-tags": promptTags.join(",") }
+        : undefined),
     }
 
     const requestMessages = [
@@ -220,11 +239,21 @@ export namespace LLM {
       ...input.messages,
     ]
 
+    const baseProviderOptions = ProviderTransform.providerOptions(input.model, params.options)
+    const providerOptionsWithTags = promptTags.length > 0
+      ? mergeDeep(
+          baseProviderOptions,
+          ProviderTransform.providerOptions(input.model, {
+            extra_body: { promptTags: promptTags.join(",") },
+          }),
+        )
+      : baseProviderOptions
+
     const requestBody = {
       temperature: params.temperature,
       topP: params.topP,
       topK: params.topK,
-      providerOptions: ProviderTransform.providerOptions(input.model, params.options),
+      providerOptions: providerOptionsWithTags,
       activeTools: Object.keys(tools).filter((x) => x !== "invalid"),
       tools,
       maxOutputTokens,
@@ -285,7 +314,7 @@ export namespace LLM {
       temperature: params.temperature,
       topP: params.topP,
       topK: params.topK,
-      providerOptions: ProviderTransform.providerOptions(input.model, params.options),
+      providerOptions: providerOptionsWithTags,
       activeTools: Object.keys(tools).filter((x) => x !== "invalid"),
       tools,
       toolChoice: input.toolChoice,
@@ -313,6 +342,9 @@ export namespace LLM {
             : undefined),
         ...input.model.headers,
         ...headers,
+        ...(promptTags.length > 0
+          ? { "zgsm-prompt-tags": promptTags.join(",") }
+          : undefined),
       },
       maxRetries: input.retries ?? 0,
       messages: requestMessages,

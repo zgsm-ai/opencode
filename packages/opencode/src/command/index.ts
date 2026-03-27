@@ -71,7 +71,7 @@ export namespace Command {
       [Default.INIT]: {
         name: Default.INIT,
         description: "create/update AGENTS.md",
-        source: "command",
+        source: "builtin",
         get template() {
           return CostrictCommand.get("enhanced-initialize", lang).replace("${path}", Instance.worktree)
         },
@@ -80,7 +80,7 @@ export namespace Command {
       [Default.REVIEW]: {
         name: Default.REVIEW,
         description: "review changes [commit|branch|pr], defaults to uncommitted",
-        source: "command",
+        source: "builtin",
         get template() {
           return PROMPT_REVIEW.replace("${path}", Instance.worktree)
         },
@@ -90,6 +90,7 @@ export namespace Command {
       [Default.PROJECT_WIKI]: {
         name: Default.PROJECT_WIKI,
         description: "generate comprehensive project wiki documentation",
+        source: "builtin",
         get template() {
           return CostrictCommand.get("project-wiki", lang).replace(/\$\{path\}/g, Instance.worktree)
         },
@@ -98,6 +99,7 @@ export namespace Command {
       [Default.SECURITY_REVIEW]: {
         name: Default.SECURITY_REVIEW,
         description: "perform code security audit",
+        source: "builtin",
         get template() {
           return CostrictCommand.get("security-review", lang)
         },
@@ -107,7 +109,10 @@ export namespace Command {
 
     const tddCommands = await getCommands()
     for (const [name, command] of Object.entries(tddCommands)) {
-      result[name] = command
+      result[name] = {
+        ...command,
+        source: command.source ?? "builtin",
+      }
     }
 
     for (const [name, command] of Object.entries(cfg.command ?? {})) {
@@ -116,7 +121,7 @@ export namespace Command {
         agent: command.agent,
         model: command.model,
         description: command.description,
-        source: "command",
+        source: "config",
         get template() {
           return command.template
         },
@@ -127,6 +132,7 @@ export namespace Command {
     for (const [name, prompt] of Object.entries(await MCP.prompts())) {
       result[name] = {
         name,
+        source: "mcp",
         mcp: true,
         description: prompt.description,
         get template() {
@@ -159,6 +165,7 @@ export namespace Command {
         result[skill.name] = {
           name: skill.name,
           description: skill.description,
+          source: "skill",
           skill: true,
           template: `Please use the skill tool to load the "${skill.name}" skill for this task.`,
           hints: [],

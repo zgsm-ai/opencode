@@ -111,6 +111,8 @@ export namespace SessionPrompt {
     format: MessageV2.Format.optional(),
     system: z.string().optional(),
     variant: z.string().optional(),
+    command: z.string().optional(),
+    commandSource: z.string().optional(),
     parts: z.array(
       z.discriminatedUnion("type", [
         MessageV2.TextPart.omit({
@@ -513,6 +515,8 @@ export namespace SessionPrompt {
             },
             agent: lastUser.agent,
             model: lastUser.model,
+            command: task.command,
+            commandSource: lastUser.commandSource,
           }
           await Session.updateMessage(summaryUserMsg)
           await Session.updatePart({
@@ -1001,6 +1005,8 @@ export namespace SessionPrompt {
       tools: input.tools,
       agent: agent.name,
       model,
+      command: input.command,
+      commandSource: input.commandSource,
       system: input.system,
       format: input.format,
       variant,
@@ -1910,6 +1916,8 @@ NOTE: At any point in time through this workflow you should feel free to ask the
       messageID: input.messageID,
       model: userModel,
       agent: userAgent,
+      command: input.command,
+      commandSource: command.source,
       parts,
       variant: input.variant,
     })) as MessageV2.WithParts

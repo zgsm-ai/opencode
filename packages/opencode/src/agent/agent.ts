@@ -47,6 +47,8 @@ export namespace Agent {
       options: z.record(z.string(), z.any()),
       steps: z.number().int().positive().optional(),
       tools: z.record(z.string(), z.boolean()).optional(),
+      promptOverridden: z.boolean().optional(),
+      promptOverriddenProviders: z.string().array().optional(),
     })
     .meta({
       ref: "Agent",
@@ -246,6 +248,15 @@ export namespace Agent {
         }
       if (value.model) item.model = Provider.parseModel(value.model)
       item.variant = value.variant ?? item.variant
+      if (item.native && value.prompt !== undefined) {
+        item.promptOverridden = true
+      }
+      if (item.native && Object.keys(value.model_prompts ?? {}).length > 0) {
+        item.promptOverriddenProviders = [
+          ...new Set([...(item.promptOverriddenProviders ?? []), ...Object.keys(value.model_prompts ?? {})]),
+        ]
+      }
+      item.model_prompts = mergeDeep(item.model_prompts ?? {}, value.model_prompts ?? {})
       item.prompt = value.prompt ?? item.prompt
       item.description = value.description ?? item.description
       item.temperature = value.temperature ?? item.temperature

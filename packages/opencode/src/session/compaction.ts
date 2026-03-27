@@ -108,6 +108,13 @@ export namespace SessionCompaction {
     overflow?: boolean
   }) {
     const userMessage = input.messages.findLast((m) => m.info.id === input.parentID)!.info as MessageV2.User
+    const commandSource =
+      userMessage.commandSource ??
+      (
+        input.messages.find((m) => m.info.role === "user" && (m.info as MessageV2.User).commandSource)?.info as
+          | MessageV2.User
+          | undefined
+      )?.commandSource
 
     let messages = input.messages
     let replay: MessageV2.WithParts | undefined
@@ -245,6 +252,8 @@ When constructing the summary, try to stick to this template:
           model: original.model,
           format: original.format,
           tools: original.tools,
+          command: original.command,
+          commandSource: original.commandSource ?? commandSource,
           system: original.system,
           variant: original.variant,
         })
@@ -269,6 +278,8 @@ When constructing the summary, try to stick to this template:
           time: { created: Date.now() },
           agent: userMessage.agent,
           model: userMessage.model,
+          command: userMessage.command,
+          commandSource: commandSource,
         })
         const text =
           (input.overflow

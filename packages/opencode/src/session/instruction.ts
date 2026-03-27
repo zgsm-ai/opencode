@@ -29,6 +29,10 @@ function globalFiles() {
   return files
 }
 
+function isRemote(instruction: string) {
+  return instruction.startsWith("https://") || instruction.startsWith("http://")
+}
+
 async function resolveRelative(instruction: string): Promise<string[]> {
   if (!Flag.OPENCODE_DISABLE_PROJECT_CONFIG) {
     return Filesystem.globUp(instruction, Instance.directory, Instance.worktree).catch(() => [])
@@ -94,7 +98,7 @@ export namespace InstructionPrompt {
 
     if (config.instructions) {
       for (let instruction of config.instructions) {
-        if (instruction.startsWith("https://") || instruction.startsWith("http://")) continue
+        if (isRemote(instruction)) continue
         if (instruction.startsWith("~/")) {
           instruction = path.join(os.homedir(), instruction.slice(2))
         }
@@ -114,6 +118,34 @@ export namespace InstructionPrompt {
     return paths
   }
 
+  export async function systemRefs() {
+    const config = await Config.get()
+    const paths = await systemPaths()
+    const refs = new Set<string>()
+
+    await Promise.all(
+      Array.from(paths).map(async (p) => {
+        const content = await Filesystem.readText(p).catch(() => "")
+        if (content) refs.add(p)
+      }),
+    )
+
+    if (config.instructions) {
+      await Promise.all(
+        config.instructions.filter(isRemote).map((url) =>
+          fetch(url, { signal: AbortSignal.timeout(5000) })
+            .then((res) => (res.ok ? res.text() : ""))
+            .catch(() => "")
+            .then((x) => {
+              if (x) refs.add(url)
+            }),
+        ),
+      )
+    }
+
+    return refs
+  }
+
   export async function system() {
     const config = await Config.get()
     const paths = await systemPaths()
@@ -126,7 +158,7 @@ export namespace InstructionPrompt {
     const urls: string[] = []
     if (config.instructions) {
       for (const instruction of config.instructions) {
-        if (instruction.startsWith("https://") || instruction.startsWith("http://")) {
+        if (isRemote(instruction)) {
           urls.push(instruction)
         }
       }
