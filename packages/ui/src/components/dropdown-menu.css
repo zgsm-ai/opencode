@@ -66,6 +66,11 @@
     }
   }
 
+  [data-slot="dropdown-menu-checkbox-item"],
+  [data-slot="dropdown-menu-radio-item"] {
+    padding-right: 28px;
+  }
+
   [data-slot="dropdown-menu-sub-trigger"] {
     &[data-expanded] {
       background: var(--surface-raised-base-hover);
@@ -78,6 +83,10 @@
     justify-content: center;
     width: 16px;
     height: 16px;
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
   }
 
   [data-slot="dropdown-menu-item-label"] {
@@ -96,6 +105,7 @@
   }
 
   [data-slot="dropdown-menu-group-label"] {
+    display: block;
     padding: 4px 8px;
     font-family: var(--font-family-sans);
     font-size: var(--font-size-x-small);

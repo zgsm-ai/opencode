@@ -18,6 +18,7 @@ import { ProviderTransform } from "@/provider/transform"
 import { Config } from "@/config/config"
 import { Instance } from "@/project/instance"
 import type { Agent } from "@/agent/agent"
+import { executeDynamicContext } from "@/agent/dynamic-context"
 import type { MessageV2 } from "./message-v2"
 import { Plugin } from "@/plugin"
 import { SystemPrompt } from "./system"
@@ -71,7 +72,11 @@ export namespace LLM {
 
     const system = []
     // model-specific prompt takes priority over locale-selected agent prompt
-    const agentPrompt = input.agent.model_prompts?.[input.model.providerID] ?? input.agent.prompt
+    let agentPrompt = input.agent.model_prompts?.[input.model.providerID] ?? input.agent.prompt
+    // process dynamic context in agent prompt
+    if (agentPrompt) {
+      agentPrompt = await executeDynamicContext(agentPrompt)
+    }
     system.push(
       [
         // use agent prompt otherwise provider prompt

@@ -16,6 +16,7 @@ export interface CoStrictModel {
   object?: string               // 对象类型 (通常是 "model")
   created?: number              // 创建时间戳
   owned_by?: string             // 所有者
+  supportsImages?: boolean      // 是否支持图片输入
   [key: string]: any            // 其他扩展字段
 }
 

@@ -1,6 +1,7 @@
 import { Plugin } from "@/plugin"
 import { NotificationMode } from "@/permission/notification"
 import { Session } from "@/session"
+import { SessionID } from "@/session/schema"
 import { MessageV2 } from "@/session/message-v2"
 import { notifyCloud } from "@/costrict/device/notify"
 
@@ -41,7 +42,7 @@ function shouldSkipNotification(key: string): boolean {
 
 async function isSessionInterrupted(sessionID: string): Promise<boolean> {
   try {
-    const messages = await Session.messages({ sessionID, limit: 1 })
+    const messages = await Session.messages({ sessionID: SessionID.make(sessionID), limit: 1 })
     if (messages.length === 0) return false
 
     const latestMessage = messages[0]

@@ -26,13 +26,6 @@ permission:
     WikiCatalogueDesign: deny
     WikiDocumentGenerate: deny
     WikiIndexGeneration: deny
-    StrictSpec: deny
-    SpecReSearch: deny
-    Requirement: deny
-    DesignAgent: deny
-    TaskPlan: deny
-    PlanManager: deny
-    SpecPlan: deny
     StrictPlan: deny
 ---
 # CodingAgent - 开发任务管理与协调

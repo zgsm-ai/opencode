@@ -26,8 +26,9 @@ import type { InitError } from "../pages/error"
 import { useGlobalSDK } from "./global-sdk"
 import { bootstrapDirectory, bootstrapGlobal } from "./global-sync/bootstrap"
 import { createChildStoreManager } from "./global-sync/child-store"
-import { applyDirectoryEvent, applyGlobalEvent } from "./global-sync/event-reducer"
+import { applyDirectoryEvent, applyGlobalEvent, cleanupDroppedSessionCaches } from "./global-sync/event-reducer"
 import { createRefreshQueue } from "./global-sync/queue"
+import { clearSessionPrefetchDirectory } from "./global-sync/session-prefetch"
 import { estimateRootSessionTotal, loadRootSessionsWithFallback } from "./global-sync/session-load"
 import { trimSessions } from "./global-sync/session-trim"
 import type { ProjectMeta } from "./global-sync/types"
@@ -161,7 +162,9 @@ function createGlobalSync() {
       queue.clear(directory)
       sessionMeta.delete(directory)
       sdkCache.delete(directory)
+      clearSessionPrefetchDirectory(directory)
     },
+    translate: language.t,
   })
 
   const sdkFor = (directory: string) => {
@@ -190,6 +193,7 @@ function createGlobalSync() {
       })
       if (next.length !== store.session.length) {
         setStore("session", reconcile(next, { key: "id" }))
+        cleanupDroppedSessionCaches(store, setStore, next, setSessionTodo)
       }
       children.unpin(directory)
       return
@@ -222,6 +226,7 @@ function createGlobalSync() {
           }),
         )
         setStore("session", reconcile(sessions, { key: "id" }))
+        cleanupDroppedSessionCaches(store, setStore, sessions, setSessionTodo)
         sessionMeta.set(directory, { limit })
       })
       .catch((err) => {
@@ -458,6 +463,3 @@ export function useGlobalSync() {
   if (!context) throw new Error("useGlobalSync must be used within GlobalSyncProvider")
   return context
 }
-
-export { canDisposeDirectory, pickDirectoriesToEvict } from "./global-sync/eviction"
-export { estimateRootSessionTotal, loadRootSessionsWithFallback } from "./global-sync/session-load"

@@ -1,6 +1,7 @@
 import { Config } from "../config/config"
 import z from "zod"
 import { Provider } from "../provider/provider"
+import { ModelID, ProviderID } from "../provider/schema"
 import { generateObject, streamObject, type ModelMessage } from "ai"
 import { SystemPrompt } from "../session/system"
 import { Instance } from "../project/instance"
@@ -29,14 +30,15 @@ export namespace Agent {
       mode: z.enum(["subagent", "primary", "all"]),
       native: z.boolean().optional(),
       hidden: z.boolean().optional(),
+      visible: z.boolean().optional(),
       topP: z.number().optional(),
       temperature: z.number().optional(),
       color: z.string().optional(),
       permission: PermissionNext.Ruleset,
       model: z
         .object({
-          modelID: z.string(),
-          providerID: z.string(),
+          modelID: ModelID.zod,
+          providerID: ProviderID.zod,
         })
         .optional(),
       variant: z.string().optional(),
@@ -44,6 +46,7 @@ export namespace Agent {
       model_prompts: z.record(z.string(), z.string()).optional(),
       options: z.record(z.string(), z.any()),
       steps: z.number().int().positive().optional(),
+      tools: z.record(z.string(), z.boolean()).optional(),
     })
     .meta({
       ref: "Agent",
@@ -238,6 +241,7 @@ export namespace Agent {
           mode: "all",
           permission: PermissionNext.merge(defaults, user),
           options: {},
+          tools: {},
           native: false,
         }
       if (value.model) item.model = Provider.parseModel(value.model)
@@ -249,10 +253,12 @@ export namespace Agent {
       item.mode = value.mode ?? item.mode
       item.color = value.color ?? item.color
       item.hidden = value.hidden ?? item.hidden
+      item.visible = value.visible ?? item.visible ?? true
       item.name = value.name ?? item.name
       item.steps = value.steps ?? item.steps
       item.options = mergeDeep(item.options, value.options ?? {})
       item.permission = PermissionNext.merge(item.permission, PermissionNext.fromConfig(value.permission ?? {}))
+      item.tools = mergeDeep(item.tools ?? {}, value.tools ?? {})
     }
 
     // Ensure Truncate.GLOB is allowed unless explicitly configured
@@ -304,7 +310,7 @@ export namespace Agent {
     return primaryVisible.name
   }
 
-  export async function generate(input: { description: string; model?: { providerID: string; modelID: string } }) {
+  export async function generate(input: { description: string; model?: { providerID: ProviderID; modelID: ModelID } }) {
     const cfg = await Config.get()
     const defaultModel = input.model ?? (await Provider.defaultModel())
     const model = await Provider.getModel(defaultModel.providerID, defaultModel.modelID)

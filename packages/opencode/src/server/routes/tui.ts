@@ -7,6 +7,7 @@ import { TuiEvent } from "@/cli/cmd/tui/event"
 import { AsyncQueue } from "../../util/queue"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
+import { EditorContext } from "@/context/editor-context"
 
 const TuiRequest = z.object({
   path: z.string(),
@@ -98,6 +99,48 @@ export const TuiRoutes = lazy(() =>
       validator("json", TuiEvent.PromptAppend.properties),
       async (c) => {
         await Bus.publish(TuiEvent.PromptAppend, c.req.valid("json"))
+        return c.json(true)
+      },
+    )
+    .post(
+      "/context",
+      describeRoute({
+        summary: "Update editor context",
+        description: "Update the editor context from VSCode extension",
+        operationId: "tui.updateContext",
+        responses: {
+          200: {
+            description: "Context updated successfully",
+            content: {
+              "application/json": {
+                schema: resolver(z.boolean()),
+              },
+            },
+          },
+          ...errors(400),
+        },
+      }),
+      validator(
+        "json",
+        z.object({
+          activeFile: z
+            .object({
+              relativePath: z.string(),
+              fileRef: z.string(),
+              selection: z
+                .object({
+                  startLine: z.number(),
+                  endLine: z.number(),
+                })
+                .optional(),
+            })
+            .optional(),
+          openTabs: z.array(z.string()),
+        }),
+      ),
+      async (c) => {
+        const ctx = c.req.valid("json")
+        EditorContext.setContext(ctx)
         return c.json(true)
       },
     )

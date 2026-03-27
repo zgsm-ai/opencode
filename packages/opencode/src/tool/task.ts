@@ -2,6 +2,7 @@ import { Tool } from "./tool"
 import DESCRIPTION from "./task.txt"
 import z from "zod"
 import { Session } from "../session"
+import { SessionID, MessageID } from "../session/schema"
 import { MessageV2 } from "../session/message-v2"
 import { Identifier } from "../id/id"
 import { Agent } from "../agent/agent"
@@ -30,7 +31,24 @@ export const TaskTool = Tool.define("task", async (ctx) => {
   // Filter agents by permissions if agent provided
   const caller = ctx?.agent
   const accessibleAgents = caller
-    ? agents.filter((a) => PermissionNext.evaluate("task", a.name, caller.permission).action !== "deny")
+    ? agents.filter((a) => {
+        // Check if caller has permission to access this agent
+        const hasPermission = PermissionNext.evaluate("task", a.name, caller.permission).action !== "deny"
+        if (!hasPermission) return false
+
+        // If target agent is not visible (visible === false),
+        // caller must have explicit permission in permission:task
+        if (a.visible === false) {
+          const explicitPerm = PermissionNext.evaluate("task", a.name, caller.permission)
+          // Only allow if there's an explicit rule (not just default "*" rule)
+          const hasExplicitRule = caller.permission.some(
+            (r) => r.permission === "task" && r.pattern === a.name
+          )
+          return hasExplicitRule && explicitPerm.action === "allow"
+        }
+
+        return true
+      })
     : agents
 
   const description = DESCRIPTION.replace(
@@ -65,7 +83,7 @@ export const TaskTool = Tool.define("task", async (ctx) => {
 
       const session = await iife(async () => {
         if (params.task_id) {
-          const found = await Session.get(params.task_id).catch(() => {})
+          const found = await Session.get(SessionID.make(params.task_id)).catch(() => {})
           if (found) return found
         }
 
@@ -106,7 +124,7 @@ export const TaskTool = Tool.define("task", async (ctx) => {
         },
       })
 
-      const messageID = Identifier.ascending("message")
+      const messageID = MessageID.ascending()
 
       function cancel() {
         SessionPrompt.cancel(session.id)

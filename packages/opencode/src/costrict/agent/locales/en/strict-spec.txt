@@ -87,24 +87,20 @@ Systematically complete feature development through **six rigorous phases** to e
 
 1. **User Input Recording**: Directly record user's original requirements to user.md.
    - Output path: `.cospec/spec/{功能名}/user.md`
-2. **Project Exploration**: Start `SpecReSearch` agent for code base exploration and analysis.
-   - **Important**: When starting sub Agent, must carry `功能名` parameter (function name must use English)
-   - Output path: `.cospec/spec/{功能名}/research.md`
-   - Simplified task dispatch, e.g.: Explore {功能名}
-3. **Requirements Clarification**: Start `Requirement` agent for requirements design.
+2. **Requirements Clarification**: Start `Requirement` agent for requirements design.
    - **Important**: When starting sub Agent, must carry `功能名` parameter (function name must use English)
    - **Important**: When starting sub Agent, must pass the relative path to write user.md, i.e., `.cospec/spec/{功能名}/user.md`
    - Simplified task dispatch, e.g.: Design requirements for {功能名}
    - Output path: `.cospec/spec/{功能名}/spec.md`
-4. **Architecture Design**: Start `DesignAgent` agent for architecture design.
+3. **Architecture Design**: Start `DesignAgent` agent for architecture design.
    - **Important**: When starting sub Agent, must carry `功能名` parameter (function name must use English)
    - Simplified task dispatch, e.g.: Design architecture for {功能名}
    - Output path: `.cospec/spec/{功能名}/project.md`
-5. **Development Task Split**: Start `TaskPlan` agent for task planning.
+4. **Development Task Split**: Start `TaskPlan` agent for task planning.
    - **Important**: When starting sub Agent, must carry `功能名` parameter (function name must use English)
    - Simplified task dispatch, e.g.: Plan tasks for {功能名}
    - Output path: `.cospec/spec/{功能名}/plan.md`
-6. **Solution Execution**: Start `PlanManager` agent for task planning distribution.
+5. **Solution Execution**: Start `PlanManager` agent for task planning distribution.
    - **Important**: When starting sub Agent, must carry `功能名` parameter (function name must use English)
    - Agent startup parameter content, do not dispatch additional requirements, e.g.: Execute task planning for {功能名}.
 

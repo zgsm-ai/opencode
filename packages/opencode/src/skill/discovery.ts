@@ -19,9 +19,10 @@ export namespace Discovery {
     return path.join(Global.Path.cache, "skills")
   }
 
-  async function get(url: string, dest: string): Promise<boolean> {
+  async function get(url: string, dest: string, token?: string): Promise<boolean> {
     if (await Filesystem.exists(dest)) return true
-    return fetch(url)
+    const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {}
+    return fetch(url, { headers })
       .then(async (response) => {
         if (!response.ok) {
           log.error("failed to download", { url, status: response.status })
@@ -36,15 +37,16 @@ export namespace Discovery {
       })
   }
 
-  export async function pull(url: string): Promise<string[]> {
+  export async function pull(url: string, token?: string): Promise<string[]> {
     const result: string[] = []
     const base = url.endsWith("/") ? url : `${url}/`
     const index = new URL("index.json", base).href
     const cache = dir()
     const host = base.slice(0, -1)
+    const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {}
 
     log.info("fetching index", { url: index })
-    const data = await fetch(index)
+    const data = await fetch(index, { headers })
       .then(async (response) => {
         if (!response.ok) {
           log.error("failed to fetch index", { url: index, status: response.status })
@@ -84,7 +86,7 @@ export namespace Discovery {
             const link = new URL(file, `${host}/${skill.name}/`).href
             const dest = path.join(root, file)
             await mkdir(path.dirname(dest), { recursive: true })
-            await get(link, dest)
+            await get(link, dest, token)
           }),
         )
 

@@ -3,6 +3,7 @@ import { describeRoute, validator } from "hono-openapi"
 import { resolver } from "hono-openapi"
 import { Instance } from "../project/instance"
 import { Project } from "../project/project"
+import { ProjectID } from "../project/schema"
 import z from "zod"
 import { errors } from "./error"
 
@@ -71,7 +72,7 @@ export const ProjectRoute = new Hono()
     validator("param", z.object({ projectID: z.string() })),
     validator("json", Project.update.schema.omit({ projectID: true })),
     async (c) => {
-      const projectID = c.req.valid("param").projectID
+      const projectID = ProjectID.make(c.req.valid("param").projectID)
       const body = c.req.valid("json")
       const project = await Project.update({ ...body, projectID })
       return c.json(project)

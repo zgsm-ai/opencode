@@ -233,7 +233,7 @@ export async function createCoStrictCustomLoader(provider: any) {
           input: {
             text: true,
             audio: false,
-            image: false,
+            image: model.supportsImages === true,
             video: false,
             pdf: false,
           },

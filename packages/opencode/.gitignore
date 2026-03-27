@@ -4,3 +4,4 @@ gen
 app.log
 src/provider/models-snapshot.ts
 src/costrict/agent/builtin.ts
+src/costrict/skill/builtin.ts

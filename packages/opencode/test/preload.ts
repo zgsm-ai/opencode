@@ -57,7 +57,7 @@ if (response.ok) {
 // Disable models.dev refresh to avoid race conditions during tests
 process.env["COSTRICT_DISABLE_MODELS_FETCH"] = "true"
 
-// Clear provider env vars to ensure clean test state
+// Clear provider and server auth env vars to ensure clean test state
 delete process.env["ANTHROPIC_API_KEY"]
 delete process.env["OPENAI_API_KEY"]
 delete process.env["GOOGLE_API_KEY"]
@@ -77,6 +77,8 @@ delete process.env["DEEPSEEK_API_KEY"]
 delete process.env["FIREWORKS_API_KEY"]
 delete process.env["CEREBRAS_API_KEY"]
 delete process.env["SAMBANOVA_API_KEY"]
+delete process.env["OPENCODE_SERVER_PASSWORD"]
+delete process.env["OPENCODE_SERVER_USERNAME"]
 
 // Now safe to import from src/
 const { Log } = await import("../src/util/log")

@@ -37,11 +37,7 @@ Configuration files are **merged together**, not replaced.
 
 Configuration files are merged together, not replaced. Settings from the following config locations are combined. Later configs override earlier ones only for conflicting keys. Non-conflicting settings from all configs are preserved.
 
-<<<<<<< HEAD
 For example, if your global config sets `theme: "costrict-cli"` and `autoupdate: true`, and your project config sets `model: "anthropic/claude-sonnet-4-5"`, the final configuration will include all three settings.
-=======
-For example, if your global config sets `autoupdate: true` and your project config sets `model: "anthropic/claude-sonnet-4-5"`, the final configuration will include both settings.
->>>>>>> v1.2.20
 
 ---
 
@@ -102,13 +98,9 @@ You can enable specific servers in your local config:
 
 ### Global
 
-<<<<<<< HEAD
 Place your global CoStrict config in `~/.config/costrict-cli/opencode.json`. Use global config for user-wide preferences like themes, providers, or keybinds.
-=======
-Place your global OpenCode config in `~/.config/opencode/opencode.json`. Use global config for user-wide server/runtime preferences like providers, models, and permissions.
 
-For TUI-specific settings, use `~/.config/opencode/tui.json`.
->>>>>>> v1.2.20
+For TUI-specific settings, use `~/.config/costrict-cli/tui.json`.
 
 Global config overrides remote organizational defaults.
 
@@ -161,13 +153,9 @@ The custom directory is loaded after the global config and `.costrict-cli` direc
 
 ## Schema
 
-<<<<<<< HEAD
 The config file has a schema that's defined in [**`costrict.ai/config.json`**](https://costrict.ai/config.json).
-=======
-The server/runtime config schema is defined in [**`opencode.ai/config.json`**](https://opencode.ai/config.json).
 
-TUI config uses [**`opencode.ai/tui.json`**](https://opencode.ai/tui.json).
->>>>>>> v1.2.20
+TUI config uses [**`costrict.ai/tui.json`**](https://costrict.ai/tui.json).
 
 Your editor should be able to validate and autocomplete based on the schema.
 
@@ -179,7 +167,6 @@ Use a dedicated `tui.json` (or `tui.jsonc`) file for TUI-specific settings.
 
 ```json title="tui.json"
 {
-<<<<<<< HEAD
   "$schema": "https://costrict.ai/config.json",
   "tui": {
     "scroll_speed": 3,
@@ -188,14 +175,6 @@ Use a dedicated `tui.json` (or `tui.jsonc`) file for TUI-specific settings.
     },
     "diff_style": "auto"
   }
-=======
-  "$schema": "https://opencode.ai/tui.json",
-  "scroll_speed": 3,
-  "scroll_acceleration": {
-    "enabled": true
-  },
-  "diff_style": "auto"
->>>>>>> v1.2.20
 }
 ```
 
@@ -269,7 +248,7 @@ You can configure the providers and models you want to use in your CoStrict conf
 
 The `small_model` option configures a separate model for lightweight tasks like title generation. By default, CoStrict tries to use a cheaper model if one is available from your provider, otherwise it falls back to your main model.
 
-Provider options can include `timeout` and `setCacheKey`:
+Provider options can include `timeout`, `chunkTimeout`, and `setCacheKey`:
 
 ```json title="opencode.json"
 {
@@ -278,6 +257,7 @@ Provider options can include `timeout` and `setCacheKey`:
     "anthropic": {
       "options": {
         "timeout": 600000,
+        "chunkTimeout": 30000,
         "setCacheKey": true
       }
     }
@@ -286,6 +266,7 @@ Provider options can include `timeout` and `setCacheKey`:
 ```
 
 - `timeout` - Request timeout in milliseconds (default: 300000). Set to `false` to disable.
+- `chunkTimeout` - Timeout in milliseconds between streamed response chunks. If no chunk arrives in time, the request is aborted.
 - `setCacheKey` - Ensure a cache key is always set for designated provider.
 
 You can also configure [local models](/docs/models#local). [Learn more](/docs/models).
@@ -329,21 +310,14 @@ Bearer tokens (`AWS_BEARER_TOKEN_BEDROCK` or `/connect`) take precedence over pr
 
 ### Themes
 
-<<<<<<< HEAD
 You can configure the theme you want to use in your CoStrict config through the `theme` option.
-=======
-Set your UI theme in `tui.json`.
->>>>>>> v1.2.20
+
+You can also place TUI-specific theme settings in `tui.json`.
 
 ```json title="tui.json"
 {
-<<<<<<< HEAD
   "$schema": "https://costrict.ai/config.json",
   "theme": ""
-=======
-  "$schema": "https://opencode.ai/tui.json",
-  "theme": "tokyonight"
->>>>>>> v1.2.20
 }
 ```
 
@@ -447,11 +421,7 @@ Customize keybinds in `tui.json`.
 
 ```json title="tui.json"
 {
-<<<<<<< HEAD
   "$schema": "https://costrict.ai/config.json",
-=======
-  "$schema": "https://opencode.ai/tui.json",
->>>>>>> v1.2.20
   "keybinds": {}
 }
 ```

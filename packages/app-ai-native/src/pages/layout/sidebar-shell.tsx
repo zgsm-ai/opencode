@@ -1,4 +1,4 @@
-import { createMemo, For, Show, type Accessor, type JSX } from "solid-js"
+import { createEffect, createMemo, For, Show, type Accessor, type JSX } from "solid-js"
 import {
   DragDropProvider,
   DragDropSensors,
@@ -11,7 +11,6 @@ import { ConstrainDragXAxis } from "@/utils/solid-dnd"
 import { IconButton } from "@opencode-ai/ui/icon-button"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { type LocalProject } from "@/context/layout"
-import { sidebarExpanded } from "./sidebar-shell-helpers"
 
 function UserIcon() {
   return (
@@ -47,12 +46,24 @@ export const SidebarContent = (props: {
   renderProjectOverlay: () => JSX.Element
   renderPanel: () => JSX.Element
 }): JSX.Element => {
-  const expanded = createMemo(() => sidebarExpanded(props.mobile, props.opened()))
+  const expanded = createMemo(() => !!props.mobile || props.opened())
   const placement = () => (props.mobile ? "bottom" : "right")
+  let panel: HTMLDivElement | undefined
+
+  createEffect(() => {
+    const el = panel
+    if (!el) return
+    if (expanded()) {
+      el.removeAttribute("inert")
+      return
+    }
+    el.setAttribute("inert", "")
+  })
 
   return (
-    <div class="flex h-full w-full overflow-hidden">
+    <div class="flex h-full w-full min-w-0 overflow-hidden">
       <div
+        data-component="sidebar-rail"
         class="w-16 shrink-0 bg-background-base flex flex-col items-center overflow-hidden"
         onMouseMove={props.aimMove}
       >
@@ -94,7 +105,15 @@ export const SidebarContent = (props: {
         </div>
       </div>
 
-      <Show when={expanded()}>{props.renderPanel()}</Show>
+      <div
+        ref={(el) => {
+          panel = el
+        }}
+        classList={{ "flex-1 flex h-full min-h-0 min-w-0 overflow-hidden": true, "pointer-events-none": !expanded() }}
+        aria-hidden={!expanded()}
+      >
+        {props.renderPanel()}
+      </div>
     </div>
   )
 }

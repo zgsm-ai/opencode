@@ -43,6 +43,9 @@ function createWorkerFetch(client: RpcClient): typeof fetch {
 function createEventSource(client: RpcClient): EventSource {
   return {
     on: (handler) => client.on<Event>("event", handler),
+    setWorkspace: (workspaceID) => {
+      void client.call("setWorkspace", { workspaceID })
+    },
   }
 }
 
@@ -116,7 +119,7 @@ export const TuiThreadCommand = cmd({
 
       // Resolve relative paths against PWD to preserve behavior when using --cwd flag
       const baseCwd = process.env.PWD ?? process.cwd()
-      const cwd = args.project ? path.resolve(baseCwd, args.project) : process.cwd()
+      // const cwd = args.project ? path.resolve(baseCwd, args.project) : process.cwd()
       const localWorker = new URL("./worker.ts", import.meta.url)
       const distWorker = new URL("./cli/cmd/tui/worker.js", import.meta.url)
       const workerPath = await iife(async () => {
@@ -124,12 +127,20 @@ export const TuiThreadCommand = cmd({
         if (await Filesystem.exists(fileURLToPath(distWorker))) return distWorker
         return localWorker
       })
+      // Resolve relative --project paths from PWD, then use the real cwd after
+      // chdir so the thread and worker share the same directory key.
+      const root = Filesystem.resolve(process.env.PWD ?? process.cwd())
+      const next = args.project
+        ? Filesystem.resolve(path.isAbsolute(args.project) ? args.project : path.join(root, args.project))
+        : Filesystem.resolve(process.cwd())
+      // const file = await target()
       try {
-        process.chdir(cwd)
+        process.chdir(next)
       } catch {
-        UI.error("Failed to change directory to " + cwd)
+        UI.error("Failed to change directory to " + next)
         return
       }
+      const cwd = Filesystem.resolve(process.cwd())
 
       const worker = new Worker(workerPath, {
         env: Object.fromEntries(
@@ -216,7 +227,6 @@ export const TuiThreadCommand = cmd({
             prompt,
             fork: args.fork,
           },
-          onExit: stop,
         })
       } finally {
         await stop()

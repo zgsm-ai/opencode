@@ -41,8 +41,8 @@ jobs:
 
       - uses: ./.github/actions/setup-bun
 
-      - name: Generate builtin agents
-        run: bun run --cwd packages/opencode build:builtin-agents
+      - name: Generate builtin agents and skills
+        run: bun run --cwd packages/opencode build:builtin
 
       - id: version
         env:
@@ -96,6 +96,11 @@ jobs:
           fetch-depth: 0
 
       - uses: ./.github/actions/setup-bun
+
+      - name: Generate builtin agents and skills
+        run: |
+          bun run --cwd packages/opencode build:builtin-agents
+          bun run --cwd packages/opencode build:builtin-skills
 
       # Build CLI binaries using the build script
       - name: Build

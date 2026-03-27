@@ -2,13 +2,14 @@ import { Bus } from "@/bus"
 import { BusEvent } from "@/bus/bus-event"
 import { Config } from "@/config/config"
 import { Identifier } from "@/id/id"
+import { YoloMode } from "@/permission/yolo"
 import { Instance } from "@/project/instance"
-import { Database, eq } from "@/storage/db"
 import { PermissionTable } from "@/session/session.sql"
+import { Database, eq } from "@/storage/db"
+import { Context } from "@/util/context"
 import { fn } from "@/util/fn"
 import { Log } from "@/util/log"
 import { Wildcard } from "@/util/wildcard"
-import { YoloMode } from "@/permission/yolo"
 import os from "os"
 import z from "zod"
 
@@ -21,6 +22,15 @@ export namespace PermissionNext {
     if (pattern.startsWith("$HOME/")) return os.homedir() + pattern.slice(5)
     if (pattern.startsWith("$HOME")) return os.homedir() + pattern.slice(5)
     return pattern
+  }
+
+  function yolo() {
+    try {
+      return YoloMode.isEnabled()
+    } catch (err) {
+      if (err instanceof Context.NotFound && err.name === "instance") return false
+      throw err
+    }
   }
 
   export const Action = z.enum(["allow", "deny", "ask"]).meta({
@@ -235,15 +245,13 @@ export namespace PermissionNext {
   )
 
   export function evaluate(permission: string, pattern: string, ...rulesets: Ruleset[]): Rule {
-    if (YoloMode.isEnabled()) {
-      return { action: "allow", permission, pattern }
-    }
     const merged = merge(...rulesets)
     log.info("evaluate", { permission, pattern, ruleset: merged })
-    const match = merged.findLast(
-      (rule) => Wildcard.match(permission, rule.permission) && Wildcard.match(pattern, rule.pattern),
-    )
-    return match ?? { action: "ask", permission, pattern: "*" }
+    const rule = merged.findLast(
+      (item) => Wildcard.match(permission, item.permission) && Wildcard.match(pattern, item.pattern),
+    ) ?? { action: "ask", permission, pattern: "*" }
+    if (rule.action === "ask" && yolo()) return { ...rule, action: "allow" }
+    return rule
   }
 
   const EDIT_TOOLS = ["edit", "write", "patch", "multiedit"]

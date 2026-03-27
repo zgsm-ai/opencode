@@ -135,6 +135,6 @@ Based on the viewed modifications, determine if all assigned tasks are completed
 <directory_structure>
 .cospec/spec/{功能名}/
   ├── spec.md           # Phase 1: System Requirements List
-  ├── project.md        # Phase 2: Overall Design Document
+  ├── tech.md        # Phase 2: Overall Design Document
   └── plan.md           # Phase 3: Execution Plan
 </directory_structure>

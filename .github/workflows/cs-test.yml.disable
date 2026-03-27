@@ -91,6 +91,7 @@ jobs:
           path: |
             packages/app/e2e/test-results
             packages/app/e2e/playwright-report
+<<<<<<< HEAD:.github/workflows/cs-test.yml.disable
 
   required:
     name: required
@@ -106,3 +107,5 @@ jobs:
           echo "e2e=${{ needs.e2e.result }}"
           test "${{ needs.unit.result }}" = "success"
           test "${{ needs.e2e.result }}" = "success" || test "${{ inputs.skip-e2e }}" = "true"
+=======
+>>>>>>> v1.2.27:.github/workflows/test.yml

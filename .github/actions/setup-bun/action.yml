@@ -12,14 +12,6 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Cache Bun dependencies
-      uses: actions/cache@v4
-      with:
-        path: ~/.bun/install/cache
-        key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lockb') }}
-        restore-keys: |
-          ${{ runner.os }}-bun-
-
     - name: Get baseline download URL
       id: bun-url
       shell: bash

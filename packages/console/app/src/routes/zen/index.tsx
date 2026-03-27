@@ -25,8 +25,7 @@ import { config } from "~/config"
 
 const checkLoggedIn = query(async () => {
   "use server"
-  const workspaceID = await getLastSeenWorkspaceID().catch(() => {})
-  if (workspaceID) throw redirect(`/workspace/${workspaceID}`)
+  return await getLastSeenWorkspaceID().catch(() => {})
 }, "checkLoggedIn.get")
 
 export default function Home() {

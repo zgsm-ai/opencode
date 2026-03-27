@@ -35,8 +35,8 @@ export function createDialogProviderOptions() {
         title: provider.name,
         value: provider.id,
         description: {
-          costrict: "(Recommended)",
-          anthropic: "(Claude Max or API key)",
+          opencode: "(Recommended)",
+          anthropic: "(API key)",
           openai: "(ChatGPT Plus/Pro or API key)",
           "opencode-go": "Low cost subscription for everyone",
         }[provider.id],
