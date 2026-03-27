@@ -60,6 +60,7 @@ export function WorkspaceSidebar() {
 
   const handleSelectWorkspace = (workspace: Workspace) => {
     if (!workspace.deviceUniqueId) return
+    enableWorkspace(workspace.id)
     selectWorkspace(workspace.id)
     active.setActive(workspace.id, { ...workspace })
     server.setActive(ServerConnection.Key.make(getProxyUrl(workspace.deviceUniqueId)))
