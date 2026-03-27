@@ -5,12 +5,10 @@ type WorkspaceContextValue = {
   workspaces: Accessor<Workspace[]>
   devices: Accessor<Device[]>
   selectedWorkspaceId: Accessor<string | undefined>
-  selectedDeviceId: Accessor<string | undefined>
   enabledWorkspaceIds: Accessor<string[]>
   closedWorkspaceIds: Accessor<string[]>
   isLoading: Accessor<boolean>
   selectWorkspace: (id: string) => void
-  selectDevice: (id: string) => void
   enableWorkspace: (id: string) => void
   disableWorkspace: (id: string) => void
   createWorkspace: (deviceId: string, directory: string) => Promise<void>
