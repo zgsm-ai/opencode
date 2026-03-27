@@ -446,55 +446,80 @@ const PluginUploadCommand = cmd({
 
         prompts.outro("Done")
 
-        // Validate plugin directory
-        const validateSpinner = prompts.spinner()
-        logSpinnerStart("Validating plugin...", isInteractive)
-        validateSpinner.start("Validating plugin...")
-        try {
-          await validatePlugin(options.path)
-          validateSpinner.stop("Plugin validated")
-          logSpinnerStop("Plugin validated", isInteractive)
-        } catch (err) {
-          validateSpinner.stop("Validation failed", 1)
-          const errorMessage = formatError(err)
-          prompts.log.error(errorMessage)
-          errorNonInteractive(`Error: ${errorMessage}`, isInteractive)
-          prompts.outro("Done")
-          return
+        // Validate plugin directory (only for skill type)
+        if (type === "skill") {
+          const validateSpinner = prompts.spinner()
+          logSpinnerStart("Validating plugin...", isInteractive)
+          validateSpinner.start("Validating plugin...")
+          try {
+            await validatePlugin(options.path)
+            validateSpinner.stop("Plugin validated")
+            logSpinnerStop("Plugin validated", isInteractive)
+          } catch (err) {
+            validateSpinner.stop("Validation failed", 1)
+            const errorMessage = formatError(err)
+            prompts.log.error(errorMessage)
+            errorNonInteractive(`Error: ${errorMessage}`, isInteractive)
+            prompts.outro("Done")
+            return
+          }
         }
 
-        // Pack plugin
-        const packSpinner = prompts.spinner()
-        logSpinnerStart("Packing plugin...", isInteractive)
-        packSpinner.start("Packing plugin...")
-        let packResult
-        try {
-          const tempDir = path.join(Global.Path.cache, "plugin-uploads")
-          packResult = await packPlugin(options.path, tempDir)
-          
-          // Save packed file to local for verification
-          const localPackDir = path.join(Global.Path.data, "packed-plugins")
-          await mkdir(localPackDir, { recursive: true })
-          const localPackPath = path.join(localPackDir, path.basename(packResult.archivePath))
-          await copyFile(packResult.archivePath, localPackPath)
-          packSpinner.stop(`Plugin packed (${formatBytes(packResult.size)}, saved to: ${localPackPath})`)
-          logSpinnerStop(`Plugin packed (${formatBytes(packResult.size)})`, isInteractive)
-        } catch (err) {
-          packSpinner.stop("Packing failed", 1)
-          const errorMessage = formatError(err)
-          prompts.log.error(errorMessage)
-          errorNonInteractive(`Error: ${errorMessage}`, isInteractive)
-          prompts.outro("Done")
-          return
+        // Pack plugin (only for skill type)
+        if (type === "skill") {
+          const packSpinner = prompts.spinner()
+          logSpinnerStart("Packing plugin...", isInteractive)
+          packSpinner.start("Packing plugin...")
+          try {
+            const tempDir = path.join(Global.Path.cache, "plugin-uploads")
+            const packResult = await packPlugin(options.path, tempDir)
+            
+            // Save packed file to local for verification
+            const localPackDir = path.join(Global.Path.data, "packed-plugins")
+            await mkdir(localPackDir, { recursive: true })
+            const localPackPath = path.join(localPackDir, path.basename(packResult.archivePath))
+            await copyFile(packResult.archivePath, localPackPath)
+            packSpinner.stop(`Plugin packed (${formatBytes(packResult.size)}, saved to: ${localPackPath})`)
+            logSpinnerStop(`Plugin packed (${formatBytes(packResult.size)})`, isInteractive)
+          } catch (err) {
+            packSpinner.stop("Packing failed", 1)
+            const errorMessage = formatError(err)
+            prompts.log.error(errorMessage)
+            errorNonInteractive(`Error: ${errorMessage}`, isInteractive)
+            prompts.outro("Done")
+            return
+          }
         }
 
-        // Read SKILL.md content
+        // Read markdown content
+        // For skill: read SKILL.md from directory
+        // For subagent/command: path can be direct markdown file
         let skillContent = ""
-        try {
-          skillContent = await readSkillMarkdown(options.path)
-        } catch {
-          if (options.type === "skill") {
+        let markdownFileName: string
+        
+        if (type === "skill") {
+          try {
+            skillContent = await readSkillMarkdown(options.path)
+          } catch {
             prompts.log.warn("SKILL.md not found, using empty content")
+          }
+          markdownFileName = path.basename(options.path)
+        } else {
+          // subagent/command: path can be direct .md file
+          if (options.path.endsWith(".md")) {
+            const file = Bun.file(options.path)
+            if (await file.exists()) {
+              skillContent = await file.text()
+            }
+            markdownFileName = path.basename(options.path, ".md")
+          } else {
+            // Fallback to directory mode
+            try {
+              skillContent = await readSkillMarkdown(options.path)
+            } catch {
+              // Ignore error
+            }
+            markdownFileName = path.basename(options.path)
           }
         }
 
@@ -506,6 +531,12 @@ const PluginUploadCommand = cmd({
 
         const baseUrl = registryBase()
 
+        // Calculate name and slug based on type
+        // skill: use parent folder name; subagent/command: use markdown file name
+        const itemName = options.type === "skill"
+          ? path.basename(options.path)
+          : markdownFileName
+        
         // Create item
         const itemSpinner = prompts.spinner()
         logSpinnerStart("Creating item...", isInteractive)
@@ -513,9 +544,9 @@ const PluginUploadCommand = cmd({
         let item: CreateItemResponse
         try {
           item = await createItem(baseUrl,{
-            slug: "cs-writer4",
+            slug: itemName,
             itemType: options.type,
-            name: "cs-writer4",
+            name: itemName,
             description: options.description || "",
             category: "utilities",
             version: options.version,
