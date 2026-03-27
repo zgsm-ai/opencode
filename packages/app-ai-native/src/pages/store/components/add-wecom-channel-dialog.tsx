@@ -22,9 +22,9 @@ export function AddWecomChannelDialog(props: AddWecomChannelDialogProps) {
     name: "",
     webhook: "",
     events: {
-      agent: true,
-      permissions: true,
-      errors: false,
+      permission: true,
+      question: true,
+      idle: false,
     },
     error: "",
     saving: false,
@@ -50,9 +50,9 @@ export function AddWecomChannelDialog(props: AddWecomChannelDialogProps) {
         webhook: form.webhook.trim(),
         enabled: true,
         events: {
-          agent: form.events.agent,
-          permissions: form.events.permissions,
-          errors: form.events.errors,
+          permission: form.events.permission,
+          question: form.events.question,
+          idle: form.events.idle,
         },
         ...(wecom ? { systemChannelId: wecom.systemChannelId } : {}),
       })
@@ -94,17 +94,17 @@ export function AddWecomChannelDialog(props: AddWecomChannelDialogProps) {
               {language.t("store.notificationChannels.dialog.events")}
             </label>
             <div class="flex flex-col gap-2 text-sm text-text-strong">
-              <Checkbox checked={form.events.agent} onChange={(checked) => setForm("events", "agent", checked)}>
-                {language.t("store.notificationChannels.event.agent")}
-              </Checkbox>
               <Checkbox
-                checked={form.events.permissions}
-                onChange={(checked) => setForm("events", "permissions", checked)}
+                checked={form.events.permission}
+                onChange={(checked) => setForm("events", "permission", checked)}
               >
-                {language.t("store.notificationChannels.event.permissions")}
+                {language.t("store.notificationChannels.event.permission")}
               </Checkbox>
-              <Checkbox checked={form.events.errors} onChange={(checked) => setForm("events", "errors", checked)}>
-                {language.t("store.notificationChannels.event.errors")}
+              <Checkbox checked={form.events.question} onChange={(checked) => setForm("events", "question", checked)}>
+                {language.t("store.notificationChannels.event.question")}
+              </Checkbox>
+              <Checkbox checked={form.events.idle} onChange={(checked) => setForm("events", "idle", checked)}>
+                {language.t("store.notificationChannels.event.idle")}
               </Checkbox>
             </div>
           </div>

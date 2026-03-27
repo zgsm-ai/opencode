@@ -3,10 +3,10 @@ import { notificationChannelApi, type WecomChannelPayload } from "./api"
 
 function toTriggerEvents(events: WecomChannel["events"]) {
   return [
-    events.agent ? "agent" : null,
-    events.permissions ? "permissions" : null,
-    events.errors ? "errors" : null,
-  ].filter(Boolean) as Array<"agent" | "permissions" | "errors">
+    events.permission ? "permission" : null,
+    events.question ? "question" : null,
+    events.idle ? "idle" : null,
+  ].filter(Boolean) as Array<"permission" | "question" | "idle">
 }
 
 function toPayload(channel: Omit<WecomChannel, "id">): WecomChannelPayload {

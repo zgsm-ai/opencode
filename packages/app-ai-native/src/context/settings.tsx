@@ -9,9 +9,9 @@ export interface WecomChannel {
   webhook: string
   enabled: boolean
   events: {
-    agent: boolean
-    permissions: boolean
-    errors: boolean
+    permission: boolean
+    question: boolean
+    idle: boolean
   }
   systemChannelId?: string
 }
@@ -97,9 +97,9 @@ const defaultSettings: Settings = {
         webhook: "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=mock-key",
         enabled: true,
         events: {
-          agent: true,
-          permissions: true,
-          errors: false,
+          permission: true,
+          question: true,
+          idle: false,
         },
       },
     ],
@@ -267,9 +267,7 @@ export const { use: useSettings, provider: SettingsProvider } = createSimpleCont
           setStore("channels", "wecom", (list = []) => [...list, channel])
         },
         updateWecom(id: string, patch: Partial<WecomChannel>) {
-          setStore("channels", "wecom", (list = []) =>
-            list.map((c) => (c.id === id ? { ...c, ...patch } : c)),
-          )
+          setStore("channels", "wecom", (list = []) => list.map((c) => (c.id === id ? { ...c, ...patch } : c)))
         },
         removeWecom(id: string) {
           setStore("channels", "wecom", (list = []) => list.filter((c) => c.id !== id))

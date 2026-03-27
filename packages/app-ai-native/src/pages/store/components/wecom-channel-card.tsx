@@ -51,22 +51,22 @@ export function WecomChannelCard(props: WecomChannelCardProps) {
       <div class="flex flex-col gap-2 px-4 py-2">
         <span class="text-xs font-medium text-text-weak">{language.t("store.notificationChannels.dialog.events")}</span>
         <div class="flex flex-wrap gap-2">
-          <Show when={props.channel.events.agent}>
+          <Show when={props.channel.events.permission}>
             <span class="rounded-full bg-surface-info-base/20 px-2.5 py-0.5 text-xs text-text-strong">
-              {language.t("store.notificationChannels.event.agentShort")}
+              {language.t("store.notificationChannels.event.permission")}
             </span>
           </Show>
-          <Show when={props.channel.events.permissions}>
+          <Show when={props.channel.events.question}>
             <span class="rounded-full bg-surface-info-base/20 px-2.5 py-0.5 text-xs text-text-strong">
-              {language.t("store.notificationChannels.event.permissions")}
+              {language.t("store.notificationChannels.event.question")}
             </span>
           </Show>
-          <Show when={props.channel.events.errors}>
+          <Show when={props.channel.events.idle}>
             <span class="rounded-full bg-surface-info-base/20 px-2.5 py-0.5 text-xs text-text-strong">
-              {language.t("store.notificationChannels.event.errors")}
+              {language.t("store.notificationChannels.event.idle")}
             </span>
           </Show>
-          <Show when={!props.channel.events.agent && !props.channel.events.permissions && !props.channel.events.errors}>
+          <Show when={!props.channel.events.permission && !props.channel.events.question && !props.channel.events.idle}>
             <span class="text-xs text-text-weak">{language.t("store.notificationChannels.none")}</span>
           </Show>
         </div>

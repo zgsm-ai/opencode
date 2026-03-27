@@ -279,7 +279,7 @@ type DeviceResponse = Partial<Device> & {
 
 type NotificationChannelType = "wecom" | "feishu" | "webhook"
 
-type NotificationTriggerEvent = "agent" | "permissions" | "errors"
+type NotificationTriggerEvent = "permission" | "question" | "idle"
 
 export type AvailableChannel = {
   name: string
@@ -344,9 +344,9 @@ function normalizeWecomChannel(channel: WecomChannelResponse) {
     webhook,
     enabled: Boolean(channel.enabled),
     events: {
-      agent: triggerEvents.has("agent"),
-      permissions: triggerEvents.has("permissions"),
-      errors: triggerEvents.has("errors"),
+      permission: triggerEvents.has("permission"),
+      question: triggerEvents.has("question"),
+      idle: triggerEvents.has("idle"),
     },
   }
 }
