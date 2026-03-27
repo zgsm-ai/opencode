@@ -23,11 +23,12 @@ function NavButton(props: {
             type="button"
             aria-label={props.label}
             onClick={props.onClick}
-            classList={{
-               "flex items-center justify-center size-10 rounded-lg transition-colors cursor-default outline-none": true,
-               "bg-surface-base text-icon-strong-base shadow-xs-border-base/30": props.active,
-               "text-icon-weak-base hover:bg-surface-base-hover hover:text-icon-base": !props.active,
-            }}
+            class={[
+               "flex items-center justify-center size-10 rounded-lg transition-colors cursor-default outline-none",
+               props.active
+                  ? "bg-surface-base text-icon-strong-base shadow-xs-border-base/30"
+                  : "text-icon-weak-base hover:bg-surface-base-hover hover:text-icon-base",
+            ].join(" ")}
          >
             <Icon name={props.icon} size="normal" />
          </button>

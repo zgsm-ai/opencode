@@ -17,11 +17,9 @@ function NavItem(props: {
   return (
     <A
       href={props.href}
-      class={`group flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150 cursor-pointer ${
-        props.active
-          ? "bg-surface-base text-text-strong font-medium shadow-xs-border-base/30"
-          : "text-text-weak hover:text-text-strong hover:bg-surface-base/60"
-      }`}
+      class="group flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150 cursor-pointer"
+      activeClass="bg-surface-base text-text-strong font-medium shadow-xs-border-base/30"
+      inactiveClass="text-text-weak hover:text-text-strong hover:bg-surface-base/60"
     >
       <span
         class="flex items-center justify-center size-8 rounded-lg shrink-0"
