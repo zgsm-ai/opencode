@@ -139,6 +139,53 @@ export function WorkspaceSidebar() {
     const [mounted, setMounted] = createSignal(false)
     const [renaming, setRenaming] = createSignal(false)
     const [renameValue, setRenameValue] = createSignal("")
+
+    const menu = () => (
+      <DropdownMenu>
+        <DropdownMenu.Trigger
+          as={IconButton}
+          icon="dot-grid"
+          variant="ghost"
+          class="size-7 rounded-lg cursor-pointer"
+          aria-label={t("workspace.more")}
+        />
+        <DropdownMenu.Portal>
+          <DropdownMenu.Content
+            class="min-w-36"
+            style={{
+              "background-color": "var(--surface-base)",
+              border: "none",
+              "box-shadow": "var(--shadow-xs-border)",
+              "--dropdown-item-hover": "var(--surface-base-hover)",
+            }}
+          >
+            <Show when={cardProps.isRunning}>
+              <DropdownMenu.Item onSelect={() => handleCloseWorkspace(workspace()!)}>
+                <Icon name="stop" size="small" class="size-4 text-icon-weak" />
+                <DropdownMenu.ItemLabel>{t("workspace.close")}</DropdownMenu.ItemLabel>
+              </DropdownMenu.Item>
+            </Show>
+            <Show when={!cardProps.isRunning && !dot().offline}>
+              <DropdownMenu.Item onSelect={() => handleOpenWorkspace(workspace()!)}>
+                <Icon name="enter" size="small" class="size-4 text-icon-weak" />
+                <DropdownMenu.ItemLabel>{t("workspace.run")}</DropdownMenu.ItemLabel>
+              </DropdownMenu.Item>
+            </Show>
+            <DropdownMenu.Item onSelect={startRename}>
+              <Icon name="edit" size="small" class="size-4 text-icon-weak" />
+              <DropdownMenu.ItemLabel>{t("workspace.rename")}</DropdownMenu.ItemLabel>
+            </DropdownMenu.Item>
+            <Show when={!cardProps.isRunning}>
+              <DropdownMenu.Separator />
+              <DropdownMenu.Item onSelect={() => deleteWorkspace(cardProps.id)}>
+                <Icon name="trash" size="small" class="size-4 text-icon-critical-base" />
+                <DropdownMenu.ItemLabel>{t("workspace.delete")}</DropdownMenu.ItemLabel>
+              </DropdownMenu.Item>
+            </Show>
+          </DropdownMenu.Content>
+        </DropdownMenu.Portal>
+      </DropdownMenu>
+    )
     const toggle = () => {
       if (!mounted()) setMounted(true)
       setOpen((v) => !v)
@@ -282,40 +329,7 @@ export function WorkspaceSidebar() {
                       }}
                     />
                   </Tooltip>
-                  <DropdownMenu>
-                    <DropdownMenu.Trigger
-                      as={IconButton}
-                      icon="dot-grid"
-                      variant="ghost"
-                      class="size-7 rounded-lg cursor-pointer"
-                      aria-label={t("workspace.more")}
-                    />
-                    <DropdownMenu.Portal>
-                      <DropdownMenu.Content
-                        class="min-w-36"
-                        style={{
-                          "background-color": "var(--surface-base)",
-                          border: "none",
-                          "box-shadow": "var(--shadow-xs-border)",
-                          "--dropdown-item-hover": "var(--surface-base-hover)",
-                        }}
-                      >
-                        <DropdownMenu.Item onSelect={() => handleCloseWorkspace(ws())}>
-                          <Icon name="stop" size="small" class="size-4 text-icon-weak" />
-                          <DropdownMenu.ItemLabel>{t("workspace.close")}</DropdownMenu.ItemLabel>
-                        </DropdownMenu.Item>
-                        <DropdownMenu.Item onSelect={startRename}>
-                          <Icon name="edit" size="small" class="size-4 text-icon-weak" />
-                          <DropdownMenu.ItemLabel>{t("workspace.rename")}</DropdownMenu.ItemLabel>
-                        </DropdownMenu.Item>
-                        <DropdownMenu.Separator />
-                        <DropdownMenu.Item onSelect={() => deleteWorkspace(cardProps.id)}>
-                          <Icon name="trash" size="small" class="size-4 text-icon-critical-base" />
-                          <DropdownMenu.ItemLabel>{t("workspace.delete")}</DropdownMenu.ItemLabel>
-                        </DropdownMenu.Item>
-                      </DropdownMenu.Content>
-                    </DropdownMenu.Portal>
-                  </DropdownMenu>
+                  {menu()}
                 </div>
               </div>
               <Show when={mounted()}>
@@ -389,42 +403,7 @@ export function WorkspaceSidebar() {
               </button>
             </Tooltip>
             <div class="shrink-0 flex items-center gap-0.5 ml-auto opacity-0 group-hover/workspace:opacity-100 transition-opacity duration-150 pr-1">
-              <DropdownMenu>
-                <DropdownMenu.Trigger
-                  as={IconButton}
-                  icon="dot-grid"
-                  variant="ghost"
-                  class="size-7 rounded-lg cursor-pointer"
-                  aria-label={t("workspace.more")}
-                />
-                <DropdownMenu.Portal>
-                  <DropdownMenu.Content
-                    class="min-w-36"
-                    style={{
-                      "background-color": "var(--surface-base)",
-                      border: "none",
-                      "box-shadow": "var(--shadow-xs-border)",
-                      "--dropdown-item-hover": "var(--surface-base-hover)",
-                    }}
-                  >
-                    <Show when={!dot().offline}>
-                      <DropdownMenu.Item onSelect={() => handleOpenWorkspace(ws())}>
-                        <Icon name="enter" size="small" class="size-4 text-icon-weak" />
-                        <DropdownMenu.ItemLabel>{t("workspace.run")}</DropdownMenu.ItemLabel>
-                      </DropdownMenu.Item>
-                    </Show>
-                    <DropdownMenu.Item onSelect={startRename}>
-                      <Icon name="edit" size="small" class="size-4 text-icon-weak" />
-                      <DropdownMenu.ItemLabel>{t("workspace.rename")}</DropdownMenu.ItemLabel>
-                    </DropdownMenu.Item>
-                    <DropdownMenu.Separator />
-                    <DropdownMenu.Item onSelect={() => deleteWorkspace(cardProps.id)}>
-                      <Icon name="trash" size="small" class="size-4 text-icon-critical-base" />
-                      <DropdownMenu.ItemLabel>{t("workspace.delete")}</DropdownMenu.ItemLabel>
-                    </DropdownMenu.Item>
-                  </DropdownMenu.Content>
-                </DropdownMenu.Portal>
-              </DropdownMenu>
+              {menu()}
             </div>
           </div>
         )}
