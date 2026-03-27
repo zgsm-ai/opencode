@@ -299,10 +299,10 @@ function WorkspaceContent(props: ParentProps) {
       <Show
         when={ready()}
         fallback={
-          <>
+          <Show when={!params.workspaceID} fallback={<div class="size-full" />}>
             {props.children}
             <Toast.Region />
-          </>
+          </Show>
         }
       >
         <AppInterface>{props.children}</AppInterface>
