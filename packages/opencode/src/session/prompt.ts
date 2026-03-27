@@ -961,6 +961,26 @@ export namespace SessionPrompt {
           })
         }
 
+        // Inject editor context into the last user message for cache optimization
+        const editorCtx = SystemPrompt.editorContext()
+        if (editorCtx) {
+          const lastMsg = msgs.findLast((m) => m.info.role === "user")
+          if (lastMsg) {
+            for (const part of lastMsg.parts) {
+              if (part.type !== "text" || part.ignored) continue
+              if (!part.text.trim()) continue
+              part.text = [
+                "<editor_context>",
+                editorCtx,
+                "</editor_context>",
+                "",
+                part.text,
+              ].join("\n")
+              break
+            }
+          }
+        }
+
         const sessionMessages = clone(msgs)
 
         if (agent.name === "proposal") {
@@ -1053,19 +1073,19 @@ export namespace SessionPrompt {
             ...MessageV2.toModelMessages(msgs, model),
             ...(maxStepState.forceExitTool && maxStepState.exitToolName
               ? [
-                  {
-                    role: "user" as const,
-                    content: [{ type: "text" as const, text: LoopPolicy.reminder(maxStepState.exitToolName) }],
-                  },
-                ]
+                {
+                  role: "user" as const,
+                  content: [{ type: "text" as const, text: LoopPolicy.reminder(maxStepState.exitToolName) }],
+                },
+              ]
               : []),
             ...(ENABLE_MAX_STEPS_EPHEMERAL_INJECTION && isLastStep
               ? [
-                  {
-                    role: "assistant" as const,
-                    content: MAX_STEPS,
-                  },
-                ]
+                {
+                  role: "assistant" as const,
+                  content: MAX_STEPS,
+                },
+              ]
               : []),
           ],
           tools,
@@ -1625,8 +1645,8 @@ export namespace SessionPrompt {
                       messageID: info.id,
                       extra: { bypassCwdCheck: true, model },
                       messages: [],
-                      metadata: async () => {},
-                      ask: async () => {},
+                      metadata: async () => { },
+                      ask: async () => { },
                     }
                     const result = await t.execute(args, readCtx)
                     pieces.push({
@@ -1684,8 +1704,8 @@ export namespace SessionPrompt {
                   messageID: info.id,
                   extra: { bypassCwdCheck: true },
                   messages: [],
-                  metadata: async () => {},
-                  ask: async () => {},
+                  metadata: async () => { },
+                  ask: async () => { },
                 }
                 const result = await ReadTool.init().then((t) => t.execute(args, listCtx))
                 return [
@@ -1737,7 +1757,15 @@ export namespace SessionPrompt {
         if (part.type === "agent") {
           // Check if this agent would be denied by task permission
           const perm = PermissionNext.evaluate("task", part.name, agent.permission)
-          const hint = perm.action === "deny" ? " . Invoked by user; guaranteed to exist." : ""
+          let hint = ""
+          if (perm.action === "deny") {
+            hint = " . Invoked by user; guaranteed to exist."
+            // Check if the agent is not visible by default
+            const targetAgent = await Agent.get(part.name)
+            if (targetAgent?.visible === false) {
+              hint += ` Note: ${part.name} is not visible to other agents by default. It requires explicit permission configuration to access.`
+            }
+          }
           return [
             {
               ...part,
@@ -2312,19 +2340,19 @@ NOTE: At any point in time through this workflow you should feel free to ask the
     const isSubtask = (agent.mode === "subagent" && command.subtask !== false) || command.subtask === true
     const parts = isSubtask
       ? [
-          {
-            type: "subtask" as const,
-            agent: agent.name,
-            description: command.description ?? "",
-            command: input.command,
-            model: {
-              providerID: taskModel.providerID,
-              modelID: taskModel.modelID,
-            },
-            // TODO: how can we make task tool accept a more complex input?
-            prompt: templateParts.find((y) => y.type === "text")?.text ?? "",
+        {
+          type: "subtask" as const,
+          agent: agent.name,
+          description: command.description ?? "",
+          command: input.command,
+          model: {
+            providerID: taskModel.providerID,
+            modelID: taskModel.modelID,
           },
-        ]
+          // TODO: how can we make task tool accept a more complex input?
+          prompt: templateParts.find((y) => y.type === "text")?.text ?? "",
+        },
+      ]
       : [...templateParts, ...(input.parts ?? [])]
 
     const userAgent = isSubtask ? (input.agent ?? (await Agent.defaultAgent())) : agentName

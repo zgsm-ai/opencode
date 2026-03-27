@@ -1,0 +1,12 @@
+---
+name: Clarify
+description: >-
+  用于澄清和细化任务要求的代理。当任务描述不明确或缺乏细节时，使用此代理与用户互动，提出澄清性问题，以确保对任务的全面理解，从而制定出准确的执行计划。
+mode: subagent
+tools:
+  webfetch: false
+  skill: false
+  question: true
+  write: true
+steps: 20
+---

@@ -9,6 +9,7 @@ import nunjucks from "nunjucks"
 export namespace ConfigMarkdown {
   export const FILE_REGEX = /(?<![\w`])@(\.?[^\s`,.]*(?:\.[^\s`,.]+)*)/g
   export const SHELL_REGEX = /!`([^`]+)`/g
+  export const TOOL_REGEX = /!tool\{([\w-]+)\}\s*\(([^)]*)\)/g
 
   export function files(template: string) {
     return Array.from(template.matchAll(FILE_REGEX))
@@ -16,6 +17,10 @@ export namespace ConfigMarkdown {
 
   export function shell(template: string) {
     return Array.from(template.matchAll(SHELL_REGEX))
+  }
+
+  export function tool(template: string): RegExpMatchArray[] {
+    return Array.from(template.matchAll(TOOL_REGEX))
   }
 
   // other coding agents like claude code allow invalid yaml in their

@@ -24,7 +24,7 @@ tools:
 3. 按 C4 Model 四个层次逐步完成架构建模
 4. 输出系统上下文图、容器图、组件图等架构图（Mermaid / PlantUML 格式）
 5. 记录关键架构决策（ADR）
-6. 在 `.cospec/` 目录下输出总体设计文档 `project.md` 
+6. 在 `.cospec/` 目录下输出总体设计文档 `tech.md` 
 </role>
 
 <directory_structure>
@@ -32,7 +32,7 @@ tools:
   ├─archived/  # 归档目录
   └─spec/      # spec目录
       └─demand-xxx/      # 用户需求目录
-          project.md     # 总体设计文件
+          tech.md     # 总体设计文件
           research.md    # 项目探索结果 
           spec.md        # 系统需求清单 
           plan.md        # 执行计划 

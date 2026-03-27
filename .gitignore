@@ -39,6 +39,8 @@ trae_agent
 tsconfig.tsbuildinfo
 .bunfig.toml
 .cache
+skills
+
 .history
 .cursor
 .cspell

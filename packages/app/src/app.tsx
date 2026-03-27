@@ -9,7 +9,6 @@ import { Splash } from "@opencode-ai/ui/logo"
 import { ThemeProvider } from "@opencode-ai/ui/theme"
 import { MetaProvider } from "@solidjs/meta"
 import { type BaseRouterProps, Navigate, Route, Router } from "@solidjs/router"
-import { type Duration, Effect } from "effect"
 import {
   type Component,
   createMemo,
@@ -155,10 +154,9 @@ export function AppBaseProviders(props: ParentProps) {
   )
 }
 
-const effectMinDuration =
-  (duration: Duration.Input) =>
-  <A, E, R>(e: Effect.Effect<A, E, R>) =>
-    Effect.all([e, Effect.sleep(duration)], { concurrency: "unbounded" }).pipe(Effect.map((v) => v[0]))
+function sleep(ms: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, ms))
+}
 
 function ConnectionGate(props: ParentProps<{ disableHealthCheck?: boolean }>) {
   const server = useServer()
@@ -168,25 +166,29 @@ function ConnectionGate(props: ParentProps<{ disableHealthCheck?: boolean }>) {
 
   // performs repeated health check with a grace period for
   // non-http connections, otherwise fails instantly
-  const [startupHealthCheck, healthCheckActions] = createResource(() =>
-    props.disableHealthCheck
-      ? true
-      : Effect.gen(function* () {
-          if (!server.current) return true
-          const { http, type } = server.current
-
-          while (true) {
-            const res = yield* Effect.promise(() => checkServerHealth(http))
-            if (res.healthy) return true
-            if (checkMode() === "background" || type === "http") return false
-          }
-        }).pipe(
-          effectMinDuration(checkMode() === "blocking" ? "1.2 seconds" : 0),
-          Effect.timeoutOrElse({ duration: "10 seconds", onTimeout: () => Effect.succeed(false) }),
-          Effect.ensuring(Effect.sync(() => setCheckMode("background"))),
-          Effect.runPromise,
-        ),
-  )
+  const [startupHealthCheck, healthCheckActions] = createResource(async () => {
+    if (props.disableHealthCheck) return true
+    if (!server.current) return true
+    const { http, type } = server.current
+    const minMs = checkMode() === "blocking" ? 1200 : 0
+    const run = async () => {
+      while (true) {
+        const res = await checkServerHealth(http)
+        if (res.healthy) return true
+        if (checkMode() === "background" || type === "http") return false
+      }
+    }
+    try {
+      const timeout = new Promise<false>((resolve) => setTimeout(() => resolve(false), 10000))
+      const result = await Promise.race([
+        Promise.all([run(), sleep(minMs)]).then(([v]) => v),
+        timeout,
+      ])
+      return result
+    } finally {
+      setCheckMode("background")
+    }
+  })
 
   return (
     <Show

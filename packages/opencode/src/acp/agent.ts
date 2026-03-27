@@ -1324,7 +1324,7 @@ export namespace ACP {
                 filename,
                 mime: part.mimeType,
               })
-            } else if (part.uri && part.uri.startsWith("http:")) {
+            } else if (part.uri && /^https?:/.test(part.uri)) {
               parts.push({
                 type: "file",
                 url: part.uri,

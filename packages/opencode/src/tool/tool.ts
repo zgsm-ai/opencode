@@ -27,6 +27,7 @@ export namespace Tool {
   }
   export interface Info<Parameters extends z.ZodType = z.ZodType, M extends Metadata = Metadata> {
     id: string
+    visible?: boolean
     init: (ctx?: InitContext) => Promise<{
       description: string
       parameters: Parameters
@@ -49,9 +50,11 @@ export namespace Tool {
   export function define<Parameters extends z.ZodType, Result extends Metadata>(
     id: string,
     init: Info<Parameters, Result>["init"] | Awaited<ReturnType<Info<Parameters, Result>["init"]>>,
+    options?: { visible?: boolean },
   ): Info<Parameters, Result> {
     return {
       id,
+      visible: options?.visible,
       init: async (initCtx) => {
         const toolInfo = init instanceof Function ? await init(initCtx) : init
         const execute = toolInfo.execute
