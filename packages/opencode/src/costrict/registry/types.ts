@@ -143,6 +143,8 @@ export interface CreateItemRequest {
   version: string
   content: string
   createdBy: string
+  registryId: string
+  visibility: string
 }
 
 export interface CreateItemResponse {

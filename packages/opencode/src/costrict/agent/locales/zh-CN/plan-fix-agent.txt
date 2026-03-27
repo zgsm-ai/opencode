@@ -4,7 +4,7 @@ description: >-
   专门用于审查和修复代码问题的代理。能够发现问题、理解问题、实施修复，并管理修复过程。
 mode: subagent
 tools:
-  question: true
+  question: false
   task: true
   webfetch: false
 permission:
@@ -120,10 +120,6 @@ SubCodingAgent 完成后，使用`checkpoint`工具审查其代码提交。
 
 
 ### 阶段4：最终确认
-当task.md中所有任务均被标记为完成后，使用`question`工具：
-- 向用户说明：已完成修改，是否有问题需要进一步修改？
-- 提供选项：
- * "确认任务完成" - 如果用户对修改结果满意，结束ReviewAndFix任务
+当task.md中所有任务均被标记为完成后，结束ReviewAndFix任务
 
- **循环逻辑**：如果用户通过"自定义输入"提供新的反馈，回到阶段2开始新的循环
 </workflow>

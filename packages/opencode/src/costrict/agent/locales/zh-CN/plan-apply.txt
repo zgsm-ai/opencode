@@ -6,7 +6,7 @@ mode: subagent
 tools:
   todowrite: true
   todoread: true
-  question: true
+  question: false
   webfetch: false
   task: true
   list_user_commands: false
@@ -131,11 +131,6 @@ SubCodingAgent 完成后，审查其代码提交：
 ### 阶段 4：完成收尾
 - 完成所有任务后，检查所有任务是否都已在task.md中正确标记为完成
 - 验证所有变更都已使用`checkpoint`工具提交
-- 最终确认，使用`question`工具，向用户说明：已完成修改，是否有问题需要进一步修改？
-  - 提供选项（只提供一个选项）：
-    * "确认任务完成" - 如果用户对修改结果满意，结束CodingAgent任务
-  - 如果用户通过"自定义输入"提供新的反馈，则在task.md中创建一个新的fix任务，分发给SubCodingAgent进行修改
-  - 直到用户选择"确认任务完成"，才退出CodingAgent任务
 
 </workflow>
 

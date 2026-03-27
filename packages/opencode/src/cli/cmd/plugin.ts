@@ -52,13 +52,6 @@ function formatBytes(bytes: number): string {
   return `${value.toFixed(1)} ${unit}`
 }
 
-// 输出普通日志（非交互模式始终输出，交互模式可选）
-function logNonInteractive(message: string, isInteractive: boolean): void {
-  if (!isInteractive) {
-    console.log(message)
-  }
-}
-
 // 输出错误信息（两种模式都输出）
 function errorNonInteractive(message: string, isInteractive: boolean): void {
   console.error(message)
@@ -176,37 +169,10 @@ async function promptForMissingOptions(options: Partial<UploadOptions>, interact
   return resolved
 }
 
-async function resolveRegistryId(name: string | undefined, interactive: boolean): Promise<{ registryId: string; baseUrl: string }> {
-  const baseUrl = registryBase()
-  const registryName = name || DEFAULT_ORG
-  const url = baseUrl + `/api/registries`
-  // For now, we'll create a new registry if it doesn't exist
-  // In a real implementation, you might want to list existing registries first
-  const spinner = prompts.spinner()
-  spinner.start("Creating registry...")
-
-  try {
-    const registry = await createRegistry(url, {
-      name: registryName,
-      description: `Registry for ${registryName}`,
-      sourceType: "local",
-      visibility: "public",
-      ownerId: "cli-user",
-      syncEnabled: false,
-    })
-    spinner.stop(`Registry created: ${registry.name}`)
-    return { registryId: registry.id, baseUrl }
-  } catch (err) {
-    spinner.stop("Failed to create registry", 1)
-    throw err
-  }
-}
-
-function formatUploadResult(registry: CreateRegistryResponse, item: CreateItemResponse, artifact: UploadArtifactResponse): string {
+function formatUploadResult(item: CreateItemResponse, artifact: UploadArtifactResponse): string {
   const lines = [
     `✓ Upload successful!`,
     ``,
-    `Registry: ${registry.name}`,
     `Item: ${item.slug} (${item.name})`,
     `Type: ${item.itemType}`,
     `Version: ${item.version}`,
@@ -441,13 +407,7 @@ const PluginUploadCommand = cmd({
         demandOption: true,
         choices: ["skill", "subagent", "command", "mcp"]
       })
-      .positional("path", { type: "string", describe: "plugin directory path"})
-      .option("registry", { type: "string", describe: "target registry name" })
-      .option("slug", { type: "string", describe: "plugin slug identifier" })
-      .option("name", { type: "string", describe: "plugin display name" })
-      .option("version", { type: "string", describe: "version number", default: "1.0.0" })
-      .option("description", { type: "string", describe: "plugin description" })
-      .option("category", { type: "string", describe: "plugin category" }),
+      .positional("path", { type: "string", describe: "plugin directory path"}),
   async handler(args) {
     const type = args.itemType as RegistryItemType
     await Instance.provide({
@@ -460,29 +420,16 @@ const PluginUploadCommand = cmd({
 
         // 使用 TTYCheck 更准确地判断交互式环境
         const isInteractive = TTYCheck.canUseTUI()
-        logNonInteractive("Upload extension\n", isInteractive)
-
-        // Parse initial options from args
-        // const initialOptions: Partial<UploadOptions> = {
-        //   path: args.path,
-        //   registry: args.registry,
-        //   slug: args.slug,
-        //   name: args.name,
-        //   type: args.type as RegistryItemType,
-        //   version: args.version,
-        //   description: args.description,
-        //   category: args.category,
-        // }
 
         const initialOptions: Partial<UploadOptions> = {
           path: args.path,
-          registry: args.registry,
-          slug: args.slug,
-          name: args.name,
+          registry: "xixing",
+          slug: "test",
+          name: "type",
           type: type,
-          version: args.version,
-          description: args.description,
-          category: args.category,
+          version: "1.0.0",
+          description: "1.0.0",
+          category: type,
         }
 
         // Prompt for missing options
@@ -556,21 +503,8 @@ const PluginUploadCommand = cmd({
         logSpinnerStart("Resolving registry...", isInteractive)
         registrySpinner.start("Resolving registry...")
         let registry: CreateRegistryResponse
-        let baseUrl: string
-        try {
-          const result = await resolveRegistryId(options.registry, true)
-          registry = { id: result.registryId, name: options.registry || DEFAULT_ORG, description: "", sourceType: "local", visibility: "public", ownerId: "", createdAt: new Date().toISOString() }
-          baseUrl = result.baseUrl
-          registrySpinner.stop(`Registry resolved: ${registry.name}`)
-          logSpinnerStop(`Registry resolved: ${registry.name}`, isInteractive)
-        } catch (err) {
-          registrySpinner.stop("Failed to resolve registry", 1)
-          const errorMessage = formatError(err)
-          prompts.log.error(errorMessage)
-          errorNonInteractive(`Error: ${errorMessage}`, isInteractive)
-          prompts.outro("Done")
-          return
-        }
+
+        const baseUrl = registryBase()
 
         // Create item
         const itemSpinner = prompts.spinner()
@@ -578,15 +512,17 @@ const PluginUploadCommand = cmd({
         itemSpinner.start("Creating item...")
         let item: CreateItemResponse
         try {
-          item = await createItem(baseUrl, registry.id, {
-            slug: options.slug!,
+          item = await createItem(baseUrl,{
+            slug: "cs-writer4",
             itemType: options.type,
-            name: options.name!,
+            name: "cs-writer4",
             description: options.description || "",
-            category: options.category || "general",
+            category: "utilities",
             version: options.version,
             content: skillContent,
-            createdBy: "cli-user",
+            createdBy: "xixing",
+            registryId: "00000000-0000-0000-0000-000000000001",
+            visibility: "public",
           })
           itemSpinner.stop(`Item created: ${item.slug}`)
           logSpinnerStop(`Item created: ${item.slug}`, isInteractive)
@@ -600,39 +536,37 @@ const PluginUploadCommand = cmd({
         }
 
         // Upload artifact
-        const uploadSpinner = prompts.spinner()
-        logSpinnerStart("Uploading artifact...", isInteractive)
-        uploadSpinner.start("Uploading artifact...")
-        let artifact: UploadArtifactResponse
-        try {
-          const archivePath = packResult.archivePath
-          artifact = await uploadArtifact(
-            baseUrl,
-            item.id,
-            archivePath,
-            options.version,
-            (loaded, total) => {
-              const percent = Math.round((loaded / total) * 100)
-              uploadSpinner.message(`Uploading artifact... ${percent}% (${formatBytes(loaded)} / ${formatBytes(total)})`)
-            }
-          )
-          uploadSpinner.stop("Artifact uploaded")
-          logSpinnerStop("Artifact uploaded", isInteractive)
-        } catch (err) {
-          uploadSpinner.stop("Failed to upload artifact", 1)
-          const errorMessage = formatError(err)
-          prompts.log.error(errorMessage)
-          errorNonInteractive(`Error: ${errorMessage}`, isInteractive)
-          prompts.outro("Done")
-          return
-        }
+        // const uploadSpinner = prompts.spinner()
+        // logSpinnerStart("Uploading artifact...", isInteractive)
+        // uploadSpinner.start("Uploading artifact...")
+        // let artifact: UploadArtifactResponse
+        // try {
+        //   const archivePath = packResult.archivePath
+        //   artifact = await uploadArtifact(
+        //     baseUrl,
+        //     item.id,
+        //     archivePath,
+        //     options.version,
+        //     (loaded, total) => {
+        //       const percent = Math.round((loaded / total) * 100)
+        //       uploadSpinner.message(`Uploading artifact... ${percent}% (${formatBytes(loaded)} / ${formatBytes(total)})`)
+        //     }
+        //   )
+        //   uploadSpinner.stop("Artifact uploaded")
+        //   logSpinnerStop("Artifact uploaded", isInteractive)
+        // } catch (err) {
+        //   uploadSpinner.stop("Failed to upload artifact", 1)
+        //   const errorMessage = formatError(err)
+        //   prompts.log.error(errorMessage)
+        //   errorNonInteractive(`Error: ${errorMessage}`, isInteractive)
+        //   prompts.outro("Done")
+        //   return
+        // }
 
         // Display success message
-        const resultMessage = formatUploadResult(registry, item, artifact)
-        prompts.log.success(resultMessage)
-        logNonInteractive(resultMessage, isInteractive)
+        // const resultMessage = formatUploadResult(item, artifact)
+        // prompts.log.success(resultMessage)
         prompts.outro("Done")
-        logNonInteractive("Done\n", isInteractive)
       },
     })
   },

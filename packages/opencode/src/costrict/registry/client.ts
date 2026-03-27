@@ -65,6 +65,10 @@ export async function resolveToken(url: string): Promise<string | undefined> {
 
   if (isPublic) return undefined
 
+  return resolveLoggedInToken()
+}
+
+export async function resolveLoggedInToken(): Promise<string> {
   const credentials = await loadCoStrictCredentials()
   if (!credentials) throw new NotLoggedInError()
 
@@ -125,13 +129,11 @@ export async function createRegistry(
   request: CreateRegistryRequest
 ): Promise<CreateRegistryResponse> {
   const url = `${baseUrl.replace(/\/$/, "")}`
-  const token = await resolveToken(url)
+  const token = await resolveLoggedInToken()
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-  }
-  if (token) {
-    headers.Authorization = `Bearer ${token}`
+    "Authorization": `Bearer ${token}`,
   }
 
   console.log(`→ POST ${url}`)
@@ -164,11 +166,10 @@ export async function createRegistry(
 
 export async function createItem(
   baseUrl: string,
-  registryId: string,
   request: CreateItemRequest
 ): Promise<CreateItemResponse> {
-  const url = `${baseUrl.replace(/\/$/, "")}/api/registries/${registryId}/items`
-  const token = await resolveToken(url)
+  const url = `${baseUrl.replace(/\/$/, "")}/api/items`
+  const token = await resolveLoggedInToken()
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -213,7 +214,7 @@ export async function uploadArtifact(
   onProgress?: (loaded: number, total: number) => void
 ): Promise<UploadArtifactResponse> {
   const url = `${baseUrl.replace(/\/$/, "")}/api/artifacts/upload`
-  const token = await resolveToken(url)
+  const token = await resolveLoggedInToken()
 
   const file = Bun.file(filePath)
   const filename = path.basename(filePath)
