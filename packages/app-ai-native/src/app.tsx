@@ -195,6 +195,7 @@ export function AppInterface(props: {
   defaultServer: ServerConnection.Key
   servers?: Array<ServerConnection.Any>
   router?: Component<BaseRouterProps>
+  disableHealthCheck?: boolean
 }) {
   return (
     <ServerProvider defaultServer={props.defaultServer} servers={props.servers}>

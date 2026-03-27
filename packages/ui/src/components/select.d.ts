@@ -1,0 +1,21 @@
+import { Select as Kobalte } from "@kobalte/core/select";
+import { type ComponentProps, type JSX } from "solid-js";
+import { ButtonProps } from "./button";
+export type SelectProps<T> = Omit<ComponentProps<typeof Kobalte<T>>, "value" | "onSelect" | "children"> & {
+    placeholder?: string;
+    options: T[];
+    current?: T;
+    value?: (x: T) => string;
+    label?: (x: T) => string;
+    groupBy?: (x: T) => string;
+    valueClass?: ComponentProps<"div">["class"];
+    onSelect?: (value: T | undefined) => void;
+    onHighlight?: (value: T | undefined) => (() => void) | void;
+    class?: ComponentProps<"div">["class"];
+    classList?: ComponentProps<"div">["classList"];
+    children?: (item: T | undefined) => JSX.Element;
+    triggerStyle?: JSX.CSSProperties;
+    triggerVariant?: "settings";
+    triggerProps?: Record<string, string | number | boolean | undefined>;
+};
+export declare function Select<T>(props: SelectProps<T> & Omit<ButtonProps, "children">): JSX.Element;
