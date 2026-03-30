@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { createEffect, createSignal, onCleanup, onMount } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useSpring } from "./motion-spring"

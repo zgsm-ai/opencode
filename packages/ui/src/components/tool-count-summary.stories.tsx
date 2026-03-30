@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { onCleanup } from "solid-js"
 import { createStore } from "solid-js/store"
 import { AnimatedCountList, type CountItem } from "./tool-count-summary"

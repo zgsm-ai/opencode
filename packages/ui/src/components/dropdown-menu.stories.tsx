@@ -1,4 +1,3 @@
-// @ts-nocheck
 import * as mod from "./dropdown-menu"
 import { Button } from "./button"
 

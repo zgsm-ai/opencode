@@ -1,4 +1,3 @@
-// @ts-nocheck
 import * as mod from "./progress-circle"
 import { create } from "../storybook/scaffold"
 

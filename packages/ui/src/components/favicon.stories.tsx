@@ -1,4 +1,3 @@
-// @ts-nocheck
 import * as mod from "./favicon"
 
 const docs = `### Overview

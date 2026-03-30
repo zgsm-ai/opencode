@@ -1,4 +1,3 @@
-// @ts-nocheck
 import * as mod from "./typewriter"
 import { create } from "../storybook/scaffold"
 

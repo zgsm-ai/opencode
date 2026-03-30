@@ -1,4 +1,3 @@
-// @ts-nocheck
 import * as mod from "./inline-input"
 import { create } from "../storybook/scaffold"
 

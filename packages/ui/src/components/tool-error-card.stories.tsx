@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { ToolErrorCard } from "./tool-error-card"
 
 const docs = `### Overview

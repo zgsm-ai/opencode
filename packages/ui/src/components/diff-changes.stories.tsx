@@ -1,4 +1,3 @@
-// @ts-nocheck
 import * as mod from "./diff-changes"
 import { create } from "../storybook/scaffold"
 import { changes } from "../storybook/fixtures"

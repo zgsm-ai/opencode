@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { iconNames } from "./provider-icons/types"
 import * as mod from "./provider-icon"
 import { create } from "../storybook/scaffold"

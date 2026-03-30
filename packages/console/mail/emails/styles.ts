@@ -1,4 +1,5 @@
-// @ts-nocheck
+import type { CSSProperties } from "react"
+
 export const unit = 12
 export const PRIMARY_COLOR = "#211E1E"
 export const TEXT_COLOR = "#656363"
@@ -7,16 +8,16 @@ export const LINK_BACKGROUND_COLOR = "#F9F8F8"
 export const BACKGROUND_COLOR = "#F0F0F1"
 export const SURFACE_DIVIDER_COLOR = "#D5D5D9"
 
-export const body = {
+export const body: CSSProperties = {
   background: BACKGROUND_COLOR,
 }
 
-export const container = {
+export const container: CSSProperties = {
   minWidth: "600px",
   padding: "64px 0px",
 }
 
-export const frame = {
+export const frame: CSSProperties = {
   padding: `${unit * 2}px`,
   border: `1px solid ${SURFACE_DIVIDER_COLOR}`,
   background: "#FFF",
@@ -26,11 +27,11 @@ export const frame = {
               0 2px 6px rgba(0,0,0,0.03)`,
 }
 
-export const baseText = {
+export const baseText: CSSProperties = {
   fontFamily: "JetBrains Mono, monospace",
 }
 
-export const headingText = {
+export const headingText: CSSProperties = {
   color: PRIMARY_COLOR,
   fontSize: "16px",
   fontStyle: "normal",
@@ -38,7 +39,7 @@ export const headingText = {
   lineHeight: "normal",
 }
 
-export const contentText = {
+export const contentText: CSSProperties = {
   color: TEXT_COLOR,
   fontSize: "14px",
   fontStyle: "normal",
@@ -46,7 +47,7 @@ export const contentText = {
   lineHeight: "180%",
 }
 
-export const buttonText = {
+export const buttonText: CSSProperties = {
   color: "#FDFCFC",
   fontSize: "16px",
   fontWeight: 500,
@@ -57,7 +58,7 @@ export const buttonText = {
   gap: "12px",
 }
 
-export const linkText = {
+export const linkText: CSSProperties = {
   color: LINK_COLOR,
   fontSize: "14px",
   fontStyle: "normal",
@@ -75,11 +76,11 @@ export const linkText = {
   textAlign: "center" as const,
 }
 
-export const contentHighlightText = {
+export const contentHighlightText: CSSProperties = {
   color: PRIMARY_COLOR,
 }
 
-export const button = {
+export const button: CSSProperties = {
   display: "inline-grid",
   padding: "8px 12px 8px 20px",
   justifyContent: "center",

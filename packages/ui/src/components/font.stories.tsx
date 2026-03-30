@@ -1,4 +1,3 @@
-// @ts-nocheck
 import * as mod from "./font"
 
 const docs = `### Overview

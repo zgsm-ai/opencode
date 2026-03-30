@@ -1,4 +1,3 @@
-// @ts-nocheck
 import * as mod from "./dock-prompt"
 import { create } from "../storybook/scaffold"
 

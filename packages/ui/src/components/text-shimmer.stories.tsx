@@ -1,4 +1,3 @@
-// @ts-nocheck
 import * as mod from "./text-shimmer"
 import { useArgs } from "storybook/preview-api"
 import { create } from "../storybook/scaffold"

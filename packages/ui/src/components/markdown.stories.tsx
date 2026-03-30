@@ -1,4 +1,3 @@
-// @ts-nocheck
 import * as mod from "./markdown"
 import { create } from "../storybook/scaffold"
 import { markdown } from "../storybook/fixtures"

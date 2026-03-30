@@ -1,4 +1,3 @@
-// @ts-nocheck
 import * as mod from "./radio-group"
 import { create } from "../storybook/scaffold"
 

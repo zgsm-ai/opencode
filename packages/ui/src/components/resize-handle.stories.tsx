@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { createSignal } from "solid-js"
 import { createStore } from "solid-js/store"
 import * as mod from "./resize-handle"

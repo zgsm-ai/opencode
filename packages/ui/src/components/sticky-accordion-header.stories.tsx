@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { Accordion } from "./accordion"
 import * as mod from "./sticky-accordion-header"
 

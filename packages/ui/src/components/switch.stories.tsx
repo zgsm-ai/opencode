@@ -1,4 +1,3 @@
-// @ts-nocheck
 import * as mod from "./switch"
 import { create } from "../storybook/scaffold"
 

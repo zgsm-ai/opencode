@@ -24,7 +24,13 @@ import {
   FreeUsageLimitError,
   SubscriptionUsageLimitError,
 } from "./error"
-import { createBodyConverter, createStreamPartConverter, createResponseConverter, UsageInfo } from "./provider/provider"
+import {
+  buildCostChunk,
+  createBodyConverter,
+  createStreamPartConverter,
+  createResponseConverter,
+  UsageInfo,
+} from "./provider/provider"
 import { anthropicHelper } from "./provider/anthropic"
 import { googleHelper } from "./provider/google"
 import { openaiHelper } from "./provider/openai"
@@ -97,8 +103,8 @@ export async function handler(
     const zenData = ZenData.list(opts.modelList)
     const modelInfo = validateModel(zenData, model)
     const dataDumper = createDataDumper(sessionId, requestId, projectId)
-    const trialLimiter = createTrialLimiter(modelInfo.trialProvider, ip)
-    const trialProvider = await trialLimiter?.check()
+    const trialLimiter = createTrialLimiter(modelInfo.trialProviders, ip)
+    const trialProviders = await trialLimiter?.check()
     const rateLimiter = createRateLimiter(
       modelInfo.id,
       modelInfo.allowAnonymous,
@@ -120,7 +126,7 @@ export async function handler(
         authInfo,
         modelInfo,
         sessionId,
-        trialProvider,
+        trialProviders,
         retry,
         stickyProvider,
       )
@@ -273,7 +279,7 @@ export async function handler(
                   await trackUsage(sessionId, billingSource, authInfo, modelInfo, providerInfo, usageInfo, costInfo)
                   await reload(billingSource, authInfo, costInfo)
                   const cost = calculateOccuredCost(billingSource, costInfo)
-                  c.enqueue(encoder.encode(usageParser.buidlCostChunk(cost)))
+                  c.enqueue(encoder.encode(buildCostChunk(opts.format, cost)))
                 }
                 c.close()
                 return
@@ -401,7 +407,7 @@ export async function handler(
     authInfo: AuthInfo,
     modelInfo: ModelInfo,
     sessionId: string,
-    trialProvider: string | undefined,
+    trialProviders: string[] | undefined,
     retry: RetryOptions,
     stickyProvider: string | undefined,
   ) {
@@ -410,8 +416,8 @@ export async function handler(
         return modelInfo.providers.find((provider) => provider.id === modelInfo.byokProvider)
       }
 
-      if (trialProvider) {
-        return modelInfo.providers.find((provider) => provider.id === trialProvider)
+      if (trialProviders?.length) {
+        return modelInfo.providers.find((provider) => trialProviders.includes(provider.id))
       }
 
       if (stickyProvider) {

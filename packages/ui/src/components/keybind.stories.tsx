@@ -1,4 +1,3 @@
-// @ts-nocheck
 import * as mod from "./keybind"
 import { create } from "../storybook/scaffold"
 

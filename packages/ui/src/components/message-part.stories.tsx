@@ -1,4 +1,3 @@
-// @ts-nocheck
 import * as mod from "./message-part"
 import { create } from "../storybook/scaffold"
 

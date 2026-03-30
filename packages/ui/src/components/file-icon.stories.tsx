@@ -1,4 +1,3 @@
-// @ts-nocheck
 import * as mod from "./file-icon"
 import { create } from "../storybook/scaffold"
 

@@ -1,4 +1,3 @@
-// @ts-nocheck
 import * as mod from "./collapsible"
 
 const docs = `### Overview

@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { onMount } from "solid-js"
 import * as mod from "./image-preview"
 import { Button } from "./button"

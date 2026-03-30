@@ -1,4 +1,3 @@
-// @ts-nocheck
 import * as mod from "./spinner"
 import { create } from "../storybook/scaffold"
 

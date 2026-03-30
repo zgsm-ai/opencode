@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { Icon } from "./icon"
 import * as mod from "./checkbox"
 import { create } from "../storybook/scaffold"

@@ -1,10 +1,8 @@
-// 
 import { NotFoundError, eq, and } from "../storage/db"
 import { SyncEvent } from "@/sync"
 import { Session } from "./index"
 import { MessageV2 } from "./message-v2"
 import { SessionTable, MessageTable, PartTable } from "./session.sql"
-import { ProjectTable } from "../project/project.sql"
 import { Log } from "../util/log"
 
 const log = Log.create({ service: "session.projector" })
@@ -62,12 +60,14 @@ export function toPartialRow(info: DeepPartial<Session.Info>) {
   return Object.fromEntries(Object.entries(obj).filter(([_, val]) => val !== undefined))
 }
 
+const project = SyncEvent.project as any
+
 export default [
-  SyncEvent.project(Session.Event.Created, (db, data) => {
+  project(Session.Event.Created, (db: any, data: any) => {
     db.insert(SessionTable).values(Session.toRow(data.info)).run()
   }),
 
-  SyncEvent.project(Session.Event.Updated, (db, data) => {
+  project(Session.Event.Updated, (db: any, data: any) => {
     const info = data.info
     const row = db
       .update(SessionTable)
@@ -78,11 +78,11 @@ export default [
     if (!row) throw new NotFoundError({ message: `Session not found: ${data.sessionID}` })
   }),
 
-  SyncEvent.project(Session.Event.Deleted, (db, data) => {
+  project(Session.Event.Deleted, (db: any, data: any) => {
     db.delete(SessionTable).where(eq(SessionTable.id, data.sessionID)).run()
   }),
 
-  SyncEvent.project(MessageV2.Event.Updated, (db, data) => {
+  project(MessageV2.Event.Updated, (db: any, data: any) => {
     const time_created = data.info.time.created
     const { id, sessionID, ...rest } = data.info
 
@@ -102,19 +102,19 @@ export default [
     }
   }),
 
-  SyncEvent.project(MessageV2.Event.Removed, (db, data) => {
+  project(MessageV2.Event.Removed, (db: any, data: any) => {
     db.delete(MessageTable)
       .where(and(eq(MessageTable.id, data.messageID), eq(MessageTable.session_id, data.sessionID)))
       .run()
   }),
 
-  SyncEvent.project(MessageV2.Event.PartRemoved, (db, data) => {
+  project(MessageV2.Event.PartRemoved, (db: any, data: any) => {
     db.delete(PartTable)
       .where(and(eq(PartTable.id, data.partID), eq(PartTable.session_id, data.sessionID)))
       .run()
   }),
 
-  SyncEvent.project(MessageV2.Event.PartUpdated, (db, data) => {
+  project(MessageV2.Event.PartUpdated, (db: any, data: any) => {
     const { id, messageID, sessionID, ...rest } = data.part
 
     try {
@@ -133,4 +133,4 @@ export default [
       log.warn("ignored late part update", { partID: id, messageID, sessionID })
     }
   }),
-]
+] as any[]

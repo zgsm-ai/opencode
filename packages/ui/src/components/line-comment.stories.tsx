@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { createSignal } from "solid-js"
 import * as mod from "./line-comment"
 

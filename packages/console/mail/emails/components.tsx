@@ -1,11 +1,15 @@
-// @ts-nocheck
-import React from "react"
+import React, { type ComponentPropsWithoutRef, type ReactNode } from "react"
 import { Font, Text as JEText, type TextProps } from "@jsx-email/all"
 import { baseText } from "./styles"
 
 export function Text(props: TextProps) {
   return <JEText {...props} style={{ ...baseText, ...props.style }} />
 }
+
+type TitleProps = ComponentPropsWithoutRef<"title">
+type AProps = ComponentPropsWithoutRef<"a">
+type SpanProps = ComponentPropsWithoutRef<"span">
+type WbrProps = ComponentPropsWithoutRef<"wbr">
 
 export function Title({ children }: TitleProps) {
   return React.createElement("title", null, children)
@@ -61,9 +65,9 @@ export function Fonts({ assetsUrl }: { assetsUrl: string }) {
 }
 
 export function SplitString({ text, split }: { text: string; split: number }) {
-  const segments: JSX.Element[] = []
+  const segments: ReactNode[] = []
   for (let i = 0; i < text.length; i += split) {
-    segments.push(<>{text.slice(i, i + split)}</>)
+    segments.push(<React.Fragment key={`${i}text`}>{text.slice(i, i + split)}</React.Fragment>)
     if (i + split < text.length) {
       segments.push(<Wbr key={`${i}wbr`} />)
     }

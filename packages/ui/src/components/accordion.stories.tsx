@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { createEffect, createSignal } from "solid-js"
 import * as mod from "./accordion"
 import { create } from "../storybook/scaffold"

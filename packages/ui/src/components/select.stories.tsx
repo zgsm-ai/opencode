@@ -1,4 +1,3 @@
-// @ts-nocheck
 import * as mod from "./select"
 import { create } from "../storybook/scaffold"
 

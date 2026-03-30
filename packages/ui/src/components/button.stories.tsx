@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { Button } from "./button"
 
 const docs = `### Overview
