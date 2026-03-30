@@ -4,6 +4,7 @@ import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
 import { Agent } from "../../src/agent/agent"
 import { PermissionNext } from "../../src/permission/next"
+import { YoloMode } from "../../src/permission/yolo"
 
 // Helper to evaluate permission for a tool with wildcard pattern
 function evalPerm(agent: Agent.Info | undefined, permission: string): PermissionNext.Action | undefined {
@@ -65,6 +66,24 @@ test("build agent denies other exit tools", async () => {
       expect(build).toBeDefined()
       expect(evalPerm(build, "sub_agent_task_done")).toBe("deny")
       expect(evalPerm(build, "task_done_with_change_id")).toBe("deny")
+    },
+  })
+})
+
+test("build agent keeps task deny under yolo", async () => {
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const build = await Agent.get("build")
+      expect(build).toBeDefined()
+      const action = await Promise.resolve()
+        .then(() => {
+          YoloMode.setEnabled(true)
+          return PermissionNext.evaluate("task", "ReviewAndFix", build!.permission).action
+        })
+        .finally(() => YoloMode.setEnabled(false))
+      expect(action).toBe("deny")
     },
   })
 })

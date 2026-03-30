@@ -1,21 +1,21 @@
-import { runtime } from "@/effect/runtime"
+import { Bus } from "@/bus"
+import { BusEvent } from "@/bus/bus-event"
 import { Config } from "@/config/config"
-import { fn } from "@/util/fn"
-import { Wildcard } from "@/util/wildcard"
+import { Identifier } from "@/id/id"
 import { YoloMode } from "@/permission/yolo"
-import { Effect } from "effect"
+import { Instance } from "@/project/instance"
+import { PermissionTable } from "@/session/session.sql"
+import { Database, eq } from "@/storage/db"
+import { Context } from "@/util/context"
+import { fn } from "@/util/fn"
+import { Log } from "@/util/log"
+import { Wildcard } from "@/util/wildcard"
 import os from "os"
-import * as S from "./service"
-import type {
-  Action as ActionType,
-  PermissionError,
-  Reply as ReplyType,
-  Request as RequestType,
-  Rule as RuleType,
-  Ruleset as RulesetType,
-} from "./service"
+import z from "zod"
 
 export namespace PermissionNext {
+  const log = Log.create({ service: "permission" })
+
 
   function normalize(pattern: string): string {
     return pattern.replaceAll("\\", "/")
@@ -29,26 +29,35 @@ export namespace PermissionNext {
     return normalize(pattern)
   }
 
-  function runPromise<A>(f: (service: S.PermissionService.Api) => Effect.Effect<A, PermissionError>) {
-    return runtime.runPromise(S.PermissionService.use(f))
+  function yolo() {
+    try {
+      return YoloMode.isEnabled()
+    } catch (err) {
+      if (err instanceof Context.NotFound && err.name === "instance") return false
+      throw err
+    }
   }
 
-  export const Action = S.Action
-  export type Action = ActionType
-  export const Rule = S.Rule
-  export type Rule = RuleType
-  export const Ruleset = S.Ruleset
-  export type Ruleset = RulesetType
-  export const Request = S.Request
-  export type Request = RequestType
-  export const Reply = S.Reply
-  export type Reply = ReplyType
-  export const Approval = S.Approval
-  export const Event = S.Event
-  export const Service = S.PermissionService
-  export const RejectedError = S.RejectedError
-  export const CorrectedError = S.CorrectedError
-  export const DeniedError = S.DeniedError
+  export const Action = z.enum(["allow", "deny", "ask"]).meta({
+    ref: "PermissionAction",
+  })
+  export type Action = z.infer<typeof Action>
+
+  export const Rule = z
+    .object({
+      permission: z.string(),
+      pattern: z.string(),
+      action: Action,
+    })
+    .meta({
+      ref: "PermissionRule",
+    })
+  export type Rule = z.infer<typeof Rule>
+
+  export const Ruleset = Rule.array().meta({
+    ref: "PermissionRuleset",
+  })
+  export type Ruleset = z.infer<typeof Ruleset>
 
   export function fromConfig(permission: Config.Permission) {
     const ruleset: Ruleset = []
@@ -72,19 +81,182 @@ export namespace PermissionNext {
     return rulesets.flat()
   }
 
-  export const ask = fn(S.AskInput, async (input) => runPromise((service) => service.ask(input)))
+  export const Request = z
+    .object({
+      id: Identifier.schema("permission"),
+      sessionID: Identifier.schema("session"),
+      permission: z.string(),
+      patterns: z.string().array(),
+      metadata: z.record(z.string(), z.any()),
+      always: z.string().array(),
+      tool: z
+        .object({
+          messageID: z.string(),
+          callID: z.string(),
+        })
+        .optional(),
+    })
+    .meta({
+      ref: "PermissionRequest",
+    })
 
-  export const reply = fn(S.ReplyInput, async (input) => runPromise((service) => service.reply(input)))
+  export type Request = z.infer<typeof Request>
 
-  export async function list() {
-    return runPromise((service) => service.list())
+  export const Reply = z.enum(["once", "always", "reject"])
+  export type Reply = z.infer<typeof Reply>
+
+  export const Approval = z.object({
+    projectID: z.string(),
+    patterns: z.string().array(),
+  })
+
+  export const Event = {
+    Asked: BusEvent.define("permission.asked", Request),
+    Replied: BusEvent.define(
+      "permission.replied",
+      z.object({
+        sessionID: z.string(),
+        requestID: z.string(),
+        reply: Reply,
+      }),
+    ),
   }
 
-  export function evaluate(permission: string, pattern: string, ...rulesets: Ruleset[]): Rule {
-    if (YoloMode.isEnabled()) {
-      return { action: "allow", permission, pattern }
+  const state = Instance.state(() => {
+    const projectID = Instance.project.id
+    const row = Database.use((db) =>
+      db.select().from(PermissionTable).where(eq(PermissionTable.project_id, projectID)).get(),
+    )
+    const stored = row?.data ?? ([] as Ruleset)
+
+    const pending: Record<
+      string,
+      {
+        info: Request
+        resolve: () => void
+        reject: (e: any) => void
+      }
+    > = {}
+
+    return {
+      pending,
+      approved: stored,
     }
-    return S.evaluate(permission, pattern, ...rulesets)
+  })
+
+  export const ask = fn(
+    Request.partial({ id: true }).extend({
+      ruleset: Ruleset,
+    }),
+    async (input) => {
+      const s = await state()
+      const { ruleset, ...request } = input
+      for (const pattern of request.patterns ?? []) {
+        const rule = evaluate(request.permission, pattern, ruleset, s.approved)
+        log.info("evaluated", { permission: request.permission, pattern, action: rule })
+        if (rule.action === "deny")
+          throw new DeniedError(ruleset.filter((r) => Wildcard.match(request.permission, r.permission)))
+        if (rule.action === "ask") {
+          const id = input.id ?? Identifier.ascending("permission")
+          return new Promise<void>((resolve, reject) => {
+            const info: Request = {
+              id,
+              ...request,
+            }
+            s.pending[id] = {
+              info,
+              resolve,
+              reject,
+            }
+            Bus.publish(Event.Asked, info)
+          })
+        }
+        if (rule.action === "allow") continue
+      }
+    },
+  )
+
+  export const reply = fn(
+    z.object({
+      requestID: Identifier.schema("permission"),
+      reply: Reply,
+      message: z.string().optional(),
+    }),
+    async (input) => {
+      const s = await state()
+      const existing = s.pending[input.requestID]
+      if (!existing) return
+      delete s.pending[input.requestID]
+      Bus.publish(Event.Replied, {
+        sessionID: existing.info.sessionID,
+        requestID: existing.info.id,
+        reply: input.reply,
+      })
+      if (input.reply === "reject") {
+        existing.reject(input.message ? new CorrectedError(input.message) : new RejectedError())
+        // Reject all other pending permissions for this session
+        const sessionID = existing.info.sessionID
+        for (const [id, pending] of Object.entries(s.pending)) {
+          if (pending.info.sessionID === sessionID) {
+            delete s.pending[id]
+            Bus.publish(Event.Replied, {
+              sessionID: pending.info.sessionID,
+              requestID: pending.info.id,
+              reply: "reject",
+            })
+            pending.reject(new RejectedError())
+          }
+        }
+        return
+      }
+      if (input.reply === "once") {
+        existing.resolve()
+        return
+      }
+      if (input.reply === "always") {
+        for (const pattern of existing.info.always) {
+          s.approved.push({
+            permission: existing.info.permission,
+            pattern,
+            action: "allow",
+          })
+        }
+
+        existing.resolve()
+
+        const sessionID = existing.info.sessionID
+        for (const [id, pending] of Object.entries(s.pending)) {
+          if (pending.info.sessionID !== sessionID) continue
+          const ok = pending.info.patterns.every(
+            (pattern) => evaluate(pending.info.permission, pattern, s.approved).action === "allow",
+          )
+          if (!ok) continue
+          delete s.pending[id]
+          Bus.publish(Event.Replied, {
+            sessionID: pending.info.sessionID,
+            requestID: pending.info.id,
+            reply: "always",
+          })
+          pending.resolve()
+        }
+
+        // TODO: we don't save the permission ruleset to disk yet until there's
+        // UI to manage it
+        // db().insert(PermissionTable).values({ projectID: Instance.project.id, data: s.approved })
+        //   .onConflictDoUpdate({ target: PermissionTable.projectID, set: { data: s.approved } }).run()
+        return
+      }
+    },
+  )
+
+  export function evaluate(permission: string, pattern: string, ...rulesets: Ruleset[]): Rule {
+    const merged = merge(...rulesets)
+    log.info("evaluate", { permission, pattern, ruleset: merged })
+    const rule = merged.findLast(
+      (item) => Wildcard.match(permission, item.permission) && Wildcard.match(pattern, item.pattern),
+    ) ?? { action: "ask", permission, pattern: "*" }
+    if (rule.action === "ask" && yolo()) return { ...rule, action: "allow" }
+    return rule
   }
 
   const EDIT_TOOLS = ["edit", "write", "patch", "multiedit"]
@@ -118,5 +290,33 @@ export namespace PermissionNext {
       if (rule.pattern === "*" && rule.action === "deny") result.add(tool)
     }
     return result
+  }
+
+  /** User rejected without message - halts execution */
+  export class RejectedError extends Error {
+    constructor() {
+      super(`The user rejected permission to use this specific tool call.`)
+    }
+  }
+
+  /** User rejected with message - continues with guidance */
+  export class CorrectedError extends Error {
+    constructor(message: string) {
+      super(`The user rejected permission to use this specific tool call with the following feedback: ${message}`)
+    }
+  }
+
+  /** Auto-rejected by config rule - halts execution */
+  export class DeniedError extends Error {
+    constructor(public readonly ruleset: Ruleset) {
+      super(
+        `The user has specified a rule which prevents you from using this specific tool call. Here are some of the relevant rules ${JSON.stringify(ruleset)}`,
+      )
+    }
+  }
+
+  export async function list() {
+    const s = await state()
+    return Object.values(s.pending).map((x) => x.info)
   }
 }

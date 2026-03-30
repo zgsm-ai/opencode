@@ -321,7 +321,7 @@ export namespace Config {
   export async function installDependencies(dir: string) {
     if (process.env.COSTRICT_TEST_HOME) return
     const pkg = path.join(dir, "package.json")
-    const targetVersion = Installation.isLocal() ? "*" : Installation.VERSION
+    const targetVersion = "*"
 
     const json = await Filesystem.readJson<{ dependencies?: Record<string, string> }>(pkg).catch(() => ({
       dependencies: {},
@@ -847,6 +847,10 @@ export namespace Config {
         .boolean()
         .optional()
         .describe("Hide this subagent from the @ autocomplete menu (default: false, only applies to mode: subagent)"),
+      visible: z
+        .boolean()
+        .optional()
+        .describe("控制其他Agent是否默认可见本Agent（默认true）"),
       options: z.record(z.string(), z.any()).optional(),
       color: z
         .union([
@@ -887,6 +891,7 @@ export namespace Config {
         "name",
         "model",
         "variant",
+        "visible",
         "prompt",
         "description",
         "temperature",
@@ -944,7 +949,7 @@ export namespace Config {
   export const Keybinds = z
     .object({
       leader: z.string().optional().default("ctrl+x").describe("Leader key for keybind combinations"),
-      app_exit: z.string().optional().default("ctrl+c,ctrl+d,<leader>q").describe("Exit the application"),
+      app_exit: z.string().optional().default("ctrl+d,<leader>q").describe("Exit the application"),
       editor_open: z.string().optional().default("<leader>e").describe("Open external editor"),
       theme_list: z.string().optional().default("<leader>t").describe("List available themes"),
       sidebar_toggle: z.string().optional().default("<leader>b").describe("Toggle sidebar"),
@@ -1397,6 +1402,7 @@ export namespace Config {
             .positive()
             .optional()
             .describe("Timeout in milliseconds for model context protocol (MCP) requests"),
+          spec_manage: z.boolean().optional().describe("Enable the spec manage tool"),
         })
         .optional(),
       question: z

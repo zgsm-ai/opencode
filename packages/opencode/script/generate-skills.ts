@@ -100,6 +100,11 @@ async function needsDownload(skillName: string, repo: string, branch: string): P
 
   const latestSha = await fetchCommitSha(repo, branch)
   if (!latestSha) {
+    // If we can't reach GitHub but have local files, skip download
+    if (localSkill?.commitSha) {
+      console.log(`  ⚠ Could not fetch latest commit, using local cache (commit: ${localSkill.commitSha.slice(0, 7)})`)
+      return false
+    }
     console.log(`  ⚠ Could not fetch latest commit, downloading anyway`)
     return true
   }
@@ -209,10 +214,25 @@ async function generateBuiltinSkills() {
       continue
     }
 
-    const result = await downloadSkill(name, config)
-    if (result) {
-      successCount++
-      downloadedSkills.push(result)
+    try {
+      const result = await downloadSkill(name, config)
+      if (result) {
+        successCount++
+        downloadedSkills.push(result)
+      }
+    } catch (err) {
+      // Fallback to local cached files if download fails (e.g. private repo)
+      const skillDir = path.join(bundledSkillsDir, name)
+      const skillMdPath = path.join(skillDir, "SKILL.md")
+      try {
+        await fs.access(skillMdPath)
+        console.warn(`  ⚠ Download failed, using local cached files for "${name}": ${err}`)
+        const localSkill = localIndex?.skills.find((s) => s.name === name)
+        downloadedSkills.push(localSkill || { name, commitSha: "local" })
+        skippedCount++
+      } catch {
+        console.error(`  ✗ Download failed and no local cache found for "${name}": ${err}`)
+      }
     }
   }
 

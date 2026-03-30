@@ -1014,7 +1014,7 @@ export const SessionRoutes = lazy(() =>
       async (c) => {
         const params = c.req.valid("param")
         PermissionNext.reply({
-          requestID: params.permissionID,
+          requestID: params.permissionID as unknown as string,
           reply: c.req.valid("json").response,
         })
         return c.json(true)

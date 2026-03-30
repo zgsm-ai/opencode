@@ -33,7 +33,9 @@ import { Truncate } from "./truncation"
 import { SequentialThinkingTool } from "../costrict/tool/sequential-thinking"
 import { FileOutlineTool } from "../costrict/tool/file-outline"
 import { CheckpointTool } from "../costrict/tool/checkpoint"
+import { SpecManageTool } from "../costrict/tool/spec-manage"
 import { ApplyPatchTool } from "./apply_patch"
+import { WorkflowTool } from "../costrict/tool/workflow"
 import { Glob } from "../util/glob"
 import { pathToFileURL } from "url"
 import { MemoryBankTool } from "./memory-bank"
@@ -132,8 +134,10 @@ export namespace ToolRegistry {
       // CallGraphTool,  // 已废弃
       // FileImportanceTool,  // 已废弃
       // ...(config.experimental?.checkpoint !== false ? [CheckpointTool] : []),  // 不需要
+      ...(config.experimental?.spec_manage !== false ? [SpecManageTool] : []),
       // ...(Flag.COSTRICT_EXPERIMENTAL_LSP_TOOL ? [LspTool] : []),  // 不需要
       // ApplyPatchTool,  // 不需要
+      WorkflowTool,
       // ...(config.experimental?.batch_tool === true ? [BatchTool] : []),  // 不需要
       // ...(Flag.COSTRICT_EXPERIMENTAL_PLAN_MODE && Flag.OPENCODE_CLIENT === "cli" ? [PlanExitTool] : []),  // 不需要
       LintTool,
@@ -169,5 +173,46 @@ export namespace ToolRegistry {
       }),
     )
     return result
+  }
+
+  export async function allInitialized(agent?: Agent.Info) {
+    const tools = await all()
+    const result = await Promise.all(
+      tools
+        .filter((t) => {
+          // 注意：这里跳过 visible 过滤逻辑，让所有工具（包括 visible=false 的工具）都能被返回
+
+          // Enable websearch/codesearch for zen users OR via enable flag
+          if (t.id === "codesearch" || t.id === "websearch") {
+            return Flag.COSTRICT_ENABLE_EXA
+          }
+
+          // use apply tool in same format as codex
+          // 对于动态上下文场景，不过滤 apply_patch/edit/write，允许两者都存在
+          return true
+        })
+        .map(async (t) => {
+          try {
+            using _ = log.time(t.id)
+            const tool = await t.init({ agent })
+            const output = {
+              description: tool.description,
+              parameters: tool.parameters,
+            }
+            await Plugin.trigger("tool.definition", { toolID: t.id }, output)
+            return {
+              id: t.id,
+              ...tool,
+              description: output.description,
+              parameters: output.parameters,
+            }
+          } catch (e) {
+            log.error(`Failed to initialize tool ${t.id}:`, { error: e instanceof Error ? e.message : String(e) })
+            return null
+          }
+        }),
+    )
+    // 过滤掉初始化失败的工具
+    return result.filter((t): t is NonNullable<typeof t> => t !== null)
   }
 }

@@ -86,6 +86,7 @@ export namespace Agent {
       mode: z.enum(["subagent", "primary", "all"]),
       native: z.boolean().optional(),
       hidden: z.boolean().optional(),
+      visible: z.boolean().optional(),
       topP: z.number().optional(),
       temperature: z.number().optional(),
       color: z.string().optional(),
@@ -102,6 +103,7 @@ export namespace Agent {
       options: z.record(z.string(), z.any()),
       // steps: outer loop max (max_steps)
       steps: z.number().int().positive().optional(),
+      tools: z.record(z.string(), z.boolean()).optional(),
       // budgetSteps: tool-call budget for agents that use it (e.g. QuickExplore/SubCodingAgent)
       budgetSteps: z.number().int().positive().optional(),
       warningThreshold: z.number().int().nonnegative().optional(),
@@ -568,6 +570,7 @@ export namespace Agent {
           mode: "all",
           permission: PermissionNext.merge(defaults, user),
           options: {},
+          tools: {},
           native: false,
         }
       if (value.model) item.model = Provider.parseModel(value.model)
@@ -579,6 +582,7 @@ export namespace Agent {
       item.mode = value.mode ?? item.mode
       item.color = value.color ?? item.color
       item.hidden = value.hidden ?? item.hidden
+      item.visible = value.visible ?? item.visible ?? true
       item.name = value.name ?? item.name
       item.steps = value.steps ?? item.steps
       // Allow config to override tool-call budget for agents that use it
@@ -587,6 +591,7 @@ export namespace Agent {
       item.warningThreshold = value.warningThreshold ?? item.warningThreshold
       item.options = mergeDeep(item.options, value.options ?? {})
       item.permission = PermissionNext.merge(item.permission, PermissionNext.fromConfig(value.permission ?? {}))
+      item.tools = mergeDeep(item.tools ?? {}, value.tools ?? {})
     }
 
     // Ensure SubCodingAgent is defined with proper budget settings

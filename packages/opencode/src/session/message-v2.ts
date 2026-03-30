@@ -629,7 +629,6 @@ export namespace MessageV2 {
           role: "user",
           parts: [],
         }
-        result.push(userMessage)
         for (const part of msg.parts) {
           if (part.type === "text" && !part.ignored)
             userMessage.parts.push({
@@ -665,6 +664,9 @@ export namespace MessageV2 {
               text: "The following tool was executed by the user",
             })
           }
+        }
+        if (userMessage.parts.length > 0) {
+          result.push(userMessage)
         }
       }
 
