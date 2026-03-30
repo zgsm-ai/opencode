@@ -27,6 +27,7 @@ import { SkillTool } from "../../tool/skill"
 import { BashTool } from "../../tool/bash"
 import { TodoWriteTool } from "../../tool/todo"
 import { Locale } from "../../util/locale"
+import { errorMessage } from "../../util/error"
 
 type ToolProps<T extends Tool.Info> = {
   input: Tool.InferParameters<T>
@@ -379,10 +380,14 @@ export const RunCommand = cmd({
     }
 
     async function session(sdk: OpencodeClient) {
-      const baseID = args.continue ? (await sdk.session.list()).data?.find((s) => !s.parentID)?.id : args.session
+      const listResult = args.continue ? await sdk.session.list() : undefined
+      if (listResult?.error) throw new Error(errorMessage(listResult.error))
+
+      const baseID = listResult?.data?.find((s) => !s.parentID)?.id ?? args.session
 
       if (baseID && args.fork) {
         const forked = await sdk.session.fork({ sessionID: baseID })
+        if (forked.error) throw new Error(errorMessage(forked.error))
         return forked.data?.id
       }
 
@@ -390,6 +395,7 @@ export const RunCommand = cmd({
 
       const name = title()
       const result = await sdk.session.create({ title: name, permission: rules })
+      if (result.error) throw new Error(errorMessage(result.error))
       return result.data?.id
     }
 

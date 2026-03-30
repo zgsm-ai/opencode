@@ -239,25 +239,37 @@ export namespace SyncEvent {
   }
 
   export function payloads() {
-    return z
-      .union(
-        registry
-          .entries()
-          .map(([type, def]) => {
-            return z
-              .object({
-                type: z.literal(type),
-                aggregate: z.literal(def.aggregate),
-                data: def.schema,
-              })
-              .meta({
-                ref: "SyncEvent" + "." + def.type,
-              })
+    const entries = registry
+      .entries()
+      .map(([type, def]) => {
+        return z
+          .object({
+            type: z.literal(type),
+            aggregate: z.literal(def.aggregate),
+            data: def.schema,
           })
-          .toArray() as any,
-      )
-      .meta({
-        ref: "SyncEvent",
+          .meta({
+            ref: "SyncEvent" + "." + def.type,
+          })
       })
+      .toArray()
+
+    // Some builds currently register projectors without defining sync events.
+    // Avoid constructing z.union([]), which crashes during route schema setup.
+    if (entries.length === 0) {
+      return z
+        .object({
+          type: z.never(),
+          aggregate: z.never(),
+          data: z.never(),
+        })
+        .meta({
+          ref: "SyncEvent",
+        })
+    }
+
+    return z.union(entries as any).meta({
+      ref: "SyncEvent",
+    })
   }
 }
