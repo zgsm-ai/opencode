@@ -1,7 +1,7 @@
 import { createResource, createSignal, Show, For } from "solid-js"
 import { createHighlighter } from "shiki"
 import { useTheme } from "@opencode-ai/ui/theme"
-import { useParams, useNavigate } from "@solidjs/router"
+import { useParams, useNavigate, useSearchParams } from "@solidjs/router"
 import { Icon } from "@opencode-ai/ui/icon"
 import { itemApi, artifactApi, scanApi, userApi, type CapabilityItem, type ScanResult } from "../lib/api"
 import { useLanguage } from "@/context/language"
@@ -182,6 +182,7 @@ export default function ItemDetail() {
   const theme = useTheme()
   const auth = useAuth()
   const params = useParams<{ id: string }>()
+  const [search] = useSearchParams<{ from?: string }>()
   const navigate = useNavigate()
   const [item] = createResource(
     () => params.id,
@@ -210,6 +211,7 @@ export default function ItemDetail() {
   )
 
   const meta = () => TYPE_META[item()?.itemType ?? "skill"] ?? TYPE_META.skill
+  const back = () => search.from || meta().back
 
   const copy = async () => {
     if (!item()) return
@@ -237,7 +239,7 @@ export default function ItemDetail() {
         {(data) => (
           <div class="px-8 py-8 w-full max-w-3xl mx-auto">
             <button
-              onClick={() => navigate(meta().back)}
+              onClick={() => navigate(back())}
               class="inline-flex items-center gap-1 text-12-regular text-text-weak cursor-pointer hover:text-text-strong transition-colors duration-150 mb-6"
             >
               <Icon name="chevron-left" size="small" />

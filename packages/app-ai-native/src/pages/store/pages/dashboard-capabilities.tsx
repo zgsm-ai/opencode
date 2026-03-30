@@ -3,6 +3,7 @@ import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { Icon } from "@opencode-ai/ui/icon"
 import { showToast } from "@opencode-ai/ui/toast"
 import { useLanguage } from "@/context/language"
+import { useNavigate } from "@solidjs/router"
 import { createEffect, createMemo, For, Show } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useAuth } from "../hooks/use-auth"
@@ -17,6 +18,7 @@ import { typeKey } from "../lib/constants"
 const PAGE_SIZE = 10
 
 export default function DashboardCapabilities() {
+  const navigate = useNavigate()
   const dialog = useDialog()
   const language = useLanguage()
   const { user, loading } = useAuth()
@@ -221,7 +223,14 @@ export default function DashboardCapabilities() {
                     <tbody>
                       <For each={state.items}>
                         {(item) => (
-                          <tr class="border-b border-border-weak-base last:border-0">
+                          <tr
+                            class="border-b border-border-weak-base last:border-0 cursor-pointer hover:bg-surface-secondary/50"
+                            onClick={() =>
+                              navigate(
+                                `/store/items/${item.id}?type=${item.itemType}&from=/store/dashboard/capabilities`,
+                              )
+                            }
+                          >
                             <td class="px-4 py-3">
                               <div class="text-13-medium text-text-strong">{item.name}</div>
                               <div class="mt-1 text-12-regular text-text-weak">{item.slug}</div>
@@ -279,7 +288,7 @@ export default function DashboardCapabilities() {
                             </td>
                             <td class="px-4 py-3 text-12-regular text-text-weak">{item.repoName || "—"}</td>
                             <td class="px-4 py-3">
-                              <div class="flex items-center gap-1">
+                              <div class="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                                 <Button
                                   size="small"
                                   variant="ghost"
