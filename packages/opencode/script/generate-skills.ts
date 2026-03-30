@@ -1,6 +1,8 @@
 #!/usr/bin/env bun
 
+import { $ } from "bun"
 import fs from "fs/promises"
+import os from "os"
 import path from "path"
 import { fileURLToPath } from "url"
 
@@ -20,6 +22,10 @@ async function getPackageVersion(): Promise<string> {
   return pkg.version || "0.0.0"
 }
 
+function getGitSshUrl(repo: string): string {
+  return `git@github.com:${repo}.git`
+}
+
 // Fetch latest commit SHA for a repo branch
 async function fetchCommitSha(repo: string, branch: string): Promise<string | null> {
   const apiUrl = `https://api.github.com/repos/${repo}/commits/${branch}`
@@ -27,17 +33,29 @@ async function fetchCommitSha(repo: string, branch: string): Promise<string | nu
     const response = await fetch(apiUrl, {
       headers: {
         "User-Agent": "OpenCode-Build",
-        "Accept": "application/vnd.github.v3+json",
+        Accept: "application/vnd.github.v3+json",
       },
     })
     if (!response.ok) {
       console.warn(`  ⚠ Could not fetch commit SHA from GitHub API: ${response.status}`)
-      return null
+      return fetchCommitShaViaGit(repo, branch)
     }
     const data = await response.json()
     return data.sha || null
   } catch (err) {
     console.warn(`  ⚠ Failed to fetch commit SHA: ${err}`)
+    return fetchCommitShaViaGit(repo, branch)
+  }
+}
+
+async function fetchCommitShaViaGit(repo: string, branch: string): Promise<string | null> {
+  try {
+    const result = await $`git ls-remote ${getGitSshUrl(repo)} refs/heads/${branch}`.quiet()
+    const text = (await result.text()).trim()
+    const sha = text.split(/\s+/)[0]
+    return sha || null
+  } catch (err) {
+    console.warn(`  ⚠ Failed to fetch commit SHA via git+ssh: ${err}`)
     return null
   }
 }
@@ -59,13 +77,35 @@ type Index = {
   }>
 }
 
+async function withTempClone<T>(
+  repo: string,
+  branch: string,
+  fn: (dir: string) => Promise<T>,
+): Promise<T> {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "costrict-skill-"))
+  try {
+    await $`git clone --depth=1 --branch ${branch} ${getGitSshUrl(repo)} ${tempDir}`.quiet()
+    return await fn(tempDir)
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true })
+  }
+}
+
 async function fetchIndex(repo: string, branch: string): Promise<Index | null> {
   const indexUrl = `https://raw.githubusercontent.com/${repo}/${branch}/index.json`
-  const response = await fetch(indexUrl)
-  if (!response.ok) {
-    throw new Error(`Failed to fetch index: ${indexUrl} (${response.status})`)
+  try {
+    const response = await fetch(indexUrl)
+    if (!response.ok) {
+      throw new Error(`Failed to fetch index: ${indexUrl} (${response.status})`)
+    }
+    return response.json() as Promise<Index>
+  } catch (err) {
+    console.warn(`  ⚠ Failed to fetch index over HTTPS, trying git+ssh: ${err}`)
+    return withTempClone(repo, branch, async (dir) => {
+      const content = await fs.readFile(path.join(dir, "index.json"), "utf-8")
+      return JSON.parse(content) as Index
+    })
   }
-  return response.json() as Promise<Index>
 }
 
 async function fetchFile(url: string): Promise<string> {
@@ -118,6 +158,18 @@ async function needsDownload(skillName: string, repo: string, branch: string): P
   return true
 }
 
+async function copySkillFromGitRepo(
+  repo: string,
+  branch: string,
+  subdir: string,
+  skillOutputDir: string,
+): Promise<void> {
+  await withTempClone(repo, branch, async (dir) => {
+    const sourceDir = path.join(dir, subdir)
+    await fs.cp(sourceDir, skillOutputDir, { recursive: true })
+  })
+}
+
 async function downloadSkill(
   name: string,
   config: { repo: string; branch: string; subdir: string },
@@ -150,25 +202,32 @@ async function downloadSkill(
 
   // Create output directory
   const skillOutputDir = path.join(bundledSkillsDir, name)
+  await fs.rm(skillOutputDir, { recursive: true, force: true })
   await fs.mkdir(skillOutputDir, { recursive: true })
 
   // Path prefix for files (with subdir)
   const pathPrefix = subdir ? `${subdir}/` : ""
 
   // Download all files
-  for (const file of skill.files) {
-    const url = `https://raw.githubusercontent.com/${repo}/${branch}/${pathPrefix}${file}`
-    const targetPath = path.join(skillOutputDir, file)
+  try {
+    for (const file of skill.files) {
+      const url = `https://raw.githubusercontent.com/${repo}/${branch}/${pathPrefix}${file}`
+      const targetPath = path.join(skillOutputDir, file)
 
-    // Create parent directories
-    await fs.mkdir(path.dirname(targetPath), { recursive: true })
+      // Create parent directories
+      await fs.mkdir(path.dirname(targetPath), { recursive: true })
 
-    try {
       const content = await fetchFile(url)
       await fs.writeFile(targetPath, content, "utf-8")
       console.log(`  ✓ ${file}`)
-    } catch (err) {
-      console.warn(`  ✗ Failed to download ${file}: ${err}`)
+    }
+  } catch (err) {
+    console.warn(`  ⚠ HTTPS file download failed, trying git+ssh: ${err}`)
+    await fs.rm(skillOutputDir, { recursive: true, force: true })
+    await fs.mkdir(skillOutputDir, { recursive: true })
+    await copySkillFromGitRepo(repo, branch, subdir, skillOutputDir)
+    for (const file of skill.files) {
+      console.log(`  ✓ ${file} (git+ssh)`)
     }
   }
 
