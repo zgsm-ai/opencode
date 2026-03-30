@@ -11,7 +11,6 @@ import { Vcs } from "./vcs"
 import { Log } from "@/util/log"
 import { ShareNext } from "@/share/share-next"
 import { Snapshot } from "../snapshot"
-import { Truncate } from "../tool/truncation"
 import { initializeParentProcessDetection, initializeEncodingCache } from "@/plugin/tdd/tools/shell"
 import { YoloMode } from "../permission/yolo"
 import { NotificationMode } from "../permission/notification"
@@ -75,11 +74,6 @@ export async function InstanceBootstrap() {
     {
       const step = Log.Default.time("startup.instance_bootstrap.snapshot")
       Snapshot.init()
-      step.stop()
-    }
-    {
-      const step = Log.Default.time("startup.instance_bootstrap.truncate")
-      Truncate.init()
       step.stop()
     }
     {

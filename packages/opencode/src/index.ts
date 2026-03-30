@@ -14,7 +14,6 @@ import { Installation } from "./installation"
 import { NamedError } from "@opencode-ai/util/error"
 import { FormatError } from "./cli/error"
 import { ServeCommand } from "./cli/cmd/serve"
-import { WorkspaceServeCommand } from "./cli/cmd/workspace-serve"
 import { Filesystem } from "./util/filesystem"
 import { DebugCommand } from "./cli/cmd/debug"
 import { StatsCommand } from "./cli/cmd/stats"
@@ -37,6 +36,7 @@ import path from "path"
 import { Global } from "./global"
 import { JsonMigration } from "./storage/json-migration"
 import { Database } from "./storage/db"
+import { errorMessage } from "./util/error"
 
 process.on("unhandledRejection", (e) => {
   Log.Default.error("rejection", {
@@ -71,7 +71,15 @@ let cli = yargs(hideBin(process.argv))
     type: "string",
     choices: ["DEBUG", "INFO", "WARN", "ERROR"],
   })
+  .option("pure", {
+    describe: "run without external plugins",
+    type: "boolean",
+  })
   .middleware(async (opts) => {
+    if (opts.pure) {
+      process.env.OPENCODE_PURE = "1"
+    }
+
     await Log.init({
       print: process.argv.includes("--print-logs"),
       dev: Installation.isLocal(),
@@ -84,6 +92,7 @@ let cli = yargs(hideBin(process.argv))
 
     process.env.AGENT = "1"
     process.env.COSTRICT_RUNNING = "1"
+    process.env.OPENCODE_PID = String(process.pid)
 
     Log.Default.info("costrict-cli", {
       version: Installation.VERSION,
@@ -157,10 +166,6 @@ let cli = yargs(hideBin(process.argv))
   .command(LearningCommand)
   .command(CloudCommand)
 
-if (Installation.isLocal()) {
-  cli = cli.command(WorkspaceServeCommand)
-}
-
 cli = cli
   .fail((msg, err) => {
     if (
@@ -212,7 +217,7 @@ try {
   if (formatted) UI.error(formatted)
   if (formatted === undefined) {
     UI.error("Unexpected error, check log file at " + Log.file() + " for more details" + EOL)
-    process.stderr.write((e instanceof Error ? e.message : String(e)) + EOL)
+    process.stderr.write(errorMessage(e) + EOL)
   }
   process.exitCode = 1
 } finally {

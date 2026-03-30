@@ -90,6 +90,7 @@ export namespace Project {
 
   function readCachedId(dir: string) {
     return Filesystem.readText(path.join(dir, "opencode"))
+      .catch(() => Filesystem.readText(path.join(dir, "costrict")))
       .then((x) => x.trim())
       .then(ProjectID.make)
       .catch(() => undefined)
@@ -108,9 +109,7 @@ export namespace Project {
         const gitBinary = which("git")
 
         // cached id calculation
-        let id = await Filesystem.readText(path.join(dotgit, "costrict"))
-          .then((x) => ProjectID.make(x.trim()))
-          .catch(() => undefined)
+        let id = await readCachedId(dotgit)
 
         if (!gitBinary) {
           return {
@@ -233,7 +232,7 @@ export namespace Project {
           },
         }
 
-    if (Flag.COSTRICT_EXPERIMENTAL_ICON_DISCOVERY) discover(existing)
+    if (Flag.COSTRICT_EXPERIMENTAL_ICON_DISCOVERY || Flag.OPENCODE_EXPERIMENTAL_ICON_DISCOVERY) discover(existing)
     const result: Info = {
       ...existing,
       worktree: data.worktree,

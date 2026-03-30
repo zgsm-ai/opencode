@@ -34,8 +34,10 @@ export namespace Flag {
   export const OPENCODE_AUTO_SHARE = truthy("COSTRICT_AUTO_SHARE")
   export const OPENCODE_GIT_BASH_PATH = process.env["COSTRICT_GIT_BASH_PATH"]
   export const OPENCODE_CONFIG = process.env["OPENCODE_CONFIG"]
+  export declare const OPENCODE_PURE: boolean
   export declare const OPENCODE_TUI_CONFIG: string | undefined
   export declare const OPENCODE_CONFIG_DIR: string | undefined
+  export declare const OPENCODE_PLUGIN_META_FILE: string | undefined
   export const OPENCODE_CONFIG_CONTENT = process.env["OPENCODE_CONFIG_CONTENT"]
   export declare const OPENCODE_DISABLE_PROJECT_CONFIG: boolean
 
@@ -91,15 +93,20 @@ export namespace Flag {
 
   // OPENCODE flags
   export const OPENCODE_DISABLE_AUTOUPDATE = truthy("OPENCODE_DISABLE_AUTOUPDATE")
+  export const OPENCODE_ALWAYS_NOTIFY_UPDATE = truthy("OPENCODE_ALWAYS_NOTIFY_UPDATE")
   export const OPENCODE_DISABLE_PRUNE = truthy("OPENCODE_DISABLE_PRUNE")
   export const OPENCODE_DISABLE_TERMINAL_TITLE = truthy("OPENCODE_DISABLE_TERMINAL_TITLE")
+  export const OPENCODE_SHOW_TTFD = truthy("OPENCODE_SHOW_TTFD")
   export const OPENCODE_PERMISSION = process.env["OPENCODE_PERMISSION"]
   export const OPENCODE_DISABLE_DEFAULT_PLUGINS = truthy("OPENCODE_DISABLE_DEFAULT_PLUGINS")
-  export const OPENCODE_ENABLE_DEFAULT_PLUGINS = truthy("COSTRICT_ENABLE_DEFAULT_PLUGINS")
-  export const OPENCODE_DISABLE_LSP_DOWNLOAD = truthy("COSTRICT_DISABLE_LSP_DOWNLOAD")
+  export const OPENCODE_ENABLE_DEFAULT_PLUGINS =
+    truthy("COSTRICT_ENABLE_DEFAULT_PLUGINS") || truthy("OPENCODE_ENABLE_DEFAULT_PLUGINS")
+  export const OPENCODE_DISABLE_LSP_DOWNLOAD =
+    truthy("COSTRICT_DISABLE_LSP_DOWNLOAD") || truthy("OPENCODE_DISABLE_LSP_DOWNLOAD")
   export const OPENCODE_ENABLE_EXPERIMENTAL_MODELS = truthy("OPENCODE_ENABLE_EXPERIMENTAL_MODELS")
   export const OPENCODE_DISABLE_AUTOCOMPACT = truthy("OPENCODE_DISABLE_AUTOCOMPACT")
-  export const OPENCODE_DISABLE_MODELS_FETCH = truthy("COSTRICT_DISABLE_MODELS_FETCH")
+  export const OPENCODE_DISABLE_MODELS_FETCH =
+    truthy("COSTRICT_DISABLE_MODELS_FETCH") || truthy("OPENCODE_DISABLE_MODELS_FETCH")
   export const OPENCODE_DISABLE_CLAUDE_CODE = truthy("OPENCODE_DISABLE_CLAUDE_CODE")
   export const OPENCODE_DISABLE_CLAUDE_CODE_PROMPT =
     OPENCODE_DISABLE_CLAUDE_CODE || truthy("OPENCODE_DISABLE_CLAUDE_CODE_PROMPT")
@@ -110,10 +117,11 @@ export namespace Flag {
   export const OPENCODE_ENABLE_INSTALL_DEPENDENCIES = truthy("OPENCODE_ENABLE_INSTALL_DEPENDENCIES")
   export const OPENCODE_FAKE_VCS = process.env["OPENCODE_FAKE_VCS"]
   export declare const OPENCODE_CLIENT: string
-  export const OPENCODE_SERVER_PASSWORD = process.env["COSTRICT_SERVER_PASSWORD"]
+  export const OPENCODE_SERVER_PASSWORD = process.env["COSTRICT_SERVER_PASSWORD"] ?? process.env["OPENCODE_SERVER_PASSWORD"]
   export const OPENCODE_SERVER_USERNAME = process.env["OPENCODE_SERVER_USERNAME"]
   export const OPENCODE_MODELS_URL = process.env["OPENCODE_MODELS_URL"]
-  export const OPENCODE_DISABLE_FILETIME_CHECK = truthy("OPENCODE_DISABLE_FILETIME_CHECK")
+  export const OPENCODE_DISABLE_FILETIME_CHECK =
+    truthy("COSTRICT_DISABLE_FILETIME_CHECK") || truthy("OPENCODE_DISABLE_FILETIME_CHECK")
   export const OPENCODE_ENABLE_QUESTION_TOOL = truthy("OPENCODE_ENABLE_QUESTION_TOOL")
 
   // Experimental
@@ -123,9 +131,12 @@ export namespace Flag {
   export const OPENCODE_EXPERIMENTAL_ICON_DISCOVERY =
     OPENCODE_EXPERIMENTAL || truthy("OPENCODE_EXPERIMENTAL_ICON_DISCOVERY")
 
-  const copy = process.env["COSTRICT_EXPERIMENTAL_DISABLE_COPY_ON_SELECT"]
+  const copy =
+    process.env["COSTRICT_EXPERIMENTAL_DISABLE_COPY_ON_SELECT"] ?? process.env["OPENCODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT"]
   export const OPENCODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT =
-    copy === undefined ? process.platform === "win32" : truthy("COSTRICT_EXPERIMENTAL_DISABLE_COPY_ON_SELECT")
+    copy === undefined
+      ? process.platform === "win32"
+      : truthy("COSTRICT_EXPERIMENTAL_DISABLE_COPY_ON_SELECT") || truthy("OPENCODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT")
   export const OPENCODE_ENABLE_EXA =
     truthy("OPENCODE_ENABLE_EXA") || OPENCODE_EXPERIMENTAL || truthy("OPENCODE_EXPERIMENTAL_EXA")
   export const OPENCODE_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS = number("OPENCODE_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS")
@@ -137,6 +148,8 @@ export namespace Flag {
   export const OPENCODE_EXPERIMENTAL_WORKSPACES = OPENCODE_EXPERIMENTAL || truthy("OPENCODE_EXPERIMENTAL_WORKSPACES")
   export const OPENCODE_EXPERIMENTAL_MARKDOWN = !falsy("OPENCODE_EXPERIMENTAL_MARKDOWN")
   export const OPENCODE_MODELS_PATH = process.env["OPENCODE_MODELS_PATH"]
+  export const OPENCODE_DISABLE_EMBEDDED_WEB_UI = truthy("OPENCODE_DISABLE_EMBEDDED_WEB_UI")
+  export const OPENCODE_DB = process.env["OPENCODE_DB"]
   export const OPENCODE_DISABLE_CHANNEL_DB = truthy("OPENCODE_DISABLE_CHANNEL_DB")
   export const OPENCODE_SKIP_MIGRATIONS = truthy("OPENCODE_SKIP_MIGRATIONS")
   export const OPENCODE_STRICT_CONFIG_DEPS = truthy("OPENCODE_STRICT_CONFIG_DEPS")
@@ -204,12 +217,34 @@ Object.defineProperty(Flag, "OPENCODE_DISABLE_PROJECT_CONFIG", {
   configurable: false,
 })
 
+// Dynamic getter for OPENCODE_PURE
+// This must be evaluated at access time, not module load time,
+// because the CLI can set this flag at runtime
+Object.defineProperty(Flag, "OPENCODE_PURE", {
+  get() {
+    return truthy("OPENCODE_PURE")
+  },
+  enumerable: true,
+  configurable: false,
+})
+
+// Dynamic getter for OPENCODE_PLUGIN_META_FILE
+// This must be evaluated at access time, not module load time,
+// because tests and external tooling may set this env var at runtime
+Object.defineProperty(Flag, "OPENCODE_PLUGIN_META_FILE", {
+  get() {
+    return process.env["OPENCODE_PLUGIN_META_FILE"]
+  },
+  enumerable: true,
+  configurable: false,
+})
+
 // Dynamic getter for OPENCODE_CLIENT
 // This must be evaluated at access time, not module load time,
 // because some commands override the client at runtime
 Object.defineProperty(Flag, "OPENCODE_CLIENT", {
   get() {
-    return process.env["COSTRICT_CLIENT"] ?? "cli"
+    return process.env["COSTRICT_CLIENT"] ?? process.env["OPENCODE_CLIENT"] ?? "cli"
   },
   enumerable: true,
   configurable: false,
