@@ -61,6 +61,14 @@ export namespace Project {
     })
   export type Info = z.infer<typeof Info>
 
+  export const UpdateInput = z.object({
+    projectID: ProjectID.zod,
+    name: z.string().optional(),
+    icon: Info.shape.icon.optional(),
+    commands: Info.shape.commands.optional(),
+  })
+  export type UpdateInput = z.infer<typeof UpdateInput>
+
   export const Event = {
     Updated: BusEvent.define("project.updated", Info),
   }
@@ -361,12 +369,7 @@ export namespace Project {
   }
 
   export const update = fn(
-    z.object({
-      projectID: ProjectID.zod,
-      name: z.string().optional(),
-      icon: Info.shape.icon.optional(),
-      commands: Info.shape.commands.optional(),
-    }),
+    UpdateInput,
     async (input) => {
       const id = ProjectID.make(input.projectID)
       const result = Database.use((db) =>

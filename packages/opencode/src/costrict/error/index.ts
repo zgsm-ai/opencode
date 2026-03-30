@@ -104,7 +104,7 @@ export namespace CostrictError {
         sessionID: input.message.sessionID,
         messageID: input.message.id,
       })
-      const continuation = MessageV2.toModelMessages([current], input.model)
+      const continuation = await MessageV2.toModelMessages([current], input.model)
       const messages = [
         ...input.messages,
         ...continuation,

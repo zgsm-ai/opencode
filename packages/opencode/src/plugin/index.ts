@@ -63,13 +63,15 @@ export namespace Plugin {
     }
 
     for (let plugin of plugins) {
+      const spec = Config.pluginSpecifier(plugin)
       // ignore old codex plugin since it is supported first party now
-      if (plugin.includes("opencode-openai-codex-auth") || plugin.includes("opencode-copilot-auth")) continue
-      log.info("loading plugin", { path: plugin })
-      if (!plugin.startsWith("file://")) {
-        const lastAtIndex = plugin.lastIndexOf("@")
-        const pkg = lastAtIndex > 0 ? plugin.substring(0, lastAtIndex) : plugin
-        const version = lastAtIndex > 0 ? plugin.substring(lastAtIndex + 1) : "latest"
+      if (spec.includes("opencode-openai-codex-auth") || spec.includes("opencode-copilot-auth")) continue
+      log.info("loading plugin", { path: spec })
+      let target = spec
+      if (!target.startsWith("file://")) {
+        const lastAtIndex = target.lastIndexOf("@")
+        const pkg = lastAtIndex > 0 ? target.substring(0, lastAtIndex) : target
+        const version = lastAtIndex > 0 ? target.substring(lastAtIndex + 1) : "latest"
         plugin = await BunProc.install(pkg, version).catch((err) => {
           const cause = err instanceof Error ? err.cause : err
           const detail = cause instanceof Error ? cause.message : String(cause ?? err)
@@ -82,11 +84,12 @@ export namespace Plugin {
           return ""
         })
         if (!plugin) continue
+        target = plugin
       }
       // Prevent duplicate initialization when plugins export the same function
       // as both a named export and default export (e.g., `export const X` and `export default X`).
       // Object.entries(mod) would return both entries pointing to the same function reference.
-      await import(plugin)
+      await import(target)
         .then(async (mod) => {
           const seen = new Set<PluginInstance>()
           for (const [_name, fn] of Object.entries<PluginInstance>(mod)) {
@@ -97,7 +100,7 @@ export namespace Plugin {
         })
         .catch((err) => {
           const message = err instanceof Error ? err.message : String(err)
-          log.error("failed to load plugin", { path: plugin, error: message })
+          log.error("failed to load plugin", { path: target, error: message })
           Bus.publish(Session.Event.Error, {
             error: new NamedError.Unknown({
               message: `Failed to load plugin ${plugin}: ${message}`,

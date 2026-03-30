@@ -14,6 +14,7 @@ export namespace Process {
     stdout?: Stdio
     stderr?: Stdio
     shell?: Shell
+    windowsHide?: boolean
     abort?: AbortSignal
     kill?: NodeJS.Signals | number
     timeout?: number
@@ -65,7 +66,7 @@ export namespace Process {
       shell: opts.shell,
       env: opts.env === null ? {} : opts.env ? { ...process.env, ...opts.env } : undefined,
       stdio: [opts.stdin ?? "ignore", opts.stdout ?? "ignore", opts.stderr ?? "ignore"],
-      windowsHide: process.platform === "win32",
+      windowsHide: opts.windowsHide ?? (process.platform === "win32"),
     })
 
     let closed = false

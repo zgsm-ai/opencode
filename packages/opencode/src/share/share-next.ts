@@ -66,7 +66,7 @@ export namespace ShareNext {
   export async function init() {
     if (disabled) return
     Bus.subscribe(Session.Event.Updated, async (evt) => {
-      const session = await Session.get(evt.properties.sessionID)
+      const session = await Session.get(evt.properties.info.id)
 
       await sync(session.id, [
         {

@@ -577,7 +577,7 @@ export namespace Session {
     limit?: number
   }) {
     const project = Instance.project
-    const conditions = [eq(SessionTable.project_id, project.id)]
+    const conditions: SQL[] = [eq(SessionTable.project_id, project.id)]
 
     if (WorkspaceContext.workspaceID) {
       conditions.push(eq(SessionTable.workspace_id, WorkspaceContext.workspaceID))

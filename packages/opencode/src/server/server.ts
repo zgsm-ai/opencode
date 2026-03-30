@@ -24,7 +24,7 @@ import { Global } from "../global"
 import { WorkspaceContext } from "../control-plane/workspace-context"
 import { WorkspaceID } from "../control-plane/schema"
 import { ProviderID } from "../provider/schema"
-import { WorkspaceRouterMiddleware } from "../control-plane/workspace-router-middleware"
+import { WorkspaceRouterMiddleware } from "./router"
 import { ProjectRoutes } from "./routes/project"
 import { SessionRoutes } from "./routes/session"
 import { PtyRoutes } from "./routes/pty"
@@ -153,7 +153,7 @@ export namespace Server {
             providerID: ProviderID.zod,
           }),
         ),
-        validator("json", Auth.Info),
+        validator("json", Auth.Info.zod),
         async (c) => {
           const providerID = c.req.valid("param").providerID
           const info = c.req.valid("json")
@@ -653,4 +653,3 @@ export namespace Server {
     return server
   }
 }
-

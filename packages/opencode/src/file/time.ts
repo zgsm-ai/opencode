@@ -50,10 +50,10 @@ export namespace FileTime {
 
   export class Service extends ServiceMap.Service<Service, Interface>()("@opencode/FileTime") {}
 
-  export const layer = Layer.effect(
+  export const layer: Layer.Layer<Service, never, never> = Layer.effect(
     Service,
     Effect.gen(function* () {
-      const disableCheck = yield* Flag.OPENCODE_DISABLE_FILETIME_CHECK
+      const disableCheck = Flag.OPENCODE_DISABLE_FILETIME_CHECK
       const state = yield* InstanceState.make<State>(
         Effect.fn("FileTime.state")(() =>
           Effect.succeed({
@@ -101,7 +101,8 @@ export namespace FileTime {
       })
 
       const withLock = Effect.fn("FileTime.withLock")(function* <T>(filepath: string, fn: () => Promise<T>) {
-        return yield* Effect.promise(fn).pipe((yield* getLock(filepath)).withPermits(1))
+        const lock = yield* getLock(filepath)
+        return yield* Effect.promise(fn).pipe(lock.withPermits(1))
       })
 
       return Service.of({ read, get, assert, withLock })

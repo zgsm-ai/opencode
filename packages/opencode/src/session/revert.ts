@@ -4,7 +4,6 @@ import { Snapshot } from "../snapshot"
 import { MessageV2 } from "./message-v2"
 import { Session } from "."
 import { Log } from "../util/log"
-import { SyncEvent } from "../sync"
 import { Storage } from "@/storage/storage"
 import { Bus } from "../bus"
 import { SessionPrompt } from "./prompt"
@@ -112,7 +111,7 @@ export namespace SessionRevert {
       remove.push(msg)
     }
     for (const msg of remove) {
-      SyncEvent.run(MessageV2.Event.Removed, {
+      await Session.removeMessage({
         sessionID: sessionID,
         messageID: msg.info.id,
       })
@@ -125,7 +124,7 @@ export namespace SessionRevert {
         const removeParts = target.parts.slice(removeStart)
         target.parts = preserveParts
         for (const part of removeParts) {
-          SyncEvent.run(MessageV2.Event.PartRemoved, {
+          await Session.removePart({
             sessionID: sessionID,
             messageID: target.info.id,
             partID: part.id,

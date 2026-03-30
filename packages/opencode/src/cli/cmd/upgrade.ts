@@ -3,6 +3,14 @@ import { UI } from "../ui"
 import * as prompts from "@clack/prompts"
 import { Installation } from "../../installation"
 
+function getUpgradeFailedStderr(err: unknown) {
+  if (!(err instanceof Installation.UpgradeFailedError)) return ""
+  const cause = err.cause
+  const value =
+    cause && typeof cause === "object" && "stderr" in cause ? (cause as { stderr?: unknown }).stderr : undefined
+  return typeof value === "string" ? value : ""
+}
+
 export const UpgradeCommand = {
   command: "upgrade [target]",
   describe: "upgrade cs to the latest or a specific version",
@@ -81,11 +89,12 @@ export const UpgradeCommand = {
     if (err) {
       spinner.stop("Upgrade failed", 1)
       if (err instanceof Installation.UpgradeFailedError) {
+        const stderr = getUpgradeFailedStderr(err)
         // necessary because choco only allows install/upgrade in elevated terminals
-        if (method === "choco" && err.stderr.includes("not running from an elevated command shell")) {
+        if (method === "choco" && stderr.includes("not running from an elevated command shell")) {
           prompts.log.error("Please run the terminal as Administrator and try again")
         } else {
-          prompts.log.error(err.stderr)
+          prompts.log.error(stderr || err.message)
         }
       } else if (err instanceof Error) prompts.log.error(err.message)
       prompts.outro("Done")

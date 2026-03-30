@@ -8,11 +8,12 @@ import { DialogPrompt } from "../ui/dialog-prompt"
 import { Link } from "../ui/link"
 import { useTheme } from "../context/theme"
 import { TextAttributes } from "@opentui/core"
-import type { ProviderAuthAuthorization, ProviderAuthMethod } from "@opencode-ai/sdk/v2"
+import type { ProviderAuthAuthorization } from "@opencode-ai/sdk/v2"
 import { DialogModel } from "./dialog-model"
 import { useKeyboard } from "@opentui/solid"
 import { Clipboard } from "@tui/util/clipboard"
 import { useToast } from "../ui/toast"
+import type { ProviderAuth } from "@/provider/auth"
 
 const PROVIDER_PRIORITY: Record<string, number> = {
   costrict: 0,
@@ -43,7 +44,7 @@ export function createDialogProviderOptions() {
         }[provider.id],
         category: provider.id in PROVIDER_PRIORITY ? "Popular" : "Other",
         async onSelect() {
-          const methods = sync.data.provider_auth[provider.id] ?? [
+          const methods: ProviderAuth.Method[] = (sync.data.provider_auth[provider.id] as ProviderAuth.Method[] | undefined) ?? [
             {
               type: "api",
               label: "API key",
@@ -80,11 +81,12 @@ export function createDialogProviderOptions() {
               inputs = value
             }
 
-            const result = await sdk.client.provider.oauth.authorize({
+            const authorizeInput = {
               providerID: provider.id,
               method: index,
-              inputs,
-            })
+              ...(inputs ? { inputs } : {}),
+            }
+            const result = await sdk.client.provider.oauth.authorize(authorizeInput)
             if (result.error) {
               toast.show({
                 variant: "error",
@@ -266,7 +268,7 @@ function ApiMethod(props: ApiMethodProps) {
 
 interface PromptsMethodProps {
   dialog: ReturnType<typeof useDialog>
-  prompts: NonNullable<ProviderAuthMethod["prompts"]>[number][]
+  prompts: NonNullable<ProviderAuth.Method["prompts"]>[number][]
 }
 async function PromptsMethod(props: PromptsMethodProps) {
   const inputs: Record<string, string> = {}

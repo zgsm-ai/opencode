@@ -10,7 +10,7 @@ export function initProjectors() {
     projectors: sessionProjectors,
     convertEvent: (type, data) => {
       if (type === "session.updated") {
-        const id = (data as z.infer<typeof Session.Event.Updated.schema>).sessionID
+        const id = (data as z.infer<typeof Session.Event.Updated.properties>).info.id
         const row = Database.use((db) => db.select().from(SessionTable).where(eq(SessionTable.id, id)).get())
 
         if (!row) return data

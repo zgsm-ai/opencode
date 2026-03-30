@@ -29,3 +29,5 @@ export const TodoWriteTool = Tool.define("todowrite", {
     }
   },
 })
+
+export const TodoReadTool = TodoWriteTool

@@ -32,16 +32,21 @@ import { GlobalBus } from "@/bus/global"
 import { Event } from "../server/event"
 import { Glob } from "../util/glob"
 import { PackageRegistry } from "@/bun/registry"
-import { proxied } from "@/util/proxied"
+import { proxied } from "@/util/network"
 import { iife } from "@/util/iife"
 import { Account } from "@/account"
 import { ConfigPaths } from "./paths"
 import { Filesystem } from "@/util/filesystem"
 import { Process } from "@/util/process"
 import { Lock } from "@/util/lock"
+import { isPathPluginSpec, parsePluginSpecifier, resolvePathPluginTarget } from "@/plugin/shared"
 
 export namespace Config {
   const ModelId = z.string().meta({ $ref: "https://models.dev/model-schema.json#/$defs/Model" })
+  const PluginOptions = z.record(z.string(), z.unknown())
+  export const PluginSpec = z.union([z.string(), z.tuple([z.string(), PluginOptions])])
+  export type PluginOptions = z.infer<typeof PluginOptions>
+  export type PluginSpec = z.infer<typeof PluginSpec>
 
   const log = Log.create({ service: "config" })
 
@@ -211,7 +216,7 @@ export namespace Config {
         log.debug("loaded custom config from OPENCODE_CONFIG_CONTENT")
       }
 
-      const active = Account.active()
+      const active = await Account.active()
       if (active?.active_org_id) {
         try {
           const [config, token] = await Promise.all([
@@ -565,7 +570,7 @@ export namespace Config {
   }
 
   async function loadPlugin(dir: string) {
-    const plugins: string[] = []
+    const plugins: PluginSpec[] = []
 
     for (const item of await Glob.scan("{plugin,plugins}/*.{ts,js}", {
       cwd: dir,
@@ -588,39 +593,49 @@ export namespace Config {
    * getPluginName("oh-my-opencode@2.4.3") // "oh-my-opencode"
    * getPluginName("@scope/pkg@1.0.0") // "@scope/pkg"
    */
-  export function getPluginName(plugin: string): string {
-    if (plugin.startsWith("file://")) {
-      return path.parse(new URL(plugin).pathname).name
-    }
-    const lastAt = plugin.lastIndexOf("@")
-    if (lastAt > 0) {
-      return plugin.substring(0, lastAt)
-    }
-    return plugin
+  export function pluginSpecifier(plugin: PluginSpec): string {
+    return Array.isArray(plugin) ? plugin[0] : plugin
   }
 
-  /**
-   * Deduplicates plugins by name, with later entries (higher priority) winning.
-   * Priority order (highest to lowest):
-   * 1. Local plugin/ directory
-   * 2. Local opencode.json
-   * 3. Global plugin/ directory
-   * 4. Global opencode.json
-   *
-   * Since plugins are added in low-to-high priority order,
-   * we reverse, deduplicate (keeping first occurrence), then restore order.
-   */
-  export function deduplicatePlugins(plugins: string[]): string[] {
-    // seenNames: canonical plugin names for duplicate detection
-    // e.g., "oh-my-opencode", "@scope/pkg"
-    const seenNames = new Set<string>()
+  export function pluginOptions(plugin: PluginSpec): PluginOptions | undefined {
+    return Array.isArray(plugin) ? plugin[1] : undefined
+  }
 
-    // uniqueSpecifiers: full plugin specifiers to return
-    // e.g., "oh-my-opencode@2.4.3", "file:///path/to/plugin.js"
-    const uniqueSpecifiers: string[] = []
+  export async function resolvePluginSpec(plugin: PluginSpec, configFilepath: string): Promise<PluginSpec> {
+    const spec = pluginSpecifier(plugin)
+    if (!isPathPluginSpec(spec)) return plugin
+    if (spec.startsWith("file://")) {
+      const resolved = await resolvePathPluginTarget(spec).catch(() => spec)
+      return Array.isArray(plugin) ? [resolved, plugin[1]] : resolved
+    }
+    if (path.isAbsolute(spec) || /^[A-Za-z]:[\\/]/.test(spec)) {
+      const base = pathToFileURL(spec).href
+      const resolved = await resolvePathPluginTarget(base).catch(() => base)
+      return Array.isArray(plugin) ? [resolved, plugin[1]] : resolved
+    }
+    try {
+      const base = import.meta.resolve!(spec, configFilepath)
+      const resolved = await resolvePathPluginTarget(base).catch(() => base)
+      return Array.isArray(plugin) ? [resolved, plugin[1]] : resolved
+    } catch {
+      try {
+        const require = createRequire(configFilepath)
+        const base = pathToFileURL(require.resolve(spec)).href
+        const resolved = await resolvePathPluginTarget(base).catch(() => base)
+        return Array.isArray(plugin) ? [resolved, plugin[1]] : resolved
+      } catch {
+        return plugin
+      }
+    }
+  }
+
+  export function deduplicatePlugins(plugins: PluginSpec[]): PluginSpec[] {
+    const seenNames = new Set<string>()
+    const uniqueSpecifiers: PluginSpec[] = []
 
     for (const specifier of plugins.toReversed()) {
-      const name = getPluginName(specifier)
+      const spec = pluginSpecifier(specifier)
+      const name = spec.startsWith("file://") ? spec : parsePluginSpecifier(spec).pkg
       if (!seenNames.has(name)) {
         seenNames.add(name)
         uniqueSpecifiers.push(specifier)
@@ -1129,7 +1144,7 @@ export namespace Config {
           ignore: z.array(z.string()).optional(),
         })
         .optional(),
-      plugin: z.string().array().optional(),
+      plugin: PluginSpec.array().optional(),
       snapshot: z
         .union([
           z.boolean(),
@@ -1463,7 +1478,7 @@ export namespace Config {
       const data = parsed.data
       if (data.plugin && isFile) {
         for (let i = 0; i < data.plugin.length; i++) {
-          const plugin = data.plugin[i]
+          const plugin = pluginSpecifier(data.plugin[i])
           try {
             data.plugin[i] = import.meta.resolve!(plugin, options.path)
           } catch (e) {
