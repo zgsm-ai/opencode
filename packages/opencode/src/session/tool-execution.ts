@@ -280,8 +280,17 @@ export namespace ToolExecution {
     assistantMessage: MessageV2.Assistant,
     exitToolName: string
   ): Promise<string> {
+    // 获取 agent 信息以检查可用工具
+    const agent = await Agent.get(assistantMessage.agent)
+    const hasQuestionTool = agent?.tools?.["question"] !== false
+
     // 基础消息
-    const baseMessage = `You did not call any tools. If the task is fully completed, please use the \`${exitToolName}\` tool. Otherwise, use other tools to help you complete the task.`
+    let baseMessage = `You did not call any tools. If the task is fully completed, please use the \`${exitToolName}\` tool. Otherwise, use other tools to help you complete the task.`
+
+    // 如果 agent 可以使用 question 工具，添加提示
+    if (hasQuestionTool) {
+      baseMessage += ` If anything is unclear, you can use the \`question\` tool to ask the user for clarification.`
+    }
 
     // 获取 assistant 消息的文本内容
     const allParts = await MessageV2.parts(assistantMessage.id)
