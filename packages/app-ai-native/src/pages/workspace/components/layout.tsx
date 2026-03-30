@@ -30,24 +30,30 @@ export default function WorkspaceLayout(props: ParentProps) {
   const active = useActiveWorkspace()
   const params = useParams()
 
-  onMount(async () => {
-    if (!auth.user()) return
-    setIsLoading(true)
-    try {
-      const [workspacesRes, devicesRes] = await Promise.all([
-        workspaceApi.list().catch(() => ({ workspaces: [] })),
-        deviceApi.list().catch(() => ({ devices: [] })),
-      ])
-      setWorkspaces(reconcile(workspacesRes.workspaces, { key: "id", merge: false }))
-      setDevices(reconcile(devicesRes.devices, { key: "id", merge: false }))
-    } catch (err) {
-      showToast({
-        title: t("workspace.loading.failed"),
-        description: t("workspace.loading.dataFailed"),
-      })
-    } finally {
-      setIsLoading(false)
-    }
+  let loaded = false
+  createEffect(() => {
+    const user = auth.user()
+    if (!user) return
+    if (loaded) return
+    loaded = true
+    untrack(async () => {
+      setIsLoading(true)
+      try {
+        const [workspacesRes, devicesRes] = await Promise.all([
+          workspaceApi.list().catch(() => ({ workspaces: [] })),
+          deviceApi.list().catch(() => ({ devices: [] })),
+        ])
+        setWorkspaces(reconcile(workspacesRes.workspaces, { key: "id", merge: false }))
+        setDevices(reconcile(devicesRes.devices, { key: "id", merge: false }))
+      } catch (err) {
+        showToast({
+          title: t("workspace.loading.failed"),
+          description: t("workspace.loading.dataFailed"),
+        })
+      } finally {
+        setIsLoading(false)
+      }
+    })
   })
 
   const DISABLE_DELAY_MS = 1_500
