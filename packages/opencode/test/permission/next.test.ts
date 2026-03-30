@@ -480,6 +480,20 @@ test("disabled - specific allow overrides wildcard deny", () => {
   expect(result.has("read")).toBe(true)
 })
 
+test("disabled - explicit tool allow beats trailing wildcard deny (proposal question tool)", () => {
+  const result = PermissionNext.disabled(
+    ["question", "bash", "read"],
+    [
+      { permission: "*", pattern: "*", action: "deny" },
+      { permission: "question", pattern: "*", action: "allow" },
+      { permission: "*", pattern: "*", action: "deny" },
+    ],
+  )
+  expect(result.has("question")).toBe(false)
+  expect(result.has("bash")).toBe(true)
+  expect(result.has("read")).toBe(true)
+})
+
 // ask tests
 
 test("ask - resolves immediately when action is allow", async () => {

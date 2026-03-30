@@ -89,11 +89,31 @@ export namespace PermissionNext {
 
   const EDIT_TOOLS = ["edit", "write", "patch", "multiedit"]
 
+  /**
+   * Which permission rule applies when deciding if a tool is stripped from the model tool list.
+   * Explicit `rule.permission === permission` must win over `*` catch-all, otherwise a trailing
+   * `{ permission: "*", action: "deny" }` (e.g. from user config) incorrectly removes tools that
+   * were allowed by name (e.g. `question` on the proposal agent).
+   * Within the same permission name, last rule still wins (task tool sub-patterns, etc.).
+   */
+  function resolveRuleForTool(permission: string, ruleset: Ruleset): RuleType | undefined {
+    const matches = ruleset.filter((rule) => Wildcard.match(permission, rule.permission))
+    if (matches.length === 0) return undefined
+
+    const exactName = matches.filter((rule) => rule.permission === permission)
+    if (exactName.length > 0) return exactName[exactName.length - 1]
+
+    const catchAll = matches.filter((rule) => rule.permission === "*")
+    if (catchAll.length > 0) return catchAll[catchAll.length - 1]
+
+    return matches[matches.length - 1]
+  }
+
   export function disabled(tools: string[], ruleset: Ruleset): Set<string> {
     const result = new Set<string>()
     for (const tool of tools) {
       const permission = EDIT_TOOLS.includes(tool) ? "edit" : tool
-      const rule = ruleset.findLast((rule) => Wildcard.match(permission, rule.permission))
+      const rule = resolveRuleForTool(permission, ruleset)
       if (!rule) continue
       if (rule.pattern === "*" && rule.action === "deny") result.add(tool)
     }

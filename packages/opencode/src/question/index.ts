@@ -5,6 +5,7 @@ import { Config } from "@/config/config"
 import type { QuestionID } from "./schema"
 import type { SessionID, MessageID } from "@/session/schema"
 import { Log } from "@/util/log"
+import z from "zod"
 
 const log = Log.create({ service: "question" })
 
@@ -25,6 +26,16 @@ export namespace Question {
   export type Reply = S.Reply
   export const Event = S.Event
   export const RejectedError = S.RejectedError
+
+  /** `questions` field schema for the `question` tool (must be defined — see SessionPrompt.resolveTools shape checks). */
+  export const Publics = z.array(S.Info).min(1)
+
+  export function withCustom(questions: z.infer<typeof Publics>): Info[] {
+    return questions.map((q) => ({
+      ...q,
+      custom: q.custom ?? true,
+    }))
+  }
 
   export async function ask(input: {
     sessionID: SessionID

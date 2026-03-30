@@ -46,6 +46,7 @@ tsconfig.tsbuildinfo
 .fdignore
 .rgignore
 agent-git
+.agent-git/
 explore_result/
 agent-git.bat
 .tmp-bash-tool-test/
@@ -62,3 +63,5 @@ __pycache__/
 venv/
 testcase/
 nul
+packages/opencode/testcase/
+packages/opencode/proposal/
