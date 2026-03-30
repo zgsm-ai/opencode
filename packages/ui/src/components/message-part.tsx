@@ -2159,7 +2159,7 @@ ToolRegistry.register({
 ToolRegistry.register({
   name: "str_replace_based_edit_tool",
   render(props) {
-    const diffComponent = useDiffComponent()
+    const diffComponent = useFileComponent()
     const command = createMemo(() => getStrReplaceCommand(props.input))
     const filePath = createMemo(() => props.input.path ?? props.metadata.filediff?.file ?? "")
     const filename = createMemo(() => getFilename(filePath() ?? ""))

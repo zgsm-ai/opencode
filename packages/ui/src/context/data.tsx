@@ -1,4 +1,4 @@
-import type { Message, Session, Part, FileDiff, SessionStatus, ProviderListResponse } from "@opencode-ai/sdk/v2"
+import type { Message, Session, Part, FileDiff, SessionStatus, ProviderListResponse, Permission } from "@opencode-ai/sdk/v2"
 import { createSimpleContext } from "./helper"
 import { PreloadMultiFileDiffResult } from "@pierre/diffs/ssr"
 
@@ -20,11 +20,20 @@ type Data = {
   part: {
     [messageID: string]: Part[]
   }
+  permission?: {
+    [sessionID: string]: Permission[]
+  }
 }
 
 export type NavigateToSessionFn = (sessionID: string) => void
 
 export type SessionHrefFn = (sessionID: string) => string
+
+export type RespondToPermissionFn = (params: {
+  sessionID: string
+  permissionID: string
+  response: "once" | "always" | "reject"
+}) => void
 
 export const { use: useData, provider: DataProvider } = createSimpleContext({
   name: "Data",
@@ -33,6 +42,7 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
     directory: string
     onNavigateToSession?: NavigateToSessionFn
     onSessionHref?: SessionHrefFn
+    onRespondToPermission?: RespondToPermissionFn
   }) => {
     return {
       get store() {
@@ -43,6 +53,7 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
       },
       navigateToSession: props.onNavigateToSession,
       sessionHref: props.onSessionHref,
+      respondToPermission: props.onRespondToPermission,
     }
   },
 })
