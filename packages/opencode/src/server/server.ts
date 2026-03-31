@@ -46,6 +46,7 @@ import { GlobalRoutes } from "./routes/global"
 import { CloudFileRoutes } from "./routes/cloud-file"
 import { MDNS } from "./mdns"
 import { lazy } from "@/util/lazy"
+import { normalizeAppProxyPath } from "./web-path"
 
 // @ts-ignore This global is needed to prevent ai-sdk from logging warnings to stdout https://github.com/vercel/ai/blob/2dc67e0ef538307f21368db32d5a12345d98831b/packages/ai/src/logger/log-warnings.ts#L85
 globalThis.AI_SDK_LOG_WARNINGS = false
@@ -556,23 +557,8 @@ export namespace Server {
         },
       )
       .all("/*", async (c) => {
-        let path = c.req.path
+        const path = normalizeAppProxyPath(c.req.path)
         const appUrl = new URL(await Flag.getAppUrlWithVersion())
-
-        // 如果路径中包含会话ID（base64编码）和 /session/，需要移除它以便资源能够正确代理
-        // 例如：/RDovY29kZS9ob3N0bWFu/session/assets/index.js -> /assets/index.js (静态资源)
-        // /RDovY29kZS9ob3N0bWFu/session/ses_xxx -> / (前端路由，加载 index.html)
-        const sessionMatch = path.match(/^[A-Za-z0-9_=\/+-]+\/session\/(.*)/)
-        if (sessionMatch) {
-          const subPath = sessionMatch[1]
-          // 如果是静态资源请求（包含 .），则保留路径
-          // 否则（前端路由），代理到根路径 /
-          if (subPath && subPath.includes('.')) {
-            path = '/' + subPath
-          } else {
-            path = '/'
-          }
-        }
 
         const response = await proxy(`${appUrl.href.replace(/\/$/, '')}${path}`, {
           ...c.req,

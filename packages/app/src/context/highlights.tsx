@@ -7,8 +7,6 @@ import { useSettings } from "@/context/settings"
 import { persisted } from "@/utils/persist"
 import { DialogReleaseNotes, type Highlight } from "@/components/dialog-release-notes"
 
-const CHANGELOG_URL = "https://opencode.ai/changelog.json"
-
 type Store = {
   version?: string
 }
@@ -165,6 +163,11 @@ export const { use: useHighlights, provider: HighlightsProvider } = createSimple
     }
 
     const start = (previous: string) => {
+      if (platform.platform === "web") {
+        markSeen()
+        return
+      }
+
       if (!settings.general.releaseNotes()) {
         markSeen()
         return
@@ -177,7 +180,7 @@ export const { use: useHighlights, provider: HighlightsProvider } = createSimple
         clearTimer()
       })
 
-      fetcher(CHANGELOG_URL, {
+      fetcher("/changelog.json", {
         signal: controller.signal,
         headers: { Accept: "application/json" },
       })

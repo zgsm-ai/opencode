@@ -26,6 +26,7 @@ import { ExperimentalRoutes } from "./routes/experimental"
 import { ProviderRoutes } from "./routes/provider"
 import { EventRoutes } from "./routes/event"
 import { errorHandler } from "./middleware"
+import { normalizeAppProxyPath } from "./web-path"
 
 const log = Log.create({ service: "server" })
 
@@ -267,7 +268,7 @@ export const InstanceRoutes = (app?: Hono) =>
         }
       } else {
         const appUrl = new URL(await Flag.getAppUrlWithVersion())
-        const response = await proxy(`${appUrl.href.replace(/\/$/, "")}${path}`, {
+        const response = await proxy(`${appUrl.href.replace(/\/$/, "")}${normalizeAppProxyPath(path)}`, {
           ...c.req,
           headers: {
             ...c.req.raw.headers,
