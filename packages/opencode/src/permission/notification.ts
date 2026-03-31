@@ -5,6 +5,7 @@ import { Instance } from "@/project/instance"
 import { TuiEvent } from "@/cli/cmd/tui/event"
 import { Global } from "@/global"
 import path from "path"
+import { Filesystem } from "@/util/filesystem"
 
 export namespace NotificationMode {
   const Event = {
@@ -31,11 +32,10 @@ export namespace NotificationMode {
   }
 
   export async function init() {
-    const kvFile = Bun.file(path.join(Global.Path.state, "kv.json"))
     try {
-      const kv = await kvFile.json()
+      const kv = await Filesystem.readJson<Record<string, unknown>>(path.join(Global.Path.state, "kv.json"))
       if (kv.notification_mode !== undefined) {
-        setEnabled(kv.notification_mode)
+        setEnabled(Boolean(kv.notification_mode))
       }
     } catch {}
 

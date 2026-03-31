@@ -1,5 +1,5 @@
 import { type SQLiteBunDatabase } from "drizzle-orm/bun-sqlite"
-import { migrate } from "drizzle-orm/bun-sqlite/migrator"
+import { type NodeSqliteDatabase } from "drizzle-orm/node-sqlite"
 import { type SQLiteTransaction } from "drizzle-orm/sqlite-core"
 export * from "drizzle-orm"
 import { Context } from "../util/context"
@@ -14,6 +14,7 @@ import { Installation } from "../installation"
 import { Flag } from "../flag/flag"
 import { iife } from "@/util/iife"
 import { init } from "#db"
+import { migrateDb } from "#db-migrator"
 
 declare const OPENCODE_MIGRATIONS: { sql: string; timestamp: number; name: string }[] | undefined
 
@@ -45,7 +46,7 @@ export namespace Database {
 
   export type Transaction = SQLiteTransaction<"sync", void>
 
-  type Client = SQLiteBunDatabase
+  type Client = SQLiteBunDatabase | NodeSqliteDatabase
 
   type Journal = { sql: string; timestamp: number; name: string }[]
 
@@ -109,7 +110,7 @@ export namespace Database {
           item.sql = "select 1;"
         }
       }
-      migrate(db, entries)
+      migrateDb(db, entries)
     }
 
     return db

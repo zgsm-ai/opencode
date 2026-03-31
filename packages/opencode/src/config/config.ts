@@ -1660,7 +1660,7 @@ export namespace Config {
       const candidates = [path.join(baseDir, "costrict.jsonc"), path.join(baseDir, "costrict.json")]
 
       for (const candidate of candidates) {
-        if (await Bun.file(candidate).exists()) {
+        if (await Filesystem.exists(candidate)) {
           return candidate
         }
       }
@@ -1677,7 +1677,7 @@ export namespace Config {
       ]
 
       for (const candidate of projectCandidates) {
-        if (await Bun.file(candidate).exists()) {
+        if (await Filesystem.exists(candidate)) {
           return candidate
         }
       }

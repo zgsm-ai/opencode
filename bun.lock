@@ -438,6 +438,7 @@
         "tree-sitter-typescript": "0.23.2",
         "turndown": "7.2.0",
         "ulid": "catalog:",
+        "uuid": "13.0.0",
         "vscode-jsonrpc": "8.2.1",
         "web-tree-sitter": "0.25.10",
         "which": "6.0.1",

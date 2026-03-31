@@ -3,6 +3,7 @@ import { Hono } from "hono"
 import { proxy } from "hono/proxy"
 import z from "zod"
 import { createHash } from "node:crypto"
+import { lookup } from "mime-types"
 import { Log } from "../util/log"
 import { Format } from "../format"
 import { TuiRoutes } from "./routes/tui"
@@ -18,8 +19,6 @@ import { QuestionRoutes } from "./routes/question"
 import { PermissionRoutes } from "./routes/permission"
 import { ProjectRoutes } from "./routes/project"
 import { SessionRoutes } from "./routes/session"
-import { PtyRoutes } from "./routes/pty"
-import { McpRoutes } from "./routes/mcp"
 import { FileRoutes } from "./routes/file"
 import { ConfigRoutes } from "./routes/config"
 import { ExperimentalRoutes } from "./routes/experimental"
@@ -27,6 +26,9 @@ import { ProviderRoutes } from "./routes/provider"
 import { EventRoutes } from "./routes/event"
 import { errorHandler } from "./middleware"
 import { normalizeAppProxyPath } from "./web-path"
+import { Filesystem } from "@/util/filesystem"
+import { PtyRoutes } from "#pty-routes"
+import { McpRoutes } from "#mcp-routes"
 
 const log = Log.create({ service: "server" })
 
@@ -256,13 +258,13 @@ export const InstanceRoutes = (app?: Hono) =>
       if (embeddedWebUI) {
         const match = embeddedWebUI[path.replace(/^\//, "")] ?? embeddedWebUI["index.html"] ?? null
         if (!match) return c.json({ error: "Not Found" }, 404)
-        const file = Bun.file(match)
-        if (await file.exists()) {
-          c.header("Content-Type", file.type)
-          if (file.type.startsWith("text/html")) {
+        if (await Filesystem.exists(match)) {
+          const type = lookup(match) || "application/octet-stream"
+          c.header("Content-Type", type)
+          if (type.startsWith("text/html")) {
             c.header("Content-Security-Policy", DEFAULT_CSP)
           }
-          return c.body(await file.arrayBuffer())
+          return c.body(await Filesystem.readArrayBuffer(match))
         } else {
           return c.json({ error: "Not Found" }, 404)
         }

@@ -33,6 +33,31 @@
       "bun": "./src/storage/db.bun.ts",
       "node": "./src/storage/db.node.ts",
       "default": "./src/storage/db.bun.ts"
+    },
+    "#server-runtime": {
+      "bun": "./src/server/runtime.bun.ts",
+      "node": "./src/server/runtime.node.ts",
+      "default": "./src/server/runtime.bun.ts"
+    },
+    "#pty-routes": {
+      "bun": "./src/server/routes/pty.ts",
+      "node": "./src/server/routes/pty.node.ts",
+      "default": "./src/server/routes/pty.ts"
+    },
+    "#mcp-routes": {
+      "bun": "./src/server/routes/mcp.ts",
+      "node": "./src/server/routes/mcp.node.ts",
+      "default": "./src/server/routes/mcp.ts"
+    },
+    "#mcp-impl": {
+      "bun": "./src/mcp/index.ts",
+      "node": "./src/mcp/node.ts",
+      "default": "./src/mcp/index.ts"
+    },
+    "#db-migrator": {
+      "bun": "./src/storage/db.migrator.bun.ts",
+      "node": "./src/storage/db.migrator.node.ts",
+      "default": "./src/storage/db.migrator.bun.ts"
     }
   },
   "devDependencies": {
@@ -153,6 +178,7 @@
     "tree-sitter-typescript": "0.23.2",
     "turndown": "7.2.0",
     "ulid": "catalog:",
+    "uuid": "13.0.0",
     "vscode-jsonrpc": "8.2.1",
     "web-tree-sitter": "0.25.10",
     "which": "6.0.1",

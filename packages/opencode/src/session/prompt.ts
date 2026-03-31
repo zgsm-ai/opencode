@@ -24,7 +24,7 @@ import BUILD_SWITCH from "../session/prompt/build-switch.txt"
 import MAX_STEPS from "../session/prompt/max-steps.txt"
 import { defer } from "../util/defer"
 import { ToolRegistry } from "../tool/registry"
-import { MCP } from "../mcp"
+import { MCP } from "#mcp-impl"
 import { LSP } from "../lsp"
 import { ReadTool } from "../tool/read"
 import { FileTime } from "../file/time"
@@ -32,7 +32,6 @@ import { Flag } from "../flag/flag"
 import { ulid } from "ulid"
 import { spawn } from "child_process"
 import { Command } from "../command"
-import { $ } from "bun"
 import { pathToFileURL, fileURLToPath } from "url"
 import { ConfigMarkdown } from "../config/markdown"
 import { SessionSummary } from "./summary"
@@ -48,6 +47,7 @@ import { iife } from "@/util/iife"
 import { Shell } from "@/shell/shell"
 import { Truncate } from "@/tool/truncation"
 import { decodeDataUrl } from "@/util/data-url"
+import { Process } from "@/util/process"
 
 // @ts-ignore
 globalThis.AI_SDK_LOG_WARNINGS = false
@@ -1820,7 +1820,13 @@ NOTE: At any point in time through this workflow you should feel free to ask the
       const results = await Promise.all(
         shell.map(async ([, cmd]) => {
           try {
-            return await $`${{ raw: cmd }}`.quiet().nothrow().text()
+            return (
+              await Process.run([cmd], {
+                shell: true,
+                stdin: "ignore",
+                nothrow: true,
+              })
+            ).stdout.toString()
           } catch (error) {
             return `Error executing command: ${error instanceof Error ? error.message : String(error)}`
           }

@@ -27,8 +27,6 @@ import { ProviderID } from "../provider/schema"
 import { WorkspaceRouterMiddleware } from "./router"
 import { ProjectRoutes } from "./routes/project"
 import { SessionRoutes } from "./routes/session"
-import { PtyRoutes } from "./routes/pty"
-import { McpRoutes } from "./routes/mcp"
 import { FileRoutes } from "./routes/file"
 import { ConfigRoutes } from "./routes/config"
 import { ExperimentalRoutes } from "./routes/experimental"
@@ -36,7 +34,6 @@ import { ProviderRoutes } from "./routes/provider"
 import { InstanceBootstrap } from "../project/bootstrap"
 import { NotFoundError } from "../storage/db"
 import type { ContentfulStatusCode } from "hono/utils/http-status"
-import { websocket } from "hono/bun"
 import { HTTPException } from "hono/http-exception"
 import { errors } from "./error"
 import { Filesystem } from "@/util/filesystem"
@@ -47,6 +44,9 @@ import { CloudFileRoutes } from "./routes/cloud-file"
 import { MDNS } from "./mdns"
 import { lazy } from "@/util/lazy"
 import { normalizeAppProxyPath } from "./web-path"
+import { serveApp, websocket } from "#server-runtime"
+import { PtyRoutes } from "#pty-routes"
+import { McpRoutes } from "#mcp-routes"
 
 // @ts-ignore This global is needed to prevent ai-sdk from logging warnings to stdout https://github.com/vercel/ai/blob/2dc67e0ef538307f21368db32d5a12345d98831b/packages/ai/src/logger/log-warnings.ts#L85
 globalThis.AI_SDK_LOG_WARNINGS = false
@@ -608,15 +608,10 @@ export namespace Server {
       fetch: app.fetch,
       websocket: websocket,
     } as const
-    const tryServe = (port: number) => {
-      try {
-        return Bun.serve({ ...args, port })
-      } catch {
-        return undefined
-      }
-    }
-    const server = opts.port === 0 ? (tryServe(4096) ?? tryServe(0)) : tryServe(opts.port)
-    if (!server) throw new Error(`Failed to start server on port ${opts.port}`)
+    const server = serveApp({
+      ...args,
+      port: opts.port,
+    })
 
     const shouldPublishMDNS =
       opts.mdns &&

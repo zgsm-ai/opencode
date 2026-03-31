@@ -1,4 +1,5 @@
 import { Slug } from "@opencode-ai/util/slug"
+import { existsSync } from "node:fs"
 import path from "path"
 import { BusEvent } from "@/bus/bus-event"
 import { Bus } from "@/bus"
@@ -368,11 +369,9 @@ export namespace Session {
       const costrictPath = path.join(Instance.worktree, ".costrict")
       const opencodePath = path.join(Instance.worktree, ".opencode")
 
-      try {
-        if (Bun.file(costrictPath).size !== undefined) {
-          return path.join(costrictPath, "plans")
-        }
-      } catch {}
+      if (existsSync(costrictPath)) {
+        return path.join(costrictPath, "plans")
+      }
 
       return path.join(opencodePath, "plans")
     }

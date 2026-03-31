@@ -6,12 +6,13 @@ import { Instance } from "../project/instance"
 import { Identifier } from "../id/id"
 import { CostrictCommand } from "../costrict/command"
 import PROMPT_REVIEW from "./template/review.txt"
-import { MCP } from "../mcp"
-import { getCommands } from "../plugin/tdd"
+import { MCP } from "#mcp-impl"
 import { Skill } from "../skill/skill"
 import { LearningCommands } from "../costrict/command/learning"
 
 export namespace Command {
+  const isBunRuntime = Boolean(process.versions.bun)
+
   export const Event = {
     Executed: BusEvent.define(
       "command.executed",
@@ -108,9 +109,12 @@ export namespace Command {
       ...LearningCommands.getCommands(lang ?? "en"),
     }
 
-    const tddCommands = await getCommands()
-    for (const [name, command] of Object.entries(tddCommands)) {
-      result[name] = command
+    if (isBunRuntime) {
+      const { getCommands } = await import("../plugin/tdd")
+      const tddCommands = await getCommands()
+      for (const [name, command] of Object.entries(tddCommands)) {
+        result[name] = command
+      }
     }
 
     for (const [name, command] of Object.entries(cfg.command ?? {})) {

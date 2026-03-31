@@ -1,7 +1,7 @@
 import { ConfigMarkdown } from "@/config/markdown"
 import { errorFormat } from "@/util/error"
 import { Config } from "../config/config"
-import { MCP } from "../mcp"
+import { MCP } from "#mcp-impl"
 import { Provider } from "../provider/provider"
 import { UI } from "./ui"
 

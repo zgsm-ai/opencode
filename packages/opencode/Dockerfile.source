@@ -1,0 +1,47 @@
+FROM node:24-bookworm-slim AS deps
+
+ARG BUN_VERSION=1.3.11
+
+ENV BUN_INSTALL=/opt/bun
+ENV PATH=/opt/bun/bin:${PATH}
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+    bash \
+    ca-certificates \
+    curl \
+    git \
+    openssh-client \
+    unzip \
+ && rm -rf /var/lib/apt/lists/*
+
+RUN curl -fsSL https://bun.sh/install | bash -s -- bun-v${BUN_VERSION}
+
+WORKDIR /app/costrict-web/portal
+COPY costrict-web/portal/ ./
+RUN bun install --frozen-lockfile
+
+FROM node:24-bookworm-slim
+
+ENV LANG=C.UTF-8
+ENV LC_ALL=C.UTF-8
+ENV OPENCODE_DISABLE_DEFAULT_PLUGINS=1
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+    bash \
+    ca-certificates \
+    git \
+    openssh-client \
+    ripgrep \
+    xdg-utils \
+ && rm -rf /var/lib/apt/lists/*
+
+RUN npm install -g tsx@4.20.6
+
+WORKDIR /app/costrict-web/portal/packages/opencode
+
+COPY --from=deps /app/costrict-web/portal /app/costrict-web/portal
+
+ENTRYPOINT ["tsx", "--loader", "./node-loader.mjs", "src/node-cli.ts"]
+CMD ["serve", "--hostname", "0.0.0.0", "--port", "4096"]

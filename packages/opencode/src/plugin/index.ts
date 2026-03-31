@@ -7,22 +7,50 @@ import { Server } from "../server/server"
 import { BunProc } from "../bun"
 import { Instance } from "../project/instance"
 import { Flag } from "../flag/flag"
-import { CodexAuthPlugin } from "./codex"
 import { Session } from "../session"
 import { NamedError } from "@opencode-ai/util/error"
-import { CopilotAuthPlugin } from "./copilot"
-import { CoStrictAuthPlugin } from "../costrict/plugin"
-import { TDDPlugin } from "./tdd"
-import { gitlabAuthPlugin as GitlabAuthPlugin } from "@gitlab/opencode-gitlab-auth"
-import { LearningPlugin } from "../learning/plugin"
 
 export namespace Plugin {
   const log = Log.create({ service: "plugin" })
 
   const BUILTIN = ["opencode-anthropic-auth@0.0.13", "@costrict/notify"]
 
-  // Built-in plugins that are directly imported (not installed from npm)
-  const INTERNAL_PLUGINS: PluginInstance[] = [CodexAuthPlugin, CopilotAuthPlugin, CoStrictAuthPlugin, TDDPlugin, GitlabAuthPlugin, LearningPlugin]
+  const isBunRuntime = Boolean(process.versions.bun)
+
+  const unsupportedShell = new Proxy(function () {}, {
+    apply() {
+      throw new Error("Bun shell is not available in the Node.js source runtime")
+    },
+    get() {
+      return unsupportedShell
+    },
+  }) as unknown as PluginInput["$"]
+
+  async function loadInternalPlugins(): Promise<PluginInstance[]> {
+    const plugins: PluginInstance[] = []
+
+    const copilot = await import("./copilot")
+    plugins.push(copilot.CopilotAuthPlugin)
+
+    const costrict = await import("../costrict/plugin")
+    plugins.push(costrict.CoStrictAuthPlugin)
+
+    const gitlab = await import("opencode-gitlab-auth")
+    plugins.push(gitlab.gitlabAuthPlugin as PluginInstance)
+
+    const learning = await import("../learning/plugin")
+    plugins.push(learning.LearningPlugin)
+
+    if (isBunRuntime) {
+      const codex = await import("./codex")
+      plugins.push(codex.CodexAuthPlugin)
+
+      const tdd = await import("./tdd")
+      plugins.push(tdd.TDDPlugin)
+    }
+
+    return plugins
+  }
 
   const state = Instance.state(async () => {
     const client = createOpencodeClient({
@@ -45,10 +73,10 @@ export namespace Plugin {
       get serverUrl(): URL {
         return Server.url ?? new URL("http://localhost:4096")
       },
-      $: Bun.$,
+      $: ((globalThis as { Bun?: { $?: PluginInput["$"] } }).Bun?.$ ?? unsupportedShell) as PluginInput["$"],
     }
 
-    for (const plugin of INTERNAL_PLUGINS) {
+    for (const plugin of await loadInternalPlugins()) {
       log.info("loading internal plugin", { name: plugin.name })
       const init = await plugin(input).catch((err) => {
         log.error("failed to load internal plugin", { name: plugin.name, error: err })
