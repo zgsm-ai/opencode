@@ -12,7 +12,7 @@
     "typecheck": "echo 'skip: packages/app is upstream reference only'",
     "start": "vite",
     "dev": "vite",
-    "build": "echo 'skip: packages/app is upstream reference only'",
+    "build": "vite build",
     "serve": "vite preview",
     "test": "echo 'skip: packages/app is upstream reference only'",
     "test:unit": "bun test --preload ./happydom.ts ./src",

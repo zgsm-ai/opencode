@@ -101,6 +101,98 @@ describe("session.llm.hasToolCalls", () => {
   })
 })
 
+describe("session.llm.sanitizeMessages", () => {
+  test("drops invalid provider metadata and normalizes invalid tool result payloads", () => {
+    const messages = [
+      {
+        role: "assistant",
+        providerOptions: {
+          openai: { itemId: "ok" },
+          invalid: "bad",
+        },
+        content: [
+          {
+            type: "text",
+            text: "hello",
+            providerOptions: {
+              openai: { itemId: "text-1" },
+              broken: 1,
+            },
+          },
+          {
+            type: "tool-result",
+            toolCallId: "call-1",
+            toolName: "read",
+            output: {
+              type: "json",
+              value: undefined,
+            },
+            providerOptions: {
+              openai: { itemId: "tool-1" },
+              invalid: true,
+            },
+          },
+        ],
+      },
+    ] as ModelMessage[]
+
+    expect(LLM.sanitizeMessages(messages)).toStrictEqual([
+      {
+        role: "assistant",
+        providerOptions: {
+          openai: { itemId: "ok" },
+        },
+        content: [
+          {
+            type: "text",
+            text: "hello",
+            providerOptions: {
+              openai: { itemId: "text-1" },
+            },
+          },
+          {
+            type: "tool-result",
+            toolCallId: "call-1",
+            toolName: "read",
+            output: {
+              type: "text",
+              value: "",
+            },
+            providerOptions: {
+              openai: { itemId: "tool-1" },
+            },
+          },
+        ],
+      },
+    ])
+  })
+
+  test("reports invalid message paths before sanitization", () => {
+    const messages = [
+      {
+        role: "assistant",
+        content: [
+          {
+            type: "tool-result",
+            toolCallId: "call-1",
+            toolName: "read",
+            output: {
+              type: "json",
+              value: undefined,
+            },
+          },
+        ],
+      },
+    ] as ModelMessage[]
+
+    expect(LLM.diagnoseMessages(messages)).toEqual([
+      expect.objectContaining({
+        path: "0.content.0.output.value",
+      }),
+    ])
+  })
+})
+
 type Capture = {
   url: URL
   headers: Headers

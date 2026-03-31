@@ -266,11 +266,12 @@ export const InstanceRoutes = (app?: Hono) =>
           return c.json({ error: "Not Found" }, 404)
         }
       } else {
-        const response = await proxy(`https://app.opencode.ai${path}`, {
+        const appUrl = new URL(await Flag.getAppUrlWithVersion())
+        const response = await proxy(`${appUrl.href.replace(/\/$/, "")}${path}`, {
           ...c.req,
           headers: {
             ...c.req.raw.headers,
-            host: "app.opencode.ai",
+            host: appUrl.host,
           },
         })
         const match = response.headers.get("content-type")?.includes("text/html")

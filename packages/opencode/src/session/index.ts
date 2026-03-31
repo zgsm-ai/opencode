@@ -230,6 +230,12 @@ export namespace Session {
             headers: z.record(z.string(), z.any()),
           })
           .optional(),
+        diagnostics: z
+          .object({
+            originalMessages: z.array(z.any()).optional(),
+            sanitizedMessages: z.array(z.any()).optional(),
+          })
+          .optional(),
       }),
     ),
   }

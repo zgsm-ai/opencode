@@ -7,6 +7,8 @@ import {
   streamText,
   wrapLanguageModel,
   type ModelMessage,
+  type JSONValue,
+  modelMessageSchema,
   type StreamTextResult,
   type Tool,
   type ToolSet,
@@ -14,6 +16,7 @@ import {
   jsonSchema,
 } from "ai"
 import { mergeDeep, pipe } from "remeda"
+import z from "zod"
 import { ProviderTransform } from "@/provider/transform"
 import { Config } from "@/config/config"
 import { Instance } from "@/project/instance"
@@ -31,6 +34,229 @@ import { v7 as uuidv7 } from "uuid"
 export namespace LLM {
   const log = Log.create({ service: "llm" })
   export const OUTPUT_TOKEN_MAX = ProviderTransform.OUTPUT_TOKEN_MAX
+  const modelMessagesSchema = z.array(modelMessageSchema)
+
+  function isPlainObject(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null && !Array.isArray(value)
+  }
+
+  function sanitizeJSONValue(value: unknown): JSONValue | undefined {
+    if (value == null) return null
+    if (typeof value === "string" || typeof value === "boolean") return value
+    if (typeof value === "number") return Number.isFinite(value) ? value : undefined
+    if (value instanceof URL) return value.toString()
+    if (Array.isArray(value)) {
+      const result = value.map((item) => sanitizeJSONValue(item)).filter((item) => item !== undefined)
+      return result
+    }
+    if (isPlainObject(value)) {
+      const result: Record<string, JSONValue | undefined> = {}
+      for (const [key, item] of Object.entries(value)) {
+        const next = sanitizeJSONValue(item)
+        if (next !== undefined) result[key] = next
+      }
+      return result
+    }
+    return undefined
+  }
+
+  function sanitizeProviderOptions(value: unknown): Record<string, Record<string, JSONValue | undefined>> | undefined {
+    if (!isPlainObject(value)) return undefined
+    const result: Record<string, Record<string, JSONValue | undefined>> = {}
+    for (const [provider, options] of Object.entries(value)) {
+      if (!isPlainObject(options)) continue
+      const sanitized: Record<string, JSONValue | undefined> = {}
+      for (const [key, item] of Object.entries(options)) {
+        const next = sanitizeJSONValue(item)
+        if (next !== undefined) sanitized[key] = next
+      }
+      if (Object.keys(sanitized).length > 0) {
+        result[provider] = sanitized
+      }
+    }
+    return Object.keys(result).length > 0 ? result : undefined
+  }
+
+  function sanitizeToolResultOutput(output: unknown) {
+    if (!isPlainObject(output) || typeof output.type !== "string") {
+      return { type: "text" as const, value: String(output ?? "") }
+    }
+
+    switch (output.type) {
+      case "text":
+      case "error-text":
+        return {
+          ...output,
+          value: typeof output.value === "string" ? output.value : String(output.value ?? ""),
+          providerOptions: sanitizeProviderOptions(output.providerOptions),
+        }
+      case "json":
+      case "error-json": {
+        const value = sanitizeJSONValue(output.value)
+        if (value === undefined) {
+          return { type: "text" as const, value: "" }
+        }
+        return {
+          ...output,
+          value,
+          providerOptions: sanitizeProviderOptions(output.providerOptions),
+        }
+      }
+      case "execution-denied":
+        return {
+          ...output,
+          reason: typeof output.reason === "string" ? output.reason : undefined,
+          providerOptions: sanitizeProviderOptions(output.providerOptions),
+        }
+      case "content":
+        if (!Array.isArray(output.value)) {
+          return { type: "text" as const, value: "" }
+        }
+        return {
+          type: "content" as const,
+          value: output.value
+            .map((part) => {
+              if (!isPlainObject(part) || typeof part.type !== "string") return undefined
+              switch (part.type) {
+                case "text":
+                  return {
+                    type: "text" as const,
+                    text: typeof part.text === "string" ? part.text : "",
+                    providerOptions: sanitizeProviderOptions(part.providerOptions),
+                  }
+                case "media":
+                  return typeof part.data === "string" && typeof part.mediaType === "string"
+                    ? {
+                        type: "media" as const,
+                        data: part.data,
+                        mediaType: part.mediaType,
+                      }
+                    : undefined
+                case "file-data":
+                case "image-data":
+                  return typeof part.data === "string" && typeof part.mediaType === "string"
+                    ? {
+                        ...part,
+                        data: part.data,
+                        mediaType: part.mediaType,
+                        providerOptions: sanitizeProviderOptions(part.providerOptions),
+                      }
+                    : undefined
+                case "file-url":
+                case "image-url":
+                  return typeof part.url === "string"
+                    ? {
+                        ...part,
+                        url: part.url,
+                        providerOptions: sanitizeProviderOptions(part.providerOptions),
+                      }
+                    : undefined
+                case "file-id":
+                case "image-file-id": {
+                  const fileId =
+                    typeof part.fileId === "string"
+                      ? part.fileId
+                      : sanitizeJSONValue(part.fileId) && isPlainObject(part.fileId)
+                        ? Object.fromEntries(
+                            Object.entries(part.fileId).filter(
+                              (entry): entry is [string, string] => typeof entry[1] === "string",
+                            ),
+                          )
+                        : undefined
+                  return fileId
+                    ? {
+                        ...part,
+                        fileId,
+                        providerOptions: sanitizeProviderOptions(part.providerOptions),
+                      }
+                    : undefined
+                }
+                case "custom":
+                  return {
+                    type: "custom" as const,
+                    providerOptions: sanitizeProviderOptions(part.providerOptions),
+                  }
+                default:
+                  return undefined
+              }
+            })
+            .filter((part) => part !== undefined),
+        }
+      default:
+        return { type: "text" as const, value: String(output.value ?? "") }
+    }
+  }
+
+  export function sanitizeMessages(messages: ModelMessage[]): ModelMessage[] {
+    return messages.map((message) => {
+      const providerOptions = sanitizeProviderOptions((message as any).providerOptions)
+      if (!Array.isArray(message.content)) {
+        return {
+          ...message,
+          ...(providerOptions ? { providerOptions } : {}),
+        } as ModelMessage
+      }
+
+      return {
+        ...message,
+        ...(providerOptions ? { providerOptions } : {}),
+        content: message.content
+          .map((part) => {
+            if (!part || typeof part !== "object" || !("type" in part)) return part
+            switch (part.type) {
+              case "text":
+              case "reasoning":
+                return {
+                  ...part,
+                  providerOptions: sanitizeProviderOptions((part as any).providerOptions),
+                }
+              case "file":
+                return {
+                  ...part,
+                  providerOptions: sanitizeProviderOptions((part as any).providerOptions),
+                }
+              case "tool-call":
+                return {
+                  ...part,
+                  providerOptions: sanitizeProviderOptions((part as any).providerOptions),
+                }
+              case "tool-result":
+                return {
+                  ...part,
+                  providerOptions: sanitizeProviderOptions((part as any).providerOptions),
+                  output: sanitizeToolResultOutput((part as any).output),
+                }
+              case "tool-approval-request":
+              case "tool-approval-response":
+                return part
+              default:
+                return part
+            }
+          })
+          .filter((part) => part !== undefined),
+      } as ModelMessage
+    })
+  }
+
+  export function diagnoseMessages(messages: ModelMessage[]) {
+    const parsed = modelMessagesSchema.safeParse(messages)
+    if (parsed.success) return undefined
+
+    return parsed.error.issues.slice(0, 20).map((issue) => ({
+      path: issue.path.join("."),
+      code: issue.code,
+      message: issue.message,
+      input:
+        issue.path.length === 0
+          ? undefined
+          : issue.path.reduce<unknown>((acc, key) => {
+              if (acc == null) return undefined
+              if (typeof key === "number" && Array.isArray(acc)) return acc[key]
+              if (typeof key === "string" && typeof acc === "object") return (acc as any)[key]
+              return undefined
+            }, messages as unknown),
+    }))
+  }
 
   export type StreamInput = {
     user: MessageV2.User
@@ -228,6 +454,23 @@ export namespace LLM {
       ...input.messages,
     ]
 
+    const sanitizedMessages = sanitizeMessages(requestMessages)
+    const originalDiagnostics = diagnoseMessages(requestMessages)
+    const sanitizedDiagnostics = diagnoseMessages(sanitizedMessages)
+
+    if (originalDiagnostics?.length) {
+      l.warn("invalid prompt messages detected before sanitize", {
+        xRequestId: requestId,
+        diagnostics: originalDiagnostics,
+      })
+    }
+    if (sanitizedDiagnostics?.length) {
+      l.error("invalid prompt messages remain after sanitize", {
+        xRequestId: requestId,
+        diagnostics: sanitizedDiagnostics,
+      })
+    }
+
     const requestBody = {
       temperature: params.temperature,
       topP: params.topP,
@@ -236,7 +479,7 @@ export namespace LLM {
       activeTools: Object.keys(tools).filter((x) => x !== "invalid"),
       tools,
       maxOutputTokens,
-      messages: requestMessages,
+      messages: sanitizedMessages,
       maxRetries: input.retries ?? 0,
     }
 
@@ -258,6 +501,10 @@ export namespace LLM {
           request: {
             body: requestBody,
             headers: requestHeaders,
+          },
+          diagnostics: {
+            originalMessages: originalDiagnostics,
+            sanitizedMessages: sanitizedDiagnostics,
           },
         })
       },
@@ -302,7 +549,7 @@ export namespace LLM {
       abortSignal: input.abort,
       headers: requestHeaders,
       maxRetries: input.retries ?? 0,
-      messages: requestMessages,
+      messages: sanitizedMessages,
         model: wrapLanguageModel({
           model: language,
           middleware: [

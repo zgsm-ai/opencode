@@ -9,6 +9,7 @@ import { Splash } from "@opencode-ai/ui/logo"
 import { ThemeProvider } from "@opencode-ai/ui/theme"
 import { MetaProvider } from "@solidjs/meta"
 import { type BaseRouterProps, Navigate, Route, Router } from "@solidjs/router"
+import { QueryClient, QueryClientProvider } from "@tanstack/solid-query"
 import {
   type Component,
   createMemo,
@@ -48,6 +49,7 @@ import { useCheckServerHealth } from "./utils/server-health"
 const Home = lazy(() => import("@/pages/home"))
 const Session = lazy(() => import("@/pages/session"))
 const Loading = () => <div class="size-full" />
+const queryClient = new QueryClient()
 
 const HomeRoute = () => (
   <Suspense fallback={<Loading />}>
@@ -132,24 +134,26 @@ function RouterRoot(props: ParentProps<{ appChildren?: JSX.Element }>) {
 export function AppBaseProviders(props: ParentProps) {
   return (
     <MetaProvider>
-      <Font />
-      <ThemeProvider
-        onThemeApplied={(_, mode) => {
-          void window.api?.setTitlebar?.({ mode })
-        }}
-      >
-        <LanguageProvider>
-          <UiI18nBridge>
-            <ErrorBoundary fallback={(error) => <ErrorPage error={error} />}>
-              <DialogProvider>
-                <MarkedProviderWithNativeParser>
-                  <FileComponentProvider component={File}>{props.children}</FileComponentProvider>
-                </MarkedProviderWithNativeParser>
-              </DialogProvider>
-            </ErrorBoundary>
-          </UiI18nBridge>
-        </LanguageProvider>
-      </ThemeProvider>
+      <QueryClientProvider client={queryClient}>
+        <Font />
+        <ThemeProvider
+          onThemeApplied={(_, mode) => {
+            void window.api?.setTitlebar?.({ mode })
+          }}
+        >
+          <LanguageProvider>
+            <UiI18nBridge>
+              <ErrorBoundary fallback={(error) => <ErrorPage error={error} />}>
+                <DialogProvider>
+                  <MarkedProviderWithNativeParser>
+                    <FileComponentProvider component={File}>{props.children}</FileComponentProvider>
+                  </MarkedProviderWithNativeParser>
+                </DialogProvider>
+              </ErrorBoundary>
+            </UiI18nBridge>
+          </LanguageProvider>
+        </ThemeProvider>
+      </QueryClientProvider>
     </MetaProvider>
   )
 }
