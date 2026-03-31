@@ -1,281 +1,92 @@
-import { Installation } from "@/installation"
 import { Provider } from "@/provider/provider"
 import { Log } from "@/util/log"
-import { Bus } from "@/bus"
-import { Session } from "."
-import {
-  streamText,
-  wrapLanguageModel,
-  type ModelMessage,
-  type JSONValue,
-  modelMessageSchema,
-  type StreamTextResult,
-  type Tool,
-  type ToolSet,
-  tool,
-  jsonSchema,
-} from "ai"
+import { Cause, Effect, Layer, Record, ServiceMap } from "effect"
+import * as Queue from "effect/Queue"
+import * as Stream from "effect/Stream"
+import { streamText, wrapLanguageModel, type ModelMessage, type Tool, tool, jsonSchema } from "ai"
 import { mergeDeep, pipe } from "remeda"
-import z from "zod"
+import { GitLabWorkflowLanguageModel } from "gitlab-ai-provider"
 import { ProviderTransform } from "@/provider/transform"
 import { Config } from "@/config/config"
 import { Instance } from "@/project/instance"
 import type { Agent } from "@/agent/agent"
-import { executeDynamicContext } from "@/agent/dynamic-context"
 import type { MessageV2 } from "./message-v2"
 import { Plugin } from "@/plugin"
 import { SystemPrompt } from "./system"
 import { Flag } from "@/flag/flag"
-import { PermissionNext } from "@/permission/next"
+import { Permission } from "@/permission"
 import { Auth } from "@/auth"
-import os from "node:os"
-import { v7 as uuidv7 } from "uuid"
+import { Installation } from "@/installation"
 
 export namespace LLM {
   const log = Log.create({ service: "llm" })
   export const OUTPUT_TOKEN_MAX = ProviderTransform.OUTPUT_TOKEN_MAX
-  const modelMessagesSchema = z.array(modelMessageSchema)
-
-  function isPlainObject(value: unknown): value is Record<string, unknown> {
-    return typeof value === "object" && value !== null && !Array.isArray(value)
-  }
-
-  function sanitizeJSONValue(value: unknown): JSONValue | undefined {
-    if (value == null) return null
-    if (typeof value === "string" || typeof value === "boolean") return value
-    if (typeof value === "number") return Number.isFinite(value) ? value : undefined
-    if (value instanceof URL) return value.toString()
-    if (Array.isArray(value)) {
-      const result = value.map((item) => sanitizeJSONValue(item)).filter((item) => item !== undefined)
-      return result
-    }
-    if (isPlainObject(value)) {
-      const result: Record<string, JSONValue | undefined> = {}
-      for (const [key, item] of Object.entries(value)) {
-        const next = sanitizeJSONValue(item)
-        if (next !== undefined) result[key] = next
-      }
-      return result
-    }
-    return undefined
-  }
-
-  function sanitizeProviderOptions(value: unknown): Record<string, Record<string, JSONValue | undefined>> | undefined {
-    if (!isPlainObject(value)) return undefined
-    const result: Record<string, Record<string, JSONValue | undefined>> = {}
-    for (const [provider, options] of Object.entries(value)) {
-      if (!isPlainObject(options)) continue
-      const sanitized: Record<string, JSONValue | undefined> = {}
-      for (const [key, item] of Object.entries(options)) {
-        const next = sanitizeJSONValue(item)
-        if (next !== undefined) sanitized[key] = next
-      }
-      if (Object.keys(sanitized).length > 0) {
-        result[provider] = sanitized
-      }
-    }
-    return Object.keys(result).length > 0 ? result : undefined
-  }
-
-  function sanitizeToolResultOutput(output: unknown) {
-    if (!isPlainObject(output) || typeof output.type !== "string") {
-      return { type: "text" as const, value: String(output ?? "") }
-    }
-
-    switch (output.type) {
-      case "text":
-      case "error-text":
-        return {
-          ...output,
-          value: typeof output.value === "string" ? output.value : String(output.value ?? ""),
-          providerOptions: sanitizeProviderOptions(output.providerOptions),
-        }
-      case "json":
-      case "error-json": {
-        const value = sanitizeJSONValue(output.value)
-        if (value === undefined) {
-          return { type: "text" as const, value: "" }
-        }
-        return {
-          ...output,
-          value,
-          providerOptions: sanitizeProviderOptions(output.providerOptions),
-        }
-      }
-      case "execution-denied":
-        return {
-          ...output,
-          reason: typeof output.reason === "string" ? output.reason : undefined,
-          providerOptions: sanitizeProviderOptions(output.providerOptions),
-        }
-      case "content":
-        if (!Array.isArray(output.value)) {
-          return { type: "text" as const, value: "" }
-        }
-        return {
-          type: "content" as const,
-          value: output.value
-            .map((part) => {
-              if (!isPlainObject(part) || typeof part.type !== "string") return undefined
-              switch (part.type) {
-                case "text":
-                  return {
-                    type: "text" as const,
-                    text: typeof part.text === "string" ? part.text : "",
-                    providerOptions: sanitizeProviderOptions(part.providerOptions),
-                  }
-                case "media":
-                  return typeof part.data === "string" && typeof part.mediaType === "string"
-                    ? {
-                        type: "media" as const,
-                        data: part.data,
-                        mediaType: part.mediaType,
-                      }
-                    : undefined
-                case "file-data":
-                case "image-data":
-                  return typeof part.data === "string" && typeof part.mediaType === "string"
-                    ? {
-                        ...part,
-                        data: part.data,
-                        mediaType: part.mediaType,
-                        providerOptions: sanitizeProviderOptions(part.providerOptions),
-                      }
-                    : undefined
-                case "file-url":
-                case "image-url":
-                  return typeof part.url === "string"
-                    ? {
-                        ...part,
-                        url: part.url,
-                        providerOptions: sanitizeProviderOptions(part.providerOptions),
-                      }
-                    : undefined
-                case "file-id":
-                case "image-file-id": {
-                  const fileId =
-                    typeof part.fileId === "string"
-                      ? part.fileId
-                      : sanitizeJSONValue(part.fileId) && isPlainObject(part.fileId)
-                        ? Object.fromEntries(
-                            Object.entries(part.fileId).filter(
-                              (entry): entry is [string, string] => typeof entry[1] === "string",
-                            ),
-                          )
-                        : undefined
-                  return fileId
-                    ? {
-                        ...part,
-                        fileId,
-                        providerOptions: sanitizeProviderOptions(part.providerOptions),
-                      }
-                    : undefined
-                }
-                case "custom":
-                  return {
-                    type: "custom" as const,
-                    providerOptions: sanitizeProviderOptions(part.providerOptions),
-                  }
-                default:
-                  return undefined
-              }
-            })
-            .filter((part) => part !== undefined),
-        }
-      default:
-        return { type: "text" as const, value: String(output.value ?? "") }
-    }
-  }
-
-  export function sanitizeMessages(messages: ModelMessage[]): ModelMessage[] {
-    return messages.map((message) => {
-      const providerOptions = sanitizeProviderOptions((message as any).providerOptions)
-      if (!Array.isArray(message.content)) {
-        return {
-          ...message,
-          ...(providerOptions ? { providerOptions } : {}),
-        } as ModelMessage
-      }
-
-      return {
-        ...message,
-        ...(providerOptions ? { providerOptions } : {}),
-        content: message.content
-          .map((part) => {
-            if (!part || typeof part !== "object" || !("type" in part)) return part
-            switch (part.type) {
-              case "text":
-              case "reasoning":
-                return {
-                  ...part,
-                  providerOptions: sanitizeProviderOptions((part as any).providerOptions),
-                }
-              case "file":
-                return {
-                  ...part,
-                  providerOptions: sanitizeProviderOptions((part as any).providerOptions),
-                }
-              case "tool-call":
-                return {
-                  ...part,
-                  providerOptions: sanitizeProviderOptions((part as any).providerOptions),
-                }
-              case "tool-result":
-                return {
-                  ...part,
-                  providerOptions: sanitizeProviderOptions((part as any).providerOptions),
-                  output: sanitizeToolResultOutput((part as any).output),
-                }
-              case "tool-approval-request":
-              case "tool-approval-response":
-                return part
-              default:
-                return part
-            }
-          })
-          .filter((part) => part !== undefined),
-      } as ModelMessage
-    })
-  }
-
-  export function diagnoseMessages(messages: ModelMessage[]) {
-    const parsed = modelMessagesSchema.safeParse(messages)
-    if (parsed.success) return undefined
-
-    return parsed.error.issues.slice(0, 20).map((issue) => ({
-      path: issue.path.join("."),
-      code: issue.code,
-      message: issue.message,
-      input:
-        issue.path.length === 0
-          ? undefined
-          : issue.path.reduce<unknown>((acc, key) => {
-              if (acc == null) return undefined
-              if (typeof key === "number" && Array.isArray(acc)) return acc[key]
-              if (typeof key === "string" && typeof acc === "object") return (acc as any)[key]
-              return undefined
-            }, messages as unknown),
-    }))
-  }
 
   export type StreamInput = {
     user: MessageV2.User
     sessionID: string
     model: Provider.Model
     agent: Agent.Info
+    permission?: Permission.Ruleset
     system: string[]
-    abort: AbortSignal
     messages: ModelMessage[]
     small?: boolean
     tools: Record<string, Tool>
     retries?: number
-    providerOptions?: Record<string, any>
     toolChoice?: "auto" | "required" | "none"
   }
 
-  export type StreamOutput = StreamTextResult<ToolSet, any>
+  export type StreamRequest = StreamInput & {
+    abort: AbortSignal
+  }
 
-  export async function stream(input: StreamInput) {
+  export type Event = Awaited<ReturnType<typeof stream>>["fullStream"] extends AsyncIterable<infer T> ? T : never
+
+  export interface Interface {
+    readonly stream: (input: StreamInput) => Stream.Stream<Event, unknown>
+  }
+
+  export class Service extends ServiceMap.Service<Service, Interface>()("@opencode/LLM") {}
+
+  export const layer = Layer.effect(
+    Service,
+    Effect.gen(function* () {
+      return Service.of({
+        stream(input) {
+          const stream: Stream.Stream<Event, unknown> = Stream.scoped(
+            Stream.unwrap(
+              Effect.gen(function* () {
+                const ctrl = yield* Effect.acquireRelease(
+                  Effect.sync(() => new AbortController()),
+                  (ctrl) => Effect.sync(() => ctrl.abort()),
+                )
+                const queue = yield* Queue.unbounded<Event, unknown | Cause.Done>()
+
+                yield* Effect.promise(async () => {
+                  const result = await LLM.stream({ ...input, abort: ctrl.signal })
+                  for await (const event of result.fullStream) {
+                    if (!Queue.offerUnsafe(queue, event)) break
+                  }
+                  Queue.endUnsafe(queue)
+                }).pipe(
+                  Effect.catchCause((cause) => Effect.sync(() => void Queue.failCauseUnsafe(queue, cause))),
+                  Effect.onInterrupt(() => Effect.sync(() => ctrl.abort())),
+                  Effect.forkScoped,
+                )
+
+                return Stream.fromQueue(queue)
+              }),
+            ),
+          )
+          return stream
+        },
+      })
+    }),
+  )
+
+  export const defaultLayer = layer
+
+  export async function stream(input: StreamRequest) {
     const l = log
       .clone()
       .tag("providerID", input.model.providerID)
@@ -294,21 +105,14 @@ export namespace LLM {
       Provider.getProvider(input.model.providerID),
       Auth.get(input.model.providerID),
     ])
-    const isCodex = provider.id === "openai" && auth?.type === "oauth"
-    const isCostrict = provider.id === "costrict"
+    // TODO: move this to a proper hook
+    const isOpenaiOauth = provider.id === "openai" && auth?.type === "oauth"
 
-    const system = []
-    // model-specific prompt takes priority over locale-selected agent prompt
-    let agentPrompt = input.agent.model_prompts?.[input.model.providerID] ?? input.agent.prompt
-    // process dynamic context in agent prompt
-    if (agentPrompt) {
-      agentPrompt = await executeDynamicContext(agentPrompt)
-    }
+    const system: string[] = []
     system.push(
       [
         // use agent prompt otherwise provider prompt
-        // For Codex sessions, skip SystemPrompt.provider() since it's sent via options.instructions
-        ...(agentPrompt ? [agentPrompt] : isCodex ? [] : SystemPrompt.provider(input.model)),
+        ...(input.agent.prompt ? [input.agent.prompt] : SystemPrompt.provider(input.model)),
         // any custom prompt passed into this call
         ...input.system,
         // any custom prompt from last user message
@@ -338,7 +142,7 @@ export namespace LLM {
       : ProviderTransform.options({
           model: input.model,
           sessionID: input.sessionID,
-          providerOptions: { ...provider.options, ...input.providerOptions },
+          providerOptions: provider.options,
         })
     const options: Record<string, any> = pipe(
       base,
@@ -346,15 +150,30 @@ export namespace LLM {
       mergeDeep(input.agent.options),
       mergeDeep(variant),
     )
-    if (isCodex) {
-      options.instructions = SystemPrompt.instructions()
+    if (isOpenaiOauth) {
+      options.instructions = system.join("\n")
     }
+
+    const isWorkflow = language instanceof GitLabWorkflowLanguageModel
+    const messages = isOpenaiOauth
+      ? input.messages
+      : isWorkflow
+        ? input.messages
+        : [
+            ...system.map(
+              (x): ModelMessage => ({
+                role: "system",
+                content: x,
+              }),
+            ),
+            ...input.messages,
+          ]
 
     const params = await Plugin.trigger(
       "chat.params",
       {
         sessionID: input.sessionID,
-        agent: input.agent,
+        agent: input.agent.name,
         model: input.model,
         provider,
         message: input.user,
@@ -373,7 +192,7 @@ export namespace LLM {
       "chat.headers",
       {
         sessionID: input.sessionID,
-        agent: input.agent,
+        agent: input.agent.name,
         model: input.model,
         provider,
         message: input.user,
@@ -383,11 +202,10 @@ export namespace LLM {
       },
     )
 
-    let maxOutputTokens =
-      isCodex || provider.id.includes("github-copilot") ? undefined : ProviderTransform.maxOutputTokens(input.model)
-    if (isCostrict) {
-      maxOutputTokens = input.model.limit.output
-    }
+    const maxOutputTokens =
+      isOpenaiOauth || provider.id.includes("github-copilot")
+        ? undefined
+        : ProviderTransform.maxOutputTokens(input.model)
 
     const tools = await resolveTools(input)
 
@@ -402,123 +220,60 @@ export namespace LLM {
       input.model.providerID.toLowerCase().includes("litellm") ||
       input.model.api.id.toLowerCase().includes("litellm")
 
+    // LiteLLM/Bedrock rejects requests where the message history contains tool
+    // calls but no tools param is present. When there are no active tools (e.g.
+    // during compaction), inject a stub tool to satisfy the validation requirement.
+    // The stub description explicitly tells the model not to call it.
     if (isLiteLLMProxy && Object.keys(tools).length === 0 && hasToolCalls(input.messages)) {
       tools["_noop"] = tool({
-        description:
-          "Placeholder for LiteLLM/Anthropic proxy compatibility - required when message history contains tool calls but no active tools are needed",
-        inputSchema: jsonSchema({ type: "object", properties: {} }),
+        description: "Do not call this tool. It exists only for API compatibility and must never be invoked.",
+        inputSchema: jsonSchema({
+          type: "object",
+          properties: {
+            reason: { type: "string", description: "Unused" },
+          },
+        }),
         execute: async () => ({ output: "", title: "", metadata: {} }),
       })
     }
 
-    const requestId = uuidv7()
-    const requestHeaders = {
-      ...(isCodex
-        ? {
-            originator: "costrict",
-            "User-Agent": `costrict-cli/${Installation.VERSION} (${os.platform()} ${os.release()}; ${os.arch()})`,
-            session_id: input.sessionID,
+    // Wire up toolExecutor for DWS workflow models so that tool calls
+    // from the workflow service are executed via opencode's tool system
+    // and results sent back over the WebSocket.
+    if (language instanceof GitLabWorkflowLanguageModel) {
+      const workflowModel = language
+      workflowModel.systemPrompt = system.join("\n")
+      workflowModel.toolExecutor = async (toolName, argsJson, _requestID) => {
+        const t = tools[toolName]
+        if (!t || !t.execute) {
+          return { result: "", error: `Unknown tool: ${toolName}` }
+        }
+        try {
+          const result = await t.execute!(JSON.parse(argsJson), {
+            toolCallId: _requestID,
+            messages: input.messages,
+            abortSignal: input.abort,
+          })
+          const output = typeof result === "string" ? result : (result?.output ?? JSON.stringify(result))
+          return {
+            result: output,
+            metadata: typeof result === "object" ? result?.metadata : undefined,
+            title: typeof result === "object" ? result?.title : undefined,
           }
-        : undefined),
-      ...(input.model.providerID.startsWith("opencode")
-        ? {
-            "x-opencode-project": Instance.project.id,
-            "x-opencode-session": input.sessionID,
-            "x-opencode-request": input.user.id,
-            "x-opencode-client": Flag.OPENCODE_CLIENT,
-          }
-        : input.model.providerID !== "anthropic"
-          ? {
-              "User-Agent": `opencode/${Installation.VERSION}`,
-            }
-          : undefined),
-      ...input.model.headers,
-      ...headers,
-      "X-Request-Id": requestId,
-    }
-
-    const requestMessages = [
-      ...(isCodex
-        ? [
-            {
-              role: "user",
-              content: system.join("\n\n"),
-            } as ModelMessage,
-          ]
-        : system.map(
-            (x): ModelMessage => ({
-              role: "system",
-              content: x,
-            }),
-          )),
-      ...input.messages,
-    ]
-
-    const sanitizedMessages = sanitizeMessages(requestMessages)
-    const originalDiagnostics = diagnoseMessages(requestMessages)
-    const sanitizedDiagnostics = diagnoseMessages(sanitizedMessages)
-
-    if (originalDiagnostics?.length) {
-      l.warn("invalid prompt messages detected before sanitize", {
-        xRequestId: requestId,
-        diagnostics: originalDiagnostics,
-      })
-    }
-    if (sanitizedDiagnostics?.length) {
-      l.error("invalid prompt messages remain after sanitize", {
-        xRequestId: requestId,
-        diagnostics: sanitizedDiagnostics,
-      })
-    }
-
-    const requestBody = {
-      temperature: params.temperature,
-      topP: params.topP,
-      topK: params.topK,
-      providerOptions: ProviderTransform.providerOptions(input.model, params.options),
-      activeTools: Object.keys(tools).filter((x) => x !== "invalid"),
-      tools,
-      maxOutputTokens,
-      messages: sanitizedMessages,
-      maxRetries: input.retries ?? 0,
+        } catch (e: any) {
+          return { result: "", error: e.message ?? String(e) }
+        }
+      }
     }
 
     return streamText({
       onError(error) {
         l.error("stream error", {
           error,
-          xRequestId: requestId,
-        })
-
-        Bus.publish(Session.Event.LLMError, {
-          providerID: input.model.providerID,
-          modelID: input.model.id,
-          sessionID: input.sessionID,
-          agent: input.agent.name,
-          requestType: "stream",
-          attempt: 0,
-          error,
-          request: {
-            body: requestBody,
-            headers: requestHeaders,
-          },
-          diagnostics: {
-            originalMessages: originalDiagnostics,
-            sanitizedMessages: sanitizedDiagnostics,
-          },
         })
       },
       async experimental_repairToolCall(failed) {
         const lower = failed.toolCall.toolName.toLowerCase()
-        let toolCall = failed.toolCall
-        if (lower === "todowrite" || lower === "question") {
-          let input = toolCall.input.replace(/'/g, '"').replace(/\b(False|True)\b/g, (match) => match.toLowerCase())
-          toolCall.input = input
-          return {
-            ...failed.toolCall,
-            toolName: lower,
-          }
-        }
         if (lower !== failed.toolCall.toolName && tools[lower]) {
           l.info("repairing tool call", {
             tool: failed.toolCall.toolName,
@@ -547,17 +302,30 @@ export namespace LLM {
       toolChoice: input.toolChoice,
       maxOutputTokens,
       abortSignal: input.abort,
-      headers: requestHeaders,
+      headers: {
+        ...(input.model.providerID.startsWith("opencode")
+          ? {
+              "x-opencode-project": Instance.project.id,
+              "x-opencode-session": input.sessionID,
+              "x-opencode-request": input.user.id,
+              "x-opencode-client": Flag.OPENCODE_CLIENT,
+            }
+          : {
+              "User-Agent": `opencode/${Installation.VERSION}`,
+            }),
+        ...input.model.headers,
+        ...headers,
+      },
       maxRetries: input.retries ?? 0,
-      messages: sanitizedMessages,
-        model: wrapLanguageModel({
-          model: language,
-          middleware: [
-            {
-              specificationVersion: "v3",
-              async transformParams(args) {
-                if (args.type === "stream") {
-                  // @ts-expect-error
+      messages,
+      model: wrapLanguageModel({
+        model: language,
+        middleware: [
+          {
+            specificationVersion: "v3" as const,
+            async transformParams(args) {
+              if (args.type === "stream") {
+                // @ts-expect-error
                 args.params.prompt = ProviderTransform.message(args.params.prompt, input.model, options)
               }
               return args.params
@@ -575,14 +343,12 @@ export namespace LLM {
     })
   }
 
-  async function resolveTools(input: Pick<StreamInput, "tools" | "agent" | "user">) {
-    const disabled = PermissionNext.disabled(Object.keys(input.tools), input.agent.permission)
-    for (const tool of Object.keys(input.tools)) {
-      if (input.user.tools?.[tool] === false || disabled.has(tool)) {
-        delete input.tools[tool]
-      }
-    }
-    return input.tools
+  function resolveTools(input: Pick<StreamInput, "tools" | "agent" | "permission" | "user">) {
+    const disabled = Permission.disabled(
+      Object.keys(input.tools),
+      Permission.merge(input.agent.permission, input.permission ?? []),
+    )
+    return Record.filter(input.tools, (_, k) => input.user.tools?.[k] !== false && !disabled.has(k))
   }
 
   // Check if messages contain any tool-call content

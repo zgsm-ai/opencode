@@ -1,3 +1,4 @@
+/** @jsxImportSource react */
 import React from "react"
 import { Img, Row, Html, Link, Body, Head, Button, Column, Preview, Section, Container } from "@jsx-email/all"
 import { Text, Fonts, Title, A, Span } from "../components"

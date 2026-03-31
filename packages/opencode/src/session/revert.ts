@@ -20,7 +20,7 @@ export namespace SessionRevert {
   export type RevertInput = z.infer<typeof RevertInput>
 
   export async function revert(input: RevertInput) {
-    SessionPrompt.assertNotBusy(input.sessionID)
+    await SessionPrompt.assertNotBusy(input.sessionID)
     const all = await Session.messages({ sessionID: input.sessionID })
     let lastUser: MessageV2.User | undefined
     const session = await Session.get(input.sessionID)
@@ -79,7 +79,7 @@ export namespace SessionRevert {
 
   export async function unrevert(input: { sessionID: SessionID }) {
     log.info("unreverting", input)
-    SessionPrompt.assertNotBusy(input.sessionID)
+    await SessionPrompt.assertNotBusy(input.sessionID)
     const session = await Session.get(input.sessionID)
     if (!session.revert) return session
     if (session.revert.snapshot) await Snapshot.restore(session.revert.snapshot)
@@ -91,12 +91,10 @@ export namespace SessionRevert {
     const sessionID = session.id
     const msgs = await Session.messages({ sessionID })
     const messageID = session.revert.messageID
-    const preserve = [] as MessageV2.WithParts[]
     const remove = [] as MessageV2.WithParts[]
     let target: MessageV2.WithParts | undefined
     for (const msg of msgs) {
       if (msg.info.id < messageID) {
-        preserve.push(msg)
         continue
       }
       if (msg.info.id > messageID) {
@@ -104,7 +102,6 @@ export namespace SessionRevert {
         continue
       }
       if (session.revert.partID) {
-        preserve.push(msg)
         target = msg
         continue
       }

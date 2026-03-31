@@ -11,7 +11,7 @@ export function initProjectors() {
     convertEvent: (type, data) => {
       if (type === "session.updated") {
         const id = (data as z.infer<typeof Session.Event.Updated.properties>).info.id
-        const row = Database.use((db) => db.select().from(SessionTable).where(eq(SessionTable.id, id)).get())
+        const row = Database.use((db) => db.select().from(SessionTable).where(eq(SessionTable.id, id as any)).get())
 
         if (!row) return data
 
