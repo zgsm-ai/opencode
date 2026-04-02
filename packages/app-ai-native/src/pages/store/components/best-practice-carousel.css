@@ -207,7 +207,8 @@
 }
 
 .bp-card-stat-icon {
-  font-size: 0.75rem;
+  width: 0.75rem;
+  height: 0.75rem;
   opacity: 0.65;
 }
 
@@ -237,6 +238,11 @@
 
 .bp-card-action-btn-active {
   color: var(--card-accent, var(--st-primary));
+}
+
+.bp-card-fav-icon {
+  width: 0.875rem;
+  height: 0.875rem;
 }
 
 .bp-card-action-btn-active:hover {

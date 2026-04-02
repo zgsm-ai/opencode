@@ -1,5 +1,6 @@
 import { createResource, createSignal, createMemo, createEffect, For, Show, onMount, onCleanup } from "solid-js"
 import { Icon, type IconProps } from "@opencode-ai/ui/icon"
+import { LocalIcon } from "@/components/local-icon"
 import { useLanguage } from "@/context/language"
 import { behaviorApi, itemApi, type CapabilityItem } from "../lib/api"
 import { categoryKey, typeKey } from "../lib/constants"
@@ -236,15 +237,15 @@ export default function BestPracticeCarousel(props: BestPracticeCarouselProps) {
                     <div class="bp-card-footer">
                       <div class="bp-card-stats">
                         <span class="bp-card-stat" title={language.t("store.home.table.favoriteCount")}>
-                          <span class="bp-card-stat-icon">{"\u2605"}</span>
+                          <LocalIcon name="star" size="small" class="bp-card-stat-icon" />
                           {favCount(item.id).toLocaleString()}
                         </span>
                         <span class="bp-card-stat" title={language.t("store.home.table.installCount")}>
-                          <span class="bp-card-stat-icon">{"\u2193"}</span>
+                          <LocalIcon name="download" size="small" class="bp-card-stat-icon" />
                           {(item.installCount ?? 0).toLocaleString()}
                         </span>
                         <span class="bp-card-stat" title={language.t("store.home.table.previewCount")}>
-                          <span class="bp-card-stat-icon">{"\u25E6"}</span>
+                          <LocalIcon name="view" size="small" class="bp-card-stat-icon" />
                           {(item.previewCount ?? 0).toLocaleString()}
                         </span>
                       </div>
@@ -260,10 +261,10 @@ export default function BestPracticeCarousel(props: BestPracticeCarouselProps) {
                         <button
                           class={`bp-card-action-btn ${isFavorited(item.id) ? "bp-card-action-btn-active" : ""}`}
                           onClick={(e) => toggleFavorite(item, e)}
-                          title={language.t("store.home.table.favoriteCount")}
+                          title={isFavorited(item.id) ? language.t("store.detail.unfavorite") : language.t("store.detail.favorite")}
                           disabled={favPending() === item.id}
                         >
-                          {isFavorited(item.id) ? "\u2605" : "\u2606"}
+                          <LocalIcon name={isFavorited(item.id) ? "star-filled" : "star"} size="small" class="bp-card-fav-icon" />
                         </button>
                       </div>
                     </div>
