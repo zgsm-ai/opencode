@@ -35,11 +35,6 @@ const Home = lazy(() => import("@/pages/home"))
 const Session = lazy(() => import("@/pages/session"))
 const StoreLayout = lazy(() => import("@/pages/store").then((m) => ({ default: m.StoreLayout })))
 const StoreHome = lazy(() => import("@/pages/store").then((m) => ({ default: m.StoreHome })))
-const StoreSkills = lazy(() => import("@/pages/store").then((m) => ({ default: m.StoreSkills })))
-const StoreSubagents = lazy(() => import("@/pages/store").then((m) => ({ default: m.StoreSubagents })))
-const StoreCommands = lazy(() => import("@/pages/store").then((m) => ({ default: m.StoreCommands })))
-const StoreMcpServers = lazy(() => import("@/pages/store").then((m) => ({ default: m.StoreMcpServers })))
-const StoreItemDetail = lazy(() => import("@/pages/store").then((m) => ({ default: m.StoreItemDetail })))
 const Loading = () => <div class="size-full" />
 
 const HomeRoute = () => <Navigate href="/store" />
@@ -47,36 +42,6 @@ const HomeRoute = () => <Navigate href="/store" />
 const StoreHomeRoute = () => (
   <Suspense fallback={<Loading />}>
     <StoreHome />
-  </Suspense>
-)
-
-const StoreSkillsRoute = () => (
-  <Suspense fallback={<Loading />}>
-    <StoreSkills />
-  </Suspense>
-)
-
-const StoreSubagentsRoute = () => (
-  <Suspense fallback={<Loading />}>
-    <StoreSubagents />
-  </Suspense>
-)
-
-const StoreCommandsRoute = () => (
-  <Suspense fallback={<Loading />}>
-    <StoreCommands />
-  </Suspense>
-)
-
-const StoreMcpServersRoute = () => (
-  <Suspense fallback={<Loading />}>
-    <StoreMcpServers />
-  </Suspense>
-)
-
-const StoreItemDetailRoute = () => (
-  <Suspense fallback={<Loading />}>
-    <StoreItemDetail />
   </Suspense>
 )
 
@@ -203,11 +168,6 @@ export function AppInterface(props: {
               <Route path="/" component={HomeRoute} />
               <Route path="/store" component={StoreLayout}>
                 <Route path="/" component={StoreHomeRoute} />
-                <Route path="/skills" component={StoreSkillsRoute} />
-                <Route path="/subagents" component={StoreSubagentsRoute} />
-                <Route path="/commands" component={StoreCommandsRoute} />
-                <Route path="/mcp-servers" component={StoreMcpServersRoute} />
-                <Route path="/items/:id" component={StoreItemDetailRoute} />
                 <Route path="/dashboard" component={StoreDashboardRoute} />
               </Route>
             </Dynamic>

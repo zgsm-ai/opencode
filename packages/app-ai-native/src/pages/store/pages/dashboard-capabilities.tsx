@@ -223,17 +223,16 @@ export default function DashboardCapabilities() {
                     <tbody>
                       <For each={state.items}>
                         {(item) => (
-                          <tr
-                            class="border-b border-border-weak-base last:border-0 cursor-pointer hover:bg-surface-secondary/50"
-                            onClick={() =>
-                              navigate(
-                                `/store/items/${item.id}?type=${item.itemType}&from=/store/dashboard/capabilities`,
-                              )
-                            }
-                          >
+                          <tr class="border-b border-border-weak-base last:border-0">
                             <td class="px-4 py-3">
-                              <div class="text-13-medium text-text-strong">{item.name}</div>
-                              <div class="mt-1 text-12-regular text-text-weak">{item.slug}</div>
+                              <button
+                                type="button"
+                                class="w-full cursor-pointer text-left transition-colors hover:text-text-strong"
+                                onClick={() => navigate("/store")}
+                              >
+                                <div class="text-13-medium text-text-strong">{item.name}</div>
+                                <div class="mt-1 text-12-regular text-text-weak">{item.slug}</div>
+                              </button>
                             </td>
                             <td class="px-4 py-3">
                               <span
@@ -289,6 +288,15 @@ export default function DashboardCapabilities() {
                             <td class="px-4 py-3 text-12-regular text-text-weak">{item.repoName || "—"}</td>
                             <td class="px-4 py-3">
                               <div class="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                                <Button
+                                  size="small"
+                                  variant="ghost"
+                                  class="h-8 w-8 p-0 cursor-pointer"
+                                  onClick={() => navigate("/store")}
+                                  title={language.t("common.open")}
+                                >
+                                  <Icon name="arrow-right" size="small" />
+                                </Button>
                                 <Button
                                   size="small"
                                   variant="ghost"

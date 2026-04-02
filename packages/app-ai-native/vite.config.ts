@@ -9,7 +9,8 @@ export default defineConfig(({ mode }) => {
 
   const cloudHost = env.VITE_CLOUD_SERVER_HOST ?? "localhost"
   const cloudPort = env.VITE_CLOUD_SERVER_PORT ?? "18080"
-  const cloudTarget = `http://${cloudHost}:${cloudPort}`
+  // const cloudTarget = `http://${cloudHost}:${cloudPort}`
+  const cloudTarget = `https://${cloudHost}`
   const appPort = parseInt(env.VITE_APP_PORT ?? "3000")
   const prefix = env.VITE_API_PREFIX ?? ""
   const basePath = env.VITE_BASE_PATH ?? "/"
@@ -31,7 +32,9 @@ export default defineConfig(({ mode }) => {
           target: cloudTarget,
           changeOrigin: true,
           ws: true,
-          rewrite: (path) => path.replace(new RegExp(`^${prefix}`), ""),
+          rewrite: (path) => {
+            return path.replace(new RegExp(`^${prefix}`), "/cloud-api")
+          },
           configure: (proxy) => {
             proxy.on("proxyReq", (proxyReq) => {
               if (proxyReq.path.endsWith("/global/event")) {
@@ -43,7 +46,11 @@ export default defineConfig(({ mode }) => {
         [`${prefix}/api`]: {
           target: cloudTarget,
           changeOrigin: true,
-          rewrite: (path) => path.replace(new RegExp(`^${prefix}`), ""),
+          // secure: false,
+          // rewrite: (path) => path.replace(new RegExp(`^${prefix}`), ""),
+          rewrite: (path) => {
+            return path.replace(new RegExp(`^${prefix}`), "/cloud-api")
+          },
         },
       },
     },

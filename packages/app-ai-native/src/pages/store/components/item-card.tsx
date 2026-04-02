@@ -49,7 +49,7 @@ export default function ItemCard(props: { item: CapabilityItem }) {
 
   return (
     <A
-      href={`/store/items/${props.item.id}?type=${props.item.itemType}`}
+      href="/store"
       class="item-card-glow group flex flex-col rounded-lg border border-border-weak-base bg-background-base cursor-pointer hover:shadow-xs-border-base hover:-translate-y-px active:translate-y-0 transition-all duration-150"
       style={{ "--glow-color": color() }}
     >

@@ -27,7 +27,7 @@ function slugify(value: string): string {
 
 function buildItemDetailUrl(baseUrl: string, itemId: string, itemType: string): string {
   const origin = baseUrl.replace(/\/cloud-api$/, "")
-  return `${origin}/store/items/${itemId}?type=${encodeURIComponent(itemType)}`
+  return `${origin}/store`
 }
 
 /**

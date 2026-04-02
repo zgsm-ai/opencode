@@ -25,10 +25,10 @@ function NavButton(props: {
         aria-label={props.label}
         onClick={props.onClick}
         class={[
-          "flex items-center justify-center size-10 rounded-lg transition-colors cursor-default outline-none",
+          "flex items-center justify-center size-10 transition-colors cursor-pointer outline-none",
           props.active
-            ? "bg-surface-base text-icon-strong-base shadow-xs-border-base/30"
-            : "text-icon-weak-base hover:bg-surface-base-hover hover:text-icon-base",
+            ? "bg-[#2E6CC4]/10 text-[#2E6CC4] border-l-2 border-l-[#2E6CC4]"
+            : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
         ].join(" ")}
       >
         <Icon name={props.icon} size="normal" />
@@ -60,7 +60,7 @@ function UserButton() {
     >
       <DropdownMenu placement="right-end">
         <DropdownMenu.Trigger
-          class="flex items-center justify-center size-8 rounded-md hover:bg-surface-base transition-colors"
+          class="flex items-center justify-center size-10 hover:bg-accent transition-colors"
           aria-label={language.t("sidebar.user.menu")}
         >
           <Show
@@ -100,49 +100,55 @@ export default function RootLayout(props: ParentProps) {
   const language = useLanguage()
 
   const isWorkspace = () => location.pathname.startsWith("/workspace")
-  const isConsole = () => location.pathname.startsWith("/store/dashboard")
-  const isStore = () => location.pathname.startsWith("/store") && !isConsole()
+  const isStore = () => location.pathname.startsWith("/store")
 
   return (
     <div class="flex h-full w-full overflow-hidden">
-      <div class="w-12 shrink-0 bg-background-base flex flex-col items-center py-3 gap-2 border-r border-border-weak-base">
-        <NavButton icon="folder" label="Workspace" active={isWorkspace()} onClick={() => navigate("/workspace")} />
-        <NavButton
-          icon="store"
-          label={language.t("sidebar.store")}
-          active={isStore()}
-          onClick={() => navigate("/store")}
-        />
-        <div class="flex-1" />
-        <UserButton />
-        <Show when={useAuth().user()}>
+      <aside class="fixed inset-y-0 left-0 z-40 flex w-12 flex-col items-center border-r border-border bg-background py-4">
+        <nav class="flex flex-1 flex-col gap-2">
           <NavButton
-            icon="sliders"
-            label={language.t("sidebar.user.console")}
-            active={isConsole()}
-            onClick={() => navigate("/store/dashboard")}
+            icon="store"
+            label={language.t("sidebar.store")}
+            active={isStore()}
+            onClick={() => navigate("/store")}
           />
-        </Show>
-        <Tooltip placement="right" value={language.t("sidebar.settings")}>
-          <IconButton
-            icon="settings-gear"
-            variant="ghost"
-            size="large"
-            onClick={() => dialog.show(() => <DialogSettings />)}
-            aria-label={language.t("sidebar.settings")}
-          />
-        </Tooltip>
-        <Tooltip placement="right" value={language.t("sidebar.help")}>
-          <IconButton
-            icon="help"
-            variant="ghost"
-            size="large"
-            onClick={() => platform.openLink("https://docs.costrict.ai/cli/guide/installation")}
-            aria-label={language.t("sidebar.help")}
-          />
-        </Tooltip>
-      </div>
-      <div class="flex-1 min-w-0 h-full overflow-hidden">{props.children}</div>
+          <NavButton icon="folder" label="Workspace" active={isWorkspace()} onClick={() => navigate("/workspace")} />
+        </nav>
+        <div class="mt-auto flex flex-col gap-2">
+          <UserButton />
+          <Tooltip placement="right" value={language.t("sidebar.console")}>
+            <button
+              type="button"
+              onClick={() => navigate("/store/dashboard")}
+              class="flex size-10 items-center justify-center text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+              aria-label={language.t("sidebar.console")}
+            >
+              <Icon name="sliders" size="normal" />
+            </button>
+          </Tooltip>
+          <Tooltip placement="right" value={language.t("sidebar.settings")}>
+            <button
+              type="button"
+              onClick={() => dialog.show(() => <DialogSettings />)}
+              class="flex size-10 items-center justify-center text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+              aria-label={language.t("sidebar.settings")}
+            >
+              <Icon name="settings-gear" />
+            </button>
+          </Tooltip>
+          <Tooltip placement="right" value={language.t("sidebar.help")}>
+            <button
+              type="button"
+              onClick={() => platform.openLink("https://docs.costrict.ai/cli/guide/installation")}
+              class="flex size-10 items-center justify-center text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+              aria-label={language.t("sidebar.help")}
+            >
+              <Icon name="help" />
+            </button>
+          </Tooltip>
+        </div>
+      </aside>
+      <div class="flex-1 min-w-0 h-full overflow-hidden ml-[48px]">{props.children}</div>
       {/* <LoginGuide /> */}
     </div>
   )

@@ -15,28 +15,28 @@ interface Repo {
 export const NAV_ITEMS: NavItem[] = [
   {
     type: "skill",
-    href: "/store/skills",
+    href: "/store",
     label: "store.sidebar.nav.skills",
     icon: "sparkles",
     color: "rgb(234,179,8)",
   },
   {
     type: "subagent",
-    href: "/store/subagents",
+    href: "/store",
     label: "store.sidebar.nav.subagents",
     icon: "brain",
     color: "rgb(59,130,246)",
   },
   {
     type: "command",
-    href: "/store/commands",
+    href: "/store",
     label: "store.sidebar.nav.commands",
     icon: "console",
     color: "rgb(34,197,94)",
   },
   {
     type: "mcp",
-    href: "/store/mcp-servers",
+    href: "/store",
     label: "store.sidebar.nav.mcpServers",
     icon: "mcp",
     color: "rgb(168,85,247)",

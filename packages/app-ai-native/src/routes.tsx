@@ -8,11 +8,6 @@ const Loading = () => <div class="size-full" />
 const RootLayout = lazy(() => import("@/pages/root-layout"))
 const StoreLayout = lazy(() => import("@/pages/store").then((m) => ({ default: m.StoreLayout })))
 const StoreHome = lazy(() => import("@/pages/store").then((m) => ({ default: m.StoreHome })))
-const StoreSkills = lazy(() => import("@/pages/store").then((m) => ({ default: m.StoreSkills })))
-const StoreSubagents = lazy(() => import("@/pages/store").then((m) => ({ default: m.StoreSubagents })))
-const StoreCommands = lazy(() => import("@/pages/store").then((m) => ({ default: m.StoreCommands })))
-const StoreMcpServers = lazy(() => import("@/pages/store").then((m) => ({ default: m.StoreMcpServers })))
-const StoreItemDetail = lazy(() => import("@/pages/store").then((m) => ({ default: m.StoreItemDetail })))
 const WorkspaceLayout = lazy(() => import("@/pages/workspace").then((m) => ({ default: m.WorkspaceLayout })))
 const WorkspaceHome = lazy(() => import("@/pages/workspace").then((m) => ({ default: m.WorkspaceHome })))
 const DirectoryLayout = lazy(() => import("@/pages/directory-layout"))
@@ -79,14 +74,7 @@ export const routeConfig: RouteConfig[] = [
     path: "/store",
     component: StoreLayout,
     auth: true,
-    children: [
-      { path: "/", component: StoreHome },
-      { path: "/skills", component: StoreSkills },
-      { path: "/subagents", component: StoreSubagents },
-      { path: "/commands", component: StoreCommands },
-      { path: "/mcp-servers", component: StoreMcpServers },
-      { path: "/items/:id", component: StoreItemDetail },
-    ],
+    children: [{ path: "/", component: StoreHome }],
   },
   {
     path: "/store/dashboard",

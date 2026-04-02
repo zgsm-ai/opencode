@@ -144,39 +144,33 @@ export function WorkspaceSidebar() {
           as={IconButton}
           icon="dot-grid"
           variant="ghost"
-          class="size-7 rounded-lg cursor-pointer"
+          class="size-7 rounded-lg cursor-pointer text-sidebar-foreground/70 hover:text-sidebar-foreground"
           aria-label={t("workspace.more")}
         />
         <DropdownMenu.Portal>
           <DropdownMenu.Content
-            class="min-w-36"
-            style={{
-              "background-color": "var(--surface-base)",
-              border: "none",
-              "box-shadow": "var(--shadow-xs-border)",
-              "--dropdown-item-hover": "var(--surface-base-hover)",
-            }}
+            class="min-w-36 bg-sidebar border border-sidebar-border shadow-md"
           >
             <Show when={cardProps.isRunning}>
-              <DropdownMenu.Item onSelect={() => handleCloseWorkspace(workspace()!)}>
-                <Icon name="stop" size="small" class="size-4 text-icon-weak" />
+              <DropdownMenu.Item class="hover:bg-sidebar-accent" onSelect={() => handleCloseWorkspace(workspace()!)}>
+                <Icon name="stop" size="small" class="size-4 text-sidebar-foreground/70" />
                 <DropdownMenu.ItemLabel>{t("workspace.close")}</DropdownMenu.ItemLabel>
               </DropdownMenu.Item>
             </Show>
             <Show when={!cardProps.isRunning && !dot().offline}>
-              <DropdownMenu.Item onSelect={() => handleOpenWorkspace(workspace()!)}>
-                <Icon name="enter" size="small" class="size-4 text-icon-weak" />
+              <DropdownMenu.Item class="hover:bg-sidebar-accent" onSelect={() => handleOpenWorkspace(workspace()!)}>
+                <Icon name="enter" size="small" class="size-4 text-sidebar-foreground/70" />
                 <DropdownMenu.ItemLabel>{t("workspace.run")}</DropdownMenu.ItemLabel>
               </DropdownMenu.Item>
             </Show>
-            <DropdownMenu.Item onSelect={startRename}>
-              <Icon name="edit" size="small" class="size-4 text-icon-weak" />
+            <DropdownMenu.Item class="hover:bg-sidebar-accent" onSelect={startRename}>
+              <Icon name="edit" size="small" class="size-4 text-sidebar-foreground/70" />
               <DropdownMenu.ItemLabel>{t("workspace.rename")}</DropdownMenu.ItemLabel>
             </DropdownMenu.Item>
             <Show when={!cardProps.isRunning}>
-              <DropdownMenu.Separator />
-              <DropdownMenu.Item onSelect={() => deleteWorkspace(cardProps.id)}>
-                <Icon name="trash" size="small" class="size-4 text-icon-critical-base" />
+              <DropdownMenu.Separator class="bg-sidebar-border" />
+              <DropdownMenu.Item class="hover:bg-sidebar-accent" onSelect={() => deleteWorkspace(cardProps.id)}>
+                <Icon name="trash" size="small" class="size-4 text-destructive" />
                 <DropdownMenu.ItemLabel>{t("workspace.delete")}</DropdownMenu.ItemLabel>
               </DropdownMenu.Item>
             </Show>
@@ -217,7 +211,7 @@ export function WorkspaceSidebar() {
 
     const renameInput = () => (
       <input
-        class="flex-1 min-w-0 text-sm font-medium text-text-strong bg-surface-inset-base border border-border-strong-base rounded-lg px-2 py-0.5 focus:outline-none"
+        class="flex-1 min-w-0 text-sm font-medium text-sidebar-foreground bg-sidebar-accent border border-sidebar-border rounded-lg px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-sidebar-ring"
         value={renameValue()}
         placeholder={t("workspace.rename.placeholder")}
         onInput={(e: Event) => setRenameValue((e.target as HTMLInputElement).value)}
@@ -241,9 +235,9 @@ export function WorkspaceSidebar() {
           {(ws) => (
             <div>
               <div
-                class="group/workspace flex items-center rounded-lg transition-all duration-150 hover:bg-surface-base-hover"
+                class="group/workspace flex items-center rounded-md transition-all duration-150 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                 classList={{
-                  "bg-surface-base-hover": params.workspaceID === cardProps.id,
+                  "bg-sidebar-accent text-sidebar-accent-foreground": params.workspaceID === cardProps.id,
                 }}
               >
                 <Tooltip
@@ -251,17 +245,17 @@ export function WorkspaceSidebar() {
                   value={detail()}
                   class="flex-1 min-w-0"
                   contentStyle={{
-                    background: "var(--surface-base-hover)",
-                    color: "var(--text-base)",
-                    border: "1px solid var(--border-weak-base)",
+                    background: "hsl(var(--sidebar-accent))",
+                    color: "hsl(var(--sidebar-accent-foreground))",
+                    border: "1px solid hsl(var(--sidebar-border))",
                     "box-shadow": "var(--shadow-xs)",
                   }}
                 >
                   <button
-                    class="flex-1 min-w-0 flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-150 cursor-pointer text-left"
+                    class="flex-1 min-w-0 flex items-center gap-2 px-2 py-1.5 rounded-md transition-all duration-150 cursor-pointer text-left text-sm"
                     classList={{
-                      "text-text-strong font-medium": params.workspaceID === cardProps.id,
-                      "text-text-strong": params.workspaceID !== cardProps.id,
+                      "text-sidebar-foreground font-medium": params.workspaceID === cardProps.id,
+                      "text-sidebar-foreground": params.workspaceID !== cardProps.id,
                     }}
                     onClick={() => {
                       toggle()
@@ -283,13 +277,13 @@ export function WorkspaceSidebar() {
                           "size-2 rounded-full group-hover/workspace:opacity-0": true,
                           "bg-icon-success-base": dot().online,
                           "bg-icon-critical-base": dot().offline,
-                          "bg-border-weak-base": !dot().online && !dot().offline,
+                          "bg-sidebar-border": !dot().online && !dot().offline,
                         }}
                       />
                       <Icon
                         name={open() ? "chevron-down" : "chevron-right"}
                         size="small"
-                        class="size-4 text-icon-weak opacity-0 group-hover/workspace:opacity-100 absolute -left-1 -top-1"
+                        class="size-4 text-sidebar-foreground/50 opacity-0 group-hover/workspace:opacity-100 absolute -left-1 -top-1"
                       />
                     </div>
                     <Show
@@ -315,7 +309,7 @@ export function WorkspaceSidebar() {
                     <IconButton
                       icon="plus-small"
                       variant="ghost"
-                      class="size-7 rounded-lg cursor-pointer"
+                      class="size-7 rounded-md cursor-pointer text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"
                       aria-label={t("workspace.newSession")}
                       onClick={(event: MouseEvent) => {
                         event.stopPropagation()
@@ -346,9 +340,9 @@ export function WorkspaceSidebar() {
       <Show when={workspace()}>
         {(ws) => (
           <div
-            class="group/workspace flex items-center rounded-lg transition-all duration-150 hover:bg-surface-base-hover"
+            class="group/workspace flex items-center rounded-md transition-all duration-150 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
             classList={{
-              "bg-surface-base-hover": params.workspaceID === cardProps.id,
+              "bg-sidebar-accent text-sidebar-accent-foreground": params.workspaceID === cardProps.id,
             }}
           >
             <Tooltip
@@ -356,18 +350,18 @@ export function WorkspaceSidebar() {
               value={detail()}
               class="flex-1 min-w-0"
               contentStyle={{
-                background: "var(--surface-base-hover)",
-                color: "var(--text-base)",
-                border: "1px solid var(--border-weak-base)",
+                background: "hsl(var(--sidebar-accent))",
+                color: "hsl(var(--sidebar-accent-foreground))",
+                border: "1px solid hsl(var(--sidebar-border))",
                 "box-shadow": "var(--shadow-xs)",
               }}
             >
               <button
-                class="flex-1 min-w-0 flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-150 text-left"
+                class="flex-1 min-w-0 flex items-center gap-2 px-2 py-1.5 rounded-md transition-all duration-150 text-left text-sm"
                 classList={{
-                  "text-text-strong font-medium": params.workspaceID === cardProps.id,
-                  "text-text-weak": params.workspaceID !== cardProps.id && !dot().offline,
-                  "text-text-weaker opacity-60 cursor-not-allowed": dot().offline,
+                  "text-sidebar-foreground font-medium": params.workspaceID === cardProps.id,
+                  "text-sidebar-foreground/70": params.workspaceID !== cardProps.id && !dot().offline,
+                  "text-sidebar-foreground/40 cursor-not-allowed": dot().offline,
                   "cursor-pointer": !dot().offline,
                 }}
                 onClick={() => {
@@ -379,7 +373,7 @@ export function WorkspaceSidebar() {
                     "size-2 rounded-full shrink-0": true,
                     "bg-icon-success-base": dot().online,
                     "bg-icon-critical-base": dot().offline,
-                    "bg-border-weak-base": !dot().online && !dot().offline,
+                    "bg-sidebar-border": !dot().online && !dot().offline,
                   }}
                 />
                 <Show
@@ -410,30 +404,30 @@ export function WorkspaceSidebar() {
   }
 
   return (
-    <aside class="flex flex-col h-full w-full bg-surface-base border-r border-border-weak-base">
+    <aside class="flex flex-col h-full w-full bg-sidebar text-sidebar-foreground border-r border-sidebar-border">
       {/* Header */}
-      <div class="shrink-0 h-[41px] px-3 border-b border-border-weak-base flex items-center">
+      <div class="shrink-0 h-[41px] px-3 border-b border-sidebar-border flex items-center">
         <div class="flex items-center gap-2.5">
-          <span class="text-sm font-semibold text-text-strong">{t("workspace.page.title")}</span>
+          <span class="text-sm font-semibold text-sidebar-foreground">{t("workspace.page.title")}</span>
         </div>
       </div>
 
       {/* Search */}
       <div class="shrink-0 px-3 py-2.5">
-        <div class="flex items-center h-9 w-full rounded-lg bg-surface-inset-base border border-border-weak-base focus-within:border-border-strong-base transition-all duration-200">
-          <Icon name="magnifying-glass" class="size-4 text-text-weak shrink-0 ml-3" />
+        <div class="flex items-center h-8 w-full rounded-md bg-sidebar-accent border border-sidebar-border focus-within:border-sidebar-ring focus-within:ring-1 focus-within:ring-sidebar-ring transition-all duration-200">
+          <Icon name="magnifying-glass" class="size-4 text-sidebar-foreground/50 shrink-0 ml-3" />
           <input
             type="text"
             placeholder={t("workspace.search.placeholder")}
             value={workspaceSearchQuery()}
             onInput={(e: Event) => setWorkspaceSearchQuery((e.target as HTMLInputElement).value)}
-            class="flex-1 min-w-0 h-full px-2 text-sm bg-transparent placeholder:text-text-weak focus:outline-none"
+            class="flex-1 min-w-0 h-full px-2 text-sm bg-transparent text-sidebar-foreground placeholder:text-sidebar-foreground/50 focus:outline-none"
           />
           <Show when={workspaceSearchQuery()}>
             <button
               type="button"
               onClick={() => setWorkspaceSearchQuery("")}
-              class="flex items-center justify-center size-6 rounded-full text-icon-weak hover:text-icon-strong hover:bg-surface-inset-base transition-colors cursor-pointer mr-1"
+              class="flex items-center justify-center size-6 rounded-full text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors cursor-pointer mr-1"
             >
               <Icon name="close" class="size-3.5" />
             </button>
@@ -446,9 +440,9 @@ export function WorkspaceSidebar() {
         {/* Running workspaces */}
         <Show when={runningIds().length > 0}>
           <div class="mb-2">
-            <div class="flex items-center gap-1.5 px-3 py-1.5">
-              <span class="text-xs font-medium text-text-weak uppercase tracking-wider">{t("workspace.running")}</span>
-              <span class="text-[11px] text-text-weaker ml-auto">{runningIds().length}</span>
+            <div class="flex items-center gap-1.5 px-4 py-1.5">
+              <span class="text-xs font-medium text-sidebar-foreground/70 uppercase tracking-wider">{t("workspace.running")}</span>
+              <span class="text-[11px] text-sidebar-foreground/50 ml-auto">{runningIds().length}</span>
             </div>
             <div class="flex flex-col gap-0.5 px-2">
               <For each={runningIds()}>{(id) => <WorkspaceCard id={id} isRunning={true} />}</For>
@@ -458,17 +452,17 @@ export function WorkspaceSidebar() {
 
         {/* Idle workspaces */}
         <div>
-          <div class="flex items-center gap-1.5 px-3 py-1.5">
-            <span class="text-xs font-medium text-text-weak uppercase tracking-wider">{t("workspace.idle")}</span>
-            <span class="text-[11px] text-text-weaker ml-auto">{idleIds().length}</span>
+          <div class="flex items-center gap-1.5 px-4 py-1.5">
+            <span class="text-xs font-medium text-sidebar-foreground/70 uppercase tracking-wider">{t("workspace.idle")}</span>
+            <span class="text-[11px] text-sidebar-foreground/50 ml-auto">{idleIds().length}</span>
           </div>
           <div class="flex flex-col gap-1.5 px-2">
             <For each={idleIds()}>{(id) => <WorkspaceCard id={id} isRunning={false} />}</For>
             <Show when={filteredWorkspaces().length === 0}>
-              <div class="flex flex-col items-center justify-center py-8 text-text-weak">
+              <div class="flex flex-col items-center justify-center py-8 text-sidebar-foreground/50">
                 <Icon name="folder" class="size-8 mb-2 opacity-30" />
                 <span class="text-xs">{t("workspace.empty")}</span>
-                <span class="text-[11px] text-text-weaker mt-1">{t("workspace.emptyHint")}</span>
+                <span class="text-[11px] text-sidebar-foreground/40 mt-1">{t("workspace.emptyHint")}</span>
               </div>
             </Show>
           </div>
@@ -476,7 +470,7 @@ export function WorkspaceSidebar() {
       </div>
 
       {/* Device list — 40% */}
-      <div class="flex-[2] min-h-0 overflow-y-auto thin-scrollbar border-t border-border-weak-base">
+      <div class="flex-[2] min-h-0 overflow-y-auto thin-scrollbar border-t border-sidebar-border">
         <DeviceList
           devices={devices}
           onCreateWorkspace={handleCreateWorkspace}
@@ -715,10 +709,10 @@ function WorkspaceSessions(props: { id: string }) {
               return (
                 <div class="group/session relative">
                   <button
-                    class="flex items-center gap-2 px-2.5 py-2 rounded-lg text-left transition-all duration-150 w-full group-hover/session:pr-8"
+                    class="flex items-center gap-2 px-2.5 py-1.5 rounded-md text-left transition-all duration-150 w-full group-hover/session:pr-8 text-sm"
                     classList={{
-                      "bg-surface-base text-text-strong font-medium": active(),
-                      "text-text-weak hover:text-text-strong hover:bg-surface-base/60": !active(),
+                      "bg-sidebar-accent text-sidebar-accent-foreground font-medium": active(),
+                      "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/60": !active(),
                     }}
                     onClick={() => click(session)}
                   >
@@ -729,11 +723,11 @@ function WorkspaceSessions(props: { id: string }) {
                           name="dash"
                           class="size-3 shrink-0"
                           size="small"
-                          classList={{ "text-text-weaker": true }}
+                          classList={{ "text-sidebar-foreground/40": true }}
                         />
                       }
                     >
-                      <Spinner class="size-3.5 shrink-0" style={{ color: "var(--icon-interactive-base)" }} />
+                      <Spinner class="size-3.5 shrink-0" style={{ color: "hsl(var(--sidebar-primary))" }} />
                     </Show>
                     <span class="text-xs truncate flex-1">{session.title || t("workspace.session.new")}</span>
                   </button>
@@ -742,7 +736,7 @@ function WorkspaceSessions(props: { id: string }) {
                       <IconButton
                         icon="archive"
                         variant="ghost"
-                        class="size-7 rounded-lg"
+                        class="size-7 rounded-md text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"
                         aria-label={t("common.archive")}
                         onClick={(event: MouseEvent) => {
                           event.preventDefault()
@@ -758,7 +752,7 @@ function WorkspaceSessions(props: { id: string }) {
           </For>
           <Show when={more()}>
             <button
-              class="flex items-center justify-center h-8 w-full rounded-lg text-xs text-text-weak hover:text-text-strong hover:bg-surface-base/60 transition-all duration-150"
+              class="flex items-center justify-center h-8 w-full rounded-md text-xs text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/60 transition-all duration-150"
               disabled={loading()}
               onClick={loadMore}
             >
@@ -772,12 +766,12 @@ function WorkspaceSessions(props: { id: string }) {
       <Show when={loading() && sessions().length === 0}>
         <div class="flex items-center gap-2 py-3 px-2">
           <Spinner class="size-3.5" />
-          <span class="text-xs text-text-weaker">{t("workspace.loadingSessions")}</span>
+          <span class="text-xs text-sidebar-foreground/50">{t("workspace.loadingSessions")}</span>
         </div>
       </Show>
       <Show when={!loading() && sessions().length === 0}>
         <div class="flex items-center gap-2 py-3 px-2">
-          <span class="text-xs text-text-weaker">{t("workspace.emptySessions")}</span>
+          <span class="text-xs text-sidebar-foreground/50">{t("workspace.emptySessions")}</span>
         </div>
       </Show>
     </div>
