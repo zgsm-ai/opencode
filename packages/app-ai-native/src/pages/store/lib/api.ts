@@ -222,9 +222,6 @@ export interface CapabilityItem {
   securityStatus?: SecurityStatus
   lastScanId?: string
   repoName?: string
-  favoriteCount?: number
-  installCount?: number
-  previewCount?: number
   createdBy: string
   createdAt: string
   updatedAt: string

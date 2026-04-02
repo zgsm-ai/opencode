@@ -11,11 +11,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { itemApi, type CapabilityItem } from "../lib/api"
+import { behaviorApi, itemApi, type CapabilityItem } from "../lib/api"
 import { categoryKey, typeKey } from "../lib/constants"
 import ItemDetailContent, { getInstallCommand } from "../components/item-detail-content"
 import SecurityTag from "../components/security-tag"
+import BestPracticeCarousel from "../components/best-practice-carousel"
 import { Icon, type IconProps } from "@opencode-ai/ui/icon"
+import { useAuth } from "../hooks/use-auth"
 
 const STORE_TYPES = [
   { value: "skill", labelKey: "store.sidebar.nav.skills", icon: "sparkles" as IconProps["name"] },
@@ -26,31 +28,7 @@ const STORE_TYPES = [
 
 type StoreType = (typeof STORE_TYPES)[number]["value"]
 
-const BEST_PRACTICE_CARDS = [
-  {
-    titleKey: "store.home.bestPractices.card1.title",
-    descriptionKey: "store.home.bestPractices.card1.description",
-    icon: "sparkles" as IconProps["name"],
-  },
-  {
-    titleKey: "store.home.bestPractices.card2.title",
-    descriptionKey: "store.home.bestPractices.card2.description",
-    icon: "server" as IconProps["name"],
-  },
-  {
-    titleKey: "store.home.bestPractices.card3.title",
-    descriptionKey: "store.home.bestPractices.card3.description",
-    icon: "shield" as IconProps["name"],
-  },
-  {
-    titleKey: "store.home.bestPractices.card4.title",
-    descriptionKey: "store.home.bestPractices.card4.description",
-    icon: "store" as IconProps["name"],
-  },
-] as const
-
 const PAGE_SIZE = 10
-const CATEGORY_SEED_SIZE = 100
 
 function formatDate(iso?: string) {
   if (!iso) return "—"
@@ -66,6 +44,7 @@ function rangePages(page: number, totalPages: number) {
 
 export default function Home() {
   const language = useLanguage()
+  const auth = useAuth()
   const [activeType, setActiveType] = createSignal<StoreType>("skill")
   const [activeCategory, setActiveCategory] = createSignal("all")
   const [page, setPage] = createSignal(1)
@@ -74,7 +53,13 @@ export default function Home() {
   const [searchText, setSearchText] = createSignal("")
   const [debouncedSearch, setDebouncedSearch] = createSignal("")
   const [listCache, setListCache] = createSignal<Awaited<ReturnType<typeof itemApi.list>> | null>(null)
-  const [seedCache, setSeedCache] = createSignal<Awaited<ReturnType<typeof itemApi.list>> | null>(null)
+  const [detailItem, setDetailItem] = createSignal<CapabilityItem | null>(null)
+  const [favoritePending, setFavoritePending] = createSignal(false)
+  const [favorited, setFavorited] = createSignal(false)
+  const [favoriteCount, setFavoriteCount] = createSignal(0)
+  const [previewCount, setPreviewCount] = createSignal(0)
+  const [installCount, setInstallCount] = createSignal(0)
+  const [trackedItemId, setTrackedItemId] = createSignal<string | null>(null)
 
   let searchTimer: ReturnType<typeof setTimeout> | undefined
   const handleSearchInput = (value: string) => {
@@ -105,14 +90,7 @@ export default function Home() {
     pageSize: PAGE_SIZE,
   }))
 
-  const categoryParams = createMemo(() => ({
-    type: activeType(),
-    page: 1,
-    pageSize: CATEGORY_SEED_SIZE,
-  }))
-
   const [list] = createResource(listParams, (params) => itemApi.list(params))
-  const [categorySeed] = createResource(categoryParams, (params) => itemApi.list(params))
   const [stats] = createResource(async () =>
     Object.fromEntries(
       await Promise.all(
@@ -126,20 +104,63 @@ export default function Home() {
 
   const typeMeta = createMemo(() => STORE_TYPES.find((entry) => entry.value === activeType()) ?? STORE_TYPES[0])
   const listData = createMemo(() => list.latest ?? listCache())
-  const seedData = createMemo(() => categorySeed.latest ?? seedCache())
 
   createEffect(() => {
     const data = list.latest
     if (data) setListCache(data)
   })
 
+  const toggleFavorite = async () => {
+    const data = detailItem()
+    if (!data || !auth.user() || auth.loading() || favoritePending()) return
+
+    setFavoritePending(true)
+    try {
+      if (favorited()) {
+        const result = await behaviorApi.unfavorite(data.id)
+        setFavorited(result.favorited)
+        setFavoriteCount(result.favoriteCount)
+        return
+      }
+
+      const result = await behaviorApi.favorite(data.id)
+      setFavorited(result.favorited)
+      setFavoriteCount(result.favoriteCount)
+    } finally {
+      setFavoritePending(false)
+    }
+  }
+
   createEffect(() => {
-    const data = categorySeed.latest
-    if (data) setSeedCache(data)
+    const data = detailItem()
+    if (!data) return
+    setPreviewCount(data.previewCount ?? 0)
+    setInstallCount(data.installCount ?? 0)
+    setFavorited(Boolean(data.favorited))
+    setFavoriteCount(data.favoriteCount ?? 0)
+  })
+
+  createEffect(() => {
+    const data = detailItem()
+    if (!data) return
+    if (trackedItemId() === data.id) return
+
+    setTrackedItemId(data.id)
+    void behaviorApi
+      .log(data.id, {
+        actionType: "view",
+        context: "drawer",
+        metadata: {
+          source: "app-ai-native",
+          route: "home",
+        },
+      })
+      .then(() => setPreviewCount((count) => count + 1))
+      .catch(() => undefined)
   })
 
   const categories = createMemo(() => {
-    const items = seedData()?.items ?? []
+    const items = listData()?.items ?? []
     const unique = Array.from(new Set(items.map((item) => item.category).filter(Boolean)))
     return ["all", ...unique]
   })
@@ -232,27 +253,7 @@ export default function Home() {
           </div>
         </section>
 
-        <section class="store-section">
-          <div class="store-section-heading">
-            <div>
-              <h2 class="store-section-title">{language.t("store.home.bestPractices.title")}</h2>
-              <p class="store-section-subtitle">{language.t("store.home.bestPractices.description")}</p>
-            </div>
-          </div>
-          <div class="store-best-practice-grid">
-            <For each={BEST_PRACTICE_CARDS}>
-              {(card) => (
-                <article class="store-best-practice-card">
-                  <div class="store-best-practice-icon">
-                    <Icon name={card.icon} />
-                  </div>
-                  <h3>{language.t(card.titleKey)}</h3>
-                  <p>{language.t(card.descriptionKey)}</p>
-                </article>
-              )}
-            </For>
-          </div>
-        </section>
+        <BestPracticeCarousel activeType={activeType} onSelectItem={setSelectedItemId} />
 
         <section class="store-section">
           <div class="store-type-tabs" role="tablist" aria-label={language.t("store.home.mainTabsLabel")}>
@@ -471,7 +472,18 @@ export default function Home() {
           <Show when={selectedItemId()}>
             {(itemId) => (
               <Suspense fallback={<div class="flex justify-center py-16 text-muted-foreground">{language.t("store.loading")}</div>}>
-                <ItemDetailContent itemId={itemId()} class="store-detail-content custom-scrollbar" />
+                <ItemDetailContent
+                  itemId={itemId()}
+                  class="store-detail-content custom-scrollbar"
+                  onItemLoaded={setDetailItem}
+                  favorited={favorited()}
+                  favoriteCount={favoriteCount()}
+                  previewCount={previewCount()}
+                  installCount={installCount()}
+                  onToggleFavorite={toggleFavorite}
+                  favoritePending={favoritePending()}
+                  isAuthenticated={!!auth.user() && !auth.loading()}
+                />
               </Suspense>
             )}
           </Show>

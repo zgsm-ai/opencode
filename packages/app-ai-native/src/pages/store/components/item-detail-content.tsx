@@ -1,4 +1,4 @@
-import { createResource, createSignal, Show, For } from "solid-js"
+import { createResource, createSignal, createEffect, Show, For } from "solid-js"
 import { createHighlighter } from "shiki"
 import { useTheme } from "@opencode-ai/ui/theme"
 import { Icon } from "@opencode-ai/ui/icon"
@@ -179,6 +179,14 @@ interface ItemDetailContentProps {
   class?: string
   showBackButton?: boolean
   onBack?: () => void
+  onItemLoaded?: (item: CapabilityItem) => void
+  favorited?: boolean
+  favoriteCount?: number
+  previewCount?: number
+  installCount?: number
+  onToggleFavorite?: () => Promise<void>
+  favoritePending?: boolean
+  isAuthenticated?: boolean
 }
 
 export default function ItemDetailContent(props: ItemDetailContentProps) {
@@ -188,6 +196,11 @@ export default function ItemDetailContent(props: ItemDetailContentProps) {
     () => props.itemId,
     (id) => itemApi.get(id),
   )
+
+  createEffect(() => {
+    const data = item()
+    if (data) props.onItemLoaded?.(data)
+  })
   const [artifacts] = createResource(
     () => props.itemId,
     (id) => artifactApi.list(id).then((result) => result.artifacts),
@@ -255,15 +268,44 @@ export default function ItemDetailContent(props: ItemDetailContentProps) {
                 >
                   {data().name}
                 </h1>
-                <Show when={data().sourceType === "archive"}>
-                  <span
-                    class="mt-0.5 inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-xs"
-                    style={{ "background-color": "rgba(59,130,246,0.12)", color: "rgb(59,130,246)" }}
-                    title={language.t("store.sourceType.archive")}
-                  >
-                    <Icon name="cloud-upload" size="small" />
-                  </span>
-                </Show>
+                <div class="flex items-center gap-1.5 shrink-0">
+                  <Show when={data().sourceType === "archive"}>
+                    <span
+                      class="mt-0.5 inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-xs"
+                      style={{ "background-color": "rgba(59,130,246,0.12)", color: "rgb(59,130,246)" }}
+                      title={language.t("store.sourceType.archive")}
+                    >
+                      <Icon name="cloud-upload" size="small" />
+                    </span>
+                  </Show>
+                  <Show when={props.onToggleFavorite}>
+                    <button
+                      onClick={() => void props.onToggleFavorite?.()}
+                      disabled={!props.isAuthenticated || props.favoritePending}
+                      class="inline-flex items-center gap-1.5 rounded-lg border border-border-weak-base px-3 py-1.5 text-12-medium transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-60"
+                      classList={{
+                        "bg-bg-muted text-text-strong hover:bg-bg-muted/70": props.favorited,
+                        "text-text-weak hover:text-text-strong hover:bg-bg-muted": !props.favorited,
+                      }}
+                      title={
+                        props.isAuthenticated
+                          ? props.favorited
+                            ? language.t("store.detail.unfavorite")
+                            : language.t("store.detail.favorite")
+                          : language.t("store.detail.favoriteSignIn")
+                      }
+                    >
+                      <span class="text-sm leading-none">{props.favorited ? "★" : "☆"}</span>
+                      <span>
+                        {props.isAuthenticated
+                          ? props.favorited
+                            ? language.t("store.detail.favorited")
+                            : language.t("store.detail.favorite")
+                          : language.t("store.detail.favoriteSignIn")}
+                      </span>
+                    </button>
+                  </Show>
+                </div>
               </div>
 
               <div class="mt-2 flex flex-wrap items-center gap-1.5">
@@ -388,6 +430,9 @@ export default function ItemDetailContent(props: ItemDetailContentProps) {
                         ...(authorName() ? [[language.t("store.detail.author"), authorName()]] : []),
                         [language.t("store.detail.created"), formatDate(data().createdAt)],
                         [language.t("store.detail.updated"), formatDate(data().updatedAt)],
+                        [language.t("store.detail.previewCount"), String(props.previewCount ?? data().previewCount ?? 0)],
+                        [language.t("store.detail.installCount"), String(props.installCount ?? data().installCount ?? 0)],
+                        [language.t("store.detail.favoriteCount"), String(props.favoriteCount ?? data().favoriteCount ?? 0)],
                       ] as [string, string][]}
                     >
                       {(row) => (

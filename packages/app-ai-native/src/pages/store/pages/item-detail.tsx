@@ -1,9 +1,21 @@
 import { useNavigate, useParams } from "@solidjs/router"
+import { createEffect, createSignal } from "solid-js"
 import ItemDetailContent from "../components/item-detail-content"
+import { behaviorApi, type CapabilityItem } from "../lib/api"
+import { useAuth } from "../hooks/use-auth"
 
 export default function ItemDetail() {
   const params = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const auth = useAuth()
+
+  const [item, setItem] = createSignal<CapabilityItem | null>(null)
+  const [favoritePending, setFavoritePending] = createSignal(false)
+  const [favorited, setFavorited] = createSignal(false)
+  const [favoriteCount, setFavoriteCount] = createSignal(0)
+  const [previewCount, setPreviewCount] = createSignal(0)
+  const [installCount, setInstallCount] = createSignal(0)
+  const [trackedItemId, setTrackedItemId] = createSignal<string | null>(null)
 
   const toggleFavorite = async () => {
     const data = item()
@@ -56,7 +68,19 @@ export default function ItemDetail() {
 
   return (
     <div class="mx-auto h-full w-full max-w-3xl">
-      <ItemDetailContent itemId={params.id} showBackButton onBack={() => navigate("/store")} />
+      <ItemDetailContent
+        itemId={params.id}
+        showBackButton
+        onBack={() => navigate("/store")}
+        onItemLoaded={setItem}
+        favorited={favorited()}
+        favoriteCount={favoriteCount()}
+        previewCount={previewCount()}
+        installCount={installCount()}
+        onToggleFavorite={toggleFavorite}
+        favoritePending={favoritePending()}
+        isAuthenticated={!!auth.user() && !auth.loading()}
+      />
     </div>
   )
 }
