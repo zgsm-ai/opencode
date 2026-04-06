@@ -11,8 +11,7 @@ import { Log } from "../../util/log"
 import { Flag } from "../../flag/flag"
 import { Instance } from "../../project/instance"
 import {
-  activateFavoriteSkill,
-  installFavoriteSkill,
+  downloadFavoriteSkill,
   loadFavoriteSkill,
   listFavoriteSkills,
   uninstallFavoriteSkill,
@@ -81,9 +80,8 @@ Manage costrict-web favorite skills.
 Usage:
   cs cloud favorite list [--format table|json]
   cs cloud favorite view <slug-or-id> [--format table|json]
-  cs cloud favorite install <slug-or-id>
+  cs cloud favorite download <slug-or-id>
   cs cloud favorite load <slug-or-id>
-  cs cloud favorite activate <slug-or-id>
   cs cloud favorite unload <slug-or-id>
   cs cloud favorite uninstall <slug-or-id>
   cs cloud favorite --help
@@ -91,32 +89,32 @@ Usage:
 Commands:
   list       List cloud favorite skills
   view       Show favorite skill details
-  install    Download favorite skill to local storage
-  load       Mark a local favorite skill as loaded
-  activate   Enable a favorite skill without restart
+  download   Download favorite skill to local storage
+  load       Enable a downloaded favorite skill without restart
   unload     Disable a favorite skill without restart
   uninstall  Remove a local favorite skill without restart
 
 Status flow:
-  Cloud -> Installed -> Loaded -> Active -> Unloaded
+  Cloud -> Downloaded -> Active -> Unloaded
+
+State transition rules:
+  download   Cloud/Unloaded -> Downloaded
+  load       Cloud/Downloaded/Unloaded -> Active
+  unload     Active -> Unloaded
+  uninstall  Downloaded/Active/Unloaded -> Cloud
 `)
 }
 
-async function runFavoriteAction(action: "install" | "load" | "activate" | "unload" | "uninstall", id: string) {
+async function runFavoriteAction(action: "download" | "load" | "unload" | "uninstall", id: string) {
   switch (action) {
-    case "install": {
-      const item = await installFavoriteSkill(id)
-      console.log(`installed ${item.slug}`)
+    case "download": {
+      const item = await downloadFavoriteSkill(id)
+      console.log(`downloaded ${item.slug}`)
       return
     }
     case "load": {
       const item = await loadFavoriteSkill(id)
-      console.log(`loaded ${item.slug}`)
-      return
-    }
-    case "activate": {
-      const item = await activateFavoriteSkill(id)
-      console.log(`activated ${item.slug} without restart`)
+      console.log(`loaded ${item.slug} as active without restart`)
       return
     }
     case "unload": {
@@ -352,7 +350,7 @@ export const CloudCommand = cmd({
           y
             .positional("command", {
               type: "string",
-              choices: ["list", "view", "install", "load", "activate", "unload", "uninstall", "help"],
+              choices: ["list", "view", "download", "load", "unload", "uninstall", "help"],
             })
             .positional("id", {
               type: "string",
@@ -389,7 +387,7 @@ export const CloudCommand = cmd({
             return
           }
 
-          await runFavoriteAction(command as "install" | "load" | "activate" | "unload" | "uninstall", id)
+          await runFavoriteAction(command as "download" | "load" | "unload" | "uninstall", id)
         },
       )
       .command("_worker", false, {}, async () => {

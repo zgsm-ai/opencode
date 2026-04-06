@@ -15,7 +15,7 @@ const log = Log.create({ service: "cloud-favorite" })
 const FAVORITE_PAGE_SIZE = 100
 const FAVORITE_MAX_PAGES = 20
 
-type FavoriteLifecycle = "installed" | "loaded" | "active" | "unloaded"
+type FavoriteLifecycle = "downloaded" | "active" | "unloaded"
 
 type FavoriteStateRecord = {
   id: string
@@ -48,7 +48,7 @@ export type FavoriteSkill = {
   updatedAt?: string
 }
 
-export type FavoriteStatus = "Cloud" | "Installed" | "Loaded" | "Active" | "Unloaded"
+export type FavoriteStatus = "Cloud" | "Downloaded" | "Active" | "Unloaded"
 
 export type FavoriteSkillWithStatus = FavoriteSkill & {
   status: FavoriteStatus
@@ -229,14 +229,10 @@ function deriveStatus(state: FavoriteStateRecord | undefined, activePaths: Set<s
   if (!state) return "Cloud"
   if (activePaths.has(state.localPath)) return "Active"
   switch (state.lifecycle) {
-    case "loaded":
-      return "Loaded"
     case "unloaded":
       return "Unloaded"
-    case "active":
-      return "Installed"
     default:
-      return "Installed"
+      return "Downloaded"
   }
 }
 
@@ -264,7 +260,7 @@ async function persistInstalledSkill(skill: FavoriteSkill) {
       name: skill.name,
       itemType: "skill",
       localPath: dir,
-      lifecycle: state.items[skill.slug]?.lifecycle ?? "installed",
+      lifecycle: state.items[skill.slug]?.lifecycle ?? "downloaded",
       installedAt: state.items[skill.slug]?.installedAt ?? new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     }
@@ -290,7 +286,7 @@ async function ensureInstalled(slugOrId: string) {
     name: skill.name,
     itemType: "skill" as const,
     localPath,
-    lifecycle: "installed" as const,
+    lifecycle: "downloaded" as const,
     installedAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   }
@@ -334,29 +330,19 @@ export async function viewFavoriteSkill(slugOrId: string): Promise<FavoriteSkill
   return item
 }
 
-export async function installFavoriteSkill(slugOrId: string) {
+export async function downloadFavoriteSkill(slugOrId: string) {
   const skill = await viewFavoriteSkill(slugOrId)
   const localPath = await persistInstalledSkill(skill)
   await mutateState((state) => {
     const record = state.items[skill.slug]
-    record.lifecycle = "installed"
+    record.lifecycle = "downloaded"
     record.updatedAt = new Date().toISOString()
     record.localPath = localPath
   })
-  return { ...skill, status: "Installed" as const, localPath }
+  return { ...skill, status: "Downloaded" as const, localPath }
 }
 
 export async function loadFavoriteSkill(slugOrId: string) {
-  const installed = await ensureInstalled(slugOrId)
-  await mutateState((state) => {
-    const record = state.items[installed.slug]
-    record.lifecycle = "loaded"
-    record.updatedAt = new Date().toISOString()
-  })
-  return installed
-}
-
-export async function activateFavoriteSkill(slugOrId: string) {
   const installed = await ensureInstalled(slugOrId)
   await addSkillPath(installed.localPath)
   await mutateState((state) => {

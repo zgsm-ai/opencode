@@ -113,7 +113,7 @@ describe("costrict.cloud.favorite", () => {
     expect(items[0]?.status).toBe("Cloud")
   })
 
-  test("supports Installed -> Loaded -> Active -> Unloaded -> Cloud lifecycle", async () => {
+  test("supports Cloud -> Downloaded -> Active -> Unloaded -> Cloud lifecycle", async () => {
     const skill = {
       id: "skill-1",
       slug: "favorite-skill",
@@ -154,8 +154,7 @@ describe("costrict.cloud.favorite", () => {
 
     try {
       const {
-        activateFavoriteSkill,
-        installFavoriteSkill,
+        downloadFavoriteSkill,
         listFavoriteSkills,
         loadFavoriteSkill,
         uninstallFavoriteSkill,
@@ -165,14 +164,11 @@ describe("costrict.cloud.favorite", () => {
       const skillDir = path.join(configTmp.path, "costrict", "cloud-favorites", "skills", skill.slug)
       const skillFile = path.join(skillDir, "SKILL.md")
       const stateFile = path.join(configTmp.path, "costrict", "cloud-favorites", "state.json")
-      await installFavoriteSkill(skill.slug)
+      await downloadFavoriteSkill(skill.slug)
       expect(await fs.readFile(skillFile, "utf8")).toContain("# Favorite Skill")
-      expect((await listFavoriteSkills())[0]?.status).toBe("Installed")
+      expect((await listFavoriteSkills())[0]?.status).toBe("Downloaded")
 
       await loadFavoriteSkill(skill.slug)
-      expect((await listFavoriteSkills())[0]?.status).toBe("Loaded")
-
-      await activateFavoriteSkill(skill.slug)
       const activatedConfig = await fs.readFile(globalConfigFile, "utf8")
       expect(activatedConfig).toContain(skillDir)
       const activeConfig = await Config.getGlobal()
@@ -197,7 +193,7 @@ describe("costrict.cloud.favorite", () => {
     }
   })
 
-  test("activate writes skills.paths and unload removes it", async () => {
+  test("load writes skills.paths and unload removes it", async () => {
     const skill = {
       id: "skill-1",
       slug: "favorite-skill",
@@ -229,10 +225,10 @@ describe("costrict.cloud.favorite", () => {
     })) as typeof Config.getGlobal
 
     try {
-      const { activateFavoriteSkill, unloadFavoriteSkill } = await import("../../../src/costrict/cloud/favorite")
+      const { loadFavoriteSkill, unloadFavoriteSkill } = await import("../../../src/costrict/cloud/favorite")
       const skillDir = path.join(configTmp.path, "costrict", "cloud-favorites", "skills", skill.slug)
 
-      await activateFavoriteSkill(skill.slug)
+      await loadFavoriteSkill(skill.slug)
       const parsedActivated = await Filesystem.readJson<{ skills?: { paths?: string[] } }>(globalConfigFile)
       expect(parsedActivated.skills?.paths).toContain(skillDir)
 
