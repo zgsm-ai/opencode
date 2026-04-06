@@ -10,12 +10,127 @@ import { Daemon } from "../../costrict/device/daemon"
 import { Log } from "../../util/log"
 import { Flag } from "../../flag/flag"
 import { Instance } from "../../project/instance"
+import {
+  activateFavoriteSkill,
+  installFavoriteSkill,
+  loadFavoriteSkill,
+  listFavoriteSkills,
+  uninstallFavoriteSkill,
+  unloadFavoriteSkill,
+  viewFavoriteSkill,
+} from "../../costrict/cloud/favorite"
 
 const log = Log.create({ service: "cloud-cmd" })
 
 const READY_TIMEOUT_MS = 30_000
 
 const DEVICE_ENV_KEY = "__CLOUD_DEVICE__"
+
+function pad(value: string, width: number) {
+  return value.length >= width ? value : value + " ".repeat(width - value.length)
+}
+
+async function printFavoriteList(format: "table" | "json") {
+  const items = await listFavoriteSkills()
+  if (format === "json") {
+    console.log(JSON.stringify(items, null, 2))
+    return
+  }
+
+  if (!items.length) {
+    console.log("No cloud favorites found")
+    return
+  }
+
+  const statusWidth = Math.max("Status".length, ...items.map((item) => item.status.length))
+  const slugWidth = Math.max("Slug".length, ...items.map((item) => item.slug.length))
+  const nameWidth = Math.max("Name".length, ...items.map((item) => item.name.length))
+
+  console.log(`${pad("Status", statusWidth)}  ${pad("Slug", slugWidth)}  ${pad("Name", nameWidth)}  Description`)
+  for (const item of items) {
+    console.log(
+      `${pad(item.status, statusWidth)}  ${pad(item.slug, slugWidth)}  ${pad(item.name, nameWidth)}  ${item.description}`,
+    )
+  }
+}
+
+async function printFavoriteView(id: string, format: "table" | "json") {
+  const item = await viewFavoriteSkill(id)
+  if (format === "json") {
+    console.log(JSON.stringify(item, null, 2))
+    return
+  }
+
+  console.log(`Name: ${item.name}`)
+  console.log(`Slug: ${item.slug}`)
+  console.log(`ID: ${item.id}`)
+  console.log(`Type: ${item.itemType}`)
+  console.log(`Status: ${item.status}`)
+  console.log(`Favorites: ${item.favoriteCount ?? 0}`)
+  if (item.version) console.log(`Version: ${item.version}`)
+  if (item.localPath) console.log(`Local path: ${item.localPath}`)
+  console.log("")
+  console.log(item.description || "(no description)")
+}
+
+function printFavoriteHelp() {
+  console.log(`cs cloud favorite
+
+Manage costrict-web favorite skills.
+
+Usage:
+  cs cloud favorite list [--format table|json]
+  cs cloud favorite view <slug-or-id> [--format table|json]
+  cs cloud favorite install <slug-or-id>
+  cs cloud favorite load <slug-or-id>
+  cs cloud favorite activate <slug-or-id>
+  cs cloud favorite unload <slug-or-id>
+  cs cloud favorite uninstall <slug-or-id>
+  cs cloud favorite --help
+
+Commands:
+  list       List cloud favorite skills
+  view       Show favorite skill details
+  install    Download favorite skill to local storage
+  load       Mark a local favorite skill as loaded
+  activate   Enable a favorite skill without restart
+  unload     Disable a favorite skill without restart
+  uninstall  Remove a local favorite skill without restart
+
+Status flow:
+  Cloud -> Installed -> Loaded -> Active -> Unloaded
+`)
+}
+
+async function runFavoriteAction(action: "install" | "load" | "activate" | "unload" | "uninstall", id: string) {
+  switch (action) {
+    case "install": {
+      const item = await installFavoriteSkill(id)
+      console.log(`installed ${item.slug}`)
+      return
+    }
+    case "load": {
+      const item = await loadFavoriteSkill(id)
+      console.log(`loaded ${item.slug}`)
+      return
+    }
+    case "activate": {
+      const item = await activateFavoriteSkill(id)
+      console.log(`activated ${item.slug} without restart`)
+      return
+    }
+    case "unload": {
+      const item = await unloadFavoriteSkill(id)
+      console.log(`unloaded ${item.slug} without restart`)
+      return
+    }
+    case "uninstall": {
+      const item = await uninstallFavoriteSkill(id)
+      console.log(`uninstalled ${item.slug} without restart`)
+      return
+    }
+  }
+}
 
 // Patch child_process.spawn/spawnSync at the CJS module level so that
 // third-party CJS libraries (e.g. cross-spawn used by MCP SDK) automatically
@@ -230,11 +345,58 @@ export const CloudCommand = cmd({
         if (stopped) console.log("cloud daemon stopped")
         await startDaemon()
       })
+      .command(
+        "favorite <command> [id]",
+        "manage costrict-web favorite skills",
+        (y) =>
+          y
+            .positional("command", {
+              type: "string",
+              choices: ["list", "view", "install", "load", "activate", "unload", "uninstall", "help"],
+            })
+            .positional("id", {
+              type: "string",
+              describe: "favorite skill slug or item id",
+            })
+            .option("format", {
+              type: "string",
+              choices: ["table", "json"],
+              default: "table",
+              describe: "output format",
+            }),
+        async (args) => {
+          const command = String(args.command)
+          const format = (args.format ?? "table") as "table" | "json"
+
+          if (command === "help") {
+            printFavoriteHelp()
+            return
+          }
+
+          if (command === "list") {
+            await printFavoriteList(format)
+            return
+          }
+
+          const id = String(args.id ?? "").trim()
+          if (!id) {
+            console.error("favorite id/slug is required")
+            process.exit(1)
+          }
+
+          if (command === "view") {
+            await printFavoriteView(id, format)
+            return
+          }
+
+          await runFavoriteAction(command as "install" | "load" | "activate" | "unload" | "uninstall", id)
+        },
+      )
       .command("_worker", false, {}, async () => {
         await runWorker()
       }),
   handler: async () => {
-    console.error("specify a subcommand: start, stop, restart, status, logs")
+    console.error("specify a subcommand: start, stop, restart, status, logs, favorite")
     process.exit(1)
   },
 })
