@@ -56,7 +56,7 @@ export function renderRoutes(routes: RouteConfig[]) {
 }
 
 export const routeConfig: RouteConfig[] = [
-  { path: "/", component: () => <Navigate href="/workspace" /> },
+  { path: "/", component: () => <Navigate href="/store" /> },
   {
     path: "/workspace",
     component: WorkspaceLayout,
