@@ -628,7 +628,7 @@ export async function uninstallFavoriteSkill(slugOrId: string) {
 async function readItemForConfig(installed: FavoriteStateRecord): Promise<FavoriteItem> {
   const itemMeta = await Filesystem.readJson<Record<string, unknown>>(
     path.join(installed.localPath, "item.json"),
-  ).catch(() => ({}))
+  ).catch((): Record<string, unknown> => ({}))
   return {
     id: installed.id,
     slug: installed.slug,
