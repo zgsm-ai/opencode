@@ -3,7 +3,17 @@ import { Log } from "@/util/log"
 import { Cause, Effect, Layer, Record, ServiceMap } from "effect"
 import * as Queue from "effect/Queue"
 import * as Stream from "effect/Stream"
-import { streamText, wrapLanguageModel, type ModelMessage, type Tool, tool, jsonSchema } from "ai"
+import {
+  streamText,
+  wrapLanguageModel,
+  type ModelMessage,
+  type Tool,
+  tool,
+  jsonSchema,
+  type TextStreamPart,
+  type ToolSet,
+  type LanguageModelMiddleware,
+} from "ai"
 import { mergeDeep, pipe } from "remeda"
 import { GitLabWorkflowLanguageModel } from "gitlab-ai-provider"
 import { ProviderTransform } from "@/provider/transform"
@@ -41,7 +51,7 @@ export namespace LLM {
     abort: AbortSignal
   }
 
-  export type Event = Awaited<ReturnType<typeof stream>>["fullStream"] extends AsyncIterable<infer T> ? T : never
+  export type Event = TextStreamPart<ToolSet>
 
   export interface Interface {
     readonly stream: (input: StreamInput) => Stream.Stream<Event, unknown>
@@ -337,7 +347,7 @@ export namespace LLM {
               }
               return args.params
             },
-          },
+          } satisfies LanguageModelMiddleware,
         ],
       }),
       experimental_telemetry: {
