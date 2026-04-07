@@ -1,8 +1,6 @@
-import { Button } from "@opencode-ai/ui/button"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { Icon } from "@opencode-ai/ui/icon"
 import { showToast } from "@opencode-ai/ui/toast"
-import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { useLanguage } from "@/context/language"
 import { createEffect, createMemo, For, onCleanup, Show } from "solid-js"
 import { createStore } from "solid-js/store"
@@ -143,6 +141,12 @@ export default function DashboardRepositories() {
     return visibility
   }
 
+  const visColor = (vis?: string | null) => {
+    if (vis === "public") return { bg: "color-mix(in srgb, #22c55e 12%, transparent)", c: "#22c55e" }
+    if (vis === "private") return { bg: "color-mix(in srgb, #f59e0b 12%, transparent)", c: "#f59e0b" }
+    return { bg: "rgba(156,163,175,0.12)", c: "var(--st-text-secondary)" }
+  }
+
   const syncStatusLabel = (status?: string) => {
     if (!status || status === "idle") return language.t("store.sync.status.idle")
     if (status === "running" || status === "pending") return language.t("store.sync.status.running")
@@ -152,106 +156,78 @@ export default function DashboardRepositories() {
   }
 
   const syncStatusColor = (status?: string) => {
-    if (!status || status === "idle") return "var(--color-text-weak)"
+    if (!status || status === "idle") return "var(--st-text-secondary)"
     if (status === "running" || status === "pending") return "#3b82f6"
     if (status === "success") return "#22c55e"
     if (status === "failed") return "#ef4444"
-    return "var(--color-text-weak)"
+    return "var(--st-text-secondary)"
   }
 
   return (
-    <div class="min-h-full px-6 py-6">
+    <Show
+      when={!loading()}
+      fallback={<div class="store-dash-empty">{language.t("store.loading")}</div>}
+    >
       <Show
-        when={!loading()}
-        fallback={<div class="flex justify-center py-16 text-text-weak">{language.t("store.loading")}</div>}
+        when={user()}
+        fallback={
+          <div class="store-dash-empty" style={{ "min-height": "40vh", display: "flex", "align-items": "center", "justify-content": "center" }}>
+            <div style={{ "text-align": "center" }}>
+              <h1 class="store-tbar-title">{language.t("store.console")}</h1>
+              <p class="store-tbar-sub" style={{ "margin-bottom": "0.75rem" }}>{language.t("store.console.authDescription")}</p>
+              <button
+                class="store-fbtn store-fbtn-primary"
+                onClick={() => { window.location.href = getLoginUrl("/store/dashboard/repositories") }}
+              >
+                {language.t("store.console.login")}
+              </button>
+            </div>
+          </div>
+        }
       >
-        <Show
-          when={user()}
-          fallback={
-            <div class="flex min-h-[60vh] items-center justify-center">
-              <div class="rounded-xl border border-border-weak-base bg-surface-raised-base px-8 py-10 text-center">
-                <div class="mx-auto mb-4 flex size-12 items-center justify-center rounded-full bg-surface-info-base/20 text-text-strong">
-                  <Icon name="console" />
-                </div>
-                <h1 class="text-lg font-semibold text-text-strong">{language.t("store.console")}</h1>
-                <p class="mt-2 text-sm text-text-weak">{language.t("store.console.authDescription")}</p>
-                <Button
-                  class="mt-4"
-                  onClick={() => {
-                    window.location.href = getLoginUrl("/store/dashboard/repositories")
-                  }}
-                >
-                  {language.t("store.console.login")}
-                </Button>
-              </div>
+        <section class="store-cshell">
+          <div class="store-tbar">
+            <div>
+              <h2 class="store-tbar-title">{language.t("store.console.repositories.title")}</h2>
+              <p class="store-tbar-sub">{language.t("store.console.repositories.description")}</p>
             </div>
-          }
-        >
-          <section class="rounded-2xl border border-border-weak-base bg-surface-raised-base p-5">
-            <div class="mb-5 flex items-start justify-between gap-4">
-              <div>
-                <h2 class="text-lg font-semibold text-text-strong">{language.t("store.console.repositories.title")}</h2>
-                <p class="mt-1 text-sm text-text-weak">{language.t("store.console.repositories.description")}</p>
-              </div>
-              <Button
-                size="small"
-                variant="ghost"
-                class="border border-border-weak-base cursor-pointer"
-                onClick={openCreateRepo}
-              >
-                <Icon name="plus" class="size-4" />
-                {language.t("store.console.newRepository")}
-              </Button>
-            </div>
+            <button class="store-fbtn store-fbtn-primary" onClick={openCreateRepo}>
+              <Icon name="plus" size="small" />
+              {language.t("store.console.newRepository")}
+            </button>
+          </div>
 
+          <Show
+            when={!state.loadingRepos}
+            fallback={<div class="store-dash-empty">{language.t("store.console.repositories.loading")}</div>}
+          >
             <Show
-              when={!state.loadingRepos}
-              fallback={<div class="text-sm text-text-weak">{language.t("store.console.repositories.loading")}</div>}
+              when={state.repos.length > 0}
+              fallback={
+                <div class="store-dash-empty">
+                  {language.t("store.console.repositories.empty")}
+                </div>
+              }
             >
-              <Show
-                when={state.repos.length > 0}
-                fallback={
-                  <div class="rounded-xl border border-dashed border-border-weak-base px-8 py-10 text-center text-sm text-text-weak">
-                    {language.t("store.console.repositories.empty")}
-                  </div>
-                }
-              >
-                <div class="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                  <For each={state.repos}>
-                    {(repo) => (
-                      <div class="group flex flex-col rounded-md border border-border-weak-base bg-background-base px-4 py-3 transition-all duration-150 hover:-translate-y-px hover:shadow-xs-border-base">
-                        <div class="mb-2 min-w-0 overflow-hidden">
-                          <div class="flex items-center gap-2 flex-nowrap justify-between">
-                            <Tooltip value={repo.displayName || repo.name} placement="top" class="max-w-[60%]">
-                              <div class="truncate text-sm font-medium text-text-strong transition-colors group-hover:text-text-strong">
-                                {repo.displayName || repo.name}
-                              </div>
-                            </Tooltip>
-                            <span
-                              class="inline-flex shrink-0 items-center gap-1 rounded-[10px] px-2.5 py-[3px] text-xs font-medium"
-                              style={{
-                                "background-color":
-                                  repo.visibility === "public"
-                                    ? "color-mix(in srgb, #22c55e 12%, transparent)"
-                                    : repo.visibility === "private"
-                                      ? "color-mix(in srgb, #f59e0b 12%, transparent)"
-                                      : "rgba(156,163,175,0.12)",
-                                color:
-                                  repo.visibility === "public"
-                                    ? "#22c55e"
-                                    : repo.visibility === "private"
-                                      ? "#f59e0b"
-                                      : "var(--color-text-weak)",
-                              }}
-                            >
-                              <Icon name={repo.visibility === "private" ? "eye" : "sparkles"} size="small" />
-                              {visibilityLabel(repo.visibility)}
-                            </span>
-                          </div>
-                          <div class="mt-1 truncate text-xs text-text-weak">{repo.name}</div>
+              <div class="store-dash-grid">
+                <For each={state.repos}>
+                  {(repo) => {
+                    const vc = () => visColor(repo.visibility)
+                    return (
+                      <div class="store-dash-card">
+                        <div class="store-dash-card-head">
+                          <span class="store-dash-card-name" title={repo.displayName || repo.name}>
+                            {repo.displayName || repo.name}
+                          </span>
+                          <span
+                            class="store-dash-pill"
+                            style={{ background: vc().bg, color: vc().c }}
+                          >
+                            {visibilityLabel(repo.visibility)}
+                          </span>
                         </div>
-
-                        <p class="mb-3 text-xs text-text-weak line-clamp-2 min-h-8 flex-1">{repo.description || ""}</p>
+                        <div class="store-dash-card-slug">{repo.name}</div>
+                        <p class="store-dash-card-desc">{repo.description || ""}</p>
 
                         <Show when={repo.repoType === "sync"}>
                           {(() => {
@@ -260,96 +236,85 @@ export default function DashboardRepositories() {
                             const isRunning = status === "running" || status === "pending"
                             return (
                               <div
-                                class="mb-3 flex items-center gap-1.5 text-xs"
+                                class="store-dash-card-status"
                                 style={{ color: syncStatusColor(status) }}
                               >
                                 <span
-                                  class={`inline-block size-1.5 rounded-full${isRunning ? " animate-pulse" : ""}`}
-                                  style={{ "background-color": syncStatusColor(status) }}
+                                  class={`store-dash-card-status-dot${isRunning ? " store-dash-card-status-dot-pulse" : ""}`}
+                                  style={{ background: syncStatusColor(status) }}
                                 />
                                 {syncStatusLabel(status)}
                                 <Show when={s?.lastSyncedAt}>
-                                  <span class="text-text-weak">· {new Date(s!.lastSyncedAt!).toLocaleString()}</span>
+                                  <span style={{ color: "var(--st-text-secondary)", "margin-left": "0.25rem" }}>
+                                    · {new Date(s!.lastSyncedAt!).toLocaleString()}
+                                  </span>
                                 </Show>
                               </div>
                             )
                           })()}
                         </Show>
 
-                        <div class="flex items-center justify-between gap-2 border-t border-border-weak-base pt-3">
-                          <div class="ml-auto flex items-center gap-1">
-                            <Show when={repo.repoType === "sync"}>
-                              <Button
-                                size="small"
-                                variant="ghost"
-                                class="h-7 px-2 cursor-pointer text-xs"
-                                disabled={state.syncingRepoId === repo.id}
-                                onClick={() => void syncNow(repo.id)}
-                                title={language.t("store.sync.syncNow")}
-                              >
-                                <Icon name="reset" size="small" />
-                                {language.t("store.sync.syncNow")}
-                              </Button>
-                              <Button
-                                size="small"
-                                variant="ghost"
-                                class="h-7 w-7 p-0 cursor-pointer"
-                                onClick={() =>
-                                  setState("expandedSyncRepo", state.expandedSyncRepo === repo.id ? null : repo.id)
-                                }
-                                title={
-                                  state.expandedSyncRepo === repo.id
-                                    ? language.t("store.console.repositories.hideSync")
-                                    : language.t("store.console.repositories.syncSettings")
-                                }
-                              >
-                                <Icon name="settings-gear" size="small" />
-                              </Button>
-                            </Show>
-                            <Button
-                              size="small"
-                              variant="ghost"
-                              class="h-7 w-7 p-0 cursor-pointer"
-                              onClick={() => openInvite(repo)}
-                              title={language.t("store.console.repositories.invite")}
+                        <div class="store-dash-card-foot">
+                          <Show when={repo.repoType === "sync"}>
+                            <button
+                              class="store-abtn"
+                              title={language.t("store.sync.syncNow")}
+                              disabled={state.syncingRepoId === repo.id}
+                              onClick={() => void syncNow(repo.id)}
                             >
-                              <Icon name="plus-small" size="small" />
-                            </Button>
-                            <Button
-                              size="small"
-                              variant="ghost"
-                              class="h-7 w-7 p-0 cursor-pointer"
-                              onClick={() => openEditRepo(repo)}
-                              title={language.t("store.console.repositories.edit")}
+                              <Icon name="reset" size="small" />
+                            </button>
+                            <button
+                              class="store-abtn"
+                              title={
+                                state.expandedSyncRepo === repo.id
+                                  ? language.t("store.console.repositories.hideSync")
+                                  : language.t("store.console.repositories.syncSettings")
+                              }
+                              onClick={() =>
+                                setState("expandedSyncRepo", state.expandedSyncRepo === repo.id ? null : repo.id)
+                              }
                             >
-                              <Icon name="edit" size="small" />
-                            </Button>
-                            <Button
-                              size="small"
-                              variant="ghost"
-                              class="h-7 w-7 p-0 cursor-pointer"
-                              onClick={() => handleDeleteRepo(repo.id)}
-                              title={language.t("store.console.repositories.delete")}
-                            >
-                              <Icon name="trash" size="small" />
-                            </Button>
-                          </div>
+                              <Icon name="settings-gear" size="small" />
+                            </button>
+                          </Show>
+                          <button
+                            class="store-abtn"
+                            title={language.t("store.console.repositories.invite")}
+                            onClick={() => openInvite(repo)}
+                          >
+                            <Icon name="plus-small" size="small" />
+                          </button>
+                          <button
+                            class="store-abtn"
+                            title={language.t("store.console.repositories.edit")}
+                            onClick={() => openEditRepo(repo)}
+                          >
+                            <Icon name="edit" size="small" />
+                          </button>
+                          <button
+                            class="store-abtn"
+                            title={language.t("store.console.repositories.delete")}
+                            onClick={() => handleDeleteRepo(repo.id)}
+                          >
+                            <Icon name="trash" size="small" />
+                          </button>
                         </div>
 
                         <Show when={repo.repoType === "sync" && state.expandedSyncRepo === repo.id}>
-                          <div class="mt-4 border-t border-border-weak-base pt-4">
+                          <div style={{ "margin-top": "0.75rem", "border-top": "1px solid color-mix(in srgb, var(--st-border-subtle) 8%, transparent)", "padding-top": "0.75rem" }}>
                             <RepoSyncTab repoId={repo.id} />
                           </div>
                         </Show>
                       </div>
-                    )}
-                  </For>
-                </div>
-              </Show>
+                    )
+                  }}
+                </For>
+              </div>
             </Show>
-          </section>
-        </Show>
+          </Show>
+        </section>
       </Show>
-    </div>
+    </Show>
   )
 }

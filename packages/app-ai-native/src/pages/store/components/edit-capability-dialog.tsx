@@ -1,6 +1,4 @@
-import { Button } from "@opencode-ai/ui/button"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
-import { Dialog } from "@opencode-ai/ui/dialog"
 import { showToast } from "@opencode-ai/ui/toast"
 import { useLanguage } from "@/context/language"
 import { createMemo } from "solid-js"
@@ -10,12 +8,7 @@ import type { ContentMode } from "../lib/content"
 import { canArchive, contentValue, sourceTypeToMode, usableMode } from "../lib/content"
 import { CATEGORIES, typeKey, categoryKey } from "../lib/constants"
 import { ContentField } from "./content-field"
-
-const inputClass =
-  "w-full h-9 rounded-md border border-border-weak-base bg-background-base px-3 text-sm text-text-strong outline-none focus:border-border-strong"
-
-const textAreaClass =
-  "w-full rounded-md border border-border-weak-base bg-background-base px-3 py-2 text-sm text-text-strong outline-none focus:border-border-strong resize-y"
+import { StoreDialog } from "./store-dialog"
 
 type EditCapabilityDialogProps = {
   item: CapabilityItem
@@ -77,45 +70,68 @@ export function EditCapabilityDialog(props: EditCapabilityDialogProps) {
   }
 
   return (
-    <Dialog
-      title={language.t("store.capabilityDialog.edit.title", { type: typeLabel() })}
-      class="w-full max-w-[760px] mx-auto"
-    >
-      <form onSubmit={handleSubmit} class="flex max-h-[calc(100vh-120px)] flex-col overflow-hidden">
-        <div class="flex-1 overflow-y-auto px-6 pb-6 pt-2 space-y-4">
-          <div>
-            <label class="mb-2 block text-12-medium text-text-strong">
-              {language.t("store.capabilityDialog.field.displayName")}
+    <form onSubmit={handleSubmit}>
+      <StoreDialog
+        title={language.t("store.capabilityDialog.edit.title", { type: typeLabel() })}
+        maxWidth="760px"
+        maxHeight="calc(100vh - 120px)"
+        footer={
+          <>
+            <button
+              class="store-modal-btn store-modal-btn-ghost"
+              type="button"
+              onClick={() => dialog.close()}
+            >
+              {language.t("common.cancel")}
+            </button>
+            <button
+              class="store-modal-btn store-modal-btn-primary"
+              type="submit"
+              disabled={store.saving || !store.name.trim()}
+            >
+              {store.saving
+                ? mode() === "archive"
+                  ? language.t("store.capabilityDialog.content.uploading")
+                  : language.t("common.saving")
+                : language.t("store.capabilityDialog.edit.submit")}
+            </button>
+          </>
+        }
+      >
+        <div class="store-modal-section">
+          <div class="store-modal-field">
+            <label class="store-modal-label">
+              {language.t("store.capabilityDialog.field.displayName")} <span class="req">*</span>
             </label>
             <input
               autofocus
               value={store.name}
               onInput={(e) => setStore("name", e.currentTarget.value)}
-              class={inputClass}
+              class="store-modal-input"
               required
             />
           </div>
 
-          <div>
-            <label class="mb-2 block text-12-medium text-text-strong">
+          <div class="store-modal-field">
+            <label class="store-modal-label">
               {language.t("store.capabilityDialog.field.description")}
             </label>
             <input
               value={store.description}
               onInput={(e) => setStore("description", e.currentTarget.value)}
-              class={inputClass}
+              class="store-modal-input"
             />
           </div>
 
-          <div class="grid gap-4 md:grid-cols-2">
-            <div>
-              <label class="mb-2 block text-12-medium text-text-strong">
+          <div class="store-modal-row">
+            <div class="store-modal-field" style={{ flex: "1" }}>
+              <label class="store-modal-label">
                 {language.t("store.capabilityDialog.field.category")}
               </label>
               <select
                 value={store.category}
                 onInput={(e) => setStore("category", e.currentTarget.value)}
-                class={inputClass}
+                class="store-modal-input"
               >
                 {CATEGORIES.map((category) => (
                   <option value={category}>{language.t(categoryKey(category))}</option>
@@ -123,8 +139,8 @@ export function EditCapabilityDialog(props: EditCapabilityDialogProps) {
               </select>
             </div>
 
-            <div>
-              <label class="mb-2 block text-12-medium text-text-strong">
+            <div class="store-modal-field" style={{ flex: "1" }}>
+              <label class="store-modal-label">
                 {language.t("store.capabilityDialog.field.visibility")}
               </label>
               <input
@@ -136,18 +152,21 @@ export function EditCapabilityDialog(props: EditCapabilityDialogProps) {
                       : "-"
                 }
                 disabled
-                class={inputClass + " cursor-not-allowed opacity-60"}
+                class="store-modal-input"
+                style={{ opacity: "0.6", cursor: "not-allowed" }}
               />
             </div>
           </div>
+        </div>
 
+        <div class="store-modal-section">
           <ContentField
             archive={archive}
             mode={store.contentMode}
             text={store.content}
             file={store.file}
             rows={14}
-            textClass={textAreaClass}
+            textClass="store-modal-input"
             existingArchive={props.item.sourceType === "archive"}
             onModeChange={(mode) => {
               setStore("contentMode", mode)
@@ -163,23 +182,10 @@ export function EditCapabilityDialog(props: EditCapabilityDialogProps) {
             }}
             onError={(message) => setStore("error", message)}
           />
-
-          {store.error ? <p class="text-12-regular text-icon-critical-base">{store.error}</p> : null}
         </div>
 
-        <div class="flex shrink-0 items-center justify-end gap-2 border-t border-border-weak-base bg-surface-base px-6 py-4">
-          <Button type="button" variant="ghost" onClick={() => dialog.close()}>
-            {language.t("common.cancel")}
-          </Button>
-          <Button type="submit" disabled={store.saving || !store.name.trim()}>
-            {store.saving
-              ? mode() === "archive"
-                ? language.t("store.capabilityDialog.content.uploading")
-                : language.t("common.saving")
-              : language.t("store.capabilityDialog.edit.submit")}
-          </Button>
-        </div>
-      </form>
-    </Dialog>
+        {store.error ? <p class="store-modal-error">{store.error}</p> : null}
+      </StoreDialog>
+    </form>
   )
 }

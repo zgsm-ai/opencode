@@ -74,18 +74,19 @@ export const routeConfig: RouteConfig[] = [
     path: "/store",
     component: StoreLayout,
     auth: true,
-    children: [{ path: "/", component: StoreHome }],
-  },
-  {
-    path: "/store/dashboard",
-    component: DashboardLayout,
-    auth: true,
     children: [
-      { path: "/", component: () => <Navigate href="/store/dashboard/repositories" /> },
-      { path: "/repositories", component: DashboardRepositories },
-      { path: "/capabilities", component: DashboardCapabilities },
-      { path: "/devices", component: DashboardDevices },
-      { path: "/notifications", component: DashboardNotifications },
+      { path: "/", component: StoreHome },
+      {
+        path: "/dashboard",
+        component: DashboardLayout,
+        children: [
+          { path: "/", component: () => <Navigate href="/store/dashboard/repositories" /> },
+          { path: "/repositories", component: DashboardRepositories },
+          { path: "/capabilities", component: DashboardCapabilities },
+          { path: "/devices", component: DashboardDevices },
+          { path: "/notifications", component: DashboardNotifications },
+        ],
+      },
     ],
   },
 ]

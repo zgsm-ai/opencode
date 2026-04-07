@@ -1,4 +1,5 @@
 import { createEffect, createMemo, createResource, createSignal, For, Show, Suspense } from "solid-js"
+import { useSearchParams } from "@solidjs/router"
 import { useLanguage } from "@/context/language"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -17,13 +18,14 @@ import ItemDetailContent, { getInstallCommand } from "../components/item-detail-
 import SecurityTag from "../components/security-tag"
 import BestPracticeCarousel from "../components/best-practice-carousel"
 import { Icon, type IconProps } from "@opencode-ai/ui/icon"
+import { LocalIcon } from "@/components/local-icon"
 import { useAuth } from "../hooks/use-auth"
 
 const STORE_TYPES = [
-  { value: "skill", labelKey: "store.sidebar.nav.skills", icon: "sparkles" as IconProps["name"] },
-  { value: "subagent", labelKey: "store.sidebar.nav.subagents", icon: "brain" as IconProps["name"] },
-  { value: "command", labelKey: "store.sidebar.nav.commands", icon: "console" as IconProps["name"] },
-  { value: "mcp", labelKey: "store.sidebar.nav.mcpServers", icon: "mcp" as IconProps["name"] },
+  { value: "skill", labelKey: "store.sidebar.nav.skills", descKey: "store.home.type.skill.description", icon: "sparkles" as IconProps["name"], color: "#F59E0B" },
+  { value: "subagent", labelKey: "store.sidebar.nav.subagents", descKey: "store.home.type.subagent.description", icon: "brain" as IconProps["name"], color: "#3b82f6" },
+  { value: "command", labelKey: "store.sidebar.nav.commands", descKey: "store.home.type.command.description", icon: "console" as IconProps["name"], color: "#10B981" },
+  { value: "mcp", labelKey: "store.sidebar.nav.mcpServers", descKey: "store.home.type.mcp.description", icon: "mcp" as IconProps["name"], color: "#8B5CF6" },
 ] as const
 
 type StoreType = (typeof STORE_TYPES)[number]["value"]
@@ -33,6 +35,11 @@ const PAGE_SIZE = 10
 function formatDate(iso?: string) {
   if (!iso) return "—"
   return new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })
+}
+
+function formatCompact(n: number) {
+  if (n >= 1000) return (n / 1000).toFixed(1) + "k"
+  return String(n)
 }
 
 function rangePages(page: number, totalPages: number) {
@@ -45,7 +52,14 @@ function rangePages(page: number, totalPages: number) {
 export default function Home() {
   const language = useLanguage()
   const auth = useAuth()
-  const [activeType, setActiveType] = createSignal<StoreType>("skill")
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  const initialType = () => {
+    const t = searchParams.type as StoreType | undefined
+    return STORE_TYPES.some((e) => e.value === t) ? t! : "skill"
+  }
+
+  const [activeType, setActiveType] = createSignal<StoreType>(initialType())
   const [activeCategory, setActiveCategory] = createSignal("all")
   const [page, setPage] = createSignal(1)
   const [selectedItemId, setSelectedItemId] = createSignal<string | null>(null)
@@ -103,7 +117,20 @@ export default function Home() {
   )
 
   const typeMeta = createMemo(() => STORE_TYPES.find((entry) => entry.value === activeType()) ?? STORE_TYPES[0])
-  const listData = createMemo(() => list.latest ?? listCache())
+  const isTypeListMode = createMemo(() => !!searchParams.type && STORE_TYPES.some((e) => e.value === searchParams.type))
+
+  // Popular items for type-list mode (top 3 by installCount)
+  const popularParams = createMemo(() => isTypeListMode() ? { type: activeType(), page: 1, pageSize: 20 } : null)
+  const [popularRaw] = createResource(popularParams, (params) => params ? itemApi.list(params) : null)
+  const popularItems = createMemo(() => {
+    const items = popularRaw()?.items ?? []
+    return [...items].sort((a, b) => (b.installCount ?? 0) - (a.installCount ?? 0)).slice(0, 3)
+  })
+
+  const listData = createMemo(() => {
+    if (list.loading && !listCache()) return null
+    return list.latest ?? listCache()
+  })
 
   createEffect(() => {
     const data = list.latest
@@ -192,8 +219,8 @@ export default function Home() {
     })),
   )
 
-  const handleTypeChange = (type: StoreType) => {
-    if (type === activeType()) return
+  const resetToType = (type: StoreType) => {
+    setListCache(null)
     setActiveType(type)
     setActiveCategory("all")
     setSearchText("")
@@ -201,6 +228,21 @@ export default function Home() {
     setPage(1)
     setSelectedItemId(null)
   }
+
+  const handleTypeChange = (type: StoreType) => {
+    if (type === activeType()) return
+    resetToType(type)
+  }
+
+  // Sync URL search params → activeType (only when sidebar sets ?type=)
+  createEffect(() => {
+    const urlType = searchParams.type as StoreType | undefined
+    if (!urlType) return
+    const validType = STORE_TYPES.some((e) => e.value === urlType) ? urlType! : "skill"
+    if (validType !== activeType()) {
+      resetToType(validType)
+    }
+  })
 
   const handleCategoryChange = (category: string) => {
     if (category === activeCategory()) return
@@ -223,245 +265,142 @@ export default function Home() {
     }, 2000)
   }
 
+  // Aggregate stats for type-list hero
+  const typeAggregate = createMemo(() => {
+    const items = popularRaw()?.items ?? []
+    return {
+      total: popularRaw()?.total ?? 0,
+      installs: items.reduce((s, i) => s + (i.installCount ?? 0), 0),
+      favorites: items.reduce((s, i) => s + (i.favoriteCount ?? 0), 0),
+    }
+  })
+
   return (
-    <div class="store-page min-h-full px-8 py-8">
-      <header class="store-page-header">
-        <div>
-          <h1 class="store-page-title">{language.t("store.home.hero.title")}</h1>
-          <p class="store-page-description">{language.t("store.home.hero.description")}</p>
-        </div>
-      </header>
+    <div class="store-page min-h-full" style={{ "max-width": "1100px", margin: "0 auto", padding: "1.5rem 1.75rem 3rem" }}>
+      <Show
+        when={isTypeListMode()}
+        fallback={
+          <>
+            {/* ═══ HOME MODE ═══ */}
+            <header class="store-page-header">
+              <div>
+                <h1 class="store-page-title">{language.t("store.home.hero.title")}</h1>
+                <p class="store-page-description">{language.t("store.home.hero.description")}</p>
+              </div>
+            </header>
 
-      <div class="store-page-main">
-        <section class="store-section">
-          <div class="store-stat-grid">
-            <For each={statCards()}>
-              {(entry) => (
-                <article class="store-stat-card" data-stat={entry.value}>
-                  <div class="store-stat-card-head">
-                    <span>{language.t(entry.labelKey)}</span>
-                    <Icon name={entry.icon} />
-                  </div>
-                  <p class="store-stat-card-value">
-                    <Show when={entry.total !== null} fallback="—">
-                      {entry.total?.toLocaleString()}
-                    </Show>
-                  </p>
-                </article>
-              )}
-            </For>
-          </div>
-        </section>
-
-        <BestPracticeCarousel activeType={activeType} onSelectItem={setSelectedItemId} />
-
-        <section class="store-section">
-          <div class="store-type-tabs" role="tablist" aria-label={language.t("store.home.mainTabsLabel")}>
-            <For each={STORE_TYPES}>
-              {(entry) => (
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={entry.value === activeType()}
-                  class={`store-type-tab ${entry.value === activeType() ? "store-type-tab-active" : ""}`}
-                  onClick={() => handleTypeChange(entry.value)}
-                >
-                  {language.t(entry.labelKey)}
-                </button>
-              )}
-            </For>
-          </div>
-        </section>
-
-        <section class="store-section store-content-shell">
-          <div class="store-section-heading">
-            <div>
-              <h2 class="store-section-title">{language.t(typeMeta().labelKey)}</h2>
-              <p class="store-section-subtitle">{language.t("store.home.categoryTabs.description")}</p>
-            </div>
-            <div class="flex items-center gap-2">
-              <TextField class="w-48">
-                <TextFieldInput
-                  type="search"
-                  placeholder={language.t(searchPlaceholderKey())}
-                  value={searchText()}
-                  onInput={(e: InputEvent) => handleSearchInput((e.currentTarget as HTMLInputElement).value)}
-                  class="h-8 text-sm focus-visible:ring-0 focus-visible:ring-offset-0"
-                />
-              </TextField>
-              <DropdownMenu placement="bottom-end">
-                <DropdownMenuTrigger as={Button<"button">} variant="outline" size="sm">
-                  {activeCategory() === "all"
-                    ? language.t("store.console.capabilities.category")
-                    : language.t(categoryKey(activeCategory())) || activeCategory()}
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    class="size-4"
-                  >
-                    <path d="M6 9l6 6l6 -6" />
-                  </svg>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent>
-                  <For each={categories()}>
-                    {(category) => (
-                      <DropdownMenuCheckboxItem
-                        checked={category === activeCategory()}
-                        onChange={() => handleCategoryChange(category)}
-                      >
-                        {category === "all"
-                          ? language.t("store.console.filters.all")
-                          : language.t(categoryKey(category)) || category}
-                      </DropdownMenuCheckboxItem>
+            <div class="store-page-main">
+              <section class="store-section">
+                <div class="store-stat-grid">
+                  <For each={statCards()}>
+                    {(entry) => (
+                      <article class="store-stat-card" data-stat={entry.value}>
+                        <div class="store-stat-card-icon">
+                          <Icon name={entry.icon} />
+                        </div>
+                        <div>
+                          <div class="store-stat-card-label">{language.t(entry.labelKey)}</div>
+                          <p class="store-stat-card-value">
+                            <Show when={entry.total !== null} fallback="—">
+                              {entry.total?.toLocaleString()}
+                            </Show>
+                          </p>
+                        </div>
+                      </article>
                     )}
                   </For>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          </div>
-
-          <div class="store-table-shell">
-            <Show
-              when={!showError()}
-              fallback={
-                <div class="store-table-state">
-                  {listError() || language.t("store.console.capabilities.toast.loadFailed")}
                 </div>
-              }
-            >
-              <Show
-                when={rows().length > 0 || !list.loading}
-                fallback={<div class="store-table-state">{language.t("store.loading")}</div>}
-              >
-                <Show when={list.loading && rows().length > 0}>
-                  <div class="store-table-loading-overlay">{language.t("store.loading")}</div>
-                </Show>
-                <Table class="store-data-table">
-                  <TableHeader>
-                    <TableRow class="store-data-table-head-row">
-                      <TableHead>{language.t("store.console.capabilities.name")}</TableHead>
-                      <TableHead>{language.t("store.home.table.favoriteCount")}</TableHead>
-                      <TableHead>{language.t("store.home.table.installCount")}</TableHead>
-                      <TableHead>{language.t("store.home.table.previewCount")}</TableHead>
-                      <TableHead class="store-col-category">
-                        {language.t("store.console.capabilities.category")}
-                      </TableHead>
-                      <TableHead>{language.t("store.scanResults.securityScan")}</TableHead>
-                      <TableHead class="store-col-updated">{language.t("store.detail.updated")}</TableHead>
-                      <TableHead class="store-col-action text-right">{language.t("store.home.table.action")}</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    <Show
-                      when={rows().length > 0}
-                      fallback={<TableEmptyState colSpan={8} message={language.t("store.home.emptyCategory")} />}
-                    >
-                      <For each={rows()}>
-                        {(item) => (
-                          <TableRow class="store-data-table-row cursor-pointer" onClick={() => setSelectedItemId(item.id)}>
-                            <TableCell>
-                              <span class="store-item-name">{item.name}</span>
-                            </TableCell>
-                            <TableCell class="store-data-table-muted">
-                              {item.favoriteCount?.toLocaleString() ?? "0"}
-                            </TableCell>
-                            <TableCell class="store-data-table-muted">
-                              {item.installCount?.toLocaleString() ?? "0"}
-                            </TableCell>
-                            <TableCell class="store-data-table-muted">
-                              {item.previewCount?.toLocaleString() ?? "0"}
-                            </TableCell>
-                            <TableCell class="store-col-category store-data-table-muted">
-                              {item.category ? language.t(categoryKey(item.category)) || item.category : "—"}
-                            </TableCell>
-                            <TableCell>
-                              <SecurityTag status={item.securityStatus} />
-                            </TableCell>
-                            <TableCell class="store-col-updated store-data-table-muted">
-                              {formatDate(item.updatedAt)}
-                            </TableCell>
-                            <TableCell class="store-col-action text-right" onClick={(e: MouseEvent) => e.stopPropagation()}>
-                              <DropdownMenu placement="bottom-end">
-                                <DropdownMenuTrigger
-                                  as={Button<"button">}
-                                  variant="ghost"
-                                  class="size-8 p-0"
-                                >
-                                  <span class="sr-only">{language.t("store.home.table.action")}</span>
-                                  <svg
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    stroke-width="2"
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                    class="size-4"
-                                  >
-                                    <circle cx="12" cy="12" r="1" />
-                                    <circle cx="12" cy="5" r="1" />
-                                    <circle cx="12" cy="19" r="1" />
-                                  </svg>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent>
-                                  <DropdownMenuItem onClick={() => copyInstall(item)}>
-                                    {copiedItemId() === item.id
-                                      ? language.t("store.itemCard.copied")
-                                      : language.t("store.home.table.copyInstall")}
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </TableCell>
-                          </TableRow>
-                        )}
-                      </For>
-                    </Show>
-                  </TableBody>
-                </Table>
-              </Show>
-            </Show>
-          </div>
+              </section>
 
-          <div class="store-pagination">
-            <div class="store-pagination-summary">
-              <Show when={totalItems() > 0} fallback={language.t("store.home.pagination.empty")}>
-                {language.t("store.console.capabilities.showing", {
-                  from: Math.min((page() - 1) * PAGE_SIZE + 1, totalItems()),
-                  to: Math.min(page() * PAGE_SIZE, totalItems()),
-                  total: totalItems(),
-                })}
-              </Show>
+              <BestPracticeCarousel activeType={activeType} onSelectItem={setSelectedItemId} />
+
+              <section class="store-section">
+                <div class="store-type-tabs" role="tablist" aria-label={language.t("store.home.mainTabsLabel")}>
+                  <For each={STORE_TYPES}>
+                    {(entry) => (
+                      <button
+                        type="button"
+                        role="tab"
+                        aria-selected={entry.value === activeType()}
+                        class={`store-type-tab ${entry.value === activeType() ? "store-type-tab-active" : ""}`}
+                        onClick={() => handleTypeChange(entry.value)}
+                      >
+                        {language.t(entry.labelKey)}
+                      </button>
+                    )}
+                  </For>
+                </div>
+              </section>
+
+              {/* Home mode content shell */}
+              <ContentShell />
             </div>
-            <div class="store-pagination-actions">
-              <button class="store-page-btn" disabled={page() <= 1} onClick={() => handlePageChange(page() - 1)}>
-                <Icon name="chevron-left" />
-              </button>
-              <For each={visiblePages()}>
-                {(pageNumber) => (
-                  <button
-                    class={`store-page-btn ${pageNumber === page() ? "store-page-btn-active" : ""}`}
-                    onClick={() => handlePageChange(pageNumber)}
-                  >
-                    {pageNumber}
-                  </button>
+          </>
+        }
+      >
+        {/* ═══ TYPE LIST MODE ═══ */}
+        <div class="store-page-main">
+          {/* Type Hero Header */}
+          <header class="tp-hero" style={{ "--tp-accent": typeMeta().color }}>
+            <div class="tp-hero-icon">
+              <Icon name={typeMeta().icon} />
+            </div>
+            <div class="tp-hero-text">
+              <h1 class="tp-hero-title">{language.t(typeMeta().labelKey)}</h1>
+              <p class="tp-hero-desc">{language.t(typeMeta().descKey)}</p>
+            </div>
+            <div class="tp-hero-stats">
+              <div class="tp-hstat">
+                <div class="tp-hstat-val">{typeAggregate().total.toLocaleString()}</div>
+                <div class="tp-hstat-label">{language.t("store.typeList.stat.total")}</div>
+              </div>
+              <div class="tp-hstat">
+                <div class="tp-hstat-val">{formatCompact(typeAggregate().installs)}</div>
+                <div class="tp-hstat-label">{language.t("store.typeList.stat.installs")}</div>
+              </div>
+              <div class="tp-hstat">
+                <div class="tp-hstat-val">{formatCompact(typeAggregate().favorites)}</div>
+                <div class="tp-hstat-label">{language.t("store.typeList.stat.favorites")}</div>
+              </div>
+            </div>
+          </header>
+
+          {/* Popular Cards (Top 3) */}
+          <section class="store-section">
+            <div class="store-section-heading">
+              <div>
+                <h2 class="store-section-title">{language.t("store.typeList.popular", { type: language.t(typeMeta().labelKey) })}</h2>
+                <p class="store-section-subtitle">{language.t("store.typeList.popularSub")}</p>
+              </div>
+            </div>
+            <div class="tp-featured" style={{ "--tp-accent": typeMeta().color }}>
+              <For each={popularItems()}>
+                {(item, idx) => (
+                  <article class="tp-fcard" onClick={() => setSelectedItemId(item.id)}>
+                    <span class="tp-fcard-rank">#{idx() + 1}</span>
+                    <div class="tp-fcard-icon">
+                      <Icon name={typeMeta().icon} />
+                    </div>
+                    <div class="tp-fcard-info">
+                      <div class="tp-fcard-name">{item.name}</div>
+                      <div class="tp-fcard-meta">
+                        <span><LocalIcon name="star" size="small" />{(item.favoriteCount ?? 0).toLocaleString()}</span>
+                        <span><LocalIcon name="download" size="small" />{(item.installCount ?? 0).toLocaleString()}</span>
+                      </div>
+                    </div>
+                    <Show when={item.category}>
+                      <span class="tp-fcard-cat">{language.t(categoryKey(item.category)) || item.category}</span>
+                    </Show>
+                  </article>
                 )}
               </For>
-              <button
-                class="store-page-btn"
-                disabled={page() >= totalPages()}
-                onClick={() => handlePageChange(page() + 1)}
-              >
-                <Icon name="chevron-right" />
-              </button>
             </div>
-          </div>
-        </section>
-      </div>
+          </section>
+
+          {/* Type list content shell */}
+          <ContentShell />
+        </div>
+      </Show>
 
       <Sheet open={detailOpen()} onOpenChange={(open) => !open && setSelectedItemId(null)} modal={false}>
         <SheetContent position="right" class="store-detail-sheet w-[min(48rem,92vw)] sm:max-w-none">
@@ -491,6 +430,212 @@ export default function Home() {
       </Sheet>
     </div>
   )
+
+  // Shared content shell: table, search, category filter, pagination
+  function ContentShell() {
+    const tableTitle = () =>
+      isTypeListMode()
+        ? language.t("store.typeList.allItems", { type: language.t(typeMeta().labelKey) })
+        : language.t(typeMeta().labelKey)
+
+    const tableSub = () =>
+      isTypeListMode()
+        ? language.t("store.typeList.itemsAvailable", { count: totalItems() })
+        : language.t(typeMeta().descKey)
+
+    return (
+      <section class="store-section store-content-shell">
+        <div class="store-section-heading">
+          <div>
+            <h2 class="store-section-title">{tableTitle()}</h2>
+            <p class="store-section-subtitle">{tableSub()}</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <TextField class="w-48">
+              <TextFieldInput
+                type="search"
+                placeholder={language.t(searchPlaceholderKey())}
+                value={searchText()}
+                onInput={(e: InputEvent) => handleSearchInput((e.currentTarget as HTMLInputElement).value)}
+                class="h-8 text-sm focus-visible:ring-0 focus-visible:ring-offset-0"
+              />
+            </TextField>
+            <DropdownMenu placement="bottom-end">
+              <DropdownMenuTrigger as={Button<"button">} variant="outline" size="sm">
+                {activeCategory() === "all"
+                  ? language.t("store.console.capabilities.category")
+                  : language.t(categoryKey(activeCategory())) || activeCategory()}
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  class="size-4"
+                >
+                  <path d="M6 9l6 6l6 -6" />
+                </svg>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <For each={categories()}>
+                  {(category) => (
+                    <DropdownMenuCheckboxItem
+                      checked={category === activeCategory()}
+                      onChange={() => handleCategoryChange(category)}
+                    >
+                      {category === "all"
+                        ? language.t("store.console.filters.all")
+                        : language.t(categoryKey(category)) || category}
+                    </DropdownMenuCheckboxItem>
+                  )}
+                </For>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+
+        <div class="store-table-shell">
+          <Show
+            when={!showError()}
+            fallback={
+              <div class="store-table-state">
+                {listError() || language.t("store.console.capabilities.toast.loadFailed")}
+              </div>
+            }
+          >
+            <Show
+              when={rows().length > 0 || !list.loading}
+              fallback={<div class="store-table-state">{language.t("store.loading")}</div>}
+            >
+              <Show when={list.loading && rows().length > 0}>
+                <div class="store-table-loading-overlay">
+                  <div class="store-table-loading-spinner" />
+                </div>
+              </Show>
+              <Table class="store-data-table">
+                <TableHeader>
+                  <TableRow class="store-data-table-head-row">
+                    <TableHead>{language.t("store.console.capabilities.name")}</TableHead>
+                    <TableHead>{language.t("store.home.table.favoriteCount")}</TableHead>
+                    <TableHead>{language.t("store.home.table.installCount")}</TableHead>
+                    <TableHead>{language.t("store.home.table.previewCount")}</TableHead>
+                    <TableHead class="store-col-category">
+                      {language.t("store.console.capabilities.category")}
+                    </TableHead>
+                    <TableHead>{language.t("store.scanResults.securityScan")}</TableHead>
+                    <TableHead class="store-col-updated">{language.t("store.detail.updated")}</TableHead>
+                    <TableHead class="store-col-action text-right">{language.t("store.home.table.action")}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <Show
+                    when={rows().length > 0}
+                    fallback={<TableEmptyState colSpan={8} message={language.t("store.home.emptyCategory")} />}
+                  >
+                    <For each={rows()}>
+                      {(item) => (
+                        <TableRow class="store-data-table-row cursor-pointer" onClick={() => setSelectedItemId(item.id)}>
+                          <TableCell>
+                            <span class="store-item-name">{item.name}</span>
+                          </TableCell>
+                          <TableCell class="store-data-table-muted">
+                            {item.favoriteCount?.toLocaleString() ?? "0"}
+                          </TableCell>
+                          <TableCell class="store-data-table-muted">
+                            {item.installCount?.toLocaleString() ?? "0"}
+                          </TableCell>
+                          <TableCell class="store-data-table-muted">
+                            {item.previewCount?.toLocaleString() ?? "0"}
+                          </TableCell>
+                          <TableCell class="store-col-category store-data-table-muted">
+                            {item.category ? language.t(categoryKey(item.category)) || item.category : "—"}
+                          </TableCell>
+                          <TableCell>
+                            <SecurityTag status={item.securityStatus} />
+                          </TableCell>
+                          <TableCell class="store-col-updated store-data-table-muted">
+                            {formatDate(item.updatedAt)}
+                          </TableCell>
+                          <TableCell class="store-col-action text-right" onClick={(e: MouseEvent) => e.stopPropagation()}>
+                            <DropdownMenu placement="bottom-end">
+                              <DropdownMenuTrigger
+                                as={Button<"button">}
+                                variant="ghost"
+                                class="size-8 p-0"
+                              >
+                                <span class="sr-only">{language.t("store.home.table.action")}</span>
+                                <svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  stroke-width="2"
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  class="size-4"
+                                >
+                                  <circle cx="12" cy="12" r="1" />
+                                  <circle cx="12" cy="5" r="1" />
+                                  <circle cx="12" cy="19" r="1" />
+                                </svg>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent>
+                                <DropdownMenuItem onClick={() => copyInstall(item)}>
+                                  {copiedItemId() === item.id
+                                    ? language.t("store.itemCard.copied")
+                                    : language.t("store.home.table.copyInstall")}
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </For>
+                  </Show>
+                </TableBody>
+              </Table>
+            </Show>
+          </Show>
+        </div>
+
+        <div class="store-pagination">
+          <div class="store-pagination-summary">
+            <Show when={totalItems() > 0} fallback={language.t("store.home.pagination.empty")}>
+              {language.t("store.console.capabilities.showing", {
+                from: Math.min((page() - 1) * PAGE_SIZE + 1, totalItems()),
+                to: Math.min(page() * PAGE_SIZE, totalItems()),
+                total: totalItems(),
+              })}
+            </Show>
+          </div>
+          <div class="store-pagination-actions">
+            <button class="store-page-btn" disabled={page() <= 1} onClick={() => handlePageChange(page() - 1)}>
+              <Icon name="chevron-left" />
+            </button>
+            <For each={visiblePages()}>
+              {(pageNumber) => (
+                <button
+                  class={`store-page-btn ${pageNumber === page() ? "store-page-btn-active" : ""}`}
+                  onClick={() => handlePageChange(pageNumber)}
+                >
+                  {pageNumber}
+                </button>
+              )}
+            </For>
+            <button
+              class="store-page-btn"
+              disabled={page() >= totalPages()}
+              onClick={() => handlePageChange(page() + 1)}
+            >
+              <Icon name="chevron-right" />
+            </button>
+          </div>
+        </div>
+      </section>
+    )
+  }
 }
 
 function TableEmptyState(props: { colSpan: number; message: string }) {

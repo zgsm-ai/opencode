@@ -28,7 +28,7 @@ function NavButton(props: {
           "flex items-center justify-center size-10 transition-colors cursor-pointer outline-none",
           props.active
             ? "bg-[#2E6CC4]/10 text-[#2E6CC4] border-l-2 border-l-[#2E6CC4]"
-            : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+            : "text-[var(--st-text-muted)] hover:bg-[var(--st-surface)] hover:text-[var(--st-text)]",
         ].join(" ")}
       >
         <Icon name={props.icon} size="normal" />
@@ -60,7 +60,7 @@ function UserButton() {
     >
       <DropdownMenu placement="right-end">
         <DropdownMenu.Trigger
-          class="flex items-center justify-center size-10 hover:bg-accent transition-colors"
+          class="flex items-center justify-center size-10 hover:bg-[var(--st-surface)] transition-colors"
           aria-label={language.t("sidebar.user.menu")}
         >
           <Show
@@ -122,7 +122,7 @@ export default function RootLayout(props: ParentProps) {
 
   return (
     <div class="flex h-full w-full overflow-hidden">
-      <aside class="fixed inset-y-0 left-0 z-40 flex w-12 flex-col items-center border-r border-border bg-background py-4">
+      <aside class="fixed inset-y-0 left-0 z-40 flex w-12 flex-col items-center py-4" style={{ background: "var(--st-surface-lowest)", "border-right": "1px solid rgba(194,198,212,0.2)" }}>
         <nav class="flex flex-1 flex-col gap-2">
           <NavButton
             icon="store"
@@ -138,7 +138,7 @@ export default function RootLayout(props: ParentProps) {
             <button
               type="button"
               onClick={() => navigate("/store/dashboard")}
-              class="flex size-10 items-center justify-center text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+              class="flex size-10 items-center justify-center text-[var(--st-text-muted)] transition-colors hover:bg-[var(--st-surface)] hover:text-[var(--st-text)]"
               aria-label={language.t("sidebar.console")}
             >
               <Icon name="sliders" size="normal" />
@@ -148,7 +148,7 @@ export default function RootLayout(props: ParentProps) {
             <button
               type="button"
               onClick={() => dialog.show(() => <DialogSettings />)}
-              class="flex size-10 items-center justify-center text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+              class="flex size-10 items-center justify-center text-[var(--st-text-muted)] transition-colors hover:bg-[var(--st-surface)] hover:text-[var(--st-text)]"
               aria-label={language.t("sidebar.settings")}
             >
               <Icon name="settings-gear" />
@@ -158,7 +158,7 @@ export default function RootLayout(props: ParentProps) {
             <button
               type="button"
               onClick={() => platform.openLink("https://docs.costrict.ai/cli/guide/installation")}
-              class="flex size-10 items-center justify-center text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+              class="flex size-10 items-center justify-center text-[var(--st-text-muted)] transition-colors hover:bg-[var(--st-surface)] hover:text-[var(--st-text)]"
               aria-label={language.t("sidebar.help")}
             >
               <Icon name="help" />

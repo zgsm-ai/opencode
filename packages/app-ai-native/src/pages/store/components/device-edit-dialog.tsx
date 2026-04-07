@@ -1,13 +1,9 @@
-import { Button } from "@opencode-ai/ui/button"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
-import { Dialog } from "@opencode-ai/ui/dialog"
 import { showToast } from "@opencode-ai/ui/toast"
 import { createStore } from "solid-js/store"
 import { useLanguage } from "@/context/language"
 import type { Device, UpdateDeviceRequest } from "@/pages/workspace/types"
-
-const inputClass =
-  "w-full h-9 rounded-md border border-border-weak-base bg-background-base px-3 text-sm text-text-strong outline-none focus:border-border-strong"
+import { StoreDialog } from "./store-dialog"
 
 type DeviceEditDialogProps = {
   device: Device
@@ -47,44 +43,56 @@ export function DeviceEditDialog(props: DeviceEditDialogProps) {
   }
 
   return (
-    <Dialog title={language.t("store.devices.dialog.editTitle")} class="mx-auto w-full max-w-md">
-      <form onSubmit={handleSubmit} class="flex max-h-[calc(100vh-120px)] flex-col overflow-hidden">
-        <div class="flex-1 overflow-y-auto px-6 pb-6 pt-2">
-          <div class="flex flex-col gap-4">
-            <div>
-              <label class="mb-1.5 block text-xs font-medium text-text-strong">
-                {language.t("store.devices.dialog.name")} <span class="text-icon-info-base">*</span>
-              </label>
-              <input
-                autofocus
-                value={form.displayName}
-                onInput={(e) => setForm("displayName", e.currentTarget.value)}
-                placeholder={language.t("store.devices.dialog.namePlaceholder")}
-                class={inputClass}
-              />
-            </div>
-            <div>
-              <label class="mb-1.5 block text-xs font-medium text-text-strong">
-                {language.t("store.devices.dialog.description")}
-              </label>
-              <textarea
-                value={form.description}
-                onInput={(e) => setForm("description", e.currentTarget.value)}
-                placeholder={language.t("store.devices.dialog.descriptionPlaceholder")}
-                class={`${inputClass} min-h-24 resize-y py-2`}
-              />
-            </div>
+    <form onSubmit={handleSubmit}>
+      <StoreDialog
+        title={language.t("store.devices.dialog.editTitle")}
+        maxWidth="480px"
+        maxHeight="460px"
+        footer={
+          <>
+            <button
+              class="store-modal-btn store-modal-btn-ghost"
+              type="button"
+              onClick={() => d.close()}
+            >
+              {language.t("common.cancel")}
+            </button>
+            <button
+              class="store-modal-btn store-modal-btn-primary"
+              type="submit"
+              disabled={form.saving || !form.displayName.trim()}
+            >
+              {form.saving ? language.t("common.saving") : language.t("common.save")}
+            </button>
+          </>
+        }
+      >
+        <div class="store-modal-section">
+          <div class="store-modal-field">
+            <label class="store-modal-label">
+              {language.t("store.devices.dialog.name")} <span class="req">*</span>
+            </label>
+            <input
+              autofocus
+              value={form.displayName}
+              onInput={(e) => setForm("displayName", e.currentTarget.value)}
+              placeholder={language.t("store.devices.dialog.namePlaceholder")}
+              class="store-modal-input"
+            />
+          </div>
+          <div class="store-modal-field">
+            <label class="store-modal-label">
+              {language.t("store.devices.dialog.description")}
+            </label>
+            <textarea
+              value={form.description}
+              onInput={(e) => setForm("description", e.currentTarget.value)}
+              placeholder={language.t("store.devices.dialog.descriptionPlaceholder")}
+              class="store-modal-input"
+            />
           </div>
         </div>
-        <div class="flex shrink-0 items-center justify-end gap-2 border-t border-border-weak-base bg-surface-base px-6 py-4">
-          <Button type="button" variant="ghost" onClick={() => d.close()}>
-            {language.t("common.cancel")}
-          </Button>
-          <Button type="submit" disabled={form.saving || !form.displayName.trim()}>
-            {form.saving ? language.t("common.saving") : language.t("common.save")}
-          </Button>
-        </div>
-      </form>
-    </Dialog>
+      </StoreDialog>
+    </form>
   )
 }

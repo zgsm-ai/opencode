@@ -1,0 +1,205 @@
+/*
+ * Store Design Tokens
+ *
+ * Three-layer architecture:
+ *   Layer 1 — Primitives  (--_st-*)   : raw palette, never consumed by components
+ *   Layer 2 — Semantic    (--st-*)    : purpose-based, consumed by all store CSS
+ *   Layer 3 — Component   (--card-accent, --stat-accent, …) : scoped per-element,
+ *             defined in component CSS files, NOT here
+ *
+ * Dark mode: override primitives + semantic values in [data-color-scheme="dark"].
+ * Components reference --st-* names only → zero CSS changes on theme switch.
+ */
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Layer 1 — Primitives (private, not for direct component use)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* ── Brand ── */
+  --_st-brand:              #2E6CC4;
+  --_st-brand-hover:        #245bad;
+  --_st-brand-light:        #d0e4fe;
+  --_st-brand-light-dim:    #b4c8e1;
+  --_st-brand-dark:         #001b3f;
+  --_st-brand-dark-variant:  #00458e;
+  --_st-brand-muted:        #35485d;
+
+  /* ── Neutral scale ── */
+  --_st-neutral-5:          #191c1e;
+  --_st-neutral-10:         #2d3133;
+  --_st-neutral-20:         #424752;
+  --_st-neutral-40:         #727783;
+  --_st-neutral-60:         #9da2ad;
+  --_st-neutral-80:         #c2c6d4;
+  --_st-neutral-90:         #e0e3e6;
+  --_st-neutral-92:         #e6e8eb;
+  --_st-neutral-94:         #eceef1;
+  --_st-neutral-96:         #f2f4f7;
+  --_st-neutral-98:         #f7f9fc;
+  --_st-neutral-100:        #ffffff;
+
+  /* ── Status palette ── */
+  --_st-red:                #ba1a1a;
+  --_st-red-container:      #ffdad6;
+  --_st-red-on-container:   #410002;
+
+  --_st-green:              #10B981;
+  --_st-green-container:    #d1fae5;
+  --_st-green-on-container: #064e3b;
+
+  --_st-amber:              #F59E0B;
+  --_st-amber-container:    #fef3c7;
+  --_st-amber-on-container: #78350f;
+
+  --_st-blue:               #3b82f6;
+  --_st-blue-container:     #dbeafe;
+  --_st-blue-on-container:  #1e3a5f;
+
+  --_st-purple:             #8B5CF6;
+  --_st-purple-container:   #ede9fe;
+  --_st-purple-on-container:#3b0764;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Layer 2 — Semantic Tokens (Light mode)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root,
+[data-color-scheme="light"] {
+
+  /* ── Surface & Background ── */
+  --st-bg:                  var(--_st-neutral-98);       /* page background */
+  --st-bg-subtle:           var(--_st-neutral-96);       /* slightly differentiated bg */
+  --st-surface-lowest:      var(--_st-neutral-100);      /* brightest card / sheet */
+  --st-surface-low:         var(--_st-neutral-96);       /* low-elevation surface */
+  --st-surface:             var(--_st-neutral-94);       /* default container */
+  --st-surface-high:        var(--_st-neutral-92);       /* higher-elevation (header, overlay) */
+  --st-surface-dim:         var(--_st-neutral-90);       /* receded / skeleton */
+
+  /* ── Text ── */
+  --st-text:                var(--_st-neutral-5);        /* headings, strong body */
+  --st-text-secondary:      var(--_st-neutral-20);       /* body, descriptions */
+  --st-text-muted:          var(--_st-neutral-40);       /* de-emphasized, timestamps */
+  --st-text-on-accent:      var(--_st-neutral-100);      /* text on solid accent bg */
+
+  /* ── Border ── */
+  --st-border:              var(--_st-neutral-80);       /* default border */
+  --st-border-subtle:       var(--_st-neutral-80);       /* faint / decorative */
+  --st-border-strong:       var(--_st-neutral-40);       /* emphasized dividers */
+
+  /* ── Accent / Primary ── */
+  --st-accent:              var(--_st-brand);            /* brand blue */
+  --st-accent-hover:        var(--_st-brand-hover);      /* hovered accent */
+  --st-accent-muted:        var(--_st-brand);            /* used at low opacity via color-mix */
+  --st-accent-container:    var(--_st-brand-light);      /* tinted container */
+  --st-on-accent:           var(--_st-brand-muted);      /* text on accent-container */
+
+  /* ── Secondary ── */
+  --st-secondary:           var(--_st-brand-light);      /* badge / pill bg */
+  --st-secondary-dim:       var(--_st-brand-light-dim);  /* dimmer variant */
+  --st-on-secondary:        var(--_st-brand-muted);      /* text on secondary bg */
+
+  /* ── Status: Error ── */
+  --st-error:               var(--_st-red);
+  --st-error-container:     var(--_st-red-container);
+  --st-on-error:            var(--_st-red-on-container);
+
+  /* ── Status: Success ── */
+  --st-success:             var(--_st-green);
+  --st-success-container:   var(--_st-green-container);
+  --st-on-success:          var(--_st-green-on-container);
+
+  /* ── Status: Warning ── */
+  --st-warning:             var(--_st-amber);
+  --st-warning-container:   var(--_st-amber-container);
+  --st-on-warning:          var(--_st-amber-on-container);
+
+  /* ── Status: Info ── */
+  --st-info:                var(--_st-blue);
+  --st-info-container:      var(--_st-blue-container);
+  --st-on-info:             var(--_st-blue-on-container);
+
+  /* ── Focus & Interactive ── */
+  --st-focus-ring:          var(--_st-brand);
+  --st-focus-ring-offset:   var(--_st-neutral-100);
+  --st-hover:               rgba(0, 0, 0, 0.04);        /* generic hover overlay */
+  --st-active:              rgba(0, 0, 0, 0.08);        /* pressed / active overlay */
+  --st-disabled-opacity:    0.45;
+
+  /* ── Shadow ── */
+  --st-shadow-sm:           0 1px 2px rgba(0, 0, 0, 0.04);
+  --st-shadow-md:           0 4px 16px -4px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04);
+  --st-shadow-lg:           0 12px 40px -12px rgba(46, 108, 196, 0.18), 0 4px 12px rgba(0, 0, 0, 0.06);
+
+  /* ── Radius ── */
+  --st-radius-sm:           0.5rem;
+  --st-radius-md:           0.75rem;
+  --st-radius-lg:           1rem;
+  --st-radius-full:         9999px;
+
+  /* ── Transition ── */
+  --st-transition-fast:     150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --st-transition-normal:   200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Layer 2 — Dark Mode (placeholder — populate when implementing dark theme)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+[data-color-scheme="dark"] {
+
+  /* ── Override primitives ── */
+  --_st-brand:              #8bb8ff;
+  --_st-brand-hover:        #a3c7ff;
+  --_st-brand-light:        #1a3a5c;
+  --_st-brand-light-dim:    #2a4a6c;
+  --_st-brand-dark:         #d0e4fe;
+  --_st-brand-dark-variant:  #a3c7ff;
+  --_st-brand-muted:        #b4c8e1;
+
+  --_st-neutral-5:          #e0e3e6;
+  --_st-neutral-10:         #c2c6d4;
+  --_st-neutral-20:         #9da2ad;
+  --_st-neutral-40:         #727783;
+  --_st-neutral-60:         #424752;
+  --_st-neutral-80:         #3a3f4a;
+  --_st-neutral-90:         #2d3133;
+  --_st-neutral-92:         #262a2d;
+  --_st-neutral-94:         #1f2225;
+  --_st-neutral-96:         #1a1d20;
+  --_st-neutral-98:         #141618;
+  --_st-neutral-100:        #111315;
+
+  --_st-red:                #ffb4ab;
+  --_st-red-container:      #690005;
+  --_st-red-on-container:   #ffdad6;
+
+  --_st-green:              #6ee7b7;
+  --_st-green-container:    #064e3b;
+  --_st-green-on-container: #d1fae5;
+
+  --_st-amber:              #fcd34d;
+  --_st-amber-container:    #78350f;
+  --_st-amber-on-container: #fef3c7;
+
+  --_st-blue:               #93bbfd;
+  --_st-blue-container:     #1e3a5f;
+  --_st-blue-on-container:  #dbeafe;
+
+  --_st-purple:             #c4b5fd;
+  --_st-purple-container:   #3b0764;
+  --_st-purple-on-container:#ede9fe;
+
+  /* ── Override interactive tokens ── */
+  --st-hover:               rgba(255, 255, 255, 0.06);
+  --st-active:              rgba(255, 255, 255, 0.1);
+  --st-focus-ring-offset:   #111315;
+
+  /* ── Override shadows for dark ── */
+  --st-shadow-sm:           0 1px 2px rgba(0, 0, 0, 0.2);
+  --st-shadow-md:           0 4px 16px -4px rgba(0, 0, 0, 0.3), 0 2px 4px rgba(0, 0, 0, 0.2);
+  --st-shadow-lg:           0 12px 40px -12px rgba(0, 0, 0, 0.4), 0 4px 12px rgba(0, 0, 0, 0.2);
+}

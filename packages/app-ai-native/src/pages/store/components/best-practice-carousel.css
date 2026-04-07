@@ -20,17 +20,17 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 9999px;
-  border: 1px solid color-mix(in srgb, var(--st-outline-variant) 20%, transparent);
-  background: color-mix(in srgb, var(--st-surface-container-lowest) 80%, transparent);
-  color: var(--st-on-surface-variant);
+  border-radius: var(--st-radius-full);
+  border: 1px solid color-mix(in srgb, var(--st-border-subtle) 20%, transparent);
+  background: color-mix(in srgb, var(--st-surface-lowest) 80%, transparent);
+  color: var(--st-text-secondary);
   cursor: pointer;
-  transition: background-color 150ms, color 150ms, opacity 150ms;
+  transition: background-color var(--st-transition-fast), color var(--st-transition-fast), opacity var(--st-transition-fast);
 }
 
 .bp-carousel-arrow:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--st-surface-container) 60%, transparent);
-  color: var(--st-on-surface);
+  background: color-mix(in srgb, var(--st-surface) 60%, transparent);
+  color: var(--st-text);
 }
 
 .bp-carousel-arrow:disabled {
@@ -61,16 +61,16 @@
   flex: 0 0 calc((100% - 2rem) / 3);
   min-width: 280px;
   scroll-snap-align: start;
-  border-radius: 1rem;
-  border: 1px solid color-mix(in srgb, var(--st-outline-variant) 12%, transparent);
+  border-radius: var(--st-radius-lg);
+  border: 1px solid color-mix(in srgb, var(--st-border-subtle) 12%, transparent);
   background: linear-gradient(
     180deg,
-    color-mix(in srgb, var(--st-surface-container-lowest) 98%, transparent),
-    color-mix(in srgb, var(--st-surface-container-low) 96%, transparent)
+    color-mix(in srgb, var(--st-surface-lowest) 98%, transparent),
+    color-mix(in srgb, var(--st-surface-low) 96%, transparent)
   );
-  box-shadow: 0 16px 40px -32px color-mix(in srgb, var(--st-primary) 20%, transparent);
+  box-shadow: 0 16px 40px -32px color-mix(in srgb, var(--st-accent) 20%, transparent);
   cursor: pointer;
-  transition: transform 150ms, box-shadow 150ms, border-color 150ms;
+  transition: transform var(--st-transition-fast), box-shadow var(--st-transition-fast), border-color var(--st-transition-fast);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -78,8 +78,8 @@
 
 .bp-card:hover {
   transform: translateY(-3px);
-  box-shadow: 0 20px 48px -28px color-mix(in srgb, var(--card-accent, var(--st-primary)) 30%, transparent);
-  border-color: color-mix(in srgb, var(--card-accent, var(--st-outline-variant)) 25%, transparent);
+  box-shadow: 0 20px 48px -28px color-mix(in srgb, var(--card-accent, var(--st-accent)) 30%, transparent);
+  border-color: color-mix(in srgb, var(--card-accent, var(--st-border-subtle)) 25%, transparent);
 }
 
 /* ── Visual area ── */
@@ -89,11 +89,11 @@
   height: 7.5rem;
   background: linear-gradient(
     135deg,
-    color-mix(in srgb, var(--card-accent) 12%, var(--st-surface-container-lowest)) 0%,
-    color-mix(in srgb, var(--card-accent) 4%, var(--st-surface-container-lowest)) 60%,
-    var(--st-surface-container-lowest) 100%
+    color-mix(in srgb, var(--card-accent) 12%, var(--st-surface-lowest)) 0%,
+    color-mix(in srgb, var(--card-accent) 4%, var(--st-surface-lowest)) 60%,
+    var(--st-surface-lowest) 100%
   );
-  border-bottom: 1px solid color-mix(in srgb, var(--st-outline-variant) 8%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--st-border-subtle) 8%, transparent);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -157,8 +157,8 @@
   border-radius: 0.625rem;
   font-size: 0.6875rem;
   font-weight: 500;
-  background-color: color-mix(in srgb, var(--st-on-surface-variant) 8%, transparent);
-  color: var(--st-on-surface-variant);
+  background-color: color-mix(in srgb, var(--st-text-secondary) 8%, transparent);
+  color: var(--st-text-secondary);
   white-space: nowrap;
 }
 
@@ -166,7 +166,7 @@
   margin: 0;
   font-size: 1rem;
   font-weight: 700;
-  color: var(--st-on-surface);
+  color: var(--st-text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -177,7 +177,7 @@
   margin: 0;
   font-size: 0.8125rem;
   line-height: 1.55;
-  color: var(--st-on-surface-variant);
+  color: var(--st-text-secondary);
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -197,7 +197,7 @@
   display: flex;
   gap: 0.625rem;
   font-size: 0.6875rem;
-  color: var(--st-on-surface-variant);
+  color: var(--st-text-secondary);
 }
 
 .bp-card-stat {
@@ -226,18 +226,19 @@
   border: none;
   border-radius: 0.375rem;
   background: transparent;
-  color: var(--st-on-surface-variant);
+  color: var(--st-text-secondary);
   cursor: pointer;
-  transition: background-color 150ms, color 150ms;
+  transition: background-color var(--st-transition-fast), color var(--st-transition-fast);
 }
 
 .bp-card-action-btn:hover {
-  background-color: color-mix(in srgb, var(--st-surface-container) 60%, transparent);
-  color: var(--st-on-surface);
+  background-color: color-mix(in srgb, var(--st-surface) 60%, transparent);
+  color: var(--st-text);
 }
 
-.bp-card-action-btn-active {
-  color: var(--card-accent, var(--st-primary));
+.bp-card-action-btn-active,
+.bp-card-action-btn-active [data-component="icon"] {
+  color: var(--card-accent, var(--st-accent));
 }
 
 .bp-card-fav-icon {
@@ -245,12 +246,13 @@
   height: 0.875rem;
 }
 
-.bp-card-action-btn-active:hover {
-  color: var(--card-accent, var(--st-primary));
+.bp-card-action-btn-active:hover,
+.bp-card-action-btn-active:hover [data-component="icon"] {
+  color: var(--card-accent, var(--st-accent));
 }
 
 .bp-card-action-btn:disabled {
-  opacity: 0.4;
+  opacity: var(--st-disabled-opacity);
   cursor: not-allowed;
 }
 
@@ -265,8 +267,8 @@
   flex: 0 0 calc((100% - 2rem) / 3);
   min-width: 280px;
   height: 17rem;
-  border-radius: 1rem;
-  background: color-mix(in srgb, var(--st-surface-container-low) 50%, transparent);
+  border-radius: var(--st-radius-lg);
+  background: color-mix(in srgb, var(--st-surface-low) 50%, transparent);
   animation: bp-pulse 1.5s ease-in-out infinite;
 }
 
@@ -283,7 +285,7 @@
   justify-content: center;
   min-height: 10rem;
   font-size: 0.875rem;
-  color: var(--st-on-surface-variant);
+  color: var(--st-text-secondary);
 }
 
 /* ── Responsive ── */

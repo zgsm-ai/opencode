@@ -1,19 +1,10 @@
-import { Button } from "@opencode-ai/ui/button"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
-import { Dialog } from "@opencode-ai/ui/dialog"
 import { showToast } from "@opencode-ai/ui/toast"
 import { useLanguage } from "@/context/language"
 import { createEffect } from "solid-js"
 import { createStore } from "solid-js/store"
 import { repoApi, repoRegistryApi, type CapabilityRegistry, type Repository } from "../lib/api"
-
-const inputClass =
-  "w-full h-9 rounded-md border border-border-weak-base bg-background-base px-3 text-sm text-text-strong outline-none focus:border-border-strong"
-
-const textAreaClass =
-  "w-full min-h-[84px] rounded-md border border-border-weak-base bg-background-base px-3 py-2 text-sm text-text-strong outline-none focus:border-border-strong resize-y"
-
-const monoTextAreaClass = `${textAreaClass} font-mono`
+import { StoreDialog } from "./store-dialog"
 
 type EditRepoDialogProps = {
   repo: Repository
@@ -113,100 +104,122 @@ export function EditRepoDialog(props: EditRepoDialogProps) {
   }
 
   return (
-    <Dialog title={language.t("store.repoDialog.edit.title")} class="w-full max-w-[640px] mx-auto">
-      <form onSubmit={handleSubmit} class="flex max-h-[calc(100vh-120px)] flex-col overflow-hidden">
-        <div class="flex-1 overflow-y-auto px-6 pb-6 pt-2 space-y-4">
-          <div>
-            <label class="mb-2 block text-12-medium text-text-strong">
-              {language.t("store.repoDialog.field.name")}
+    <form onSubmit={handleSubmit}>
+      <StoreDialog
+        title={language.t("store.repoDialog.edit.title")}
+        maxWidth="640px"
+        maxHeight="calc(100vh - 120px)"
+        footer={
+          <>
+            <button
+              class="store-modal-btn store-modal-btn-ghost"
+              type="button"
+              onClick={() => dialog.close()}
+            >
+              {language.t("common.cancel")}
+            </button>
+            <button
+              class="store-modal-btn store-modal-btn-primary"
+              type="submit"
+              disabled={store.saving || !store.name.trim()}
+            >
+              {store.saving ? language.t("common.saving") : language.t("store.capabilityDialog.edit.submit")}
+            </button>
+          </>
+        }
+      >
+        <div class="store-modal-section">
+          <div class="store-modal-field">
+            <label class="store-modal-label">
+              {language.t("store.repoDialog.field.name")} <span class="req">*</span>
             </label>
             <input
               autofocus
               value={store.name}
               onInput={(e) => setStore("name", e.currentTarget.value)}
-              class={inputClass}
+              class="store-modal-input"
               required
             />
           </div>
 
-          <div>
-            <label class="mb-2 block text-12-medium text-text-strong">
+          <div class="store-modal-field">
+            <label class="store-modal-label">
               {language.t("store.repoDialog.field.displayName")}
             </label>
             <input
               value={store.displayName}
               onInput={(e) => setStore("displayName", e.currentTarget.value)}
-              class={inputClass}
+              class="store-modal-input"
             />
           </div>
 
-          <div>
-            <label class="mb-2 block text-12-medium text-text-strong">
+          <div class="store-modal-field">
+            <label class="store-modal-label">
               {language.t("store.repoDialog.field.description")}
             </label>
             <textarea
               value={store.description}
               onInput={(e) => setStore("description", e.currentTarget.value)}
-              class={textAreaClass}
+              class="store-modal-input"
             />
           </div>
 
-          <div>
-            <label class="mb-2 block text-12-medium text-text-strong">
+          <div class="store-modal-field">
+            <label class="store-modal-label">
               {language.t("store.repoDialog.field.visibility")}
             </label>
             <select
               value={store.visibility}
               onInput={(e) => setStore("visibility", e.currentTarget.value as "public" | "private")}
-              class={inputClass}
+              class="store-modal-input"
             >
               <option value="private">{language.t("store.capabilityDialog.visibility.private")}</option>
               <option value="public">{language.t("store.capabilityDialog.visibility.public")}</option>
             </select>
           </div>
+        </div>
 
-          {props.repo.repoType === "sync" ? (
-            <div class="rounded-xl border border-border-weak-base bg-surface-raised-base px-4 py-4 space-y-4">
-              <div>
-                <div class="text-12-medium text-text-strong">{language.t("store.sync.settings")}</div>
-                <div class="mt-1 text-12-regular text-text-weak">{language.t("store.sync.settingsDescription")}</div>
-              </div>
+        {props.repo.repoType === "sync" ? (
+          <div class="store-modal-section">
+            <div class="store-modal-section-title">{language.t("store.sync.settings")}</div>
+            <div class="store-modal-section-desc">{language.t("store.sync.settingsDescription")}</div>
 
-              <div>
-                <label class="mb-2 block text-12-medium text-text-strong">{language.t("store.sync.gitUrl")}</label>
+            <div class="store-modal-field">
+              <label class="store-modal-label">{language.t("store.sync.gitUrl")}</label>
+              <input
+                value={store.externalUrl}
+                onInput={(e) => setStore("externalUrl", e.currentTarget.value)}
+                placeholder="https://github.com/org/repo"
+                class="store-modal-input"
+              />
+            </div>
+
+            <div class="store-modal-row">
+              <div class="store-modal-field" style={{ flex: "1" }}>
+                <label class="store-modal-label">{language.t("store.sync.branch")}</label>
                 <input
-                  value={store.externalUrl}
-                  onInput={(e) => setStore("externalUrl", e.currentTarget.value)}
-                  placeholder="https://github.com/org/repo"
-                  class={inputClass}
+                  value={store.externalBranch}
+                  onInput={(e) => setStore("externalBranch", e.currentTarget.value)}
+                  placeholder="main"
+                  class="store-modal-input"
                 />
               </div>
-
-              <div class="grid gap-4 md:grid-cols-2">
-                <div>
-                  <label class="mb-2 block text-12-medium text-text-strong">{language.t("store.sync.branch")}</label>
-                  <input
-                    value={store.externalBranch}
-                    onInput={(e) => setStore("externalBranch", e.currentTarget.value)}
-                    placeholder="main"
-                    class={inputClass}
-                  />
-                </div>
-                <div>
-                  <label class="mb-2 block text-12-medium text-text-strong">{language.t("store.sync.interval")}</label>
-                  <select
-                    value={String(store.syncInterval)}
-                    onInput={(e) => setStore("syncInterval", Number(e.currentTarget.value))}
-                    class={inputClass}
-                  >
-                    <option value="3600">{language.t("store.sync.interval.hour")}</option>
-                    <option value="21600">{language.t("store.sync.interval.6hours")}</option>
-                    <option value="86400">{language.t("store.sync.interval.day")}</option>
-                  </select>
-                </div>
+              <div class="store-modal-field" style={{ flex: "1" }}>
+                <label class="store-modal-label">{language.t("store.sync.interval")}</label>
+                <select
+                  value={String(store.syncInterval)}
+                  onInput={(e) => setStore("syncInterval", Number(e.currentTarget.value))}
+                  class="store-modal-input"
+                >
+                  <option value="3600">{language.t("store.sync.interval.hour")}</option>
+                  <option value="21600">{language.t("store.sync.interval.6hours")}</option>
+                  <option value="86400">{language.t("store.sync.interval.day")}</option>
+                </select>
               </div>
+            </div>
 
-              <label class="flex items-center gap-2 text-12-medium text-text-strong">
+            <div class="store-modal-field">
+              <label class="store-modal-checkbox">
                 <input
                   type="checkbox"
                   checked={store.syncEnabled}
@@ -214,58 +227,51 @@ export function EditRepoDialog(props: EditRepoDialogProps) {
                 />
                 {language.t("store.sync.enableAuto")}
               </label>
+            </div>
 
-              <div class="grid gap-4 md:grid-cols-2">
-                <div>
-                  <label class="mb-2 block text-12-medium text-text-strong">
-                    {language.t("store.sync.includePatterns")}
-                  </label>
-                  <textarea
-                    value={store.includePatterns}
-                    onInput={(e) => setStore("includePatterns", e.currentTarget.value)}
-                    class={monoTextAreaClass}
-                  />
-                </div>
-                <div>
-                  <label class="mb-2 block text-12-medium text-text-strong">
-                    {language.t("store.sync.excludePatterns")}
-                  </label>
-                  <textarea
-                    value={store.excludePatterns}
-                    onInput={(e) => setStore("excludePatterns", e.currentTarget.value)}
-                    class={monoTextAreaClass}
-                  />
-                </div>
-              </div>
-
-              <div class="max-w-[240px]">
-                <label class="mb-2 block text-12-medium text-text-strong">
-                  {language.t("store.sync.conflictStrategy")}
+            <div class="store-modal-row">
+              <div class="store-modal-field" style={{ flex: "1" }}>
+                <label class="store-modal-label">
+                  {language.t("store.sync.includePatterns")}
                 </label>
-                <select
-                  value={store.conflictStrategy}
-                  onInput={(e) => setStore("conflictStrategy", e.currentTarget.value)}
-                  class={inputClass}
-                >
-                  <option value="keep_remote">{language.t("store.sync.conflict.keepRemote")}</option>
-                  <option value="keep_local">{language.t("store.sync.conflict.keepLocal")}</option>
-                </select>
+                <textarea
+                  value={store.includePatterns}
+                  onInput={(e) => setStore("includePatterns", e.currentTarget.value)}
+                  class="store-modal-input"
+                  style={{ "font-family": "'SF Mono', 'Fira Code', monospace" }}
+                />
+              </div>
+              <div class="store-modal-field" style={{ flex: "1" }}>
+                <label class="store-modal-label">
+                  {language.t("store.sync.excludePatterns")}
+                </label>
+                <textarea
+                  value={store.excludePatterns}
+                  onInput={(e) => setStore("excludePatterns", e.currentTarget.value)}
+                  class="store-modal-input"
+                  style={{ "font-family": "'SF Mono', 'Fira Code', monospace" }}
+                />
               </div>
             </div>
-          ) : null}
 
-          {store.error ? <p class="text-12-regular text-icon-critical-base">{store.error}</p> : null}
-        </div>
+            <div class="store-modal-field" style={{ "max-width": "240px" }}>
+              <label class="store-modal-label">
+                {language.t("store.sync.conflictStrategy")}
+              </label>
+              <select
+                value={store.conflictStrategy}
+                onInput={(e) => setStore("conflictStrategy", e.currentTarget.value)}
+                class="store-modal-input"
+              >
+                <option value="keep_remote">{language.t("store.sync.conflict.keepRemote")}</option>
+                <option value="keep_local">{language.t("store.sync.conflict.keepLocal")}</option>
+              </select>
+            </div>
+          </div>
+        ) : null}
 
-        <div class="flex shrink-0 items-center justify-end gap-2 border-t border-border-weak-base bg-surface-base px-6 py-4">
-          <Button type="button" variant="ghost" onClick={() => dialog.close()}>
-            {language.t("common.cancel")}
-          </Button>
-          <Button type="submit" disabled={store.saving || !store.name.trim()}>
-            {store.saving ? language.t("common.saving") : language.t("store.capabilityDialog.edit.submit")}
-          </Button>
-        </div>
-      </form>
-    </Dialog>
+        {store.error ? <p class="store-modal-error">{store.error}</p> : null}
+      </StoreDialog>
+    </form>
   )
 }

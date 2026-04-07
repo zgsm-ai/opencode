@@ -1,10 +1,9 @@
-import { Button } from "@opencode-ai/ui/button"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
-import { Dialog } from "@opencode-ai/ui/dialog"
 import { Icon } from "@opencode-ai/ui/icon"
 import { useLanguage } from "@/context/language"
 import { Show } from "solid-js"
 import { createStore } from "solid-js/store"
+import { StoreDialog } from "./store-dialog"
 
 type ConfirmDialogProps = {
   title: string
@@ -31,33 +30,52 @@ export function ConfirmDialog(props: ConfirmDialogProps) {
   }
 
   return (
-    <Dialog title={props.title} class="mx-auto w-full max-w-[440px]" fit>
-      <div class="flex flex-col gap-6 px-6 pb-6 pt-2">
-        <div class="flex items-center gap-3">
-          <Show when={danger()}>
-            <div class="flex size-10 shrink-0 items-center justify-center rounded-full bg-surface-critical-base/15">
-              <Icon name="warning" class="size-5 text-icon-critical-base" />
-            </div>
-          </Show>
-          <p class="text-sm text-text-weak leading-relaxed">{props.description}</p>
-        </div>
-        <div class="flex items-center justify-end gap-3 border-t border-border-weak-base pt-4">
-          <Button variant="ghost" onClick={() => dialog.close()} disabled={state.loading}>
+    <StoreDialog
+      title={props.title}
+      maxWidth="440px"
+      maxHeight="340px"
+      footer={
+        <>
+          <button
+            class="store-modal-btn store-modal-btn-ghost"
+            type="button"
+            onClick={() => dialog.close()}
+            disabled={state.loading}
+          >
             {language.t("common.cancel")}
-          </Button>
-          <Button
+          </button>
+          <button
+            class={`store-modal-btn ${danger() ? "store-modal-btn-danger" : "store-modal-btn-primary"}`}
+            type="button"
             onClick={handle}
             disabled={state.loading}
-            class={
-              danger()
-                ? "border-border-critical-base bg-surface-critical-strong text-white shadow-none hover:opacity-90 disabled:opacity-50"
-                : ""
-            }
           >
             {state.loading ? language.t("common.loading") : (props.confirm ?? language.t("common.delete"))}
-          </Button>
+          </button>
+        </>
+      }
+    >
+      <div class="store-modal-section">
+        <div style={{ display: "flex", "align-items": "center", gap: "0.75rem" }}>
+          <Show when={danger()}>
+            <div style={{
+              display: "flex",
+              width: "2.5rem",
+              height: "2.5rem",
+              "flex-shrink": "0",
+              "align-items": "center",
+              "justify-content": "center",
+              "border-radius": "9999px",
+              background: "color-mix(in srgb, #dc2626 15%, transparent)",
+            }}>
+              <Icon name="warning" style={{ width: "1.25rem", height: "1.25rem", color: "#dc2626" }} />
+            </div>
+          </Show>
+          <div class="store-modal-section-desc" style={{ margin: "0" }}>
+            {props.description}
+          </div>
         </div>
       </div>
-    </Dialog>
+    </StoreDialog>
   )
 }

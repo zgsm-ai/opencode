@@ -1,21 +1,17 @@
-import { Button } from "@opencode-ai/ui/button"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
-import { Dialog } from "@opencode-ai/ui/dialog"
 import { Icon } from "@opencode-ai/ui/icon"
 import { showToast } from "@opencode-ai/ui/toast"
 import { useLanguage } from "@/context/language"
 import { createMemo, For, Show } from "solid-js"
 import { createStore } from "solid-js/store"
 import { itemApi, registryApi2, type CapabilityItem, type Repository } from "../lib/api"
+import { StoreDialog } from "./store-dialog"
 
 type MoveCapabilityDialogProps = {
   item: CapabilityItem
   repositories: Repository[]
   onMoved?: (item: CapabilityItem) => void
 }
-
-const inputClass =
-  "w-full h-9 rounded-md border border-border-weak-base bg-background-base px-3 text-sm text-text-strong outline-none focus:border-border-strong"
 
 export function MoveCapabilityDialog(props: MoveCapabilityDialogProps) {
   const dialog = useDialog()
@@ -27,7 +23,7 @@ export function MoveCapabilityDialog(props: MoveCapabilityDialogProps) {
     repoId: "",
   })
 
-  const current = createMemo(() => props.item.repoName || "—")
+  const current = createMemo(() => props.item.repoName || "\u2014")
 
   const targets = createMemo(() => props.repositories.filter((r) => r.id !== props.item.repoId))
 
@@ -61,46 +57,66 @@ export function MoveCapabilityDialog(props: MoveCapabilityDialogProps) {
   }
 
   return (
-    <Dialog title={language.t("store.capabilityDialog.move.title")} class="w-full max-w-[720px] mx-auto">
-      <form onSubmit={handleSubmit} class="flex max-h-[calc(100vh-80px)] flex-col overflow-hidden">
-        <div class="flex-1 overflow-y-auto px-6 pb-6 pt-2">
-          {/* Capability info */}
-          <div class="rounded-xl border border-border-weak-base bg-surface-raised-base px-5 py-4">
-            <label class="mb-2 block text-12-medium text-text-weak">
+    <form onSubmit={handleSubmit}>
+      <StoreDialog
+        title={language.t("store.capabilityDialog.move.title")}
+        maxWidth="720px"
+        maxHeight="520px"
+        footer={
+          <>
+            <button class="store-modal-btn store-modal-btn-ghost" type="button" onClick={() => dialog.close()}>
+              {language.t("common.cancel")}
+            </button>
+            <button class="store-modal-btn store-modal-btn-primary" type="submit" disabled={store.saving || !store.repoId}>
+              {store.saving
+                ? language.t("store.capabilityDialog.move.submitting")
+                : language.t("store.capabilityDialog.move.submit")}
+            </button>
+          </>
+        }
+      >
+        {/* Capability info */}
+        <div class="store-modal-section">
+          <div class="store-modal-info-card">
+            <label style={{ display: "block", "font-size": "0.6875rem", "font-weight": "600", color: "var(--st-text-secondary)", "margin-bottom": "0.5rem" }}>
               {language.t("store.capabilityDialog.move.currentCapability")}
             </label>
-            <div class="flex items-center gap-2 text-sm text-text-strong">
-              <span class="font-medium">{props.item.name}</span>
-              <span class="text-text-weak">/</span>
-              <span class="font-mono text-text-weak">{props.item.slug}</span>
+            <div style={{ display: "flex", "align-items": "center", gap: "0.5rem", "font-size": "0.8125rem", color: "var(--st-text)" }}>
+              <span style={{ "font-weight": "600" }}>{props.item.name}</span>
+              <span style={{ color: "var(--st-text-secondary)" }}>/</span>
+              <span style={{ "font-family": "'SF Mono', 'Fira Code', monospace", color: "var(--st-text-secondary)" }}>{props.item.slug}</span>
             </div>
           </div>
+        </div>
 
-          {/* Transfer direction */}
-          <div class="mt-5 grid grid-cols-[1fr_auto_1fr] items-stretch gap-4">
+        {/* Transfer direction */}
+        <div class="store-modal-section">
+          <div style={{ display: "grid", "grid-template-columns": "1fr auto 1fr", "align-items": "stretch", gap: "1rem" }}>
             {/* Current repository */}
-            <div class="flex flex-col rounded-xl border border-border-weak-base bg-surface-raised-base px-5 py-4">
-              <label class="mb-2 block text-12-medium text-text-weak">
+            <div class="store-modal-info-card" style={{ display: "flex", "flex-direction": "column" }}>
+              <label style={{ display: "block", "font-size": "0.6875rem", "font-weight": "600", color: "var(--st-text-secondary)", "margin-bottom": "0.5rem" }}>
                 {language.t("store.capabilityDialog.move.currentRepository")}
               </label>
-              <div class="flex flex-1 items-center text-sm font-medium text-text-strong">{current()}</div>
+              <div style={{ display: "flex", flex: "1", "align-items": "center", "font-size": "0.8125rem", "font-weight": "600", color: "var(--st-text)" }}>
+                {current()}
+              </div>
             </div>
 
             {/* Arrow */}
-            <div class="flex items-center text-icon-weak-base">
+            <div style={{ display: "flex", "align-items": "center", color: "var(--st-text-secondary)" }}>
               <Icon name="chevron-right" size="small" />
             </div>
 
             {/* Target repository */}
-            <div class="flex flex-col rounded-xl border border-border-weak-base bg-surface-raised-base px-5 py-4">
-              <label class="mb-2 block text-12-medium text-text-weak">
+            <div class="store-modal-info-card" style={{ display: "flex", "flex-direction": "column" }}>
+              <label style={{ display: "block", "font-size": "0.6875rem", "font-weight": "600", color: "var(--st-text-secondary)", "margin-bottom": "0.5rem" }}>
                 {language.t("store.capabilityDialog.move.targetRepository")}
               </label>
-              <div class="flex flex-1 items-center">
+              <div style={{ display: "flex", flex: "1", "align-items": "center" }}>
                 <select
                   value={store.repoId}
                   onInput={(e) => setStore("repoId", e.currentTarget.value)}
-                  class={inputClass}
+                  class="store-modal-input"
                   required
                 >
                   <option value="" disabled>
@@ -118,7 +134,7 @@ export function MoveCapabilityDialog(props: MoveCapabilityDialogProps) {
           </div>
 
           <Show when={selected() || store.repoId === "__public__"}>
-            <p class="mt-4 rounded-lg border border-border-weak-base bg-surface-raised-base px-4 py-3 text-12-regular text-text-weak">
+            <p class="store-modal-hint" style={{ "margin-top": "0.75rem", padding: "0.625rem 0.875rem", "border-radius": "var(--st-radius-sm, 0.5rem)", border: "1px solid color-mix(in srgb, var(--st-border-subtle) 12%, transparent)", background: "var(--st-surface-lowest)" }}>
               {language.t("store.capabilityDialog.move.transferHint", {
                 name: props.item.name,
                 repo:
@@ -130,21 +146,10 @@ export function MoveCapabilityDialog(props: MoveCapabilityDialogProps) {
           </Show>
 
           <Show when={store.error}>
-            <p class="mt-4 text-12-regular text-icon-critical-base">{store.error}</p>
+            <p class="store-modal-error">{store.error}</p>
           </Show>
         </div>
-
-        <div class="flex shrink-0 items-center justify-end gap-2 border-t border-border-weak-base bg-surface-base px-6 py-4">
-          <Button type="button" variant="ghost" onClick={() => dialog.close()}>
-            {language.t("common.cancel")}
-          </Button>
-          <Button type="submit" disabled={store.saving || !store.repoId}>
-            {store.saving
-              ? language.t("store.capabilityDialog.move.submitting")
-              : language.t("store.capabilityDialog.move.submit")}
-          </Button>
-        </div>
-      </form>
-    </Dialog>
+      </StoreDialog>
+    </form>
   )
 }

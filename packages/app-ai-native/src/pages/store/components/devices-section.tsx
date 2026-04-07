@@ -1,4 +1,5 @@
 import { showToast } from "@opencode-ai/ui/toast"
+import { Icon } from "@opencode-ai/ui/icon"
 import { createMemo, createResource, createSignal, For, Show } from "solid-js"
 import { useLanguage } from "@/context/language"
 import type { Device, UpdateDeviceRequest } from "@/pages/workspace/types"
@@ -71,35 +72,39 @@ export function DevicesSection() {
   }
 
   return (
-    <section class="rounded-2xl border border-border-weak-base bg-surface-raised-base p-5">
-      <div class="mb-5 flex items-start justify-between gap-4">
+    <section class="store-cshell">
+      <div class="store-tbar">
         <div>
-          <h2 class="text-lg font-semibold text-text-strong">{language.t("store.devices.title")}</h2>
-          <p class="mt-1 text-sm text-text-weak">{language.t("store.devices.description")}</p>
+          <h2 class="store-tbar-title">{language.t("store.devices.title")}</h2>
+          <p class="store-tbar-sub">{language.t("store.devices.description")}</p>
         </div>
-        <div class="w-48">
-          <input
-            value={deviceSearch()}
-            onInput={(e) => setDeviceSearch(e.currentTarget.value)}
-            placeholder={language.t("store.devices.searchPlaceholder")}
-            class="w-full h-9 rounded-md border border-border-weak-base bg-background-base px-3 text-sm text-text-strong outline-none focus:border-border-strong"
-          />
+        <div class="store-tbar-acts">
+          <div class="store-swrap">
+            <Icon name="magnifying-glass" size="small" />
+            <input
+              class="store-sinput"
+              type="search"
+              value={deviceSearch()}
+              onInput={(e) => setDeviceSearch(e.currentTarget.value)}
+              placeholder={language.t("store.devices.searchPlaceholder")}
+            />
+          </div>
         </div>
       </div>
 
       <Show
         when={!devices.loading}
-        fallback={<div class="text-sm text-text-weak">{language.t("store.devices.loading")}</div>}
+        fallback={<div class="store-dash-empty">{language.t("store.devices.loading")}</div>}
       >
         <Show
           when={filteredDevices().length > 0}
           fallback={
-            <div class="rounded-xl border border-dashed border-border-weak-base px-8 py-10 text-center text-sm text-text-weak">
+            <div class="store-dash-empty">
               {deviceSearch() ? language.t("store.devices.empty.search") : language.t("store.devices.empty.default")}
             </div>
           }
         >
-          <div class="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div class="store-dash-grid">
             <For each={filteredDevices()}>
               {(device) => <DeviceCard device={device} onUpdate={handleUpdateDevice} />}
             </For>

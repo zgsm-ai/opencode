@@ -1,13 +1,8 @@
-import { Button } from "@opencode-ai/ui/button"
-import { Checkbox } from "@opencode-ai/ui/checkbox"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
-import { Dialog } from "@opencode-ai/ui/dialog"
 import { createStore } from "solid-js/store"
 import { type WecomChannel } from "@/context/settings"
 import { useLanguage } from "@/context/language"
-
-const inputClass =
-  "w-full h-9 rounded-md border border-border-weak-base bg-background-base px-3 text-sm text-text-strong outline-none focus:border-border-strong"
+import { StoreDialog } from "./store-dialog"
 
 type EditWecomChannelDialogProps = {
   channel: WecomChannel
@@ -68,62 +63,99 @@ export function EditWecomChannelDialog(props: EditWecomChannelDialogProps) {
   }
 
   return (
-    <Dialog title={language.t("store.notificationChannels.dialog.editTitle")} class="w-full max-w-md mx-auto">
-      <form onSubmit={handleSubmit} class="flex flex-col">
-        <div class="flex flex-col gap-4 px-6 py-4">
-          <div>
-            <label class="mb-1.5 block text-xs font-medium text-text-strong">
-              {language.t("store.notificationChannels.dialog.name")} <span class="text-icon-info-base">*</span>
+    <form onSubmit={handleSubmit}>
+      <StoreDialog
+        title={language.t("store.notificationChannels.dialog.editTitle")}
+        maxWidth="480px"
+        maxHeight="460px"
+        footer={
+          <>
+            <button
+              class="store-modal-btn store-modal-btn-ghost"
+              type="button"
+              onClick={() => dialog.close()}
+            >
+              {language.t("common.cancel")}
+            </button>
+            <button
+              class="store-modal-btn store-modal-btn-primary"
+              type="submit"
+              disabled={form.saving}
+            >
+              {form.saving ? language.t("common.saving") : language.t("common.save")}
+            </button>
+          </>
+        }
+      >
+        <div class="store-modal-section">
+          <div class="store-modal-section-title">
+            {language.t("store.notificationChannels.dialog.name")}
+          </div>
+          <div class="store-modal-section-desc">
+            {language.t("store.notificationChannels.dialog.webhook")}
+          </div>
+          <div class="store-modal-field">
+            <label class="store-modal-label">
+              {language.t("store.notificationChannels.dialog.name")} <span class="req">*</span>
             </label>
             <input
               autofocus
               value={form.name}
               onInput={(e) => setForm("name", e.currentTarget.value)}
               placeholder={language.t("store.notificationChannels.dialog.namePlaceholder")}
-              class={inputClass}
+              class="store-modal-input"
             />
           </div>
-          <div>
-            <label class="mb-1.5 block text-xs font-medium text-text-strong">
-              {language.t("store.notificationChannels.dialog.webhook")} <span class="text-icon-info-base">*</span>
+          <div class="store-modal-field">
+            <label class="store-modal-label">
+              {language.t("store.notificationChannels.dialog.webhook")} <span class="req">*</span>
             </label>
             <input
               value={form.webhook}
               onInput={(e) => setForm("webhook", e.currentTarget.value)}
               placeholder={language.t("store.notificationChannels.dialog.webhookPlaceholder")}
-              class={inputClass}
+              class="store-modal-input"
             />
-          </div>
-          <div>
-            <label class="mb-2 block text-xs font-medium text-text-strong">
-              {language.t("store.notificationChannels.dialog.events")}
-            </label>
-            <div class="flex flex-col gap-2 text-sm text-text-strong">
-              <Checkbox
-                checked={form.events.permission}
-                onChange={(checked) => setForm("events", "permission", checked)}
-              >
-                {language.t("store.notificationChannels.event.permission")}
-              </Checkbox>
-              <Checkbox checked={form.events.question} onChange={(checked) => setForm("events", "question", checked)}>
-                {language.t("store.notificationChannels.event.question")}
-              </Checkbox>
-              <Checkbox checked={form.events.idle} onChange={(checked) => setForm("events", "idle", checked)}>
-                {language.t("store.notificationChannels.event.idle")}
-              </Checkbox>
+            <div class="store-modal-hint">
+              {language.t("store.notificationChannels.dialog.webhookPlaceholder")}
             </div>
           </div>
-          {form.error && <p class="text-xs text-icon-critical-base">{form.error}</p>}
         </div>
-        <div class="flex shrink-0 items-center justify-end gap-2 border-t border-border-weak-base bg-surface-base px-6 py-4">
-          <Button type="button" variant="ghost" onClick={() => dialog.close()}>
-            {language.t("common.cancel")}
-          </Button>
-          <Button type="submit" disabled={form.saving}>
-            {form.saving ? language.t("common.saving") : language.t("common.save")}
-          </Button>
+
+        <div class="store-modal-section">
+          <div class="store-modal-section-title">
+            {language.t("store.notificationChannels.dialog.events")}
+          </div>
+          <div class="store-modal-field">
+            <label class="store-modal-checkbox">
+              <input
+                type="checkbox"
+                checked={form.events.permission}
+                onChange={(e) => setForm("events", "permission", e.currentTarget.checked)}
+              />
+              {language.t("store.notificationChannels.event.permission")}
+            </label>
+            <label class="store-modal-checkbox">
+              <input
+                type="checkbox"
+                checked={form.events.question}
+                onChange={(e) => setForm("events", "question", e.currentTarget.checked)}
+              />
+              {language.t("store.notificationChannels.event.question")}
+            </label>
+            <label class="store-modal-checkbox">
+              <input
+                type="checkbox"
+                checked={form.events.idle}
+                onChange={(e) => setForm("events", "idle", e.currentTarget.checked)}
+              />
+              {language.t("store.notificationChannels.event.idle")}
+            </label>
+          </div>
         </div>
-      </form>
-    </Dialog>
+
+        {form.error && <p class="store-modal-error">{form.error}</p>}
+      </StoreDialog>
+    </form>
   )
 }

@@ -1,14 +1,14 @@
-import { Button } from "@opencode-ai/ui/button"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { Icon } from "@opencode-ai/ui/icon"
 import { showToast } from "@opencode-ai/ui/toast"
 import { useLanguage } from "@/context/language"
-import { useNavigate } from "@solidjs/router"
-import { createEffect, createMemo, For, Show } from "solid-js"
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
+import { createEffect, createMemo, createSignal, For, Show, Suspense } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useAuth } from "../hooks/use-auth"
 import { getLoginUrl } from "../lib/auth"
-import { itemApi, repoApi, type CapabilityItem, type Repository } from "../lib/api"
+import ItemDetailContent from "../components/item-detail-content"
+import { behaviorApi, itemApi, repoApi, type CapabilityItem, type Repository } from "../lib/api"
 import { ConfirmDialog } from "../components/confirm-dialog"
 import { CreateCapabilityDialog } from "../components/create-capability-dialog"
 import { EditCapabilityDialog } from "../components/edit-capability-dialog"
@@ -17,11 +17,25 @@ import { typeKey } from "../lib/constants"
 
 const PAGE_SIZE = 10
 
+const TYPE_COLORS: Record<string, string> = {
+  skill: "#F59E0B",
+  subagent: "#3b82f6",
+  command: "#10B981",
+  mcp: "#8B5CF6",
+}
+
 export default function DashboardCapabilities() {
-  const navigate = useNavigate()
   const dialog = useDialog()
   const language = useLanguage()
   const { user, loading } = useAuth()
+  const [selectedItemId, setSelectedItemId] = createSignal<string | null>(null)
+  const [detailItem, setDetailItem] = createSignal<CapabilityItem | null>(null)
+  const [favoritePending, setFavoritePending] = createSignal(false)
+  const [favorited, setFavorited] = createSignal(false)
+  const [favoriteCount, setFavoriteCount] = createSignal(0)
+  const [previewCount, setPreviewCount] = createSignal(0)
+  const [installCount, setInstallCount] = createSignal(0)
+  const [trackedItemId, setTrackedItemId] = createSignal<string | null>(null)
   const [state, setState] = createStore({
     items: [] as CapabilityItem[],
     totalItems: 0,
@@ -66,6 +80,7 @@ export default function DashboardCapabilities() {
   })
 
   const totalPages = createMemo(() => Math.max(1, Math.ceil(state.totalItems / PAGE_SIZE)))
+  const detailOpen = createMemo(() => !!selectedItemId())
 
   const pages = createMemo(() => {
     const total = totalPages()
@@ -116,167 +131,168 @@ export default function DashboardCapabilities() {
     ))
   }
 
+  const toggleFavorite = async () => {
+    const data = detailItem()
+    if (!data || !user() || loading() || favoritePending()) return
+
+    setFavoritePending(true)
+    try {
+      if (favorited()) {
+        const result = await behaviorApi.unfavorite(data.id)
+        setFavorited(result.favorited)
+        setFavoriteCount(result.favoriteCount)
+        return
+      }
+
+      const result = await behaviorApi.favorite(data.id)
+      setFavorited(result.favorited)
+      setFavoriteCount(result.favoriteCount)
+    } finally {
+      setFavoritePending(false)
+    }
+  }
+
   const typeLabel = (type: string) => language.t(typeKey(type))
 
+  const visColor = (vis?: string | null) => {
+    if (vis === "public") return { bg: "color-mix(in srgb, #22c55e 12%, transparent)", c: "#22c55e" }
+    if (vis === "private") return { bg: "color-mix(in srgb, #f59e0b 12%, transparent)", c: "#f59e0b" }
+    return { bg: "rgba(156,163,175,0.12)", c: "var(--st-text-secondary)" }
+  }
+
+  createEffect(() => {
+    const data = detailItem()
+    if (!data) return
+    setPreviewCount(data.previewCount ?? 0)
+    setInstallCount(data.installCount ?? 0)
+    setFavorited(Boolean(data.favorited))
+    setFavoriteCount(data.favoriteCount ?? 0)
+  })
+
+  createEffect(() => {
+    const data = detailItem()
+    if (!data) return
+    if (trackedItemId() === data.id) return
+
+    setTrackedItemId(data.id)
+    void behaviorApi
+      .log(data.id, {
+        actionType: "view",
+        context: "drawer",
+        metadata: {
+          source: "app-ai-native",
+          route: "dashboard-capabilities",
+        },
+      })
+      .then(() => setPreviewCount((count) => count + 1))
+      .catch(() => undefined)
+  })
+
   return (
-    <div class="min-h-full px-6 py-6">
+    <Show
+      when={!loading()}
+      fallback={<div class="store-dash-empty">{language.t("store.loading")}</div>}
+    >
       <Show
-        when={!loading()}
-        fallback={<div class="flex justify-center py-16 text-text-weak">{language.t("store.loading")}</div>}
+        when={user()}
+        fallback={
+          <div class="store-dash-empty" style={{ "min-height": "40vh", display: "flex", "align-items": "center", "justify-content": "center" }}>
+            <div style={{ "text-align": "center" }}>
+              <h1 class="store-tbar-title">{language.t("store.console")}</h1>
+              <p class="store-tbar-sub" style={{ "margin-bottom": "0.75rem" }}>{language.t("store.console.authDescription")}</p>
+              <button
+                class="store-fbtn store-fbtn-primary"
+                onClick={() => { window.location.href = getLoginUrl("/store/dashboard/capabilities") }}
+              >
+                {language.t("store.console.login")}
+              </button>
+            </div>
+          </div>
+        }
       >
-        <Show
-          when={user()}
-          fallback={
-            <div class="flex min-h-[60vh] items-center justify-center">
-              <div class="rounded-xl border border-border-weak-base bg-surface-raised-base px-8 py-10 text-center">
-                <div class="mx-auto mb-4 flex size-12 items-center justify-center rounded-full bg-surface-info-base/20 text-text-strong">
-                  <Icon name="console" />
-                </div>
-                <h1 class="text-lg font-semibold text-text-strong">{language.t("store.console")}</h1>
-                <p class="mt-2 text-sm text-text-weak">{language.t("store.console.authDescription")}</p>
-                <Button
-                  class="mt-4"
-                  onClick={() => {
-                    window.location.href = getLoginUrl("/store/dashboard/capabilities")
-                  }}
-                >
-                  {language.t("store.console.login")}
-                </Button>
-              </div>
+        <section class="store-cshell">
+          <div class="store-tbar">
+            <div>
+              <h2 class="store-tbar-title">{language.t("store.console.capabilities.title")}</h2>
+              <p class="store-tbar-sub">{language.t("store.console.capabilities.description")}</p>
             </div>
-          }
-        >
-          <section class="rounded-2xl border border-border-weak-base bg-surface-raised-base p-5">
-            <div class="mb-5 flex items-start justify-between gap-4">
-              <div>
-                <h2 class="text-lg font-semibold text-text-strong">{language.t("store.console.capabilities.title")}</h2>
-                <p class="mt-1 text-sm text-text-weak">{language.t("store.console.capabilities.description")}</p>
-              </div>
-              <Button
-                size="small"
-                variant="ghost"
-                class="border border-border-weak-base cursor-pointer"
-                onClick={openCreateCapability}
-              >
-                <Icon name="plus" class="size-4" />
-                {language.t("store.console.newCapability")}
-              </Button>
+            <button class="store-fbtn store-fbtn-primary" onClick={openCreateCapability}>
+              <Icon name="plus" size="small" />
+              {language.t("store.console.newCapability")}
+            </button>
+          </div>
+
+          <Show when={state.filtersShown || state.items.length > 0 || state.totalItems > 0}>
+            <div class="store-dash-filter-bar">
+              <For each={["all", "skill", "subagent", "command", "mcp"]}>
+                {(type) => (
+                  <button
+                    class={`store-dash-filter-btn${state.itemTypeFilter === type ? " store-dash-filter-btn-on" : ""}`}
+                    onClick={() => {
+                      setState("itemTypeFilter", type)
+                      setState("itemPage", 1)
+                      setState("filtersShown", true)
+                      void loadItems(1, type)
+                    }}
+                  >
+                    {type === "all" ? language.t("store.console.filters.all") : typeLabel(type)}
+                  </button>
+                )}
+              </For>
             </div>
+          </Show>
 
-            <Show when={state.filtersShown || state.items.length > 0 || state.totalItems > 0}>
-              <div class="mb-4 flex flex-wrap gap-2">
-                <For each={["all", "skill", "subagent", "command", "mcp"]}>
-                  {(type) => (
-                    <button
-                      class="cursor-pointer rounded-md border px-3 py-1.5 text-sm transition-colors"
-                      classList={{
-                        "border-border-strong bg-surface-info-base/20 text-text-strong": state.itemTypeFilter === type,
-                        "border-border-weak-base text-text-weak hover:text-text-strong": state.itemTypeFilter !== type,
-                      }}
-                      onClick={() => {
-                        setState("itemTypeFilter", type)
-                        setState("itemPage", 1)
-                        setState("filtersShown", true)
-                        void loadItems(1, type)
-                      }}
-                    >
-                      {type === "all" ? language.t("store.console.filters.all") : typeLabel(type)}
-                    </button>
-                  )}
-                </For>
-              </div>
-            </Show>
-
+          <Show
+            when={!state.loadingItems}
+            fallback={<div class="store-dash-empty">{language.t("store.console.capabilities.loading")}</div>}
+          >
             <Show
-              when={!state.loadingItems}
-              fallback={<div class="text-sm text-text-weak">{language.t("store.console.capabilities.loading")}</div>}
+              when={state.totalItems > 0 || state.items.length > 0}
+              fallback={
+                <div class="store-dash-empty">
+                  {language.t("store.console.capabilities.empty")}
+                </div>
+              }
             >
-              <Show
-                when={state.totalItems > 0 || state.items.length > 0}
-                fallback={
-                  <div class="rounded-xl border border-dashed border-border-weak-base px-8 py-10 text-center text-sm text-text-weak">
-                    {language.t("store.console.capabilities.empty")}
-                  </div>
-                }
-              >
-                <div class="overflow-hidden rounded-xl border border-border-weak-base bg-surface-base">
-                  <table class="w-full text-sm">
-                    <thead>
-                      <tr class="border-b border-border-weak-base bg-surface-base">
-                        <th class="px-4 py-3 text-left text-12-medium text-text-weak">
-                          {language.t("store.console.capabilities.name")}
-                        </th>
-                        <th class="px-4 py-3 text-left text-12-medium text-text-weak">
-                          {language.t("store.console.capabilities.type")}
-                        </th>
-                        <th class="px-4 py-3 text-left text-12-medium text-text-weak">
-                          {language.t("store.console.capabilities.visibility")}
-                        </th>
-                        <th class="px-4 py-3 text-left text-12-medium text-text-weak">
-                          {language.t("store.console.capabilities.source")}
-                        </th>
-                        <th class="px-4 py-3 text-left text-12-medium text-text-weak">
-                          {language.t("common.operation")}
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <For each={state.items}>
-                        {(item) => (
-                          <tr class="border-b border-border-weak-base last:border-0">
-                            <td class="px-4 py-3">
-                              <button
-                                type="button"
-                                class="w-full cursor-pointer text-left transition-colors hover:text-text-strong"
-                                onClick={() => navigate("/store")}
-                              >
-                                <div class="text-13-medium text-text-strong">{item.name}</div>
-                                <div class="mt-1 text-12-regular text-text-weak">{item.slug}</div>
-                              </button>
+              <div class="store-tshell">
+                <table class="store-dt">
+                  <thead>
+                    <tr>
+                      <th>{language.t("store.console.capabilities.name")}</th>
+                      <th>{language.t("store.console.capabilities.type")}</th>
+                      <th>{language.t("store.console.capabilities.visibility")}</th>
+                      <th>{language.t("store.console.capabilities.source")}</th>
+                      <th style={{ "text-align": "right" }}>{language.t("common.operation")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <For each={state.items}>
+                      {(item) => {
+                        const tc = () => TYPE_COLORS[item.itemType] || "#8B5CF6"
+                        const vc = () => visColor(item.repoVisibility)
+                        return (
+                          <tr onClick={() => setSelectedItemId(item.id)}>
+                            <td>
+                              <span class="store-iname">{item.name}</span>
+                              <div style={{ "font-size": "0.625rem", color: "var(--st-text-secondary)", "margin-top": "2px" }}>
+                                {item.slug}
+                              </div>
                             </td>
-                            <td class="px-4 py-3">
+                            <td>
                               <span
-                                class="inline-flex items-center rounded-[10px] px-2.5 py-[3px] text-xs font-medium"
+                                class="store-dash-pill"
                                 style={{
-                                  "background-color": `color-mix(in srgb, ${
-                                    item.itemType === "skill"
-                                      ? "rgb(234,179,8)"
-                                      : item.itemType === "subagent"
-                                        ? "rgb(59,130,246)"
-                                        : item.itemType === "command"
-                                          ? "rgb(34,197,94)"
-                                          : "rgb(168,85,247)"
-                                  } 12%, transparent)`,
-                                  color:
-                                    item.itemType === "skill"
-                                      ? "rgb(234,179,8)"
-                                      : item.itemType === "subagent"
-                                        ? "rgb(59,130,246)"
-                                        : item.itemType === "command"
-                                          ? "rgb(34,197,94)"
-                                          : "rgb(168,85,247)",
+                                  background: `color-mix(in srgb, ${tc()} 12%, transparent)`,
+                                  color: tc(),
                                 }}
                               >
                                 {typeLabel(item.itemType)}
                               </span>
                             </td>
-                            <td class="px-4 py-3">
+                            <td>
                               <span
-                                class="inline-flex items-center gap-1 rounded-[10px] px-2.5 py-[3px] text-xs font-medium"
-                                style={{
-                                  "background-color":
-                                    item.repoVisibility === "public"
-                                      ? "color-mix(in srgb, #22c55e 12%, transparent)"
-                                      : item.repoVisibility === "private"
-                                        ? "color-mix(in srgb, #f59e0b 12%, transparent)"
-                                        : "rgba(156,163,175,0.12)",
-                                  color:
-                                    item.repoVisibility === "public"
-                                      ? "#22c55e"
-                                      : item.repoVisibility === "private"
-                                        ? "#f59e0b"
-                                        : "var(--color-text-weak)",
-                                }}
+                                class="store-dash-pill"
+                                style={{ background: vc().bg, color: vc().c }}
                               >
                                 {item.repoVisibility === "public"
                                   ? language.t("store.capabilityDialog.visibility.public")
@@ -285,124 +301,131 @@ export default function DashboardCapabilities() {
                                     : "-"}
                               </span>
                             </td>
-                            <td class="px-4 py-3 text-12-regular text-text-weak">{item.repoName || "—"}</td>
-                            <td class="px-4 py-3">
-                              <div class="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                                <Button
-                                  size="small"
-                                  variant="ghost"
-                                  class="h-8 w-8 p-0 cursor-pointer"
-                                  onClick={() => navigate("/store")}
+                            <td class="store-mut">{item.repoName || "—"}</td>
+                            <td style={{ "text-align": "right" }}>
+                              <div style={{ display: "flex", gap: "1px", "justify-content": "flex-end" }} onClick={(e) => e.stopPropagation()}>
+                                <button
+                                  class="store-abtn"
                                   title={language.t("common.open")}
+                                  onClick={() => setSelectedItemId(item.id)}
                                 >
                                   <Icon name="arrow-right" size="small" />
-                                </Button>
-                                <Button
-                                  size="small"
-                                  variant="ghost"
-                                  class="h-8 w-8 p-0 cursor-pointer"
-                                  onClick={() => openMoveCapability(item)}
+                                </button>
+                                <button
+                                  class="store-abtn"
                                   title={language.t("store.console.capabilities.move")}
+                                  onClick={() => openMoveCapability(item)}
                                 >
                                   <Icon name="share" size="small" />
-                                </Button>
-                                <Button
-                                  size="small"
-                                  variant="ghost"
-                                  class="h-8 w-8 p-0 cursor-pointer"
-                                  onClick={() => openEditCapability(item)}
+                                </button>
+                                <button
+                                  class="store-abtn"
                                   title={language.t("store.console.capabilities.edit")}
+                                  onClick={() => openEditCapability(item)}
                                 >
                                   <Icon name="edit" size="small" />
-                                </Button>
-                                <Button
-                                  size="small"
-                                  variant="ghost"
-                                  class="h-8 w-8 p-0 cursor-pointer"
-                                  onClick={() => handleDeleteItem(item.id)}
+                                </button>
+                                <button
+                                  class="store-abtn"
                                   title={language.t("store.console.capabilities.delete")}
+                                  onClick={() => handleDeleteItem(item.id)}
                                 >
                                   <Icon name="trash" size="small" />
-                                </Button>
+                                </button>
                               </div>
                             </td>
                           </tr>
-                        )}
-                      </For>
-                    </tbody>
-                  </table>
-                </div>
+                        )
+                      }}
+                    </For>
+                  </tbody>
+                </table>
+              </div>
 
-                <Show when={totalPages() > 1}>
-                  <div class="mt-4 flex items-center justify-between">
-                    <p class="text-xs text-text-weak">
-                      {language.t("store.console.capabilities.showing", {
-                        from: (state.itemPage - 1) * PAGE_SIZE + 1,
-                        to: Math.min(state.itemPage * PAGE_SIZE, state.totalItems),
-                        total: state.totalItems,
-                      })}
-                    </p>
-                    <div class="flex items-center gap-1">
-                      <Button
-                        size="small"
-                        variant="ghost"
-                        class="h-8 px-2 text-xs"
-                        disabled={state.itemPage <= 1}
-                        onClick={() => {
-                          const p = Math.max(1, state.itemPage - 1)
-                          setState("itemPage", p)
-                          void loadItems(p)
-                        }}
-                      >
-                        <Icon name="chevron-left" size="small" />
-                      </Button>
-                      <For each={pages()}>
-                        {(p) => (
-                          <Show
-                            when={p !== "..."}
-                            fallback={
-                              <span class="flex h-8 min-w-8 items-center justify-center text-xs text-text-weak">
-                                ...
-                              </span>
-                            }
+              <Show when={totalPages() > 1}>
+                <div class="store-pag">
+                  <p class="store-pag-sum">
+                    {language.t("store.console.capabilities.showing", {
+                      from: (state.itemPage - 1) * PAGE_SIZE + 1,
+                      to: Math.min(state.itemPage * PAGE_SIZE, state.totalItems),
+                      total: state.totalItems,
+                    })}
+                  </p>
+                  <div class="store-pag-acts">
+                    <button
+                      class="store-pbtn"
+                      disabled={state.itemPage <= 1}
+                      onClick={() => {
+                        const p = Math.max(1, state.itemPage - 1)
+                        setState("itemPage", p)
+                        void loadItems(p)
+                      }}
+                    >
+                      <Icon name="chevron-left" size="small" />
+                    </button>
+                    <For each={pages()}>
+                      {(p) => (
+                        <Show
+                          when={p !== "..."}
+                          fallback={<span class="store-pbtn" style={{ cursor: "default" }}>...</span>}
+                        >
+                          <button
+                            class={`store-pbtn${state.itemPage === p ? " store-pbtn-on" : ""}`}
+                            onClick={() => {
+                              setState("itemPage", p as number)
+                              void loadItems(p as number)
+                            }}
                           >
-                            <button
-                              class="flex h-8 min-w-8 cursor-pointer items-center justify-center rounded-md px-2 text-xs transition-colors"
-                              classList={{
-                                "bg-bg-muted text-text-strong font-medium": state.itemPage === p,
-                                "text-text-weak hover:text-text-strong hover:bg-bg-muted": state.itemPage !== p,
-                              }}
-                              onClick={() => {
-                                setState("itemPage", p as number)
-                                void loadItems(p as number)
-                              }}
-                            >
-                              {p}
-                            </button>
-                          </Show>
-                        )}
-                      </For>
-                      <Button
-                        size="small"
-                        variant="ghost"
-                        class="h-8 px-2 text-xs"
-                        disabled={state.itemPage >= totalPages()}
-                        onClick={() => {
-                          const p = Math.min(totalPages(), state.itemPage + 1)
-                          setState("itemPage", p)
-                          void loadItems(p)
-                        }}
-                      >
-                        <Icon name="chevron-right" size="small" />
-                      </Button>
-                    </div>
+                            {p}
+                          </button>
+                        </Show>
+                      )}
+                    </For>
+                    <button
+                      class="store-pbtn"
+                      disabled={state.itemPage >= totalPages()}
+                      onClick={() => {
+                        const p = Math.min(totalPages(), state.itemPage + 1)
+                        setState("itemPage", p)
+                        void loadItems(p)
+                      }}
+                    >
+                      <Icon name="chevron-right" size="small" />
+                    </button>
                   </div>
-                </Show>
+                </div>
               </Show>
             </Show>
-          </section>
-        </Show>
+          </Show>
+        </section>
+
+        <Sheet open={detailOpen()} onOpenChange={(open) => !open && setSelectedItemId(null)} modal={false}>
+          <SheetContent position="right" class="store-detail-sheet w-[min(48rem,92vw)] sm:max-w-none">
+            <SheetHeader class="sr-only">
+              <SheetTitle>{language.t("store.home.detail.title")}</SheetTitle>
+              <SheetDescription>{language.t("store.home.detail.description")}</SheetDescription>
+            </SheetHeader>
+            <Show when={selectedItemId()}>
+              {(itemId) => (
+                <Suspense fallback={<div class="flex justify-center py-16 text-muted-foreground">{language.t("store.loading")}</div>}>
+                  <ItemDetailContent
+                    itemId={itemId()}
+                    class="store-detail-content custom-scrollbar"
+                    onItemLoaded={setDetailItem}
+                    favorited={favorited()}
+                    favoriteCount={favoriteCount()}
+                    previewCount={previewCount()}
+                    installCount={installCount()}
+                    onToggleFavorite={toggleFavorite}
+                    favoritePending={favoritePending()}
+                    isAuthenticated={!!user() && !loading()}
+                  />
+                </Suspense>
+              )}
+            </Show>
+          </SheetContent>
+        </Sheet>
       </Show>
-    </div>
+    </Show>
   )
 }

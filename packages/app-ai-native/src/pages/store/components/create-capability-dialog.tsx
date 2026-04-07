@@ -1,6 +1,4 @@
-import { Button } from "@opencode-ai/ui/button"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
-import { Dialog } from "@opencode-ai/ui/dialog"
 import { showToast } from "@opencode-ai/ui/toast"
 import { createMemo } from "solid-js"
 import { createStore } from "solid-js/store"
@@ -10,12 +8,7 @@ import type { ContentMode } from "../lib/content"
 import { canArchive, contentValue, usableMode } from "../lib/content"
 import { CATEGORIES, TYPE_PREFIX, TYPE_CONTENT_PLACEHOLDER, typeKey, categoryKey } from "../lib/constants"
 import { ContentField } from "./content-field"
-
-const inputClass =
-  "w-full h-9 rounded-md border border-border-weak-base bg-background-base px-3 text-sm text-text-strong outline-none focus:border-border-strong"
-
-const textAreaClass =
-  "w-full rounded-md border border-border-weak-base bg-background-base px-3 py-2 text-sm font-mono text-text-strong outline-none focus:border-border-strong resize-y"
+import { StoreDialog } from "./store-dialog"
 
 type NamespaceOption = {
   value: string
@@ -77,15 +70,6 @@ export function CreateCapabilityDialog(props: CreateCapabilityDialogProps) {
         visibility: "public",
       },
     ]
-    // if (props.username) {
-    //   options.push({
-    //     value: "personal",
-    //     label: `@${props.username}`,
-    //     sublabel: language.t("store.capabilityDialog.namespace.personalDescription"),
-    //     visibility: "private",
-    //   })
-    // }
-    // Backward compatibility for old prop name if it still appears in runtime transforms
     const legacyOrganizations = (props as unknown as { organizations?: Repository[] }).organizations ?? []
     for (const repo of legacyOrganizations) {
       options.push({
@@ -171,150 +155,170 @@ export function CreateCapabilityDialog(props: CreateCapabilityDialogProps) {
   }
 
   return (
-    <Dialog title={language.t("store.capabilityDialog.create.title")} size="x-large">
-      <form onSubmit={handleSubmit} class="flex h-full flex-col overflow-hidden">
-        <div class="flex-1 overflow-y-auto px-6 pb-4 pt-2">
-          <div class="rounded-xl border border-border-weak-base bg-surface-raised-base">
-            <div class="border-b border-border-weak-base px-4 py-3">
-              <div class="text-14-medium text-text-strong">{language.t("store.capabilityDialog.create.type")}</div>
-              <div class="mt-1 text-12-regular text-text-weak">
-                {language.t("store.capabilityDialog.create.typeDescription")}
-              </div>
+    <form onSubmit={handleSubmit}>
+      <StoreDialog
+        title={language.t("store.capabilityDialog.create.title")}
+        maxWidth="860px"
+        maxHeight="calc(100vh - 40px)"
+        footer={
+          <>
+            <button
+              class="store-modal-btn store-modal-btn-ghost"
+              type="button"
+              onClick={() => dialog.close()}
+            >
+              {language.t("common.cancel")}
+            </button>
+            <button
+              class="store-modal-btn store-modal-btn-primary"
+              type="submit"
+              disabled={store.saving || !store.name.trim() || !store.slug.trim()}
+            >
+              {store.saving
+                ? mode() === "archive"
+                  ? language.t("store.capabilityDialog.content.uploading")
+                  : language.t("store.capabilityDialog.create.submitting")
+                : language.t("store.capabilityDialog.create.submit")}
+            </button>
+          </>
+        }
+      >
+        <div class="store-modal-section">
+          <div class="store-modal-section-title">{language.t("store.capabilityDialog.create.type")}</div>
+          <div class="store-modal-section-desc">
+            {language.t("store.capabilityDialog.create.typeDescription")}
+          </div>
+          <div class="store-modal-field">
+            <select
+              class="store-modal-input"
+              value={store.itemType}
+              onInput={(e) => setItemType(e.currentTarget.value as "skill" | "subagent" | "command" | "mcp")}
+            >
+              {(["skill", "subagent", "command", "mcp"] as const).map((type) => (
+                <option value={type}>{language.t(typeKey(type))}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div class="store-modal-section">
+          <div class="store-modal-field">
+            <label class="store-modal-label">
+              {language.t("store.capabilityDialog.field.ownerPackage")} <span class="req">*</span>
+            </label>
+            <div style={{ display: "flex", "align-items": "center", gap: "0.5rem" }}>
               <select
-                class={`${inputClass} mt-2`}
-                value={store.itemType}
-                onInput={(e) => setItemType(e.currentTarget.value as "skill" | "subagent" | "command" | "mcp")}
+                value={store.namespace}
+                onInput={(e) => setStore("namespace", e.currentTarget.value)}
+                class="store-modal-input"
+                style={{ "min-width": "200px", flex: "1" }}
               >
-                {(["skill", "subagent", "command", "mcp"] as const).map((type) => (
-                  <option value={type}>{language.t(typeKey(type))}</option>
+                {namespaceOptions().map((option) => (
+                  <option value={option.value}>{option.label}</option>
                 ))}
               </select>
-            </div>
-
-            <div class="border-b border-border-weak-base px-4 py-3">
-              <label class="mb-2 block text-12-medium text-text-strong">
-                {language.t("store.capabilityDialog.field.ownerPackage")} <span class="text-icon-info-base">*</span>
-              </label>
-              <div class="flex items-center gap-2">
-                <select
-                  value={store.namespace}
-                  onInput={(e) => setStore("namespace", e.currentTarget.value)}
-                  class={`${inputClass} min-w-[200px] flex-1`}
-                >
-                  {namespaceOptions().map((option) => (
-                    <option value={option.value}>{option.label}</option>
-                  ))}
-                </select>
-                <span class="text-text-weak">/</span>
-                <input
-                  value={store.slug}
-                  onInput={(e) => {
-                    setStore("slug", e.currentTarget.value)
-                    setStore("slugManual", true)
-                  }}
-                  placeholder={`${slugPrefix()}my-${store.itemType}`}
-                  class={`${inputClass} flex-[1.2] font-mono`}
-                  required
-                />
-              </div>
-              <p class="mt-2 text-12-regular text-text-weak">
-                {selectedNamespace()?.sublabel} ·{" "}
-                {(selectedNamespace()?.label ?? "public") + "/" + (store.slug || `${slugPrefix()}my-${store.itemType}`)}
-              </p>
-            </div>
-
-            <div class="border-b border-border-weak-base px-4 py-3">
-              <label class="mb-2 block text-12-medium text-text-strong">
-                {language.t("store.capabilityDialog.field.displayName")} <span class="text-icon-info-base">*</span>
-              </label>
+              <span style={{ color: "var(--st-text-secondary)" }}>/</span>
               <input
-                autofocus
-                value={store.name}
-                onInput={(e) => handleNameInput(e.currentTarget.value)}
-                placeholder={language.t("store.capabilityDialog.field.displayNamePlaceholder", { type: typeLabel() })}
-                class={inputClass}
+                value={store.slug}
+                onInput={(e) => {
+                  setStore("slug", e.currentTarget.value)
+                  setStore("slugManual", true)
+                }}
+                placeholder={`${slugPrefix()}my-${store.itemType}`}
+                class="store-modal-input"
+                style={{ flex: "1.2", "font-family": "'SF Mono', 'Fira Code', monospace" }}
                 required
               />
             </div>
-
-            <div class="border-b border-border-weak-base px-4 py-3">
-              <label class="mb-2 block text-12-medium text-text-strong">
-                {language.t("store.capabilityDialog.field.description")}
-              </label>
-              <input
-                value={store.description}
-                onInput={(e) => setStore("description", e.currentTarget.value)}
-                placeholder={language.t("store.capabilityDialog.field.descriptionPlaceholder")}
-                class={inputClass}
-              />
-            </div>
-
-            <div class="grid gap-3 border-b border-border-weak-base px-4 py-3 md:grid-cols-2">
-              <div>
-                <label class="mb-2 block text-12-medium text-text-strong">
-                  {language.t("store.capabilityDialog.field.category")} <span class="text-icon-info-base">*</span>
-                </label>
-                <select
-                  value={store.category}
-                  onInput={(e) => setStore("category", e.currentTarget.value)}
-                  class={inputClass}
-                >
-                  {CATEGORIES.map((category) => (
-                    <option value={category}>{language.t(categoryKey(category))}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label class="mb-2 block text-12-medium text-text-strong">
-                  {language.t("store.capabilityDialog.field.visibility")}
-                </label>
-                <div class="flex h-9 items-center rounded-md border border-border-weak-base bg-background-base px-3 text-sm text-text-weak">
-                  {visibilityLabel(selectedNamespace()?.visibility)}
-                </div>
-              </div>
-            </div>
-
-            <div class="px-4 py-3">
-              <ContentField
-                archive={archive()}
-                mode={store.contentMode}
-                text={store.content}
-                file={store.file}
-                rows={6}
-                textClass={textAreaClass}
-                onModeChange={(mode) => {
-                  setStore("contentMode", mode)
-                  setStore("error", "")
-                }}
-                onTextChange={(text) => {
-                  setStore("content", text)
-                  setStore("error", "")
-                }}
-                onFileChange={(file) => {
-                  setStore("file", file)
-                  setStore("error", "")
-                }}
-                onError={(message) => setStore("error", message)}
-              />
+            <div class="store-modal-hint">
+              {selectedNamespace()?.sublabel} ·{" "}
+              {(selectedNamespace()?.label ?? "public") + "/" + (store.slug || `${slugPrefix()}my-${store.itemType}`)}
             </div>
           </div>
-
-          {store.error ? <p class="mt-4 text-12-regular text-icon-critical-base">{store.error}</p> : null}
         </div>
 
-        <div class="flex shrink-0 items-center justify-end gap-2 border-t border-border-weak-base bg-surface-base px-6 py-3">
-          <Button type="button" variant="ghost" onClick={() => dialog.close()}>
-            {language.t("common.cancel")}
-          </Button>
-          <Button type="submit" disabled={store.saving || !store.name.trim() || !store.slug.trim()}>
-            {store.saving
-              ? mode() === "archive"
-                ? language.t("store.capabilityDialog.content.uploading")
-                : language.t("store.capabilityDialog.create.submitting")
-              : language.t("store.capabilityDialog.create.submit")}
-          </Button>
+        <div class="store-modal-section">
+          <div class="store-modal-field">
+            <label class="store-modal-label">
+              {language.t("store.capabilityDialog.field.displayName")} <span class="req">*</span>
+            </label>
+            <input
+              autofocus
+              value={store.name}
+              onInput={(e) => handleNameInput(e.currentTarget.value)}
+              placeholder={language.t("store.capabilityDialog.field.displayNamePlaceholder", { type: typeLabel() })}
+              class="store-modal-input"
+              required
+            />
+          </div>
+
+          <div class="store-modal-field">
+            <label class="store-modal-label">
+              {language.t("store.capabilityDialog.field.description")}
+            </label>
+            <input
+              value={store.description}
+              onInput={(e) => setStore("description", e.currentTarget.value)}
+              placeholder={language.t("store.capabilityDialog.field.descriptionPlaceholder")}
+              class="store-modal-input"
+            />
+          </div>
+
+          <div class="store-modal-row">
+            <div class="store-modal-field" style={{ flex: "1" }}>
+              <label class="store-modal-label">
+                {language.t("store.capabilityDialog.field.category")} <span class="req">*</span>
+              </label>
+              <select
+                value={store.category}
+                onInput={(e) => setStore("category", e.currentTarget.value)}
+                class="store-modal-input"
+              >
+                {CATEGORIES.map((category) => (
+                  <option value={category}>{language.t(categoryKey(category))}</option>
+                ))}
+              </select>
+            </div>
+            <div class="store-modal-field" style={{ flex: "1" }}>
+              <label class="store-modal-label">
+                {language.t("store.capabilityDialog.field.visibility")}
+              </label>
+              <div
+                class="store-modal-input"
+                style={{ display: "flex", "align-items": "center", opacity: "0.6" }}
+              >
+                {visibilityLabel(selectedNamespace()?.visibility)}
+              </div>
+            </div>
+          </div>
         </div>
-      </form>
-    </Dialog>
+
+        <div class="store-modal-section">
+          <ContentField
+            archive={archive()}
+            mode={store.contentMode}
+            text={store.content}
+            file={store.file}
+            rows={6}
+            textClass="store-modal-input"
+            onModeChange={(mode) => {
+              setStore("contentMode", mode)
+              setStore("error", "")
+            }}
+            onTextChange={(text) => {
+              setStore("content", text)
+              setStore("error", "")
+            }}
+            onFileChange={(file) => {
+              setStore("file", file)
+              setStore("error", "")
+            }}
+            onError={(message) => setStore("error", message)}
+          />
+        </div>
+
+        {store.error ? <p class="store-modal-error">{store.error}</p> : null}
+      </StoreDialog>
+    </form>
   )
 }

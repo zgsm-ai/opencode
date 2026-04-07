@@ -221,7 +221,7 @@ export default function BestPracticeCarousel(props: BestPracticeCarouselProps) {
                         {TYPE_LABEL[item.itemType] ?? "\u2726"}{" "}
                         {language.t(typeKey(item.itemType))}
                       </span>
-                      <Show when={item.category}>
+                      <Show when={item.category?.trim()}>
                         <span class="bp-card-category-badge">
                           {language.t(categoryKey(item.category))}
                         </span>

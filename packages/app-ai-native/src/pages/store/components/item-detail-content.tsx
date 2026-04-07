@@ -2,6 +2,7 @@ import { createResource, createSignal, createEffect, Show, For } from "solid-js"
 import { createHighlighter } from "shiki"
 import { useTheme } from "@opencode-ai/ui/theme"
 import { Icon } from "@opencode-ai/ui/icon"
+import { LocalIcon } from "@/components/local-icon"
 import { artifactApi, itemApi, scanApi, userApi, type CapabilityItem, type ScanResult } from "../lib/api"
 import { useLanguage } from "@/context/language"
 import { categoryKey, formatBytes } from "../lib/constants"
@@ -295,7 +296,7 @@ export default function ItemDetailContent(props: ItemDetailContentProps) {
                           : language.t("store.detail.favoriteSignIn")
                       }
                     >
-                      <span class="text-sm leading-none">{props.favorited ? "★" : "☆"}</span>
+                      <span class="inline-flex items-center" style={{ width: "14px", height: "14px" }}><LocalIcon name={props.favorited ? "star-filled" : "star"} size="small" style={{ color: props.favorited ? (TYPE_META[item()?.itemType ?? ""]?.accent ?? "var(--st-accent)") : undefined, width: "14px", height: "14px" }} /></span>
                       <span>
                         {props.isAuthenticated
                           ? props.favorited
