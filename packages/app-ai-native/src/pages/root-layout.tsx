@@ -8,7 +8,7 @@ import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { usePlatform } from "@/context/platform"
 import { useLanguage } from "@/context/language"
 import { useAuth } from "@/context/auth"
-import { env } from "@/lib/env"
+import { appPath } from "@/lib/router"
 import { getLoginUrl } from "@/pages/store/lib/auth"
 import { DialogSettings } from "@/components/dialog-settings"
 
@@ -99,16 +99,7 @@ export default function RootLayout(props: ParentProps) {
   const platform = usePlatform()
   const language = useLanguage()
 
-  const appPathname = () => {
-    const base = (env.BASE_PATH || "").replace(/\/+$/, "")
-    const pathname = location.pathname
-
-    if (!base || base === "/") return pathname
-    if (pathname === base) return "/"
-    if (pathname.startsWith(`${base}/`)) return pathname.slice(base.length) || "/"
-
-    return pathname
-  }
+  const appPathname = () => appPath(location.pathname)
 
   const isWorkspace = () => {
     const path = appPathname()

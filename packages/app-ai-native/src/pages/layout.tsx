@@ -19,6 +19,7 @@ import { useWorkspaceNavigate } from "@/hooks/use-workspace-navigate"
 import { useLayout, LocalProject } from "@/context/layout"
 import { useGlobalSync } from "@/context/global-sync"
 import { useActiveWorkspace } from "@/pages/workspace/active-workspace"
+import { appPath } from "@/lib/router"
 import { Persist, persisted } from "@/utils/persist"
 import { decode64 } from "@/utils/base64"
 import { ResizeHandle } from "@opencode-ai/ui/resize-handle"
@@ -217,7 +218,7 @@ export default function Layout(props: ParentProps) {
 
   const autoselecting = createMemo(() => {
     if (params.dir) return false
-    if (location.pathname.startsWith("/store")) return false
+    if (appPath(location.pathname).startsWith("/store")) return false
     if (!state.autoselect) return false
     if (!pageReady()) return true
     if (!layoutReady()) return true
@@ -510,8 +511,8 @@ export default function Layout(props: ParentProps) {
         if (!value.layoutReady) return
         if (!state.autoselect) return
         if (value.dir) return
-        if (location.pathname.startsWith("/store")) return
-        if (location.pathname.startsWith("/workspace")) return
+        if (appPath(location.pathname).startsWith("/store")) return
+        if (appPath(location.pathname).startsWith("/workspace")) return
 
         const last = server.projects.last()
 

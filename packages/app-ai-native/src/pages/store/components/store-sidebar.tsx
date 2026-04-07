@@ -3,6 +3,7 @@ import { createResource, For, Show } from "solid-js"
 import { Icon, type IconProps } from "@opencode-ai/ui/icon"
 import { LocalIcon, type LocalIconName } from "@/components/local-icon"
 import { useLanguage } from "@/context/language"
+import { appPath } from "@/lib/router"
 import { itemApi } from "../lib/api"
 import "./store-sidebar.css"
 
@@ -28,6 +29,8 @@ export default function StoreSidebar() {
   const [searchParams] = useSearchParams()
   const language = useLanguage()
 
+  const appPathname = () => appPath(location.pathname)
+
   const [stats] = createResource(async () =>
     Object.fromEntries(
       await Promise.all(
@@ -39,17 +42,21 @@ export default function StoreSidebar() {
   )
 
   const isActive = (href: string, exact?: boolean) => {
-    const isStorePath = location.pathname === "/store" || location.pathname === "/store/"
+    const path = appPathname()
+    const [item] = href.split("?")
+    const isStorePath = path === "/store" || path === "/store/"
+
     if (exact) {
-      // Home: active when on /store with no type param
       return isStorePath && !searchParams.type
     }
-    // Type items: extract ?type= from href and compare with current search param
+
     const match = href.match(/[?&]type=([^&]+)/)
     if (match) {
       return isStorePath && searchParams.type === match[1]
     }
-    return location.pathname === href || location.pathname.startsWith(href + "/")
+
+    if (!item) return false
+    return path === item || path.startsWith(item + "/")
   }
 
   return (

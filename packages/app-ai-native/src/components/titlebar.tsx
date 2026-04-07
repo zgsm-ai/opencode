@@ -11,6 +11,7 @@ import { useLayout } from "@/context/layout"
 import { usePlatform } from "@/context/platform"
 import { useCommand } from "@/context/command"
 import { useLanguage } from "@/context/language"
+import { appPath } from "@/lib/router"
 import { applyPath, backPath, forwardPath } from "./titlebar-history"
 
 type TauriDesktopWindow = {
@@ -50,7 +51,7 @@ export function Titlebar() {
   const web = createMemo(() => platform.platform === "web")
   const zoom = () => platform.webviewZoom?.() ?? 1
   const minHeight = () => (mac() ? `${40 / zoom()}px` : undefined)
-  const inStore = createMemo(() => location.pathname.startsWith("/store"))
+  const inStore = createMemo(() => appPath(location.pathname).startsWith("/store"))
   if (inStore()) return null
 
   const [history, setHistory] = createStore({
