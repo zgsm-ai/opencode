@@ -129,7 +129,7 @@ export function CreateRepoDialog(props: CreateRepoDialogProps) {
                 autofocus
                 value={store.name}
                 onInput={(e) => setStore("name", e.currentTarget.value)}
-                placeholder="team-repo"
+                placeholder="team-space"
                 class="store-modal-input"
                 required
               />
@@ -141,7 +141,7 @@ export function CreateRepoDialog(props: CreateRepoDialogProps) {
               <input
                 value={store.displayName}
                 onInput={(e) => setStore("displayName", e.currentTarget.value)}
-                placeholder="Team Repository"
+                placeholder="Team Space"
                 class="store-modal-input"
               />
             </div>

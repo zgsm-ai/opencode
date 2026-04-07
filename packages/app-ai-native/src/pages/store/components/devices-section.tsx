@@ -6,14 +6,22 @@ import type { Device, UpdateDeviceRequest } from "@/pages/workspace/types"
 import { DeviceCard } from "./device-card"
 import { deviceManagementService } from "../lib/device-management-service"
 
-export function DevicesSection() {
+type DevicesSectionProps = {
+  devices?: () => Device[] | undefined
+  loading?: () => boolean
+  setDevices?: (fn: (items: Device[] | undefined) => Device[] | undefined) => void
+}
+
+export function DevicesSection(props: DevicesSectionProps = {}) {
   const language = useLanguage()
   const [deviceSearch, setDeviceSearch] = createSignal("")
-  const [reloadKey, setReloadKey] = createSignal(0)
+  const local = !props.devices
+    ? createResource(async () => deviceManagementService.list())
+    : undefined
 
-  const [devices, { mutate }] = createResource(reloadKey, async () => {
-    return deviceManagementService.list()
-  })
+  const devices = () => props.devices?.() ?? local?.[0]()
+  const loading = () => props.loading?.() ?? local?.[0].loading ?? false
+  const mutate = props.setDevices ?? local?.[1].mutate ?? (() => undefined)
 
   const filteredDevices = createMemo(() => {
     const search = deviceSearch().toLowerCase().trim()
@@ -61,7 +69,7 @@ export function DevicesSection() {
         title: language.t("store.devices.toast.updated"),
       })
     } catch (error) {
-      mutate(current)
+      mutate(() => current)
       showToast({
         variant: "error",
         icon: "circle-x",
@@ -93,7 +101,7 @@ export function DevicesSection() {
       </div>
 
       <Show
-        when={!devices.loading}
+        when={!loading()}
         fallback={<div class="store-dash-empty">{language.t("store.devices.loading")}</div>}
       >
         <Show

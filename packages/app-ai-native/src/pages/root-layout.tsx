@@ -109,6 +109,11 @@ export default function RootLayout(props: ParentProps) {
   }
   const isProjects = () => location.pathname.startsWith("/projects")
 
+  const isConsole = () => {
+    const path = appPathname()
+    return path === "/console" || path.startsWith("/console/")
+  }
+
   return (
     <div class="flex h-full w-full overflow-hidden">
       <aside class="fixed inset-y-0 left-0 z-40 flex w-12 flex-col items-center py-4" style={{ background: "var(--st-surface-lowest)", "border-right": "1px solid rgba(194,198,212,0.2)" }}>
@@ -129,16 +134,12 @@ export default function RootLayout(props: ParentProps) {
         </nav>
         <div class="mt-auto flex flex-col gap-2">
           <UserButton />
-          <Tooltip placement="right" value={language.t("sidebar.console")}>
-            <button
-              type="button"
-              onClick={() => navigate("/store/dashboard")}
-              class="flex size-10 items-center justify-center text-[var(--st-text-muted)] transition-colors hover:bg-[var(--st-surface)] hover:text-[var(--st-text)]"
-              aria-label={language.t("sidebar.console")}
-            >
-              <Icon name="sliders" size="normal" />
-            </button>
-          </Tooltip>
+          <NavButton
+            icon="sliders"
+            label={language.t("sidebar.console")}
+            active={isConsole()}
+            onClick={() => navigate("/console")}
+          />
           {/* TODO: 未来恢复设置入口后，再重新展示设置按钮，并放开语言/主题切换能力。 */}
           <Tooltip placement="right" value={language.t("sidebar.help")}>
             <button

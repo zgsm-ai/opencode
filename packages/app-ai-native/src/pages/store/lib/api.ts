@@ -230,6 +230,9 @@ export interface CapabilityItem {
   artifacts?: CapabilityArtifact[]
 }
 
+export type ItemSort = "favoriteCount" | "installCount" | "previewCount"
+export type ItemOrder = "asc" | "desc"
+
 export interface RepoRegistryStatus {
   registryId: string
   name: string
@@ -675,6 +678,8 @@ export const itemApi = {
     page?: number
     pageSize?: number
     status?: string
+    sortBy?: ItemSort
+    sortOrder?: ItemOrder
   }) => {
     const p = new URLSearchParams()
     if (params?.type) p.set("type", params.type)
@@ -684,6 +689,8 @@ export const itemApi = {
     if (params?.page) p.set("page", String(params.page))
     if (params?.pageSize) p.set("pageSize", String(params.pageSize))
     if (params?.status) p.set("status", params.status)
+    if (params?.sortBy) p.set("sortBy", params.sortBy)
+    if (params?.sortOrder) p.set("sortOrder", params.sortOrder)
     return apiFetch<{ items: CapabilityItem[]; total: number; hasMore: boolean }>(`/api/items?${p.toString()}`)
   },
 

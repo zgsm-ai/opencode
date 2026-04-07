@@ -40,14 +40,22 @@ export function WecomChannelCard(props: WecomChannelCardProps) {
 
   return (
     <div class="store-dash-card">
-      <div class="store-notif-card-type">
-        <Icon name="comment" size="small" />
-        WeCom — {props.channel.name}
+      <div class="store-dash-card-head">
+        <span class="store-dash-card-name" style={{ display: "flex", "align-items": "center", gap: "0.375rem" }}>
+          <Icon name="comment" size="small" />
+          WeCom — {props.channel.name}
+        </span>
+        <span
+          class="store-dash-pill"
+          style={{ background: enabledStyle().bg, color: enabledStyle().c }}
+        >
+          {enabledStyle().label}
+        </span>
       </div>
 
       <div class="store-notif-card-field">
         <strong>Webhook:</strong>{" "}
-        <span style={{ "font-family": "monospace", "font-size": "0.5625rem" }}>
+        <span style={{ "font-family": "monospace", "font-size": "12px", overflow: "hidden", "text-overflow": "ellipsis", "white-space": "nowrap" }}>
           {props.channel.webhook || "—"}
         </span>
       </div>
@@ -62,13 +70,7 @@ export function WecomChannelCard(props: WecomChannelCardProps) {
         </Show>
       </div>
 
-      <div style={{ display: "flex", "align-items": "center", gap: "0.375rem", "margin-bottom": "0.5rem" }}>
-        <span
-          class="store-dash-pill"
-          style={{ background: enabledStyle().bg, color: enabledStyle().c }}
-        >
-          {enabledStyle().label}
-        </span>
+      <div class="store-dash-card-foot" style={{ "justify-content": "space-between" }}>
         <button
           class="store-notif-test-btn"
           disabled={!props.channel.enabled || testing()}
@@ -79,23 +81,22 @@ export function WecomChannelCard(props: WecomChannelCardProps) {
             ? language.t("store.notificationChannels.testing")
             : language.t("store.notificationChannels.test")}
         </button>
-      </div>
-
-      <div class="store-dash-card-foot">
-        <button
-          class="store-abtn"
-          title={language.t("common.edit")}
-          onClick={() => props.onEdit(props.channel)}
-        >
-          <Icon name="edit" size="small" />
-        </button>
-        <button
-          class="store-abtn"
-          title={language.t("common.delete")}
-          onClick={() => void props.onRemove(props.channel.id)}
-        >
-          <Icon name="trash" size="small" />
-        </button>
+        <div style={{ display: "flex", gap: "2px" }}>
+          <button
+            class="store-abtn"
+            title={language.t("common.edit")}
+            onClick={() => props.onEdit(props.channel)}
+          >
+            <Icon name="edit" size="small" />
+          </button>
+          <button
+            class="store-abtn"
+            title={language.t("common.delete")}
+            onClick={() => void props.onRemove(props.channel.id)}
+          >
+            <Icon name="trash" size="small" />
+          </button>
+        </div>
       </div>
     </div>
   )

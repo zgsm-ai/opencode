@@ -331,17 +331,17 @@ export default function ItemDetailContent(props: ItemDetailContentProps) {
             {/* Scrollable body */}
             <div class="detail-panel-body flex-1 px-5">
               {/* Description + Install command */}
-              <div class="rounded-lg bg-bg-muted/40 px-4 py-3">
+              <div>
                 <Show when={data().description}>
-                  <p class="mb-2 text-12-regular leading-relaxed text-text-weak">{data().description}</p>
+                  <p class="mb-3 text-12-regular leading-relaxed text-text-weak">{data().description}</p>
                 </Show>
-                <div class="flex items-center gap-2">
-                  <div class="min-w-0 flex-1">
-                    <code class="select-all text-12-mono text-text-weak">{getInstallCommand(data())}</code>
+                <div class="flex items-center gap-2 rounded-lg px-4 py-2.5" style="background-color: var(--st-surface-high)">
+                  <div class="thin-scrollbar flex min-w-0 flex-1 items-center overflow-x-auto">
+                    <code class="select-all whitespace-nowrap text-12-mono text-text-weak">{getInstallCommand(data())}</code>
                   </div>
                   <button
                     onClick={copy}
-                    class="inline-flex size-7 shrink-0 cursor-pointer items-center justify-center rounded text-text-weak transition-all duration-150 hover:bg-bg-muted hover:text-text-strong"
+                    class="inline-flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-text-weak transition-all duration-150 hover:bg-bg-muted hover:text-text-strong"
                     title={language.t("store.itemCard.copyInstall")}
                   >
                     <Icon name={copied() ? "check-small" : "copy"} size="small" class={copied() ? "text-green-500" : ""} />

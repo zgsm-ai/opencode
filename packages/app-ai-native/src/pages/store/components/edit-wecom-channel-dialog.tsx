@@ -88,12 +88,6 @@ export function EditWecomChannelDialog(props: EditWecomChannelDialogProps) {
         }
       >
         <div class="store-modal-section">
-          <div class="store-modal-section-title">
-            {language.t("store.notificationChannels.dialog.name")}
-          </div>
-          <div class="store-modal-section-desc">
-            {language.t("store.notificationChannels.dialog.webhook")}
-          </div>
           <div class="store-modal-field">
             <label class="store-modal-label">
               {language.t("store.notificationChannels.dialog.name")} <span class="req">*</span>
@@ -115,10 +109,8 @@ export function EditWecomChannelDialog(props: EditWecomChannelDialogProps) {
               onInput={(e) => setForm("webhook", e.currentTarget.value)}
               placeholder={language.t("store.notificationChannels.dialog.webhookPlaceholder")}
               class="store-modal-input"
+              autocomplete="off"
             />
-            <div class="store-modal-hint">
-              {language.t("store.notificationChannels.dialog.webhookPlaceholder")}
-            </div>
           </div>
         </div>
 

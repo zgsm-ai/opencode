@@ -18,8 +18,6 @@ const BROWSE_NAV = [
 const DASHBOARD_NAV = [
   { href: "/store/dashboard/repositories", labelKey: "store.dashboard.nav.repositories", icon: "folder" as IconProps["name"], color: "#3b82f6" },
   { href: "/store/dashboard/capabilities", labelKey: "store.dashboard.nav.capabilities", icon: "sparkles" as IconProps["name"], color: "#eab308" },
-  { href: "/store/dashboard/devices", labelKey: "store.dashboard.nav.devices", icon: "server" as IconProps["name"], color: "#22c55e" },
-  { href: "/store/dashboard/notifications", labelKey: "store.dashboard.nav.notifications", localIcon: "bell" as LocalIconName, color: "#a855f7" },
 ] as const
 
 type StoreType = "skill" | "subagent" | "command" | "mcp"
@@ -109,9 +107,7 @@ export default function StoreSidebar() {
                     style={{ "--_nav-color": item.color }}
                   >
                     <span class="store-sidebar-nav-icon">
-                      {"localIcon" in item
-                        ? <LocalIcon name={item.localIcon} size="small" />
-                        : <Icon name={item.icon} size="small" />}
+                      <Icon name={item.icon} size="small" />
                     </span>
                     {language.t(item.labelKey)}
                   </A>

@@ -1,4 +1,5 @@
 import { createEffect, createMemo, createResource, createSignal, For, Show, Suspense } from "solid-js"
+import { createStore } from "solid-js/store"
 import { useSearchParams } from "@solidjs/router"
 import { useLanguage } from "@/context/language"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
@@ -12,7 +13,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { behaviorApi, itemApi, type CapabilityItem } from "../lib/api"
+import { behaviorApi, itemApi, type CapabilityItem, type ItemOrder, type ItemSort } from "../lib/api"
 import { categoryKey, typeKey } from "../lib/constants"
 import ItemDetailContent, { getInstallCommand } from "../components/item-detail-content"
 import SecurityTag from "../components/security-tag"
@@ -29,8 +30,14 @@ const STORE_TYPES = [
 ] as const
 
 type StoreType = (typeof STORE_TYPES)[number]["value"]
+type ListData = Awaited<ReturnType<typeof itemApi.list>>
 
 const PAGE_SIZE = 10
+const SORTS = [
+  ["favoriteCount", "store.home.table.favoriteCount"],
+  ["installCount", "store.home.table.installCount"],
+  ["previewCount", "store.home.table.previewCount"],
+] as const satisfies readonly [ItemSort, string][]
 
 function formatDate(iso?: string) {
   if (!iso) return "—"
@@ -52,7 +59,7 @@ function rangePages(page: number, totalPages: number) {
 export default function Home() {
   const language = useLanguage()
   const auth = useAuth()
-  const [searchParams, setSearchParams] = useSearchParams()
+  const [searchParams] = useSearchParams()
 
   const initialType = () => {
     const t = searchParams.type as StoreType | undefined
@@ -66,7 +73,8 @@ export default function Home() {
   const [copiedItemId, setCopiedItemId] = createSignal<string | null>(null)
   const [searchText, setSearchText] = createSignal("")
   const [debouncedSearch, setDebouncedSearch] = createSignal("")
-  const [listCache, setListCache] = createSignal<Awaited<ReturnType<typeof itemApi.list>> | null>(null)
+  const [listCache, setListCache] = createSignal<{ key: string; data: ListData } | null>(null)
+  const [sort, setSort] = createStore<{ by?: ItemSort; order?: ItemOrder }>({})
   const [detailItem, setDetailItem] = createSignal<CapabilityItem | null>(null)
   const [favoritePending, setFavoritePending] = createSignal(false)
   const [favorited, setFavorited] = createSignal(false)
@@ -102,9 +110,13 @@ export default function Home() {
     search: debouncedSearch() || undefined,
     page: page(),
     pageSize: PAGE_SIZE,
+    sortBy: sort.by,
+    sortOrder: sort.order,
   }))
 
-  const [list] = createResource(listParams, (params) => itemApi.list(params))
+  const listKey = createMemo(() => JSON.stringify(listParams()))
+  const listSrc = createMemo(() => ({ key: listKey(), params: listParams() }))
+  const [list] = createResource(listSrc, async (src) => ({ key: src.key, data: await itemApi.list(src.params) }))
   const [stats] = createResource(async () =>
     Object.fromEntries(
       await Promise.all(
@@ -128,13 +140,15 @@ export default function Home() {
   })
 
   const listData = createMemo(() => {
-    if (list.loading && !listCache()) return null
-    return list.latest ?? listCache()
+    const data = list.latest
+    if (data?.key === listKey()) return data.data
+    return listCache()?.data ?? null
   })
 
   createEffect(() => {
     const data = list.latest
-    if (data) setListCache(data)
+    if (!data || data.key !== listKey()) return
+    setListCache(data)
   })
 
   const toggleFavorite = async () => {
@@ -257,6 +271,25 @@ export default function Home() {
     setSelectedItemId(null)
   }
 
+  const handleSortChange = (by: ItemSort) => {
+    setSelectedItemId(null)
+    setPage(1)
+    if (sort.by !== by) {
+      setSort({ by, order: "desc" })
+      return
+    }
+    if (sort.order === "desc") {
+      setSort("order", "asc")
+      return
+    }
+    setSort({ by: undefined, order: undefined })
+  }
+
+  const sortState = (by: ItemSort) => {
+    if (sort.by !== by || !sort.order) return "none"
+    return sort.order === "asc" ? "ascending" : "descending"
+  }
+
   const copyInstall = async (item: CapabilityItem) => {
     await navigator.clipboard.writeText(getInstallCommand(item))
     setCopiedItemId(item.id)
@@ -271,7 +304,6 @@ export default function Home() {
     return {
       total: popularRaw()?.total ?? 0,
       installs: items.reduce((s, i) => s + (i.installCount ?? 0), 0),
-      favorites: items.reduce((s, i) => s + (i.favoriteCount ?? 0), 0),
     }
   })
 
@@ -357,10 +389,6 @@ export default function Home() {
               <div class="tp-hstat">
                 <div class="tp-hstat-val">{formatCompact(typeAggregate().installs)}</div>
                 <div class="tp-hstat-label">{language.t("store.typeList.stat.installs")}</div>
-              </div>
-              <div class="tp-hstat">
-                <div class="tp-hstat-val">{formatCompact(typeAggregate().favorites)}</div>
-                <div class="tp-hstat-label">{language.t("store.typeList.stat.favorites")}</div>
               </div>
             </div>
           </header>
@@ -518,9 +546,27 @@ export default function Home() {
                 <TableHeader>
                   <TableRow class="store-data-table-head-row">
                     <TableHead>{language.t("store.console.capabilities.name")}</TableHead>
-                    <TableHead>{language.t("store.home.table.favoriteCount")}</TableHead>
-                    <TableHead>{language.t("store.home.table.installCount")}</TableHead>
-                    <TableHead>{language.t("store.home.table.previewCount")}</TableHead>
+                    <For each={SORTS}>
+                      {([by, label]) => (
+                        <TableHead aria-sort={sortState(by)}>
+                          <button
+                            type="button"
+                            class={`store-sort-btn ${sort.by === by ? "store-sort-btn-active" : ""}`}
+                            onClick={() => handleSortChange(by)}
+                          >
+                            <span>{language.t(label)}</span>
+                            <span class="store-sort-icon" aria-hidden="true">
+                              <span
+                                class={`store-sort-arrow store-sort-arrow-up ${sort.by === by && sort.order === "asc" ? "store-sort-arrow-active" : ""}`}
+                              />
+                              <span
+                                class={`store-sort-arrow store-sort-arrow-down ${sort.by === by && sort.order === "desc" ? "store-sort-arrow-active" : ""}`}
+                              />
+                            </span>
+                          </button>
+                        </TableHead>
+                      )}
+                    </For>
                     <TableHead class="store-col-category">
                       {language.t("store.console.capabilities.category")}
                     </TableHead>

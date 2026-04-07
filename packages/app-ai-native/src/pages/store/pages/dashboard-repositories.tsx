@@ -188,12 +188,12 @@ export default function DashboardRepositories() {
         <section class="store-cshell">
           <div class="store-tbar">
             <div>
-              <h2 class="store-tbar-title">{language.t("store.console.repositories.title")}</h2>
+              <h2 class="store-tbar-title">{language.t("store.dashboard.nav.repositories")}</h2>
               <p class="store-tbar-sub">{language.t("store.console.repositories.description")}</p>
             </div>
             <button class="store-fbtn store-fbtn-primary" onClick={openCreateRepo}>
               <Icon name="plus" size="small" />
-              {language.t("store.console.newRepository")}
+              {language.t("store.console.repositories.create")}
             </button>
           </div>
 

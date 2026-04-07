@@ -10,10 +10,22 @@ import { WecomChannelCard } from "./wecom-channel-card"
 import { notificationChannelService } from "../lib/notification-channel-service"
 import { ConfirmDialog } from "./confirm-dialog"
 
-export function NotificationChannelsSection() {
+type NotificationChannelsSectionProps = {
+  channels?: () => WecomChannel[] | undefined
+  loading?: () => boolean
+  setChannels?: (fn: (items: WecomChannel[] | undefined) => WecomChannel[] | undefined) => void
+}
+
+export function NotificationChannelsSection(props: NotificationChannelsSectionProps = {}) {
   const dialog = useDialog()
   const language = useLanguage()
-  const [channels, { mutate, refetch }] = createResource(async () => notificationChannelService.listWecom())
+  const local = !props.channels
+    ? createResource(async () => notificationChannelService.listWecom())
+    : undefined
+
+  const channels = () => props.channels?.() ?? local?.[0]()
+  const loading = () => props.loading?.() ?? local?.[0].loading ?? false
+  const mutate = props.setChannels ?? local?.[1].mutate ?? (() => undefined)
 
   const wecomChannels = createMemo(() => channels() ?? [])
 
@@ -69,7 +81,7 @@ export function NotificationChannelsSection() {
         title: language.t("store.notificationChannels.toast.updated"),
       })
     } catch (error) {
-      mutate(current)
+      mutate(() => current)
       showToast({
         variant: "error",
         icon: "circle-x",
@@ -96,7 +108,7 @@ export function NotificationChannelsSection() {
               title: language.t("store.notificationChannels.toast.deleted"),
             })
           } catch (error) {
-            mutate(current)
+            mutate(() => current)
             showToast({
               variant: "error",
               icon: "circle-x",
@@ -142,7 +154,7 @@ export function NotificationChannelsSection() {
       </div>
 
       <Show
-        when={!channels.loading}
+        when={!loading()}
         fallback={<div class="store-dash-empty">{language.t("store.notificationChannels.loading")}</div>}
       >
         <Show

@@ -40,9 +40,9 @@
   min-width: 0;
   min-height: 14rem;
   border-radius: 1rem;
-  border: 1px solid color-mix(in srgb, var(--st-outline-variant) 12%, transparent);
-  background-color: color-mix(in srgb, var(--st-surface-container-lowest) 98%, transparent);
-  box-shadow: 0 20px 44px -36px color-mix(in srgb, var(--st-primary) 18%, transparent);
+  border: 1px solid color-mix(in srgb, var(--st-border-subtle) 12%, transparent);
+  background-color: color-mix(in srgb, var(--st-surface-lowest) 98%, transparent);
+  box-shadow: 0 20px 44px -36px color-mix(in srgb, var(--st-accent) 18%, transparent);
   padding: 1rem;
 }
 
@@ -74,8 +74,8 @@
   max-width: 18rem;
   min-height: 10rem;
   border-radius: 0.875rem;
-  border: 1px solid color-mix(in srgb, var(--st-primary) 22%, white);
-  background-color: color-mix(in srgb, var(--st-primary) 78%, #1d4ed8);
+  border: 1px solid color-mix(in srgb, var(--st-accent) 22%, white);
+  background-color: color-mix(in srgb, var(--st-accent) 78%, #1d4ed8);
   padding: 1rem;
   display: flex;
   flex-direction: column;
@@ -106,7 +106,7 @@
   display: flex;
   gap: 0.75rem;
   font-size: 0.75rem;
-  color: var(--st-on-surface-variant);
+  color: var(--st-text-muted);
 }
 
 .projects-invitation-carousel,
@@ -125,9 +125,9 @@
   justify-content: space-between;
   gap: 0.75rem;
   border-radius: 0.875rem;
-  border: 1px solid color-mix(in srgb, var(--st-outline-variant) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--st-border-subtle) 12%, transparent);
   padding: 0.5rem 0.75rem;
-  background-color: color-mix(in srgb, var(--st-surface-container-low) 78%, transparent);
+  background-color: color-mix(in srgb, var(--st-surface-low) 78%, transparent);
   min-height: 2.5rem;
   width: 100%;
   text-align: left;
@@ -152,21 +152,21 @@
 }
 
 .projects-invitation-item-actions button:hover {
-  background-color: color-mix(in srgb, var(--st-surface-container-lowest) 94%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--st-outline) 18%, transparent);
+  background-color: color-mix(in srgb, var(--st-surface-lowest) 94%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--st-border) 18%, transparent);
 }
 
 .projects-invitation-item-title {
   margin: 0;
   font-size: 0.8125rem;
   font-weight: 700;
-  color: var(--st-on-surface);
+  color: var(--st-text);
 }
 
 .projects-invitation-item-meta {
   margin-top: 0.25rem;
   font-size: 0.75rem;
-  color: var(--st-on-surface-variant);
+  color: var(--st-text-muted);
 }
 
 .projects-invitation-actions {
@@ -214,8 +214,8 @@
 .project-detail-tab-panel-members,
 .project-detail-tab-panel-invitations {
   border-radius: 1rem;
-  background-color: color-mix(in srgb, var(--st-surface-container-lowest) 98%, transparent);
-  box-shadow: 0 20px 44px -36px color-mix(in srgb, var(--st-primary) 14%, transparent);
+  background-color: color-mix(in srgb, var(--st-surface-lowest) 98%, transparent);
+  box-shadow: 0 20px 44px -36px color-mix(in srgb, var(--st-accent) 14%, transparent);
 }
 
 .project-detail-bound-repositories {
@@ -255,9 +255,9 @@
   flex: 0 0 auto;
   min-height: 7.5rem;
   height: 7.5rem;
-  background-color: color-mix(in srgb, var(--st-surface-container-low) 92%, transparent);
-  border: 1px solid color-mix(in srgb, var(--st-outline-variant) 14%, transparent);
-  box-shadow: 0 12px 28px -24px color-mix(in srgb, var(--st-primary) 20%, transparent);
+  background-color: color-mix(in srgb, var(--st-surface-low) 92%, transparent);
+  border: 1px solid color-mix(in srgb, var(--st-border-subtle) 14%, transparent);
+  box-shadow: 0 12px 28px -24px color-mix(in srgb, var(--st-accent) 20%, transparent);
 }
 
 .project-detail-activity-repo-layout {
@@ -297,8 +297,8 @@
   height: 2rem;
   border-radius: 9999px;
   overflow: hidden;
-  border: 2px solid color-mix(in srgb, var(--st-surface-container-lowest) 96%, transparent);
-  background-color: color-mix(in srgb, var(--st-surface-container-low) 92%, transparent);
+  border: 2px solid color-mix(in srgb, var(--st-surface-lowest) 96%, transparent);
+  background-color: color-mix(in srgb, var(--st-surface-low) 92%, transparent);
 }
 
 .project-detail-activity-user-avatar-overflow {
@@ -307,7 +307,7 @@
   justify-content: center;
   font-size: 0.75rem;
   font-weight: 600;
-  color: var(--st-on-surface-variant);
+  color: var(--st-text-muted);
 }
 
 .project-detail-activity-chart {

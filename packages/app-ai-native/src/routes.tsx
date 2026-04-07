@@ -17,8 +17,8 @@ const DirectoryLayout = lazy(() => import("@/pages/directory-layout"))
 const DashboardLayout = lazy(() => import("@/pages/store").then((m) => ({ default: m.DashboardLayout })))
 const DashboardRepositories = lazy(() => import("@/pages/store").then((m) => ({ default: m.DashboardRepositories })))
 const DashboardCapabilities = lazy(() => import("@/pages/store").then((m) => ({ default: m.DashboardCapabilities })))
-const DashboardDevices = lazy(() => import("@/pages/store").then((m) => ({ default: m.DashboardDevices })))
-const DashboardNotifications = lazy(() => import("@/pages/store").then((m) => ({ default: m.DashboardNotifications })))
+const consoleImport = import("@/pages/console")
+const ConsolePage = lazy(() => consoleImport.then((m) => ({ default: m.ConsolePage })))
 
 const wrap = (Component: Component<{ children?: JSX.Element }>) => (props: { children?: JSX.Element }) => (
   <Suspense fallback={<Loading />}>
@@ -83,6 +83,11 @@ export const routeConfig: RouteConfig[] = [
     ],
   },
   {
+    path: "/console",
+    component: ConsolePage,
+    auth: true,
+  },
+  {
     path: "/store",
     component: StoreLayout,
     auth: true,
@@ -95,8 +100,6 @@ export const routeConfig: RouteConfig[] = [
           { path: "/", component: () => <Navigate href="/store/dashboard/repositories" /> },
           { path: "/repositories", component: DashboardRepositories },
           { path: "/capabilities", component: DashboardCapabilities },
-          { path: "/devices", component: DashboardDevices },
-          { path: "/notifications", component: DashboardNotifications },
         ],
       },
     ],
