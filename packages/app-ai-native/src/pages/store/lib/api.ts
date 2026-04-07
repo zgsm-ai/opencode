@@ -844,3 +844,19 @@ export const searchApi = {
       body: JSON.stringify(params),
     }),
 }
+
+export interface Category {
+  id: string
+  slug: string
+  icon: string
+  sortOrder: number
+  names: Record<string, string>
+  descriptions: Record<string, string>
+  createdBy: string
+  createdAt: string
+  updatedAt: string
+}
+
+export const categoryApi = {
+  list: () => apiFetch<{ categories: Category[] }>("/api/categories").then((res) => res.categories),
+}

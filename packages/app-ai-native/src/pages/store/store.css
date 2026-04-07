@@ -253,6 +253,7 @@
   border-radius: 0.875rem;
   border: 1px solid color-mix(in srgb, var(--st-border-subtle) 10%, transparent);
   overflow: hidden;
+  min-height: 480px;
 }
 
  .store-table-loading-overlay {

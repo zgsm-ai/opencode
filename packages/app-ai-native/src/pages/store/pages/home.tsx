@@ -13,8 +13,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { behaviorApi, itemApi, type CapabilityItem, type ItemOrder, type ItemSort } from "../lib/api"
-import { categoryKey, typeKey } from "../lib/constants"
+import { behaviorApi, categoryApi, itemApi, type Category, type CapabilityItem, type ItemOrder, type ItemSort } from "../lib/api"
+import { typeKey } from "../lib/constants"
 import ItemDetailContent, { getInstallCommand } from "../components/item-detail-content"
 import SecurityTag from "../components/security-tag"
 import BestPracticeCarousel from "../components/best-practice-carousel"
@@ -83,6 +83,13 @@ export default function Home() {
   const [installCount, setInstallCount] = createSignal(0)
   const [trackedItemId, setTrackedItemId] = createSignal<string | null>(null)
 
+  const [allCategories] = createResource(() => categoryApi.list().catch(() => [] as Category[]))
+
+  const categoryName = (cat: Category) => {
+    const locale = language.locale()
+    return cat.names[locale] || cat.names.en || cat.slug
+  }
+
   let searchTimer: ReturnType<typeof setTimeout> | undefined
   const handleSearchInput = (value: string) => {
     setSearchText(value)
@@ -106,7 +113,7 @@ export default function Home() {
 
   const listParams = createMemo(() => ({
     type: activeType(),
-    category: activeCategory() === "all" ? undefined : activeCategory(),
+    category: activeCategory() === "all" ? undefined : activeCategory(),  // slug
     search: debouncedSearch() || undefined,
     page: page(),
     pageSize: PAGE_SIZE,
@@ -200,11 +207,7 @@ export default function Home() {
       .catch(() => undefined)
   })
 
-  const categories = createMemo(() => {
-    const items = listData()?.items ?? []
-    const unique = Array.from(new Set(items.map((item) => item.category).filter((c) => c && c.trim())))
-    return ["all", ...unique]
-  })
+  const categories = createMemo(() => allCategories() ?? [])
 
   const rows = createMemo(() => listData()?.items ?? [])
   const totalItems = createMemo(() => listData()?.total ?? 0)
@@ -219,7 +222,7 @@ export default function Home() {
   })
 
   createEffect(() => {
-    if (activeCategory() !== "all" && !categories().includes(activeCategory())) {
+    if (activeCategory() !== "all" && !categories().some((c) => c.slug === activeCategory())) {
       setActiveCategory("all")
       setPage(1)
       setSelectedItemId(null)
@@ -417,7 +420,9 @@ export default function Home() {
                       </div>
                     </div>
                     <Show when={item.category}>
-                      <span class="tp-fcard-cat">{language.t(categoryKey(item.category)) || item.category}</span>
+                      <span class="tp-fcard-cat">{categories().find((c) => c.slug === item.category)
+                        ? categoryName(categories().find((c) => c.slug === item.category)!)
+                        : item.category}</span>
                     </Show>
                   </article>
                 )}
@@ -492,7 +497,9 @@ export default function Home() {
               <DropdownMenuTrigger as={Button<"button">} variant="outline" size="sm">
                 {activeCategory() === "all"
                   ? language.t("store.console.capabilities.category")
-                  : language.t(categoryKey(activeCategory())) || activeCategory()}
+                  : categories().find((c) => c.slug === activeCategory())
+                    ? categoryName(categories().find((c) => c.slug === activeCategory())!)
+                    : activeCategory()}
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   viewBox="0 0 24 24"
@@ -506,16 +513,20 @@ export default function Home() {
                   <path d="M6 9l6 6l6 -6" />
                 </svg>
               </DropdownMenuTrigger>
-              <DropdownMenuContent>
+              <DropdownMenuContent class="max-h-72 overflow-y-auto">
+                <DropdownMenuCheckboxItem
+                  checked={activeCategory() === "all"}
+                  onChange={() => handleCategoryChange("all")}
+                >
+                  {language.t("store.console.filters.all")}
+                </DropdownMenuCheckboxItem>
                 <For each={categories()}>
-                  {(category) => (
+                  {(cat) => (
                     <DropdownMenuCheckboxItem
-                      checked={category === activeCategory()}
-                      onChange={() => handleCategoryChange(category)}
+                      checked={cat.slug === activeCategory()}
+                      onChange={() => handleCategoryChange(cat.slug)}
                     >
-                      {category === "all"
-                        ? language.t("store.console.filters.all")
-                        : language.t(categoryKey(category)) || category}
+                      {categoryName(cat)}
                     </DropdownMenuCheckboxItem>
                   )}
                 </For>
@@ -596,7 +607,11 @@ export default function Home() {
                             {item.previewCount?.toLocaleString() ?? "0"}
                           </TableCell>
                           <TableCell class="store-col-category store-data-table-muted">
-                            {item.category ? language.t(categoryKey(item.category)) || item.category : "—"}
+                            {item.category
+                              ? categories().find((c) => c.slug === item.category)
+                                ? categoryName(categories().find((c) => c.slug === item.category)!)
+                                : item.category
+                              : "—"}
                           </TableCell>
                           <TableCell>
                             <SecurityTag status={item.securityStatus} />
