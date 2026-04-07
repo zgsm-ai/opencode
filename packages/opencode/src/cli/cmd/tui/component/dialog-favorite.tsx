@@ -11,24 +11,49 @@ type FavoriteItem = {
   slug: string
   name: string
   description: string
+  itemType: "skill" | "agent" | "command" | "mcp"
   status: "Cloud" | "Downloaded" | "Active" | "Unloaded"
   localPath?: string
 }
 
-function Status(props: { status: FavoriteItem["status"]; loading: boolean }) {
+const TYPE_LABEL: Record<string, string> = {
+  skill: "Skill",
+  agent: "Agent",
+  command: "Command",
+  mcp: "MCP",
+}
+
+function Status(props: { status: FavoriteItem["status"]; itemType: string; loading: boolean }) {
   const { theme } = useTheme()
   if (props.loading) {
     return <span style={{ fg: theme.textMuted }}>... Loading</span>
   }
+  const typeTag = TYPE_LABEL[props.itemType] ?? props.itemType
   switch (props.status) {
     case "Active":
-      return <span style={{ fg: theme.success, attributes: TextAttributes.BOLD }}>✓ Active</span>
+      return (
+        <span style={{ fg: theme.success, attributes: TextAttributes.BOLD }}>
+          ✓ Active · {typeTag}
+        </span>
+      )
     case "Downloaded":
-      return <span style={{ fg: theme.info }}>↓ Downloaded</span>
+      return (
+        <span style={{ fg: theme.info }}>
+          ↓ Downloaded · {typeTag}
+        </span>
+      )
     case "Unloaded":
-      return <span style={{ fg: theme.textMuted }}>○ Unloaded</span>
+      return (
+        <span style={{ fg: theme.textMuted }}>
+          ○ Unloaded · {typeTag}
+        </span>
+      )
     case "Cloud":
-      return <span style={{ fg: theme.textMuted }}>☁ Cloud</span>
+      return (
+        <span style={{ fg: theme.textMuted }}>
+          ☁ Cloud · {typeTag}
+        </span>
+      )
   }
 }
 
@@ -76,7 +101,7 @@ export function DialogFavorite() {
     } catch (e) {
       toast.show({
         variant: "error",
-        message: e instanceof Error ? e.message : `Failed to ${action} skill`,
+        message: e instanceof Error ? e.message : `Failed to ${action} item`,
         duration: 5000,
       })
     } finally {
@@ -112,7 +137,8 @@ export function DialogFavorite() {
       value: item.slug,
       title: item.name,
       description: item.description,
-      footer: <Status status={item.status} loading={loadingSlug === item.slug} />,
+      footer: <Status status={item.status} itemType={item.itemType} loading={loadingSlug === item.slug} />,
+      category: TYPE_LABEL[item.itemType] ?? item.itemType,
     }))
   })
 
@@ -143,7 +169,7 @@ export function DialogFavorite() {
   return (
     <DialogSelect
       ref={setRef}
-      title="Favorite Skills"
+      title="Favorite Items"
       options={options()}
       keybind={keybinds()}
       onSelect={() => {

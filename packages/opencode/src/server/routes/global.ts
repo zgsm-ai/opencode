@@ -13,11 +13,12 @@ import { lazy } from "../../util/lazy"
 import { Config } from "../../config/config"
 import { errors } from "../error"
 import {
-  listFavoriteSkills,
-  loadFavoriteSkill,
-  unloadFavoriteSkill,
-  downloadFavoriteSkill,
-  uninstallFavoriteSkill,
+  listFavoriteItems,
+  loadFavoriteItem,
+  unloadFavoriteItem,
+  downloadFavoriteItem,
+  uninstallFavoriteItem,
+  type FavoriteItemType,
 } from "@/costrict/cloud/favorite"
 
 const log = Log.create({ service: "server" })
@@ -319,12 +320,12 @@ export const GlobalRoutes = lazy(() =>
     .get(
       "/favorite/skills",
       describeRoute({
-        summary: "List favorite skills",
-        description: "List all cloud favorite skills with their current status.",
+        summary: "List favorite items",
+        description: "List all cloud favorite items with their current status. Supports filtering by type.",
         operationId: "global.favorite.list",
         responses: {
           200: {
-            description: "Favorite skills list",
+            description: "Favorite items list",
             content: {
               "application/json": {
                 schema: resolver(
@@ -334,6 +335,7 @@ export const GlobalRoutes = lazy(() =>
                       slug: z.string(),
                       name: z.string(),
                       description: z.string(),
+                      itemType: z.enum(["skill", "agent", "command", "mcp"]),
                       status: z.enum(["Cloud", "Downloaded", "Active", "Unloaded"]),
                       localPath: z.string().optional(),
                     }),
@@ -347,7 +349,9 @@ export const GlobalRoutes = lazy(() =>
       }),
       async (c) => {
         try {
-          const items = await listFavoriteSkills()
+          const type = c.req.query("type") as FavoriteItemType | undefined
+          const validTypes = ["skill", "agent", "command", "mcp"]
+          const items = await listFavoriteItems(type && validTypes.includes(type) ? type : undefined)
           return c.json(items)
         } catch (e) {
           return c.json({ error: e instanceof Error ? e.message : String(e) }, 500)
@@ -357,8 +361,8 @@ export const GlobalRoutes = lazy(() =>
     .post(
       "/favorite/skills/:slug/:action",
       describeRoute({
-        summary: "Perform favorite skill action",
-        description: "Load, unload, download, or uninstall a favorite skill.",
+        summary: "Perform favorite item action",
+        description: "Load, unload, download, or uninstall a favorite item.",
         operationId: "global.favorite.action",
         responses: {
           200: {
@@ -384,16 +388,16 @@ export const GlobalRoutes = lazy(() =>
         try {
           switch (action) {
             case "load":
-              await loadFavoriteSkill(slug)
+              await loadFavoriteItem(slug)
               break
             case "unload":
-              await unloadFavoriteSkill(slug)
+              await unloadFavoriteItem(slug)
               break
             case "download":
-              await downloadFavoriteSkill(slug)
+              await downloadFavoriteItem(slug)
               break
             case "uninstall":
-              await uninstallFavoriteSkill(slug)
+              await uninstallFavoriteItem(slug)
               break
           }
           return c.json({ success: true as const, slug })

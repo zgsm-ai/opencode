@@ -11,41 +11,66 @@
 3. 状态流转为：`Cloud -> Downloaded -> Active -> Unloaded`。
 4. 下载、加载、卸载不需要重启程序。
 5. 尽量最小改动；如需新增代码，优先放入 `costrict` 目录，便于管理与合入上游。
+6. 支持多种收藏类型：skill、agent、command、mcp。
+7. 在交互式 TUI 中也可通过 `/favorites` 命令管理收藏项。
 
 ## 2. 设计原则
 
 本方案遵循以下设计原则：
 
-- **最小改动优先**：复用现有 CLI、配置系统、skill 加载链路和认证能力。
-- **先支持 skill**：当前只支持 `skill` 类型收藏，避免同时引入多种扩展类型的安装/运行态管理。
+- **最小改动优先**：复用现有 CLI、配置系统、加载链路和认证能力。
+- **多类型统一管理**：skill、agent、command、mcp 共享同一套状态模型和生命周期管理。
 - **下载与激活解耦**：`download` 只负责本地落盘，`load` 负责真正启用。
 - **无重启生效**：通过修改全局配置并调用 `Config.invalidate(true)` 触发即时生效。
 - **与上游兼容**：新增逻辑集中在 `packages/opencode/src/costrict/cloud/` 与少量 CLI 接入点。
 
-## 3. 为什么当前只支持 skill
+## 3. 支持的收藏类型
 
-为了满足“最小改动”，当前实现只处理服务端收藏中的 `skill`：
+当前支持四种收藏类型，每种类型有不同的存储格式和配置注册方式：
 
-- skill 已经具备成熟的本地落盘形式：`SKILL.md`
-- skill 已有现成加载入口：`config.skills.paths`
-- skill 可以通过配置刷新立即生效，无需专门扩展复杂运行时容器
+| 类型 | 服务端 itemType | 文件格式 | 配置注册方式 | 内容文件名 |
+|------|----------------|----------|-------------|-----------|
+| skill | `skill` | Markdown | `skills.paths[]`（路径数组） | `SKILL.md` |
+| agent | `subagent` | Markdown | `config.agent[name]`（对象合并） | `<slug>.md` |
+| command | `command` | Markdown | `config.command[name]`（对象合并） | `<slug>.md` |
+| mcp | `mcp` | JSON | `config.mcp[name]`（对象合并） | `mcp.json` |
 
-如果一开始同时支持 `subagent / command / mcp / plugin`，会额外引入：
+### 3.1 各类型激活机制
 
-- 多种安装结构与元数据适配
-- 多种激活路径与配置注入逻辑
-- 更多回滚与状态一致性处理
+#### Skill
 
-因此本期范围锁定在 **favorite skill management**。
+- 加载链路已经依赖 `config.skills.paths` 字段
+- `load` 时将本地 skill 目录路径追加到 `skills.paths` 数组
+- 调用 `Config.invalidate(true)` 后，skill 发现逻辑重新扫描路径
+
+#### Agent
+
+- Agent 通过 markdown 文件定义，frontmatter 包含 model、mode、permission 等配置
+- 正文内容作为 agent 的 `prompt` 字段
+- `load` 时解析 markdown，将解析结果写入 `config.agent[slug]`
+- `unload` 时从 `config.agent` 中删除对应 key
+
+#### Command
+
+- Command 通过 markdown 文件定义，frontmatter 包含 description、agent、model 等配置
+- 正文内容作为 command 的 `template` 字段
+- `load` 时解析 markdown，将解析结果写入 `config.command[slug]`
+- `unload` 时从 `config.command` 中删除对应 key
+
+#### MCP
+
+- MCP 使用 JSON 配置，包含 type（local/remote）、command/url 等字段
+- `load` 时将 JSON 配置写入 `config.mcp[slug]`
+- `unload` 时从 `config.mcp` 中删除对应 key
 
 ## 4. 功能范围
 
 ### 4.1 支持的命令
 
-当前 `cs cloud favorite` 支持：
+#### CLI 命令
 
-- `cs cloud favorite list`
-- `cs cloud favorite view <slug-or-id>`
+- `cs cloud favorite list [--type skill|agent|command|mcp] [--format table|json]`
+- `cs cloud favorite view <slug-or-id> [--format table|json]`
 - `cs cloud favorite download <slug-or-id>`
 - `cs cloud favorite load <slug-or-id>`
 - `cs cloud favorite unload <slug-or-id>`
@@ -53,18 +78,23 @@
 - `cs cloud favorite --help`
 - `cs cloud favorite help`
 
+#### 交互式 TUI 命令
+
+- `/favorites`（别名 `/fav`）— 打开收藏管理对话框
+  - `Space` 键：切换 load/unload
+  - `x` 键：uninstall
+  - 按类型分组显示
+
 ### 4.2 输出格式
 
-- `list` 支持 `--format table|json`
+- `list` 支持 `--format table|json`，table 模式包含 Status、Type、Slug、Name、Description 列
 - `view` 支持 `--format table|json`
 
 ### 4.3 非目标
 
 本期不做：
 
-- 收藏项的新增/取消收藏操作
-- 非 skill 类型收藏项的安装与激活
-- 交互式选择 favorite 项
+- 收藏项的新增/取消收藏操作（通过 web 端操作）
 - 复杂权限模型或本地多用户隔离
 - 独立的长期驻留运行态管理器
 
@@ -105,10 +135,10 @@ Downloaded/Active/Unloaded --uninstall--> Cloud
 
 效果：
 
-- 从云端获取 skill 内容
-- 本地落盘 `SKILL.md` 与 `item.json`
+- 从云端获取 item 内容
+- 本地落盘内容文件与 `item.json`
 - 更新 `state.json`
-- **不会写入 `skills.paths`**
+- **不会写入配置**
 - 因此状态只会进入 `Downloaded`
 
 #### 规则 2：Cloud -> Active
@@ -120,13 +150,13 @@ Downloaded/Active/Unloaded --uninstall--> Cloud
 效果：
 
 - 若本地尚未下载，会先自动下载
-- 然后把路径写入 `skills.paths`
+- 然后根据类型写入对应配置
 - 调用 `Config.invalidate(true)`
 - 因此 `load` 结束后直接进入 `Active`
 
 这意味着：
 
-- `load` = “确保本地已下载 + 立即启用”
+- `load` = "确保本地已下载 + 立即启用"
 - 不再保留独立的 `Loaded` 中间状态
 
 #### 规则 3：Downloaded -> Active
@@ -138,7 +168,7 @@ Downloaded/Active/Unloaded --uninstall--> Cloud
 效果：
 
 - 复用已下载的本地文件
-- 将路径加入 `skills.paths`
+- 根据类型将配置注入全局配置
 - 立即生效
 
 #### 规则 4：Active -> Unloaded
@@ -149,7 +179,7 @@ Downloaded/Active/Unloaded --uninstall--> Cloud
 
 效果：
 
-- 从 `skills.paths` 中移除本地路径
+- 根据类型从全局配置中移除对应配置
 - 调用 `Config.invalidate(true)`
 - 保留本地文件
 - 状态变为 `Unloaded`
@@ -163,7 +193,7 @@ Downloaded/Active/Unloaded --uninstall--> Cloud
 效果：
 
 - 不重新下载文件
-- 重新加入 `skills.paths`
+- 重新注入配置
 - 立即恢复为 `Active`
 
 #### 规则 6：Downloaded / Active / Unloaded -> Cloud
@@ -174,9 +204,9 @@ Downloaded/Active/Unloaded --uninstall--> Cloud
 
 效果：
 
-- 删除本地 skill 目录
+- 删除本地 item 目录
 - 删除本地 state 记录
-- 若处于激活态则先移除 `skills.paths`
+- 若处于激活态则先移除配置
 - 最终回到 `Cloud`
 
 ### 5.4 各状态含义定义
@@ -189,22 +219,22 @@ Downloaded/Active/Unloaded --uninstall--> Cloud
 
 #### Downloaded
 
-- skill 已经下载并落盘到本地
-- 未加入 `skills.paths`
+- item 已经下载并落盘到本地
+- 未注入配置
 - 还没有在当前 CLI 配置里启用
 
 #### Active
 
-- skill 已在本地存在
-- 对应路径已写入全局配置 `skills.paths`
+- item 已在本地存在
+- 对应配置已写入全局配置
 - 已触发 `Config.invalidate(true)`
 - 无需重启即可生效
 - `load` 完成后直接进入该状态
 
 #### Unloaded
 
-- skill 仍保留在本地
-- 已从 `skills.paths` 中移除
+- item 仍保留在本地
+- 已从配置中移除
 - 已触发配置刷新
 - 当前未激活
 - 可以通过再次 `load` 恢复为 `Active`
@@ -220,61 +250,92 @@ Downloaded/Active/Unloaded --uninstall--> Cloud
 外部状态计算逻辑：
 
 1. 若本地无记录，则显示 `Cloud`
-2. 若本地路径存在于 `Config.getGlobal().skills.paths`，则显示 `Active`
-3. 否则根据本地 `lifecycle` 映射为：
+2. 根据类型检查对应配置是否包含该项：
+   - skill：检查 `skills.paths` 是否包含对应路径
+   - agent：检查 `config.agent` 是否包含对应 key
+   - command：检查 `config.command` 是否包含对应 key
+   - mcp：检查 `config.mcp` 是否包含对应 key
+3. 若配置中存在，则显示 `Active`
+4. 否则根据本地 `lifecycle` 映射为：
    - `unloaded -> Unloaded`
    - 其他 -> `Downloaded`
-
-> 说明：如果本地记录曾标记为 `active`，但当前配置中已经没有对应 path，则说明真实运行态已不激活。此时状态会保守回退显示为 `Downloaded`，不会继续显示 `Active`。
 
 ## 6. 总体架构
 
 ### 6.1 模块划分
 
-本功能主要由两个模块组成：
+本功能主要由以下模块组成：
 
-| 模块         | 文件路径                                           | 职责                                      |
-| ------------ | -------------------------------------------------- | ----------------------------------------- |
-| CLI 命令入口 | `packages/opencode/src/cli/cmd/cloud.ts`           | 定义 `cs cloud favorite` 命令、帮助与输出 |
-| 收藏核心逻辑 | `packages/opencode/src/costrict/cloud/favorite.ts` | 拉取收藏、状态管理、下载/加载/卸载        |
+| 模块 | 文件路径 | 职责 |
+|------|---------|------|
+| CLI 命令入口 | `packages/opencode/src/cli/cmd/cloud.ts` | 定义 `cs cloud favorite` 命令、帮助与输出 |
+| 收藏核心逻辑 | `packages/opencode/src/costrict/cloud/favorite.ts` | 拉取收藏、状态管理、下载/加载/卸载 |
+| 服务端路由 | `packages/opencode/src/server/routes/global.ts` | 提供 HTTP API 供 TUI 调用 |
+| TUI 对话框 | `packages/opencode/src/cli/cmd/tui/component/dialog-favorite.tsx` | 交互式收藏管理界面 |
+| TUI 命令注册 | `packages/opencode/src/cli/cmd/tui/app.tsx` | 注册 `/favorites` 斜杠命令 |
 
 ### 6.2 设计思路
 
 整体思路是：
 
-1. 从云端查询用户收藏的 skill 列表
-2. 拉取详情，构造可操作的 favorite skill 数据
+1. 从云端查询用户收藏列表（支持按类型过滤）
+2. 拉取详情，构造可操作的 favorite item 数据
 3. 将本地状态持久化到 `costrict/cloud-favorites/state.json`
-4. 将已下载 skill 落盘到本地专属目录
-5. `load` 时通过修改 `skills.paths` 注入 skill 目录
+4. 将已下载 item 落盘到本地专属目录
+5. `load` 时根据类型注入对应配置
 6. 调用 `Config.invalidate(true)` 实现无重启生效
+
+### 6.3 TUI 交互式命令架构
+
+TUI 中的收藏管理通过 HTTP API 与 worker 进程通信，确保 `Config.invalidate(true)` 在正确的进程中执行：
+
+```text
+TUI 主线程 (dialog-favorite.tsx)
+  ↓ HTTP fetch
+Worker 线程 (server/routes/global.ts)
+  ↓ 调用
+favorite.ts → 修改配置文件 + Config.invalidate(true)
+  ↓
+配置缓存失效 → Instance 重建 → 新配置生效
+```
+
+这解决了 CLI 独立进程中 `Config.invalidate` 无法影响运行中交互会话的问题。
 
 ## 7. 服务端数据获取方案
 
 ### 7.1 现状
 
-仓库中可以明确看到 favorite 的写接口，但没有直接搜到“我的收藏列表”专用接口。
+仓库中可以明确看到 favorite 的写接口，但没有直接搜到"我的收藏列表"专用接口。
 
 实际联调中发现：
 
 - `/api/items/{id}/favorite` 可用于收藏与取消收藏
 - `/api/items/{id}` 详情中含有 `favorited` 字段
-- `/api/items?...` 可列出 skill 项，但列表结果本身未稳定返回用户 favorite 状态
+- `/api/items?type=<type>` 可列出不同类型的项目
 
 ### 7.2 当前实现方案
 
 为了在缺少明确 favorites list API 的前提下尽快实现功能，当前采用如下策略：
 
-1. 分页请求 `/api/items?type=skill&page=<n>&pageSize=<size>`
-2. 获取候选 skill 列表
+1. 按类型分页请求 `/api/items?type=<storeType>&page=<n>&pageSize=<size>`
+2. 获取候选项列表
 3. 对候选项逐个请求 `/api/items/{id}`
 4. 通过详情里的 `favorited === true` 过滤出真正收藏项
 
+类型映射关系：
+
+| 本地类型 | 服务端 itemType |
+|---------|----------------|
+| skill | `skill` |
+| agent | `subagent` |
+| command | `command` |
+| mcp | `mcp` |
+
 核心函数：
 
-- `listRemoteSkillCandidates()`
-- `getRemoteSkill(id)`
-- `listFavoriteSkills()`
+- `listRemoteCandidates(storeType?)`
+- `getRemoteItem(id)`
+- `listFavoriteItems(type?)`
 
 ### 7.3 优缺点
 
@@ -292,11 +353,11 @@ Downloaded/Active/Unloaded --uninstall--> Cloud
 
 ### 7.4 后续优化方向
 
-如果后续服务端明确提供“我的收藏列表”接口，可以将当前实现替换为：
+如果后续服务端明确提供"我的收藏列表"接口，可以将当前实现替换为：
 
 - 单次或少量分页请求 favorite list
 - 减少逐项详情请求
-- 明确支持按用户收藏维度筛选 skill
+- 明确支持按用户收藏维度筛选
 
 ## 8. 认证与请求模型
 
@@ -349,15 +410,29 @@ Downloaded/Active/Unloaded --uninstall--> Cloud
 │   └── <slug>/
 │       ├── SKILL.md
 │       └── item.json
+├── agents/
+│   └── <slug>/
+│       ├── <slug>.md
+│       └── item.json
+├── commands/
+│   └── <slug>/
+│       ├── <slug>.md
+│       └── item.json
+├── mcp/
+│   └── <slug>/
+│       ├── mcp.json
+│       └── item.json
 └── state.json
 ```
 
 ### 9.3 文件职责
 
-#### SKILL.md
+#### 内容文件（SKILL.md / <slug>.md / mcp.json）
 
-- skill 的实际内容文件
-- 供 skill 发现与加载链路直接使用
+- item 的实际内容文件
+- skill：供 skill 发现与加载链路直接使用
+- agent/command：Markdown 格式，frontmatter + prompt/template 正文
+- mcp：JSON 配置，包含 type、command/url 等字段
 
 #### item.json
 
@@ -367,21 +442,34 @@ Downloaded/Active/Unloaded --uninstall--> Cloud
 #### state.json
 
 - 保存 favorite 的本地生命周期状态
-- 记录 slug、id、localPath、lifecycle、时间戳等信息
+- 记录 slug、id、itemType、localPath、lifecycle、时间戳等信息
 
 ## 10. 配置接入设计
 
-### 10.1 为什么复用 skills.paths
+### 10.1 各类型配置注入方式
 
-为了保证改动最小，当前不新增新的专用配置段，而是直接复用已有：
+#### Skill — 复用 skills.paths
 
-- `skills.paths`
+- 加载时将目录路径追加到 `skills.paths[]`
+- 卸载时从数组中移除
 
-原因：
+#### Agent — 写入 config.agent
 
-- skill 加载链路已经依赖该字段
-- 改动小，兼容已有技能发现能力
-- 调用 `Config.invalidate(true)` 后即可生效
+- 加载时解析本地 markdown 文件（frontmatter + prompt）
+- 写入 `config.agent[slug] = { ...frontmatter, prompt }`
+- 卸载时删除 `config.agent[slug]`
+
+#### Command — 写入 config.command
+
+- 加载时解析本地 markdown 文件（frontmatter + template）
+- 写入 `config.command[slug] = { ...frontmatter, template }`
+- 卸载时删除 `config.command[slug]`
+
+#### MCP — 写入 config.mcp
+
+- 加载时读取本地 `mcp.json`
+- 写入 `config.mcp[slug] = mcpConfig`
+- 卸载时删除 `config.mcp[slug]`
 
 ### 10.2 配置文件定位
 
@@ -400,13 +488,15 @@ Downloaded/Active/Unloaded --uninstall--> Cloud
 - `modify()`
 - `applyEdits()`
 
-对 `skills.paths` 做增删，避免粗暴覆盖整个配置文件。
+统一使用 `patchGlobalConfig(path, value)` 和 `removeGlobalConfig(path)` 函数，对配置做精准增删，避免粗暴覆盖整个配置文件。
 
 核心函数：
 
-- `patchGlobalSkillPaths()`
-- `addSkillPath()`
-- `removeSkillPath()`
+- `patchGlobalConfig(path[], value)` — 设置任意配置路径的值
+- `removeGlobalConfig(path[])` — 删除任意配置路径
+- `patchGlobalSkillPaths()` — skill 专用的 paths 数组操作
+- `addItemToConfig(item, localPath)` — 根据类型调用对应注入逻辑
+- `removeItemFromConfig(itemType, slug, localPath)` — 根据类型调用对应移除逻辑
 
 ## 11. 无重启生效方案
 
@@ -416,9 +506,9 @@ Downloaded/Active/Unloaded --uninstall--> Cloud
 
 真正影响运行态的是：
 
-- `loadFavoriteSkill()`
-- `unloadFavoriteSkill()`
-- `uninstallFavoriteSkill()`
+- `loadFavoriteItem()`
+- `unloadFavoriteItem()`
+- `uninstallFavoriteItem()`
 
 这三个动作在修改配置后都会调用：
 
@@ -428,14 +518,18 @@ await Config.invalidate(true)
 
 ### 11.2 为什么不需要重启
 
-`Config.invalidate(true)` 会使配置缓存失效，并等待相关依赖刷新，进而让后续 skill 发现逻辑读取到最新的 `skills.paths`。
+`Config.invalidate(true)` 会使配置缓存失效，并等待相关依赖刷新，进而让后续发现逻辑读取到最新配置。
 
 因此：
 
-- `load` 后立即可被新的 skill 发现流程感知
+- `load` 后立即可被对应类型的发现流程感知
 - `unload` 后立即从活动配置中移除
 
-这满足“下载、加载、卸载不需要重启程序”的要求。
+这满足"下载、加载、卸载不需要重启程序"的要求。
+
+### 11.3 TUI 交互式场景
+
+在 TUI 中通过 `/favorites` 命令执行的操作通过 HTTP API 发送到 worker 进程，确保 `Config.invalidate(true)` 在 worker 进程中执行。这解决了 CLI 独立进程中 invalidate 无法影响运行中会话的问题。
 
 ## 12. 命令行为说明
 
@@ -443,21 +537,30 @@ await Config.invalidate(true)
 
 用途：
 
-- 查看当前云端收藏的 skill 列表
-- 同时显示每项在本地的状态
+- 查看当前云端收藏列表
+- 同时显示每项在本地的状态和类型
 
 输出字段：
 
 - `status`
+- `type`（itemType）
 - `slug`
 - `name`
 - `description`
+
+支持 `--type` 过滤：
+
+```bash
+cs cloud favorite list --type skill
+cs cloud favorite list --type agent
+cs cloud favorite list --type mcp
+```
 
 ### 12.2 view
 
 用途：
 
-- 查看单个收藏 skill 的详细信息
+- 查看单个收藏项的详细信息
 
 输出内容包括：
 
@@ -476,7 +579,7 @@ await Config.invalidate(true)
 行为：
 
 1. 拉取收藏项详情
-2. 本地落盘 `SKILL.md` 与 `item.json`
+2. 根据类型本地落盘内容文件与 `item.json`
 3. 在 `state.json` 中记录为 `downloaded`
 
 不会自动激活，只进入 `Downloaded`。
@@ -485,37 +588,37 @@ await Config.invalidate(true)
 
 行为：
 
-1. 确保 skill 已下载
+1. 确保 item 已下载
 2. 若未下载则自动下载
-3. 将本地路径加入 `skills.paths`
+3. 根据类型将配置注入全局配置
 4. 本地状态改为 `active`
 5. 调用 `Config.invalidate(true)`
 
 结果：
 
-- skill 立即生效
+- item 立即生效
 - `load` 后直接进入 `Active`
 
 ### 12.5 unload
 
 行为：
 
-1. 确保 skill 已下载
-2. 从 `skills.paths` 中移除本地路径
+1. 确保 item 已下载
+2. 根据类型从全局配置中移除对应配置
 3. 状态改为 `unloaded`
 4. 调用 `Config.invalidate(true)`
 
 结果：
 
-- skill 保留在本地
+- item 保留在本地
 - 但不再处于激活状态
 
 ### 12.6 uninstall
 
 行为：
 
-1. 确保 skill 已下载
-2. 从 `skills.paths` 中移除路径
+1. 确保 item 已下载
+2. 从全局配置中移除对应配置
 3. 删除本地目录
 4. 从 `state.json` 中删除记录
 5. 调用 `Config.invalidate(true)`
@@ -531,10 +634,15 @@ await Config.invalidate(true)
 - `cs cloud favorite --help`
 - `cs cloud favorite help`
 
-其中：
+### 12.8 TUI /favorites
 
-- `--help` 使用 yargs 默认帮助
-- `help` 为显式帮助子命令，便于统一命令体验
+在交互式界面中输入 `/favorites` 或 `/fav` 打开收藏管理对话框：
+
+- 按类型（Skill、Agent、Command、MCP）分组显示
+- 显示状态指示器（✓ Active、↓ Downloaded、○ Unloaded、☁ Cloud）
+- `Space` 键切换 load/unload
+- `x` 键执行 uninstall
+- 操作完成后自动刷新列表并显示 toast 提示
 
 ## 13. 核心实现流程
 
@@ -544,11 +652,11 @@ await Config.invalidate(true)
 flowchart TD
     A["执行 cs cloud favorite list"] --> B["加载本地凭证"]
     B --> C["必要时刷新 token"]
-    C --> D["分页请求 api/items?type=skill"]
+    C --> D["按类型分页请求 api/items?type=<storeType>"]
     D --> E["逐个请求 api/items/:id"]
     E --> F["按 favorited=true 过滤"]
     F --> G["读取本地 state.json"]
-    G --> H["读取 skills.paths"]
+    G --> H["读取各类型配置状态"]
     H --> I["计算最终状态"]
     I --> J["输出 table 或 json"]
 ```
@@ -561,7 +669,7 @@ flowchart TD
     B -->|否| C["从云端拉取详情并下载"]
     B -->|是| D["直接复用本地文件"]
     C --> D
-    D --> E["写入 skills.paths"]
+    D --> E["根据类型注入对应配置"]
     E --> F["更新 state.json 为 active"]
     F --> G["调用 Config.invalidate(true)"]
     G --> H["立即生效"]
@@ -577,12 +685,14 @@ flowchart TD
 
 当前自动化测试覆盖：
 
-1. **只列出真正 favorited 的 skill**
+1. **只列出真正 favorited 的 item**
 2. **状态流转测试**：
    - `Cloud -> Downloaded -> Active -> Unloaded -> Cloud`
 3. **配置写入测试**：
-   - `load` 会写入 `skills.paths`
-   - `unload` 会移除 `skills.paths`
+   - skill: `load` 会写入 `skills.paths`，`unload` 会移除
+   - agent: `load` 会写入 `config.agent`，`unload` 会移除
+   - command: `load` 会写入 `config.command`，`unload` 会移除
+   - mcp: `load` 会写入 `config.mcp`，`unload` 会移除
 4. **配置刷新调用测试**：
    - 确认 `Config.invalidate(true)` 在关键步骤被调用
 
@@ -612,18 +722,13 @@ bun run typecheck
 
 这在数据规模大时效率不高。
 
-### 15.2 仅支持 skill
+### 15.2 配置解析采用轻量处理
 
-当前不支持：
+当前在更新配置前，会做一层较轻量的 JSON/JSONC 文本处理。这满足当前需求，但若后续配置结构更复杂，可以进一步统一到更强的配置写入抽象中。
 
-- subagent
-- command
-- mcp
-- plugin 其他扩展形态
+### 15.3 MCP 内容格式依赖
 
-### 15.3 配置解析采用轻量处理
-
-当前在更新 `skills.paths` 前，会做一层较轻量的 JSON/JSONC 文本处理。这满足当前需求，但若后续配置结构更复杂，可以进一步统一到更强的配置写入抽象中。
+MCP 类型的内容预期为合法 JSON 配置。如果服务端返回的 content 字段格式不是标准 MCP 配置 JSON，load 操作可能失败。
 
 ## 16. 后续演进建议
 
@@ -633,25 +738,15 @@ bun run typecheck
 
 优先级最高。可以显著降低请求量与实现复杂度。
 
-### 16.2 扩展更多收藏类型
-
-在 skill 稳定后，按类型逐步支持：
-
-- subagent
-- command
-- mcp
-
-建议不要一次性全部放开，而是按安装链路成熟度逐步接入。
-
-### 16.3 增加命令层测试
+### 16.2 增加命令层测试
 
 当前重点覆盖的是核心模块 `favorite.ts`。后续可补：
 
-- `cs cloud favorite list`
+- `cs cloud favorite list --type agent`
 - `cs cloud favorite help`
 - 参数错误与异常路径
 
-### 16.4 增加错误恢复与用户提示
+### 16.3 增加错误恢复与用户提示
 
 例如：
 
@@ -659,6 +754,7 @@ bun run typecheck
 - 远端 item 已删除
 - 本地目录损坏
 - 配置文件内容异常
+- MCP 配置格式校验
 
 可以进一步提升 CLI 的可诊断性。
 
@@ -668,6 +764,9 @@ bun run typecheck
 
 - `packages/opencode/src/cli/cmd/cloud.ts`
 - `packages/opencode/src/costrict/cloud/favorite.ts`
+- `packages/opencode/src/server/routes/global.ts`
+- `packages/opencode/src/cli/cmd/tui/component/dialog-favorite.tsx`
+- `packages/opencode/src/cli/cmd/tui/app.tsx`
 
 ### 17.2 测试代码
 
@@ -679,19 +778,20 @@ bun run typecheck
 
 ## 18. 结论
 
-本方案以“**最小改动 + skill 优先 + download/load 分离 + 无重启生效**”为核心，完成了 `cs cloud favorite` 的第一版落地：
+本方案以"**多类型统一管理 + download/load 分离 + 无重启生效 + TUI 交互支持**"为核心，完成了 `cs cloud favorite` 的多类型扩展：
 
-- 将服务端收藏 skill 引入 CLI 管理能力
+- 将服务端收藏的 skill、agent、command、mcp 四种类型引入 CLI 和 TUI 管理能力
 - 提供清晰的生命周期状态模型
-- 复用既有配置与 skill 加载链路
+- 各类型使用独立的配置注入方式，复用既有加载链路
 - 通过 `Config.invalidate(true)` 实现无需重启的即时生效
+- TUI 中通过 HTTP API 确保 Config.invalidate 在正确进程执行
 - 使用 `costrict` 目录承载本地新增逻辑，便于与上游代码解耦
 
 当前版本中：
 
-- `download` 表示“仅下载到本地，不启用”
-- `load` 表示“确保已下载，并立即启用”
-- `unload` 表示“停用但保留本地文件”
-- `uninstall` 表示“彻底移除本地副本，回到 Cloud”
+- `download` 表示"仅下载到本地，不启用"
+- `load` 表示"确保已下载，并立即启用"
+- `unload` 表示"停用但保留本地文件"
+- `uninstall` 表示"彻底移除本地副本，回到 Cloud"
 
 该方案已经具备可用性与可维护性，适合作为后续扩展收藏能力的基础版本。
