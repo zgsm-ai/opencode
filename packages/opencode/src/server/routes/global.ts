@@ -12,6 +12,13 @@ import { Log } from "../../util/log"
 import { lazy } from "../../util/lazy"
 import { Config } from "../../config/config"
 import { errors } from "../error"
+import {
+  listFavoriteSkills,
+  loadFavoriteSkill,
+  unloadFavoriteSkill,
+  downloadFavoriteSkill,
+  uninstallFavoriteSkill,
+} from "@/costrict/cloud/favorite"
 
 const log = Log.create({ service: "server" })
 
@@ -307,6 +314,92 @@ export const GlobalRoutes = lazy(() =>
           return c.json(result)
         }
         return c.json(result, 500)
+      },
+    )
+    .get(
+      "/favorite/skills",
+      describeRoute({
+        summary: "List favorite skills",
+        description: "List all cloud favorite skills with their current status.",
+        operationId: "global.favorite.list",
+        responses: {
+          200: {
+            description: "Favorite skills list",
+            content: {
+              "application/json": {
+                schema: resolver(
+                  z.array(
+                    z.object({
+                      id: z.string(),
+                      slug: z.string(),
+                      name: z.string(),
+                      description: z.string(),
+                      status: z.enum(["Cloud", "Downloaded", "Active", "Unloaded"]),
+                      localPath: z.string().optional(),
+                    }),
+                  ),
+                ),
+              },
+            },
+          },
+          ...errors(500),
+        },
+      }),
+      async (c) => {
+        try {
+          const items = await listFavoriteSkills()
+          return c.json(items)
+        } catch (e) {
+          return c.json({ error: e instanceof Error ? e.message : String(e) }, 500)
+        }
+      },
+    )
+    .post(
+      "/favorite/skills/:slug/:action",
+      describeRoute({
+        summary: "Perform favorite skill action",
+        description: "Load, unload, download, or uninstall a favorite skill.",
+        operationId: "global.favorite.action",
+        responses: {
+          200: {
+            description: "Action performed successfully",
+            content: {
+              "application/json": {
+                schema: resolver(z.object({ success: z.literal(true), slug: z.string() })),
+              },
+            },
+          },
+          ...errors(400, 500),
+        },
+      }),
+      validator(
+        "param",
+        z.object({
+          slug: z.string(),
+          action: z.enum(["load", "unload", "download", "uninstall"]),
+        }),
+      ),
+      async (c) => {
+        const { slug, action } = c.req.valid("param")
+        try {
+          switch (action) {
+            case "load":
+              await loadFavoriteSkill(slug)
+              break
+            case "unload":
+              await unloadFavoriteSkill(slug)
+              break
+            case "download":
+              await downloadFavoriteSkill(slug)
+              break
+            case "uninstall":
+              await uninstallFavoriteSkill(slug)
+              break
+          }
+          return c.json({ success: true as const, slug })
+        } catch (e) {
+          return c.json({ error: e instanceof Error ? e.message : String(e) }, 500)
+        }
       },
     ),
 )

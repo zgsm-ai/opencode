@@ -35,6 +35,7 @@ import { DialogThemeList } from "@tui/component/dialog-theme-list"
 import { DialogHelp } from "./ui/dialog-help"
 import { CommandProvider, useCommandDialog } from "@tui/component/dialog-command"
 import { DialogAgent } from "@tui/component/dialog-agent"
+import { DialogFavorite } from "@tui/component/dialog-favorite"
 import { DialogSessionList } from "@tui/component/dialog-session-list"
 import { DialogWorkspaceList } from "@tui/component/dialog-workspace-list"
 import { KeybindProvider, useKeybind } from "@tui/context/keybind"
@@ -569,6 +570,18 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       },
       onSelect: () => {
         dialog.replace(() => <DialogMcp />)
+      },
+    },
+    {
+      title: "Manage favorite skills",
+      value: "favorite.list",
+      category: "Agent",
+      slash: {
+        name: "favorites",
+        aliases: ["fav"],
+      },
+      onSelect: () => {
+        dialog.replace(() => <DialogFavorite />)
       },
     },
     {
