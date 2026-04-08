@@ -643,7 +643,7 @@ export default function Home() {
                                 </svg>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent>
-                                <DropdownMenuItem onClick={() => copyInstall(item)}>
+                                <DropdownMenuItem class="justify-center" onClick={() => copyInstall(item)}>
                                   {copiedItemId() === item.id
                                     ? language.t("store.itemCard.copied")
                                     : language.t("store.home.table.copyInstall")}
