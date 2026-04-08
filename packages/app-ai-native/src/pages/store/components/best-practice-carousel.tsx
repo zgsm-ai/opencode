@@ -82,6 +82,8 @@ export default function BestPracticeCarousel(props: BestPracticeCarouselProps) {
     type: props.activeType(),
     page: 1,
     pageSize: CAROUSEL_SIZE,
+    sortBy: "installCount" as const,
+    sortOrder: "desc" as const,
   }))
 
   const [recommended] = createResource(carouselParams, (params) => itemApi.list(params))
@@ -89,13 +91,11 @@ export default function BestPracticeCarousel(props: BestPracticeCarouselProps) {
   // Keep previous data while loading to avoid flicker
   const [cachedItems, setCachedItems] = createSignal<CapabilityItem[]>([])
 
-  // Client-side sort by installCount as a best-effort ranking
   const items = createMemo(() => {
     const data = recommended.latest?.items
     if (data) {
-      const sorted = [...data].sort((a, b) => (b.installCount ?? 0) - (a.installCount ?? 0))
-      setCachedItems(sorted)
-      return sorted
+      setCachedItems(data)
+      return data
     }
     return cachedItems()
   })
@@ -221,11 +221,11 @@ export default function BestPracticeCarousel(props: BestPracticeCarouselProps) {
                         {TYPE_LABEL[item.itemType] ?? "\u2726"}{" "}
                         {language.t(typeKey(item.itemType))}
                       </span>
-                      <Show when={item.category?.trim()}>
+                      {/* <Show when={item.category?.trim()}>
                         <span class="bp-card-category-badge">
                           {language.t(categoryKey(item.category))}
                         </span>
-                      </Show>
+                      </Show> */}
                       <Show when={item.securityStatus}>
                         <SecurityTag status={item.securityStatus} />
                       </Show>

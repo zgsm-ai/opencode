@@ -238,7 +238,7 @@
 
 .bp-card-action-btn-active,
 .bp-card-action-btn-active [data-component="icon"] {
-  color: var(--card-accent, var(--st-accent));
+  color: rgb(234, 179, 8);
 }
 
 .bp-card-fav-icon {
@@ -248,7 +248,7 @@
 
 .bp-card-action-btn-active:hover,
 .bp-card-action-btn-active:hover [data-component="icon"] {
-  color: var(--card-accent, var(--st-accent));
+  color: rgb(234, 179, 8);
 }
 
 .bp-card-action-btn:disabled {
