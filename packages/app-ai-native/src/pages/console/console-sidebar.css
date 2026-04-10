@@ -1,6 +1,6 @@
-/* ── Store Sidebar ── */
+/* ── Console Sidebar ── */
 
-.store-sidebar {
+.console-sidebar {
   width: 15.5rem;
   flex-shrink: 0;
   display: flex;
@@ -12,43 +12,27 @@
 
 /* ── Header / Brand ── */
 
-.store-sidebar-head {
+.console-sidebar-head {
   padding: 0.875rem 1rem 0.625rem;
   border-bottom: 1px solid color-mix(in srgb, var(--st-border-subtle) 12%, transparent);
 }
 
-.store-sidebar-brand {
+.console-sidebar-brand {
   display: flex;
   align-items: center;
   gap: 0.5rem;
 }
 
-.store-sidebar-brand-icon {
-  width: 1.75rem;
-  height: 1.75rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--st-radius-md);
-  flex-shrink: 0;
-  background: linear-gradient(135deg, var(--st-accent), #5b8fd9);
-  color: var(--st-text-on-accent);
-}
-
-.store-sidebar-brand-icon [data-slot="icon-svg"] {
-  width: 14px;
-  height: 14px;
-}
-
-.store-sidebar-brand-text {
+.console-sidebar-brand-text {
   font-size: 0.875rem;
+  font-weight: 700;
   color: var(--st-text);
   letter-spacing: -0.01em;
 }
 
 /* ── Navigation ── */
 
-.store-sidebar-nav {
+.console-sidebar-nav {
   flex: 1;
   overflow-y: auto;
   padding: 0.625rem 0.5rem;
@@ -57,16 +41,17 @@
   gap: 1.25rem;
 }
 
-.store-sidebar-nav-label {
+.console-sidebar-nav-label {
   padding: 0 0.5rem;
-  font-size: 12px;
+  font-size: 0.625rem;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.07em;
   color: var(--st-text-muted);
   margin-bottom: 0.125rem;
 }
 
-.store-sidebar-nav-group {
+.console-sidebar-nav-group {
   display: flex;
   flex-direction: column;
   gap: 1px;
@@ -74,7 +59,7 @@
 
 /* ── Nav Item ── */
 
-.store-sidebar-nav-item {
+.console-sidebar-nav-item {
   display: flex;
   align-items: center;
   gap: 0.625rem;
@@ -83,6 +68,7 @@
   text-decoration: none;
   color: var(--st-text-secondary);
   font-size: 0.8125rem;
+  font-weight: 500;
   cursor: pointer;
   transition: all var(--st-transition-fast);
   position: relative;
@@ -92,17 +78,18 @@
   text-align: left;
 }
 
-.store-sidebar-nav-item:hover {
+.console-sidebar-nav-item:hover {
   background: var(--st-hover);
   color: var(--st-text);
 }
 
-.store-sidebar-nav-item-active {
+.console-sidebar-nav-item-active {
   background: color-mix(in srgb, var(--st-accent) 8%, transparent);
   color: var(--st-accent);
+  font-weight: 600;
 }
 
-.store-sidebar-nav-item-active::before {
+.console-sidebar-nav-item-active::before {
   content: '';
   position: absolute;
   left: -0.5rem;
@@ -115,7 +102,7 @@
 
 /* ── Nav Icon ── */
 
-.store-sidebar-nav-icon {
+.console-sidebar-nav-icon {
   width: 1.75rem;
   height: 1.75rem;
   display: flex;
@@ -126,32 +113,28 @@
   transition: all var(--st-transition-fast);
 }
 
-.store-sidebar-nav-icon [data-slot="icon-svg"] {
+.console-sidebar-nav-icon [data-slot="icon-svg"] {
   width: 15px;
   height: 15px;
 }
 
-.store-sidebar-nav-item-active .store-sidebar-nav-icon {
+.console-sidebar-nav-item-active .console-sidebar-nav-icon {
   color: var(--st-text-secondary);
 }
 
-.store-sidebar-nav-item:not(.store-sidebar-nav-item-active) .store-sidebar-nav-icon {
+.console-sidebar-nav-item:not(.console-sidebar-nav-item-active) .console-sidebar-nav-icon {
   color: var(--st-text-secondary);
 }
 
 /* ── Badge ── */
 
-.store-sidebar-nav-badge {
+.console-sidebar-nav-badge {
   margin-left: auto;
   padding: 0 0.4375rem;
   border-radius: var(--st-radius-full);
-  font-size: 12px;
+  font-size: 0.625rem;
+  font-weight: 600;
   line-height: 1.625;
   background: color-mix(in srgb, var(--st-accent) 8%, transparent);
   color: var(--st-accent);
-}
-
-.store-sidebar-nav-badge-warn {
-  background: var(--st-warning-container);
-  color: var(--_st-amber-on-container);
 }

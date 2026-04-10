@@ -1,1 +1,5 @@
-export { default as ConsolePage } from "./console-page"
+export { default as ConsoleLayout } from "./console-layout"
+export { default as DashboardRepositories } from "./dashboard-repositories"
+export { default as DashboardCapabilities } from "./dashboard-capabilities"
+export { DevicesSection as DevicesPage } from "./components/devices-section"
+export { NotificationChannelsSection as NotificationsPage } from "./components/notification-channels-section"

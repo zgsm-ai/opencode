@@ -1,138 +1,14 @@
 .console-page {
   max-width: 960px;
   margin: 0 auto;
-  padding: 2rem 2rem 3rem;
+  padding: 1.5rem 1.75rem 3rem;
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
 }
 
-.console-header {
-  display: flex;
-  align-items: center;
-  gap: 0.875rem;
-}
-
-.console-header-icon {
-  width: 2.5rem;
-  height: 2.5rem;
-  border-radius: var(--st-radius-lg, 1rem);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  background-color: color-mix(in srgb, var(--st-accent, #2E6CC4) 12%, transparent);
-  color: var(--st-accent, #2E6CC4);
-}
-
-.console-header-title {
-  font-size: 1.375rem;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  color: var(--st-text, #191c1e);
-  line-height: 1.2;
-}
-
-.console-header-desc {
-  margin-top: 0.25rem;
-  font-size: 0.8125rem;
-  color: var(--st-text-secondary, #424752);
-  line-height: 1.4;
-}
-
-.console-stat-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.625rem;
-}
-
-/* ── Card shell wrapping tabs + content ── */
-.console-card {
-  border-radius: 1.25rem;
-  border: 1px solid color-mix(in srgb, var(--st-border-subtle, rgba(194,198,212,0.12)) 25%, transparent);
-  background-color: var(--st-surface-lowest, #fff);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-  overflow: hidden;
-}
-
-.console-card-header {
-  padding: 1rem 1.25rem 0;
-}
-
-/* Remove inner section card styling so it merges into the outer card */
-.console-card .store-cshell {
-  border: none;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-}
-
-/* Console max-width is 960px — force 2-column grid for all section grids */
-.console-card .store-dash-grid,
-.console-card .store-dash-grid-3 {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-/* ── Underline-style tabs ── */
-.console-tabs {
-  display: flex;
-  gap: 0;
-  border-bottom: 2px solid color-mix(in srgb, var(--st-border-subtle, rgba(194,198,212,0.12)) 25%, transparent);
-}
-
-.console-tab {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.625rem 1rem;
-  border: none;
-  background: transparent;
-  color: var(--st-text-secondary, #424752);
-  font-size: 0.8125rem;
-  font-weight: 400;
-  cursor: pointer;
-  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
-  position: relative;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -2px;
-  font-family: inherit;
-}
-
-.console-tab:hover {
-  color: var(--st-text, #191c1e);
-  background: rgba(0, 0, 0, 0.02);
-}
-
-.console-tab-active {
-  color: var(--st-accent, #2E6CC4);
-  font-weight: 400;
-  border-bottom-color: var(--st-accent, #2E6CC4);
-}
-
-.console-tab-badge {
-  padding: 0 0.375rem;
-  border-radius: 9999px;
-  font-size: 0.5625rem;
-  font-weight: 700;
-  line-height: 1.625;
-}
-
-.console-tab-active .console-tab-badge {
-  background: color-mix(in srgb, var(--st-accent, #2E6CC4) 8%, transparent);
-  color: var(--st-accent, #2E6CC4);
-}
-
-.console-tab:not(.console-tab-active) .console-tab-badge {
-  background: rgba(66, 71, 82, 0.06);
-  color: var(--st-text-secondary, #424752);
-}
-
 @media (max-width: 768px) {
   .console-page {
     padding: 1rem;
-  }
-
-  .console-stat-grid {
-    grid-template-columns: minmax(0, 1fr);
   }
 }

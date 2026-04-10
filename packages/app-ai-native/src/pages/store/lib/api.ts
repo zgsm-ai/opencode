@@ -680,6 +680,7 @@ export const itemApi = {
     status?: string
     sortBy?: ItemSort
     sortOrder?: ItemOrder
+    favorited?: boolean
   }) => {
     const p = new URLSearchParams()
     if (params?.type) p.set("type", params.type)
@@ -691,6 +692,7 @@ export const itemApi = {
     if (params?.status) p.set("status", params.status)
     if (params?.sortBy) p.set("sortBy", params.sortBy)
     if (params?.sortOrder) p.set("sortOrder", params.sortOrder)
+    if (params?.favorited) p.set("favorited", "true")
     return apiFetch<{ items: CapabilityItem[]; total: number; hasMore: boolean }>(`/api/items?${p.toString()}`)
   },
 

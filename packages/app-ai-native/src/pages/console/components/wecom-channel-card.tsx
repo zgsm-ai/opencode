@@ -55,7 +55,7 @@ export function WecomChannelCard(props: WecomChannelCardProps) {
 
       <div class="store-notif-card-field">
         <strong>Webhook:</strong>{" "}
-        <span style={{"font-size": "12px", overflow: "hidden", "text-overflow": "ellipsis", "white-space": "nowrap" }}>
+        <span style={{ flex: 1, "min-width": "0", "font-size": "12px", overflow: "hidden", "text-overflow": "ellipsis", "white-space": "nowrap" }}>
           {props.channel.webhook || "—"}
         </span>
       </div>

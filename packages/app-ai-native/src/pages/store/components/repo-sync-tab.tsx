@@ -12,7 +12,7 @@ const inputClass =
   "w-full h-8 rounded-md border border-border-weak-base bg-background-base px-3 text-sm text-text-strong outline-none focus:border-border-strong"
 
 const textAreaClass =
-  "w-full min-h-[72px] rounded-md border border-border-weak-base bg-background-base px-3 py-2 text-xs font-mono text-text-strong outline-none focus:border-border-strong resize-y"
+  "w-full min-h-[72px] rounded-md border border-border-weak-base bg-background-base px-3 py-2 text-sm font-mono text-text-strong outline-none focus:border-border-strong resize-y"
 
 type RepoSyncTabProps = { repoId: string }
 
@@ -142,7 +142,7 @@ export function RepoSyncTab(props: RepoSyncTabProps) {
     <div class="space-y-3">
       <div class="flex items-center justify-between">
         <div>
-          <div class="text-12-medium text-text-strong">{language.t("store.sync.title")}</div>
+          <div class="text-sm text-text-strong">{language.t("store.sync.title")}</div>
           <div class="text-12-regular text-text-weak">{language.t("store.sync.description")}</div>
         </div>
       </div>
@@ -153,7 +153,7 @@ export function RepoSyncTab(props: RepoSyncTabProps) {
           class="rounded-lg border border-border-weak-base bg-surface-raised-base p-3 space-y-3"
         >
           <div>
-            <label class="mb-1 block text-12-medium text-text-strong">{language.t("store.sync.gitUrl")}</label>
+            <label class="mb-1 block text-12-regular text-text-strong">{language.t("store.sync.gitUrl")}</label>
             <input
               value={store.externalUrl}
               onInput={(e) => setStore("externalUrl", e.currentTarget.value)}
@@ -164,7 +164,7 @@ export function RepoSyncTab(props: RepoSyncTabProps) {
           </div>
           <div class="grid gap-3 md:grid-cols-3">
             <div>
-              <label class="mb-1 block text-12-medium text-text-strong">{language.t("store.sync.branch")}</label>
+              <label class="mb-1 block text-12-regular text-text-strong">{language.t("store.sync.branch")}</label>
               <input
                 value={store.externalBranch}
                 onInput={(e) => setStore("externalBranch", e.currentTarget.value)}
@@ -172,7 +172,7 @@ export function RepoSyncTab(props: RepoSyncTabProps) {
               />
             </div>
             <div>
-              <label class="mb-1 block text-12-medium text-text-strong">{language.t("store.sync.interval")}</label>
+              <label class="mb-1 block text-12-regular text-text-strong">{language.t("store.sync.interval")}</label>
               <select
                 value={String(store.syncInterval)}
                 onInput={(e) => setStore("syncInterval", Number(e.currentTarget.value))}
@@ -184,7 +184,7 @@ export function RepoSyncTab(props: RepoSyncTabProps) {
               </select>
             </div>
             <div>
-              <label class="mb-1 block text-12-medium text-text-strong">{language.t("store.sync.conflict")}</label>
+              <label class="mb-1 block text-12-regular text-text-strong">{language.t("store.sync.conflict")}</label>
               <select
                 value={store.conflictStrategy}
                 onInput={(e) => setStore("conflictStrategy", e.currentTarget.value)}
@@ -195,7 +195,7 @@ export function RepoSyncTab(props: RepoSyncTabProps) {
               </select>
             </div>
           </div>
-          <label class="flex items-center gap-2 text-12-medium text-text-strong">
+          <label class="flex items-center gap-2 text-12-regular text-text-strong">
             <input
               type="checkbox"
               checked={store.syncEnabled}
@@ -205,7 +205,7 @@ export function RepoSyncTab(props: RepoSyncTabProps) {
           </label>
           <div class="grid gap-3 md:grid-cols-2">
             <div>
-              <label class="mb-1 block text-12-medium text-text-strong">
+              <label class="mb-1 block text-12-regular text-text-strong">
                 {language.t("store.sync.includePatterns")}
               </label>
               <textarea
@@ -215,7 +215,7 @@ export function RepoSyncTab(props: RepoSyncTabProps) {
               />
             </div>
             <div>
-              <label class="mb-1 block text-12-medium text-text-strong">
+              <label class="mb-1 block text-12-regular text-text-strong">
                 {language.t("store.sync.excludePatterns")}
               </label>
               <textarea
@@ -248,7 +248,7 @@ export function RepoSyncTab(props: RepoSyncTabProps) {
                   <div class="flex items-start justify-between gap-3">
                     <div class="min-w-0 flex-1">
                       <Tooltip value={registry.externalUrl} placement="top">
-                        <div class="truncate text-12-medium text-text-strong">{registry.externalUrl}</div>
+                        <div class="truncate text-sm text-text-strong">{registry.externalUrl}</div>
                       </Tooltip>
                       <div class="mt-1 text-12-regular text-text-weak">
                         {registry.externalBranch || "main"} · {registry.syncStatus || "idle"}

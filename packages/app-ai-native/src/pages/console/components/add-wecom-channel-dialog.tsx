@@ -2,7 +2,7 @@ import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { createResource } from "solid-js"
 import { createStore } from "solid-js/store"
 import { type WecomChannel } from "@/context/settings"
-import { notificationChannelApi } from "../lib/api"
+import { notificationChannelApi } from "@/pages/store/lib/api"
 import { useLanguage } from "@/context/language"
 import { Modal } from "@/components/modal"
 

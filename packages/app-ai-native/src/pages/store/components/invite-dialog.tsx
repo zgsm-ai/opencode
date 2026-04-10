@@ -92,12 +92,12 @@ export function InviteDialog(props: Props) {
       </div>
       <div class="modal-section" style={{ flex: "1", "overflow-y": "auto" }}>
         <Show when={store.searching}>
-          <div style={{ padding: "1rem 0", "text-align": "center", "font-size": "0.75rem", color: "var(--st-text-secondary)" }}>
+          <div style={{ padding: "1rem 0", "text-align": "center", "font-size": "0.8125rem", color: "var(--st-text-secondary)" }}>
             {language.t("store.loading")}
           </div>
         </Show>
         <Show when={!store.searching && store.results.length === 0 && store.query.trim()}>
-          <div style={{ padding: "1rem 0", "text-align": "center", "font-size": "0.75rem", color: "var(--st-text-secondary)" }}>
+          <div style={{ padding: "1rem 0", "text-align": "center", "font-size": "0.8125rem", color: "var(--st-text-secondary)" }}>
             {language.t("store.inviteDialog.empty")}
           </div>
         </Show>
@@ -123,8 +123,7 @@ export function InviteDialog(props: Props) {
                             "justify-content": "center",
                             "border-radius": "9999px",
                             background: "var(--st-surface-low)",
-                            "font-size": "0.75rem",
-                            "font-weight": "500",
+                            "font-size": "0.8125rem",
                             color: "var(--st-text)",
                           }}
                         >
@@ -148,7 +147,6 @@ export function InviteDialog(props: Props) {
                       <div
                         style={{
                           "font-size": "0.8125rem",
-                          "font-weight": "600",
                           color: "var(--st-text)",
                           overflow: "hidden",
                           "text-overflow": "ellipsis",
@@ -159,7 +157,7 @@ export function InviteDialog(props: Props) {
                       </div>
                       <div
                         style={{
-                          "font-size": "0.6875rem",
+                          "font-size": "12px",
                           color: "var(--st-text-secondary)",
                           overflow: "hidden",
                           "text-overflow": "ellipsis",
@@ -177,7 +175,7 @@ export function InviteDialog(props: Props) {
                     onClick={() => void invite(user)}
                   >
                     <Show when={store.inviting === user.id} fallback={<Icon name="plus-small" size="small" />}>
-                      <span style={{ "font-size": "0.6875rem" }}>{language.t("store.loading")}</span>
+                      <span style={{ "font-size": "0.8125rem" }}>{language.t("store.loading")}</span>
                     </Show>
                   </button>
                 </div>

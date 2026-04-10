@@ -264,7 +264,7 @@ export default function ItemDetailContent(props: ItemDetailContentProps) {
 
               <div class="flex items-start justify-between gap-3">
                 <h1
-                  class="min-w-0 font-bold text-text-strong"
+                  class="min-w-0 text-text-strong"
                   style={{ "font-size": "20px", "letter-spacing": "-0.02em", "line-height": "1.3" }}
                 >
                   {data().name}
@@ -283,7 +283,7 @@ export default function ItemDetailContent(props: ItemDetailContentProps) {
                     <button
                       onClick={() => void props.onToggleFavorite?.()}
                       disabled={!props.isAuthenticated || props.favoritePending}
-                      class="inline-flex items-center gap-1.5 rounded-lg border border-border-weak-base px-3 py-1.5 text-12-medium transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-60"
+                      class="inline-flex items-center gap-1.5 rounded-lg border border-border-weak-base px-3 py-1.5 text-12-regular transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-60"
                       classList={{
                         "bg-bg-muted text-text-strong hover:bg-bg-muted/70": props.favorited,
                         "text-text-weak hover:text-text-strong hover:bg-bg-muted": !props.favorited,
@@ -311,7 +311,7 @@ export default function ItemDetailContent(props: ItemDetailContentProps) {
 
               <div class="mt-2 flex flex-wrap items-center gap-1.5">
                 <span
-                  class="inline-flex items-center rounded-[10px] px-2.5 py-[2px] text-xs font-medium"
+                  class="inline-flex items-center rounded-[10px] px-2.5 py-[2px] text-xs"
                   style={{
                     "background-color": `color-mix(in srgb, ${meta().accent} 12%, transparent)`,
                     color: meta().accent,
@@ -320,7 +320,7 @@ export default function ItemDetailContent(props: ItemDetailContentProps) {
                   {language.t("store.capability.type." + (item()?.itemType ?? "skill"))}
                 </span>
                 <Show when={data().category}>
-                  <span class="inline-flex items-center rounded-[10px] bg-[rgba(156,163,175,0.12)] px-2.5 py-[2px] text-xs font-medium text-text-weak">
+                  <span class="inline-flex items-center rounded-[10px] bg-[rgba(156,163,175,0.12)] px-2.5 py-[2px] text-xs text-text-weak">
                     {language.t(categoryKey(data().category))}
                   </span>
                 </Show>
@@ -379,10 +379,10 @@ export default function ItemDetailContent(props: ItemDetailContentProps) {
                         <div class="flex items-center justify-between gap-3 border-b border-border-weak-base px-3 py-2.5 transition-colors duration-150 last:border-b-0 hover:bg-bg-muted/40">
                           <div class="min-w-0">
                             <div class="flex items-center gap-2">
-                              <span class="truncate text-12-medium text-text-strong">{artifact.filename}</span>
+                              <span class="truncate text-12-regular text-text-strong">{artifact.filename}</span>
                               <Show when={artifact.isLatest}>
                                 <span
-                                  class="inline-flex items-center rounded-[10px] px-2 py-[1px] text-xs font-medium"
+                                  class="inline-flex items-center rounded-[10px] px-2 py-[1px] text-xs"
                                   style={{
                                     "background-color": `color-mix(in srgb, ${meta().accent} 12%, transparent)`,
                                     color: meta().accent,
@@ -400,7 +400,7 @@ export default function ItemDetailContent(props: ItemDetailContentProps) {
                           <a
                             href={artifactApi.downloadUrl(artifact.id)}
                             download=""
-                            class="inline-flex cursor-pointer items-center gap-1 rounded-lg px-2.5 py-1 text-12-medium text-text-weak transition-all duration-150 hover:bg-bg-muted hover:text-text-strong"
+                            class="inline-flex cursor-pointer items-center gap-1 rounded-lg px-2.5 py-1 text-12-regular text-text-weak transition-all duration-150 hover:bg-bg-muted hover:text-text-strong"
                           >
                             <Icon name="download" size="small" />
                             {language.t("store.itemCard.download")}
@@ -439,7 +439,7 @@ export default function ItemDetailContent(props: ItemDetailContentProps) {
                       {(row) => (
                         <div class="flex items-center justify-between border-b border-border-weak-base px-4 py-2.5 last:border-b-0">
                           <dt class="text-12-regular text-text-weak">{row[0]}</dt>
-                          <dd class="text-12-medium text-text-strong">{row[1]}</dd>
+                          <dd class="text-12-regular text-text-strong">{row[1]}</dd>
                         </div>
                       )}
                     </For>

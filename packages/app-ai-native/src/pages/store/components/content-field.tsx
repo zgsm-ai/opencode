@@ -63,7 +63,7 @@ export function ContentField(props: ContentFieldProps) {
    return (
       <div>
          <div class="mb-2 flex items-center justify-between gap-3">
-            <label class="block text-12-medium text-text-strong">{language.t("store.capabilityDialog.field.content")}</label>
+            <label class="block text-12-regular text-text-strong">{language.t("store.capabilityDialog.field.content")}</label>
             <Show when={props.archive !== false}>
                <div class="flex items-center gap-2">
                   {modes.map((item) => (

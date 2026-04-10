@@ -1,6 +1,7 @@
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { Icon } from "@opencode-ai/ui/icon"
 import { showToast } from "@opencode-ai/ui/toast"
+import { LocalIcon } from "@/components/local-icon"
 import { useLanguage } from "@/context/language"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { createEffect, createMemo, createSignal, For, Show, Suspense } from "solid-js"
@@ -24,6 +25,14 @@ const TYPE_COLORS: Record<string, string> = {
   mcp: "#8B5CF6",
 }
 
+
+const SUB = {
+  "font-size": "0.8125rem",
+  color: "var(--st-text-secondary)",
+  "margin-bottom": "0.75rem",
+}
+
+
 export default function DashboardCapabilities() {
   const dialog = useDialog()
   const language = useLanguage()
@@ -44,6 +53,12 @@ export default function DashboardCapabilities() {
     itemPage: 1,
     filtersShown: false,
     repos: [] as Repository[],
+  })
+  const [favState, setFavState] = createStore({
+    items: [] as CapabilityItem[],
+    total: 0,
+    loading: false,
+    page: 1,
   })
 
   const userId = createMemo(() => user()?.id ?? user()?.subjectId ?? user()?.sub ?? "")
@@ -71,20 +86,34 @@ export default function DashboardCapabilities() {
     }
   }
 
+  const loadFavorited = async (page = favState.page) => {
+    if (favState.loading) return
+    setFavState("loading", true)
+    try {
+      const res = await itemApi.list({ favorited: true, page, pageSize: PAGE_SIZE })
+      setFavState("items", res.items ?? [])
+      setFavState("total", res.total ?? 0)
+    } catch {
+      // silently ignore
+    } finally {
+      setFavState("loading", false)
+    }
+  }
+
   let loaded = false
   createEffect(() => {
     if (!userId() || loaded) return
     loaded = true
     void loadItems()
+    void loadFavorited()
     void repoApi.listMy(userId()).then((res) => setState("repos", res.repositories ?? []))
   })
 
   const totalPages = createMemo(() => Math.max(1, Math.ceil(state.totalItems / PAGE_SIZE)))
+  const favTotalPages = createMemo(() => Math.max(1, Math.ceil(favState.total / PAGE_SIZE)))
   const detailOpen = createMemo(() => !!selectedItemId())
 
-  const pages = createMemo(() => {
-    const total = totalPages()
-    const cur = state.itemPage
+  const buildPages = (total: number, cur: number) => {
     if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
     const set = new Set([1, 2, cur - 1, cur, cur + 1, total - 1, total])
     const sorted = [...set].filter((p) => p >= 1 && p <= total).sort((a, b) => a - b)
@@ -94,7 +123,10 @@ export default function DashboardCapabilities() {
       result.push(sorted[i])
     }
     return result
-  })
+  }
+
+  const pages = createMemo(() => buildPages(totalPages(), state.itemPage))
+  const favPages = createMemo(() => buildPages(favTotalPages(), favState.page))
 
   const openCreateCapability = () => {
     if (!userId()) return
@@ -131,6 +163,11 @@ export default function DashboardCapabilities() {
     ))
   }
 
+  const unfavoriteItem = async (id: string) => {
+    await behaviorApi.unfavorite(id)
+    void loadFavorited(favState.page)
+  }
+
   const toggleFavorite = async () => {
     const data = detailItem()
     if (!data || !user() || loading() || favoritePending()) return
@@ -141,12 +178,14 @@ export default function DashboardCapabilities() {
         const result = await behaviorApi.unfavorite(data.id)
         setFavorited(result.favorited)
         setFavoriteCount(result.favoriteCount)
+        void loadFavorited(favState.page)
         return
       }
 
       const result = await behaviorApi.favorite(data.id)
       setFavorited(result.favorited)
       setFavoriteCount(result.favoriteCount)
+      void loadFavorited(favState.page)
     } finally {
       setFavoritePending(false)
     }
@@ -188,6 +227,49 @@ export default function DashboardCapabilities() {
       .catch(() => undefined)
   })
 
+  const Pagination = (props: {
+    page: number
+    totalPages: number
+    pages: (number | "...")[]
+    onPage: (p: number) => void
+    total: number
+  }) => (
+    <Show when={props.totalPages > 1}>
+      <div class="store-pag">
+        <p class="store-pag-sum">
+          {language.t("store.console.capabilities.showing", {
+            from: (props.page - 1) * PAGE_SIZE + 1,
+            to: Math.min(props.page * PAGE_SIZE, props.total),
+            total: props.total,
+          })}
+        </p>
+        <div class="store-pag-acts">
+          <button class="store-pbtn" disabled={props.page <= 1} onClick={() => props.onPage(props.page - 1)}>
+            <Icon name="chevron-left" size="small" />
+          </button>
+          <For each={props.pages}>
+            {(p) => (
+              <Show
+                when={p !== "..."}
+                fallback={<span class="store-pbtn" style={{ cursor: "default" }}>...</span>}
+              >
+                <button
+                  class={`store-pbtn${props.page === p ? " store-pbtn-on" : ""}`}
+                  onClick={() => props.onPage(p as number)}
+                >
+                  {p}
+                </button>
+              </Show>
+            )}
+          </For>
+          <button class="store-pbtn" disabled={props.page >= props.totalPages} onClick={() => props.onPage(props.page + 1)}>
+            <Icon name="chevron-right" size="small" />
+          </button>
+        </div>
+      </div>
+    </Show>
+  )
+
   return (
     <Show
       when={!loading()}
@@ -210,12 +292,17 @@ export default function DashboardCapabilities() {
           </div>
         }
       >
-        <section class="store-cshell">
-          <div class="store-tbar">
-            <div>
-              <h2 class="store-tbar-title">{language.t("store.console.capabilities.title")}</h2>
-              <p class="store-tbar-sub">{language.t("store.console.capabilities.description")}</p>
-            </div>
+        <div class="store-tbar">
+          <div>
+            <h2 class="store-tbar-title">{language.t("store.console.capabilities.title")}</h2>
+            <p class="store-tbar-sub">{language.t("store.console.capabilities.description")}</p>
+          </div>
+        </div>
+
+        {/* My Created */}
+        <section class="store-cshell" style={{ "margin-bottom": "1rem" }}>
+          <div style={{ display: "flex", "align-items": "center", "justify-content": "space-between", "margin-bottom": "0.75rem" }}>
+            <p style={{ ...SUB, "margin-bottom": 0 }}>{language.t("store.console.capabilities.myCreated")}</p>
             <button class="store-fbtn store-fbtn-primary" onClick={openCreateCapability}>
               <Icon name="plus" size="small" />
               {language.t("store.console.newCapability")}
@@ -248,11 +335,7 @@ export default function DashboardCapabilities() {
           >
             <Show
               when={state.totalItems > 0 || state.items.length > 0}
-              fallback={
-                <div class="store-dash-empty">
-                  {language.t("store.console.capabilities.empty")}
-                </div>
-              }
+              fallback={<div class="store-dash-empty">{language.t("store.console.capabilities.empty")}</div>}
             >
               <div class="store-tshell">
                 <table class="store-dt">
@@ -273,10 +356,7 @@ export default function DashboardCapabilities() {
                         return (
                           <tr onClick={() => setSelectedItemId(item.id)}>
                             <td>
-                              <span class="store-iname">{item.name}</span>
-                              <div style={{ "font-size": "0.625rem", color: "var(--st-text-secondary)", "margin-top": "2px" }}>
-                                {item.slug}
-                              </div>
+                              <span style={{ color: "var(--st-text)" }}>{item.name}</span>
                             </td>
                             <td>
                               <span
@@ -342,59 +422,90 @@ export default function DashboardCapabilities() {
                 </table>
               </div>
 
-              <Show when={totalPages() > 1}>
-                <div class="store-pag">
-                  <p class="store-pag-sum">
-                    {language.t("store.console.capabilities.showing", {
-                      from: (state.itemPage - 1) * PAGE_SIZE + 1,
-                      to: Math.min(state.itemPage * PAGE_SIZE, state.totalItems),
-                      total: state.totalItems,
-                    })}
-                  </p>
-                  <div class="store-pag-acts">
-                    <button
-                      class="store-pbtn"
-                      disabled={state.itemPage <= 1}
-                      onClick={() => {
-                        const p = Math.max(1, state.itemPage - 1)
-                        setState("itemPage", p)
-                        void loadItems(p)
+              <Pagination
+                page={state.itemPage}
+                totalPages={totalPages()}
+                pages={pages()}
+                total={state.totalItems}
+                onPage={(p) => {
+                  setState("itemPage", p)
+                  void loadItems(p)
+                }}
+              />
+            </Show>
+          </Show>
+        </section>
+
+        {/* My Favorited */}
+        <section class="store-cshell">
+          <p style={SUB}>{language.t("store.console.capabilities.myFavorited")}</p>
+
+          <Show
+            when={!favState.loading}
+            fallback={<div class="store-dash-empty">{language.t("store.console.capabilities.favorited.loading")}</div>}
+          >
+            <Show
+              when={favState.total > 0 || favState.items.length > 0}
+              fallback={<div class="store-dash-empty">{language.t("store.console.capabilities.favorited.empty")}</div>}
+            >
+              <div class="store-tshell">
+                <table class="store-dt">
+                  <thead>
+                    <tr>
+                      <th>{language.t("store.console.capabilities.name")}</th>
+                      <th>{language.t("store.console.capabilities.type")}</th>
+                      <th>{language.t("store.console.capabilities.source")}</th>
+                      <th style={{ "text-align": "right" }}>{language.t("common.operation")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <For each={favState.items}>
+                      {(item) => {
+                        const tc = () => TYPE_COLORS[item.itemType] || "#8B5CF6"
+                        return (
+                          <tr onClick={() => setSelectedItemId(item.id)}>
+                            <td>
+                              <span style={{ color: "var(--st-text)" }}>{item.name}</span>
+                            </td>
+                            <td>
+                              <span
+                                class="store-dash-pill"
+                                style={{
+                                  background: `color-mix(in srgb, ${tc()} 12%, transparent)`,
+                                  color: tc(),
+                                }}
+                              >
+                                {typeLabel(item.itemType)}
+                              </span>
+                            </td>
+                            <td class="store-mut">{item.repoName || "—"}</td>
+                            <td style={{ "text-align": "right" }}>
+                              <button
+                                class="store-abtn"
+                                title={language.t("store.detail.unfavorite")}
+                                onClick={(e) => { e.stopPropagation(); void unfavoriteItem(item.id) }}
+                              >
+                                <LocalIcon name="star-filled" size="small" style={{ color: "rgb(234,179,8)" }} />
+                              </button>
+                            </td>
+                          </tr>
+                        )
                       }}
-                    >
-                      <Icon name="chevron-left" size="small" />
-                    </button>
-                    <For each={pages()}>
-                      {(p) => (
-                        <Show
-                          when={p !== "..."}
-                          fallback={<span class="store-pbtn" style={{ cursor: "default" }}>...</span>}
-                        >
-                          <button
-                            class={`store-pbtn${state.itemPage === p ? " store-pbtn-on" : ""}`}
-                            onClick={() => {
-                              setState("itemPage", p as number)
-                              void loadItems(p as number)
-                            }}
-                          >
-                            {p}
-                          </button>
-                        </Show>
-                      )}
                     </For>
-                    <button
-                      class="store-pbtn"
-                      disabled={state.itemPage >= totalPages()}
-                      onClick={() => {
-                        const p = Math.min(totalPages(), state.itemPage + 1)
-                        setState("itemPage", p)
-                        void loadItems(p)
-                      }}
-                    >
-                      <Icon name="chevron-right" size="small" />
-                    </button>
-                  </div>
-                </div>
-              </Show>
+                  </tbody>
+                </table>
+              </div>
+
+              <Pagination
+                page={favState.page}
+                totalPages={favTotalPages()}
+                pages={favPages()}
+                total={favState.total}
+                onPage={(p) => {
+                  setFavState("page", p)
+                  void loadFavorited(p)
+                }}
+              />
             </Show>
           </Show>
         </section>

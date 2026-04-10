@@ -15,7 +15,15 @@ const WorkspaceLayout = lazy(() => import("@/pages/workspace").then((m) => ({ de
 const WorkspaceHome = lazy(() => import("@/pages/workspace").then((m) => ({ default: m.WorkspaceHome })))
 const DirectoryLayout = lazy(() => import("@/pages/directory-layout"))
 const consoleImport = import("@/pages/console")
-const ConsolePage = lazy(() => consoleImport.then((m) => ({ default: m.ConsolePage })))
+const ConsoleLayout = lazy(() => consoleImport.then((m) => ({ default: m.ConsoleLayout })))
+const ConsoleRepositories = lazy(() => consoleImport.then((m) => ({ default: m.DashboardRepositories })))
+const ConsoleCapabilities = lazy(() => consoleImport.then((m) => ({ default: m.DashboardCapabilities })))
+const ConsoleDevices = lazy(() => consoleImport.then((m) => ({ default: m.DevicesPage })))
+const ConsoleNotifications = lazy(() => consoleImport.then((m) => ({ default: m.NotificationsPage })))
+
+const ConsoleDevicesRoute: Component = () => <ConsoleDevices />
+const ConsoleNotificationsRoute: Component = () => <ConsoleNotifications />
+
 
 const wrap = (Component: Component<{ children?: JSX.Element }>) => (props: { children?: JSX.Element }) => (
   <Suspense fallback={<Loading />}>
@@ -81,8 +89,14 @@ export const routeConfig: RouteConfig[] = [
   },
   {
     path: "/console",
-    component: ConsolePage,
+    component: ConsoleLayout,
     auth: true,
+    children: [
+      { path: "/", component: ConsoleRepositories },
+      { path: "/capabilities", component: ConsoleCapabilities },
+      { path: "/devices", component: ConsoleDevicesRoute },
+      { path: "/notifications", component: ConsoleNotificationsRoute },
+    ],
   },
   {
     path: "/store",

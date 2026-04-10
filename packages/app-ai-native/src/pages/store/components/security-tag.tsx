@@ -40,7 +40,7 @@ export default function SecurityTag(props: { status?: SecurityStatus }) {
   return (
     <Show when={props.status}>
       <span
-        class="inline-flex items-center justify-center rounded-[10px] px-2.5 py-[2px] text-xs font-medium"
+        class="inline-flex items-center justify-center rounded-[10px] px-2.5 py-[2px] text-xs"
         style={{ "background-color": COLORS[status()][0], color: COLORS[status()][1] }}
         title={text()}
       >
@@ -71,7 +71,7 @@ export function VerdictTag(props: { verdict?: Verdict }) {
   return (
     <Show when={props.verdict}>
       <span
-        class="inline-flex items-center justify-center rounded-[10px] px-2.5 py-[2px] text-xs font-medium"
+        class="inline-flex items-center justify-center rounded-[10px] px-2.5 py-[2px] text-xs"
         style={{ "background-color": VERDICT_COLORS[verdict()][0], color: VERDICT_COLORS[verdict()][1] }}
         title={language.t(VERDICT_KEYS[verdict()])}
       >

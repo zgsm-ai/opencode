@@ -78,11 +78,11 @@ export function MoveCapabilityDialog(props: MoveCapabilityDialogProps) {
         {/* Capability info */}
         <div class="modal-section">
           <div class="modal-info-card">
-            <label style={{ display: "block", "font-size": "0.6875rem", "font-weight": "600", color: "var(--st-text-secondary)", "margin-bottom": "0.5rem" }}>
+            <label style={{ display: "block", "font-size": "12px", color: "var(--st-text-secondary)", "margin-bottom": "0.5rem" }}>
               {language.t("store.capabilityDialog.move.currentCapability")}
             </label>
             <div style={{ display: "flex", "align-items": "center", gap: "0.5rem", "font-size": "0.8125rem", color: "var(--st-text)" }}>
-              <span style={{ "font-weight": "600" }}>{props.item.name}</span>
+              <span>{props.item.name}</span>
               <span style={{ color: "var(--st-text-secondary)" }}>/</span>
               <span style={{ "font-family": "'SF Mono', 'Fira Code', monospace", color: "var(--st-text-secondary)" }}>{props.item.slug}</span>
             </div>
@@ -94,10 +94,10 @@ export function MoveCapabilityDialog(props: MoveCapabilityDialogProps) {
           <div style={{ display: "grid", "grid-template-columns": "1fr auto 1fr", "align-items": "stretch", gap: "1rem" }}>
             {/* Current repository */}
             <div class="modal-info-card" style={{ display: "flex", "flex-direction": "column" }}>
-              <label style={{ display: "block", "font-size": "0.6875rem", "font-weight": "600", color: "var(--st-text-secondary)", "margin-bottom": "0.5rem" }}>
+              <label style={{ display: "block", "font-size": "12px", color: "var(--st-text-secondary)", "margin-bottom": "0.5rem" }}>
                 {language.t("store.capabilityDialog.move.currentRepository")}
               </label>
-              <div style={{ display: "flex", flex: "1", "align-items": "center", "font-size": "0.8125rem", "font-weight": "600", color: "var(--st-text)" }}>
+              <div style={{ display: "flex", flex: "1", "align-items": "center", "font-size": "0.8125rem", color: "var(--st-text)" }}>
                 {current()}
               </div>
             </div>
@@ -109,7 +109,7 @@ export function MoveCapabilityDialog(props: MoveCapabilityDialogProps) {
 
             {/* Target repository */}
             <div class="modal-info-card" style={{ display: "flex", "flex-direction": "column" }}>
-              <label style={{ display: "block", "font-size": "0.6875rem", "font-weight": "600", color: "var(--st-text-secondary)", "margin-bottom": "0.5rem" }}>
+              <label style={{ display: "block", "font-size": "12px", color: "var(--st-text-secondary)", "margin-bottom": "0.5rem" }}>
                 {language.t("store.capabilityDialog.move.targetRepository")}
               </label>
               <div style={{ display: "flex", flex: "1", "align-items": "center" }}>

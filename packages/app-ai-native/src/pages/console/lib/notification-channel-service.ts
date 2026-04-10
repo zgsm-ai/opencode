@@ -1,5 +1,5 @@
 import type { WecomChannel } from "@/context/settings"
-import { notificationChannelApi, type WecomChannelPayload } from "./api"
+import { notificationChannelApi, type WecomChannelPayload } from "@/pages/store/lib/api"
 
 function toTriggerEvents(events: WecomChannel["events"]) {
   return [

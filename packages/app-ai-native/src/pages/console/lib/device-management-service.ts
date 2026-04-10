@@ -1,5 +1,5 @@
 import type { UpdateDeviceRequest } from "@/pages/workspace/types"
-import { deviceApi } from "../lib/api"
+import { deviceApi } from "@/pages/store/lib/api"
 
 export const deviceManagementService = {
   async list() {

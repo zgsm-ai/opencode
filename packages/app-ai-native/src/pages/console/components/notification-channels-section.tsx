@@ -8,7 +8,7 @@ import { AddWecomChannelDialog } from "./add-wecom-channel-dialog"
 import { EditWecomChannelDialog } from "./edit-wecom-channel-dialog"
 import { WecomChannelCard } from "./wecom-channel-card"
 import { notificationChannelService } from "../lib/notification-channel-service"
-import { ConfirmDialog } from "./confirm-dialog"
+import { ConfirmDialog } from "@/pages/store/components/confirm-dialog"
 
 type NotificationChannelsSectionProps = {
   channels?: () => WecomChannel[] | undefined
@@ -165,7 +165,7 @@ export function NotificationChannelsSection(props: NotificationChannelsSectionPr
             </div>
           }
         >
-          <div class="store-dash-grid store-dash-grid-3">
+          <div class="store-dash-grid store-dash-grid-2">
             <For each={wecomChannels()}>
               {(channel) => (
                 <WecomChannelCard
