@@ -194,7 +194,6 @@ export function AppInterface(props: {
               <Route path="/" component={HomeRoute} />
               <Route path="/store" component={StoreLayout}>
                 <Route path="/" component={StoreHomeRoute} />
-                <Route path="/dashboard" component={StoreDashboardRoute} />
               </Route>
             </Dynamic>
           </GlobalSyncProvider>

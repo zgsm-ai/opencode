@@ -979,6 +979,8 @@ export const dict = {
   "sidebar.console": "Console",
   "console.title": "Console",
   "console.description": "Manage your devices and notification channels",
+  "console.tab.repositories": "Namespaces",
+  "console.tab.capabilities": "Capabilities",
   "console.tab.devices": "Devices",
   "console.tab.notifications": "Notification Channels",
   "console.stats.devices": "Devices",

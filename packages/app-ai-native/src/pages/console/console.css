@@ -89,7 +89,7 @@
   background: transparent;
   color: var(--st-text-secondary, #424752);
   font-size: 0.8125rem;
-  font-weight: 500;
+  font-weight: 400;
   cursor: pointer;
   transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
@@ -105,7 +105,7 @@
 
 .console-tab-active {
   color: var(--st-accent, #2E6CC4);
-  font-weight: 600;
+  font-weight: 400;
   border-bottom-color: var(--st-accent, #2E6CC4);
 }
 

@@ -576,6 +576,8 @@ export const dict = {
   "sidebar.console": "个人控制台",
   "console.title": "控制台",
   "console.description": "管理您的设备和通知渠道",
+  "console.tab.repositories": "命名空间",
+  "console.tab.capabilities": "功能",
   "console.tab.devices": "设备",
   "console.tab.notifications": "通知渠道",
   "console.stats.devices": "设备",

@@ -15,11 +15,6 @@ const BROWSE_NAV = [
   { href: "/store?type=mcp", labelKey: "store.sidebar.nav.mcpServers", icon: "mcp" as IconProps["name"], color: "#8B5CF6", statKey: "mcp" },
 ] as const
 
-const DASHBOARD_NAV = [
-  { href: "/store/dashboard/repositories", labelKey: "store.dashboard.nav.repositories", icon: "folder" as IconProps["name"], color: "#3b82f6" },
-  { href: "/store/dashboard/capabilities", labelKey: "store.dashboard.nav.capabilities", icon: "sparkles" as IconProps["name"], color: "#eab308" },
-] as const
-
 type StoreType = "skill" | "subagent" | "command" | "mcp"
 
 export default function StoreSidebar() {
@@ -94,28 +89,6 @@ export default function StoreSidebar() {
           </div>
         </div>
 
-        <div>
-          <div class="store-sidebar-nav-label">{language.t("store.sidebar.dashboard")}</div>
-          <div class="store-sidebar-nav-group">
-            <For each={DASHBOARD_NAV}>
-              {(item) => {
-                const active = () => isActive(item.href)
-                return (
-                  <A
-                    href={item.href}
-                    class={`store-sidebar-nav-item ${active() ? "store-sidebar-nav-item-active" : ""}`}
-                    style={{ "--_nav-color": item.color }}
-                  >
-                    <span class="store-sidebar-nav-icon">
-                      <Icon name={item.icon} size="small" />
-                    </span>
-                    {language.t(item.labelKey)}
-                  </A>
-                )
-              }}
-            </For>
-          </div>
-        </div>
       </nav>
     </aside>
   )

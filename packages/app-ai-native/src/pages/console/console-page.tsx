@@ -7,14 +7,16 @@ import { DevicesSection } from "@/pages/store/components/devices-section"
 import { NotificationChannelsSection } from "@/pages/store/components/notification-channels-section"
 import { deviceManagementService } from "@/pages/store/lib/device-management-service"
 import { notificationChannelService } from "@/pages/store/lib/notification-channel-service"
+import DashboardRepositories from "./dashboard-repositories"
+import DashboardCapabilities from "./dashboard-capabilities"
 import "@/pages/store/store.css"
 import "./console.css"
 
-type Tab = "devices" | "notifications"
+type Tab = "repositories" | "capabilities" | "devices" | "notifications"
 
 export default function ConsolePage() {
   const language = useLanguage()
-  const [activeTab, setActiveTab] = createSignal<Tab>("devices")
+  const [activeTab, setActiveTab] = createSignal<Tab>("repositories")
 
   const [devices, deviceActs] = createResource(async () => deviceManagementService.list())
   const [channels, channelActs] = createResource(async () => notificationChannelService.listWecom())
@@ -98,11 +100,28 @@ export default function ConsolePage() {
               <button
                 type="button"
                 role="tab"
+                aria-selected={activeTab() === "repositories"}
+                class={`console-tab ${activeTab() === "repositories" ? "console-tab-active" : ""}`}
+                onClick={() => setActiveTab("repositories")}
+              >
+                {language.t("console.tab.repositories")}
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeTab() === "capabilities"}
+                class={`console-tab ${activeTab() === "capabilities" ? "console-tab-active" : ""}`}
+                onClick={() => setActiveTab("capabilities")}
+              >
+                {language.t("console.tab.capabilities")}
+              </button>
+              <button
+                type="button"
+                role="tab"
                 aria-selected={activeTab() === "devices"}
                 class={`console-tab ${activeTab() === "devices" ? "console-tab-active" : ""}`}
                 onClick={() => setActiveTab("devices")}
               >
-                <Icon name="server" size="small" />
                 {language.t("console.tab.devices")}
                 <Show when={!devices.loading}>
                   <span class="console-tab-badge">{devices()?.length ?? 0}</span>
@@ -115,7 +134,6 @@ export default function ConsolePage() {
                 class={`console-tab ${activeTab() === "notifications" ? "console-tab-active" : ""}`}
                 onClick={() => setActiveTab("notifications")}
               >
-                <LocalIcon name="bell" size="small" />
                 {language.t("console.tab.notifications")}
                 <Show when={!channels.loading}>
                   <span class="console-tab-badge">{channels()?.length ?? 0}</span>
@@ -124,6 +142,16 @@ export default function ConsolePage() {
             </div>
           </div>
 
+          <Show when={activeTab() === "repositories"}>
+            <div class="console-tab-panel">
+              <DashboardRepositories />
+            </div>
+          </Show>
+          <Show when={activeTab() === "capabilities"}>
+            <div class="console-tab-panel">
+              <DashboardCapabilities />
+            </div>
+          </Show>
           <Show when={activeTab() === "devices"}>
             <div class="console-tab-panel">
               <DevicesSection

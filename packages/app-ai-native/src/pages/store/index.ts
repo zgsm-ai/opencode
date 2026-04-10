@@ -1,5 +1,2 @@
 export { default as StoreLayout } from "./components/layout"
 export { default as StoreHome } from "./pages/home"
-export { default as DashboardLayout } from "./components/dashboard-layout"
-export { default as DashboardRepositories } from "./pages/dashboard-repositories"
-export { default as DashboardCapabilities } from "./pages/dashboard-capabilities"

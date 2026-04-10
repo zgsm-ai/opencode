@@ -14,9 +14,6 @@ const ProjectDetail = lazy(() => import("@/pages/projects").then((m) => ({ defau
 const WorkspaceLayout = lazy(() => import("@/pages/workspace").then((m) => ({ default: m.WorkspaceLayout })))
 const WorkspaceHome = lazy(() => import("@/pages/workspace").then((m) => ({ default: m.WorkspaceHome })))
 const DirectoryLayout = lazy(() => import("@/pages/directory-layout"))
-const DashboardLayout = lazy(() => import("@/pages/store").then((m) => ({ default: m.DashboardLayout })))
-const DashboardRepositories = lazy(() => import("@/pages/store").then((m) => ({ default: m.DashboardRepositories })))
-const DashboardCapabilities = lazy(() => import("@/pages/store").then((m) => ({ default: m.DashboardCapabilities })))
 const consoleImport = import("@/pages/console")
 const ConsolePage = lazy(() => consoleImport.then((m) => ({ default: m.ConsolePage })))
 
@@ -93,15 +90,6 @@ export const routeConfig: RouteConfig[] = [
     auth: true,
     children: [
       { path: "/", component: StoreHome },
-      {
-        path: "/dashboard",
-        component: DashboardLayout,
-        children: [
-          { path: "/", component: () => <Navigate href="/store/dashboard/repositories" /> },
-          { path: "/repositories", component: DashboardRepositories },
-          { path: "/capabilities", component: DashboardCapabilities },
-        ],
-      },
     ],
   },
 ]
