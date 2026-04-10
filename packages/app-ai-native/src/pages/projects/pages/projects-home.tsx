@@ -136,7 +136,6 @@ export default function ProjectsHome() {
     <div class="projects-page">
       <header class="projects-page-header">
         <div>
-          <p class="store-page-kicker">{language.t("projects.nav.title")}</p>
           <h1 class="store-page-title">{language.t("projects.home.hero.title")}</h1>
           <p class="store-page-description">{language.t("projects.home.hero.description")}</p>
         </div>

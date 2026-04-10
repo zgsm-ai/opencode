@@ -2,7 +2,7 @@ import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { createStore } from "solid-js/store"
 import { type WecomChannel } from "@/context/settings"
 import { useLanguage } from "@/context/language"
-import { StoreDialog } from "./store-dialog"
+import { Modal } from "@/components/modal"
 
 type EditWecomChannelDialogProps = {
   channel: WecomChannel
@@ -64,21 +64,21 @@ export function EditWecomChannelDialog(props: EditWecomChannelDialogProps) {
 
   return (
     <form onSubmit={handleSubmit}>
-      <StoreDialog
+      <Modal
         title={language.t("store.notificationChannels.dialog.editTitle")}
         maxWidth="480px"
         maxHeight="460px"
         footer={
           <>
             <button
-              class="store-modal-btn store-modal-btn-ghost"
+              class="modal-btn modal-btn-ghost"
               type="button"
               onClick={() => dialog.close()}
             >
               {language.t("common.cancel")}
             </button>
             <button
-              class="store-modal-btn store-modal-btn-primary"
+              class="modal-btn modal-btn-primary"
               type="submit"
               disabled={form.saving}
             >
@@ -87,9 +87,9 @@ export function EditWecomChannelDialog(props: EditWecomChannelDialogProps) {
           </>
         }
       >
-        <div class="store-modal-section">
-          <div class="store-modal-field">
-            <label class="store-modal-label">
+        <div class="modal-section">
+          <div class="modal-field">
+            <label class="modal-label">
               {language.t("store.notificationChannels.dialog.name")} <span class="req">*</span>
             </label>
             <input
@@ -97,29 +97,29 @@ export function EditWecomChannelDialog(props: EditWecomChannelDialogProps) {
               value={form.name}
               onInput={(e) => setForm("name", e.currentTarget.value)}
               placeholder={language.t("store.notificationChannels.dialog.namePlaceholder")}
-              class="store-modal-input"
+              class="modal-input"
             />
           </div>
-          <div class="store-modal-field">
-            <label class="store-modal-label">
+          <div class="modal-field">
+            <label class="modal-label">
               {language.t("store.notificationChannels.dialog.webhook")} <span class="req">*</span>
             </label>
             <input
               value={form.webhook}
               onInput={(e) => setForm("webhook", e.currentTarget.value)}
               placeholder={language.t("store.notificationChannels.dialog.webhookPlaceholder")}
-              class="store-modal-input"
+              class="modal-input"
               autocomplete="off"
             />
           </div>
         </div>
 
-        <div class="store-modal-section">
-          <div class="store-modal-section-title">
+        <div class="modal-section">
+          <div class="modal-section-title">
             {language.t("store.notificationChannels.dialog.events")}
           </div>
-          <div class="store-modal-field">
-            <label class="store-modal-checkbox">
+          <div class="modal-field">
+            <label class="modal-checkbox">
               <input
                 type="checkbox"
                 checked={form.events.permission}
@@ -127,7 +127,7 @@ export function EditWecomChannelDialog(props: EditWecomChannelDialogProps) {
               />
               {language.t("store.notificationChannels.event.permission")}
             </label>
-            <label class="store-modal-checkbox">
+            <label class="modal-checkbox">
               <input
                 type="checkbox"
                 checked={form.events.question}
@@ -135,7 +135,7 @@ export function EditWecomChannelDialog(props: EditWecomChannelDialogProps) {
               />
               {language.t("store.notificationChannels.event.question")}
             </label>
-            <label class="store-modal-checkbox">
+            <label class="modal-checkbox">
               <input
                 type="checkbox"
                 checked={form.events.idle}
@@ -146,8 +146,8 @@ export function EditWecomChannelDialog(props: EditWecomChannelDialogProps) {
           </div>
         </div>
 
-        {form.error && <p class="store-modal-error">{form.error}</p>}
-      </StoreDialog>
+        {form.error && <p class="modal-error">{form.error}</p>}
+      </Modal>
     </form>
   )
 }

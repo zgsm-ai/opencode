@@ -3,7 +3,7 @@ import { showToast } from "@opencode-ai/ui/toast"
 import { createStore } from "solid-js/store"
 import { useLanguage } from "@/context/language"
 import { repoApi, type Repository } from "../lib/api"
-import { StoreDialog } from "./store-dialog"
+import { Modal } from "@/components/modal"
 
 type CreateRepoDialogProps = {
   userId: string
@@ -89,21 +89,21 @@ export function CreateRepoDialog(props: CreateRepoDialogProps) {
 
   return (
     <form onSubmit={handleSubmit}>
-      <StoreDialog
+      <Modal
         title={language.t("store.repoDialog.create.title")}
         maxWidth="860px"
         maxHeight="calc(100vh - 40px)"
         footer={
           <>
             <button
-              class="store-modal-btn store-modal-btn-ghost"
+              class="modal-btn modal-btn-ghost"
               type="button"
               onClick={() => dialog.close()}
             >
               {language.t("common.cancel")}
             </button>
             <button
-              class="store-modal-btn store-modal-btn-primary"
+              class="modal-btn modal-btn-primary"
               type="submit"
               disabled={store.saving || !store.name.trim()}
             >
@@ -114,15 +114,15 @@ export function CreateRepoDialog(props: CreateRepoDialogProps) {
           </>
         }
       >
-        <div class="store-modal-section">
-          <div class="store-modal-section-title">{language.t("store.repoDialog.create.info")}</div>
-          <div class="store-modal-section-desc">
+        <div class="modal-section">
+          <div class="modal-section-title">{language.t("store.repoDialog.create.info")}</div>
+          <div class="modal-section-desc">
             {language.t("store.repoDialog.create.infoDescription")}
           </div>
 
-          <div class="store-modal-row">
-            <div class="store-modal-field" style={{ flex: "1" }}>
-              <label class="store-modal-label">
+          <div class="modal-row">
+            <div class="modal-field" style={{ flex: "1" }}>
+              <label class="modal-label">
                 {language.t("store.repoDialog.field.name")} <span class="req">*</span>
               </label>
               <input
@@ -130,64 +130,64 @@ export function CreateRepoDialog(props: CreateRepoDialogProps) {
                 value={store.name}
                 onInput={(e) => setStore("name", e.currentTarget.value)}
                 placeholder="team-space"
-                class="store-modal-input"
+                class="modal-input"
                 required
               />
             </div>
-            <div class="store-modal-field" style={{ flex: "1" }}>
-              <label class="store-modal-label">
+            <div class="modal-field" style={{ flex: "1" }}>
+              <label class="modal-label">
                 {language.t("store.repoDialog.field.displayName")}
               </label>
               <input
                 value={store.displayName}
                 onInput={(e) => setStore("displayName", e.currentTarget.value)}
                 placeholder="Team Space"
-                class="store-modal-input"
+                class="modal-input"
               />
             </div>
           </div>
 
-          <div class="store-modal-field">
-            <label class="store-modal-label">
+          <div class="modal-field">
+            <label class="modal-label">
               {language.t("store.repoDialog.field.description")}
             </label>
             <textarea
               value={store.description}
               onInput={(e) => setStore("description", e.currentTarget.value)}
               placeholder={language.t("store.repoDialog.field.descriptionPlaceholder")}
-              class="store-modal-input"
+              class="modal-input"
             />
           </div>
 
-          <div class="store-modal-row">
-            <div class="store-modal-field" style={{ flex: "1" }}>
-              <label class="store-modal-label">
+          <div class="modal-row">
+            <div class="modal-field" style={{ flex: "1" }}>
+              <label class="modal-label">
                 {language.t("store.repoDialog.field.visibility")}
               </label>
               <select
                 value={store.visibility}
                 onInput={(e) => setStore("visibility", e.currentTarget.value as "public" | "private")}
-                class="store-modal-input"
+                class="modal-input"
               >
                 <option value="private">{language.t("store.capabilityDialog.visibility.private")}</option>
                 <option value="public">{language.t("store.capabilityDialog.visibility.public")}</option>
               </select>
             </div>
-            <div class="store-modal-field" style={{ flex: "1" }}>
-              <label class="store-modal-label">
+            <div class="modal-field" style={{ flex: "1" }}>
+              <label class="modal-label">
                 {language.t("store.repoDialog.field.repoType")}
               </label>
-              <div class="store-modal-toggle-group">
+              <div class="modal-toggle-group">
                 <button
                   type="button"
-                  class={`store-modal-toggle ${store.repoType === "normal" ? "on" : ""}`}
+                  class={`modal-toggle ${store.repoType === "normal" ? "on" : ""}`}
                   onClick={() => setStore("repoType", "normal")}
                 >
                   {language.t("store.repoDialog.repoType.normal")}
                 </button>
                 <button
                   type="button"
-                  class={`store-modal-toggle ${store.repoType === "sync" ? "on" : ""}`}
+                  class={`modal-toggle ${store.repoType === "sync" ? "on" : ""}`}
                   onClick={() => setStore("repoType", "sync")}
                 >
                   {language.t("store.repoDialog.repoType.sync")}
@@ -198,39 +198,39 @@ export function CreateRepoDialog(props: CreateRepoDialogProps) {
         </div>
 
         {store.repoType === "sync" ? (
-          <div class="store-modal-section">
-            <div class="store-modal-section-title">{language.t("store.sync.settings")}</div>
-            <div class="store-modal-section-desc">{language.t("store.sync.settingsDescription")}</div>
+          <div class="modal-section">
+            <div class="modal-section-title">{language.t("store.sync.settings")}</div>
+            <div class="modal-section-desc">{language.t("store.sync.settingsDescription")}</div>
 
-            <div class="store-modal-field">
-              <label class="store-modal-label">
+            <div class="modal-field">
+              <label class="modal-label">
                 {language.t("store.sync.gitUrl")} <span class="req">*</span>
               </label>
               <input
                 value={store.externalUrl}
                 onInput={(e) => setStore("externalUrl", e.currentTarget.value)}
                 placeholder="https://github.com/org/repo"
-                class="store-modal-input"
+                class="modal-input"
                 required={store.repoType === "sync"}
               />
             </div>
 
-            <div class="store-modal-row">
-              <div class="store-modal-field" style={{ flex: "1" }}>
-                <label class="store-modal-label">{language.t("store.sync.branch")}</label>
+            <div class="modal-row">
+              <div class="modal-field" style={{ flex: "1" }}>
+                <label class="modal-label">{language.t("store.sync.branch")}</label>
                 <input
                   value={store.externalBranch}
                   onInput={(e) => setStore("externalBranch", e.currentTarget.value)}
                   placeholder="main"
-                  class="store-modal-input"
+                  class="modal-input"
                 />
               </div>
-              <div class="store-modal-field" style={{ flex: "1" }}>
-                <label class="store-modal-label">{language.t("store.sync.interval")}</label>
+              <div class="modal-field" style={{ flex: "1" }}>
+                <label class="modal-label">{language.t("store.sync.interval")}</label>
                 <select
                   value={String(store.syncInterval)}
                   onInput={(e) => setStore("syncInterval", Number(e.currentTarget.value))}
-                  class="store-modal-input"
+                  class="modal-input"
                 >
                   <option value="3600">{language.t("store.sync.interval.hour")}</option>
                   <option value="21600">{language.t("store.sync.interval.6hours")}</option>
@@ -239,8 +239,8 @@ export function CreateRepoDialog(props: CreateRepoDialogProps) {
               </div>
             </div>
 
-            <div class="store-modal-field">
-              <label class="store-modal-checkbox">
+            <div class="modal-field">
+              <label class="modal-checkbox">
                 <input
                   type="checkbox"
                   checked={store.syncEnabled}
@@ -250,39 +250,39 @@ export function CreateRepoDialog(props: CreateRepoDialogProps) {
               </label>
             </div>
 
-            <div class="store-modal-row">
-              <div class="store-modal-field" style={{ flex: "1" }}>
-                <label class="store-modal-label">
+            <div class="modal-row">
+              <div class="modal-field" style={{ flex: "1" }}>
+                <label class="modal-label">
                   {language.t("store.sync.includePatterns")}
                 </label>
                 <textarea
                   value={store.includePatterns}
                   onInput={(e) => setStore("includePatterns", e.currentTarget.value)}
-                  class="store-modal-input"
+                  class="modal-input"
                   style={{ "font-family": "'SF Mono', 'Fira Code', monospace" }}
                 />
               </div>
-              <div class="store-modal-field" style={{ flex: "1" }}>
-                <label class="store-modal-label">
+              <div class="modal-field" style={{ flex: "1" }}>
+                <label class="modal-label">
                   {language.t("store.sync.excludePatterns")}
                 </label>
                 <textarea
                   value={store.excludePatterns}
                   onInput={(e) => setStore("excludePatterns", e.currentTarget.value)}
-                  class="store-modal-input"
+                  class="modal-input"
                   style={{ "font-family": "'SF Mono', 'Fira Code', monospace" }}
                 />
               </div>
             </div>
 
-            <div class="store-modal-field" style={{ "max-width": "240px" }}>
-              <label class="store-modal-label">
+            <div class="modal-field" style={{ "max-width": "240px" }}>
+              <label class="modal-label">
                 {language.t("store.sync.conflictStrategy")}
               </label>
               <select
                 value={store.conflictStrategy}
                 onInput={(e) => setStore("conflictStrategy", e.currentTarget.value as "keep_remote" | "keep_local")}
-                class="store-modal-input"
+                class="modal-input"
               >
                 <option value="keep_remote">{language.t("store.sync.conflict.keepRemote")}</option>
                 <option value="keep_local">{language.t("store.sync.conflict.keepLocal")}</option>
@@ -291,8 +291,8 @@ export function CreateRepoDialog(props: CreateRepoDialogProps) {
           </div>
         ) : null}
 
-        {store.error ? <p class="store-modal-error">{store.error}</p> : null}
-      </StoreDialog>
+        {store.error ? <p class="modal-error">{store.error}</p> : null}
+      </Modal>
     </form>
   )
 }

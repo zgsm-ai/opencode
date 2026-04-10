@@ -3,7 +3,7 @@ import { Icon } from "@opencode-ai/ui/icon"
 import { useLanguage } from "@/context/language"
 import { Show } from "solid-js"
 import { createStore } from "solid-js/store"
-import { StoreDialog } from "./store-dialog"
+import { Modal } from "@/components/modal"
 
 type ConfirmDialogProps = {
   title: string
@@ -30,14 +30,14 @@ export function ConfirmDialog(props: ConfirmDialogProps) {
   }
 
   return (
-    <StoreDialog
+    <Modal
       title={props.title}
       maxWidth="440px"
       maxHeight="340px"
       footer={
         <>
           <button
-            class="store-modal-btn store-modal-btn-ghost"
+            class="modal-btn modal-btn-ghost"
             type="button"
             onClick={() => dialog.close()}
             disabled={state.loading}
@@ -45,7 +45,7 @@ export function ConfirmDialog(props: ConfirmDialogProps) {
             {language.t("common.cancel")}
           </button>
           <button
-            class={`store-modal-btn ${danger() ? "store-modal-btn-danger" : "store-modal-btn-primary"}`}
+            class={`modal-btn ${danger() ? "modal-btn-danger" : "modal-btn-primary"}`}
             type="button"
             onClick={handle}
             disabled={state.loading}
@@ -55,7 +55,7 @@ export function ConfirmDialog(props: ConfirmDialogProps) {
         </>
       }
     >
-      <div class="store-modal-section">
+      <div class="modal-section">
         <div style={{ display: "flex", "align-items": "center", gap: "0.75rem" }}>
           <Show when={danger()}>
             <div style={{
@@ -71,11 +71,11 @@ export function ConfirmDialog(props: ConfirmDialogProps) {
               <Icon name="warning" style={{ width: "1.25rem", height: "1.25rem", color: "#dc2626" }} />
             </div>
           </Show>
-          <div class="store-modal-section-desc" style={{ margin: "0" }}>
+          <div class="modal-section-desc" style={{ margin: "0" }}>
             {props.description}
           </div>
         </div>
       </div>
-    </StoreDialog>
+    </Modal>
   )
 }

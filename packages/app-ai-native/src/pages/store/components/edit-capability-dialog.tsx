@@ -8,7 +8,7 @@ import type { ContentMode } from "../lib/content"
 import { canArchive, contentValue, sourceTypeToMode, usableMode } from "../lib/content"
 import { CATEGORIES, typeKey, categoryKey } from "../lib/constants"
 import { ContentField } from "./content-field"
-import { StoreDialog } from "./store-dialog"
+import { Modal } from "@/components/modal"
 
 type EditCapabilityDialogProps = {
   item: CapabilityItem
@@ -71,21 +71,21 @@ export function EditCapabilityDialog(props: EditCapabilityDialogProps) {
 
   return (
     <form onSubmit={handleSubmit}>
-      <StoreDialog
+      <Modal
         title={language.t("store.capabilityDialog.edit.title", { type: typeLabel() })}
         maxWidth="760px"
         maxHeight="calc(100vh - 120px)"
         footer={
           <>
             <button
-              class="store-modal-btn store-modal-btn-ghost"
+              class="modal-btn modal-btn-ghost"
               type="button"
               onClick={() => dialog.close()}
             >
               {language.t("common.cancel")}
             </button>
             <button
-              class="store-modal-btn store-modal-btn-primary"
+              class="modal-btn modal-btn-primary"
               type="submit"
               disabled={store.saving || !store.name.trim()}
             >
@@ -98,40 +98,40 @@ export function EditCapabilityDialog(props: EditCapabilityDialogProps) {
           </>
         }
       >
-        <div class="store-modal-section">
-          <div class="store-modal-field">
-            <label class="store-modal-label">
+        <div class="modal-section">
+          <div class="modal-field">
+            <label class="modal-label">
               {language.t("store.capabilityDialog.field.displayName")} <span class="req">*</span>
             </label>
             <input
               autofocus
               value={store.name}
               onInput={(e) => setStore("name", e.currentTarget.value)}
-              class="store-modal-input"
+              class="modal-input"
               required
             />
           </div>
 
-          <div class="store-modal-field">
-            <label class="store-modal-label">
+          <div class="modal-field">
+            <label class="modal-label">
               {language.t("store.capabilityDialog.field.description")}
             </label>
             <input
               value={store.description}
               onInput={(e) => setStore("description", e.currentTarget.value)}
-              class="store-modal-input"
+              class="modal-input"
             />
           </div>
 
-          <div class="store-modal-row">
-            <div class="store-modal-field" style={{ flex: "1" }}>
-              <label class="store-modal-label">
+          <div class="modal-row">
+            <div class="modal-field" style={{ flex: "1" }}>
+              <label class="modal-label">
                 {language.t("store.capabilityDialog.field.category")}
               </label>
               <select
                 value={store.category}
                 onInput={(e) => setStore("category", e.currentTarget.value)}
-                class="store-modal-input"
+                class="modal-input"
               >
                 {CATEGORIES.map((category) => (
                   <option value={category}>{language.t(categoryKey(category))}</option>
@@ -139,8 +139,8 @@ export function EditCapabilityDialog(props: EditCapabilityDialogProps) {
               </select>
             </div>
 
-            <div class="store-modal-field" style={{ flex: "1" }}>
-              <label class="store-modal-label">
+            <div class="modal-field" style={{ flex: "1" }}>
+              <label class="modal-label">
                 {language.t("store.capabilityDialog.field.visibility")}
               </label>
               <input
@@ -152,21 +152,21 @@ export function EditCapabilityDialog(props: EditCapabilityDialogProps) {
                       : "-"
                 }
                 disabled
-                class="store-modal-input"
+                class="modal-input"
                 style={{ opacity: "0.6", cursor: "not-allowed" }}
               />
             </div>
           </div>
         </div>
 
-        <div class="store-modal-section">
+        <div class="modal-section">
           <ContentField
             archive={archive}
             mode={store.contentMode}
             text={store.content}
             file={store.file}
             rows={14}
-            textClass="store-modal-input"
+            textClass="modal-input"
             existingArchive={props.item.sourceType === "archive"}
             onModeChange={(mode) => {
               setStore("contentMode", mode)
@@ -184,8 +184,8 @@ export function EditCapabilityDialog(props: EditCapabilityDialogProps) {
           />
         </div>
 
-        {store.error ? <p class="store-modal-error">{store.error}</p> : null}
-      </StoreDialog>
+        {store.error ? <p class="modal-error">{store.error}</p> : null}
+      </Modal>
     </form>
   )
 }

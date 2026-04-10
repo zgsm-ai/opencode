@@ -8,7 +8,7 @@ import type { ContentMode } from "../lib/content"
 import { canArchive, contentValue, usableMode } from "../lib/content"
 import { CATEGORIES, TYPE_PREFIX, TYPE_CONTENT_PLACEHOLDER, typeKey, categoryKey } from "../lib/constants"
 import { ContentField } from "./content-field"
-import { StoreDialog } from "./store-dialog"
+import { Modal } from "@/components/modal"
 
 type NamespaceOption = {
   value: string
@@ -156,21 +156,21 @@ export function CreateCapabilityDialog(props: CreateCapabilityDialogProps) {
 
   return (
     <form onSubmit={handleSubmit}>
-      <StoreDialog
+      <Modal
         title={language.t("store.capabilityDialog.create.title")}
         maxWidth="860px"
         maxHeight="calc(100vh - 40px)"
         footer={
           <>
             <button
-              class="store-modal-btn store-modal-btn-ghost"
+              class="modal-btn modal-btn-ghost"
               type="button"
               onClick={() => dialog.close()}
             >
               {language.t("common.cancel")}
             </button>
             <button
-              class="store-modal-btn store-modal-btn-primary"
+              class="modal-btn modal-btn-primary"
               type="submit"
               disabled={store.saving || !store.name.trim() || !store.slug.trim()}
             >
@@ -183,14 +183,14 @@ export function CreateCapabilityDialog(props: CreateCapabilityDialogProps) {
           </>
         }
       >
-        <div class="store-modal-section">
-          <div class="store-modal-section-title">{language.t("store.capabilityDialog.create.type")}</div>
-          <div class="store-modal-section-desc">
+        <div class="modal-section">
+          <div class="modal-section-title">{language.t("store.capabilityDialog.create.type")}</div>
+          <div class="modal-section-desc">
             {language.t("store.capabilityDialog.create.typeDescription")}
           </div>
-          <div class="store-modal-field">
+          <div class="modal-field">
             <select
-              class="store-modal-input"
+              class="modal-input"
               value={store.itemType}
               onInput={(e) => setItemType(e.currentTarget.value as "skill" | "subagent" | "command" | "mcp")}
             >
@@ -201,16 +201,16 @@ export function CreateCapabilityDialog(props: CreateCapabilityDialogProps) {
           </div>
         </div>
 
-        <div class="store-modal-section">
-          <div class="store-modal-field">
-            <label class="store-modal-label">
+        <div class="modal-section">
+          <div class="modal-field">
+            <label class="modal-label">
               {language.t("store.capabilityDialog.field.ownerPackage")} <span class="req">*</span>
             </label>
             <div style={{ display: "flex", "align-items": "center", gap: "0.5rem" }}>
               <select
                 value={store.namespace}
                 onInput={(e) => setStore("namespace", e.currentTarget.value)}
-                class="store-modal-input"
+                class="modal-input"
                 style={{ "min-width": "200px", flex: "1" }}
               >
                 {namespaceOptions().map((option) => (
@@ -225,21 +225,21 @@ export function CreateCapabilityDialog(props: CreateCapabilityDialogProps) {
                   setStore("slugManual", true)
                 }}
                 placeholder={`${slugPrefix()}my-${store.itemType}`}
-                class="store-modal-input"
+                class="modal-input"
                 style={{ flex: "1.2", "font-family": "'SF Mono', 'Fira Code', monospace" }}
                 required
               />
             </div>
-            <div class="store-modal-hint">
+            <div class="modal-hint">
               {selectedNamespace()?.sublabel} ·{" "}
               {(selectedNamespace()?.label ?? "public") + "/" + (store.slug || `${slugPrefix()}my-${store.itemType}`)}
             </div>
           </div>
         </div>
 
-        <div class="store-modal-section">
-          <div class="store-modal-field">
-            <label class="store-modal-label">
+        <div class="modal-section">
+          <div class="modal-field">
+            <label class="modal-label">
               {language.t("store.capabilityDialog.field.displayName")} <span class="req">*</span>
             </label>
             <input
@@ -247,44 +247,44 @@ export function CreateCapabilityDialog(props: CreateCapabilityDialogProps) {
               value={store.name}
               onInput={(e) => handleNameInput(e.currentTarget.value)}
               placeholder={language.t("store.capabilityDialog.field.displayNamePlaceholder", { type: typeLabel() })}
-              class="store-modal-input"
+              class="modal-input"
               required
             />
           </div>
 
-          <div class="store-modal-field">
-            <label class="store-modal-label">
+          <div class="modal-field">
+            <label class="modal-label">
               {language.t("store.capabilityDialog.field.description")}
             </label>
             <input
               value={store.description}
               onInput={(e) => setStore("description", e.currentTarget.value)}
               placeholder={language.t("store.capabilityDialog.field.descriptionPlaceholder")}
-              class="store-modal-input"
+              class="modal-input"
             />
           </div>
 
-          <div class="store-modal-row">
-            <div class="store-modal-field" style={{ flex: "1" }}>
-              <label class="store-modal-label">
+          <div class="modal-row">
+            <div class="modal-field" style={{ flex: "1" }}>
+              <label class="modal-label">
                 {language.t("store.capabilityDialog.field.category")} <span class="req">*</span>
               </label>
               <select
                 value={store.category}
                 onInput={(e) => setStore("category", e.currentTarget.value)}
-                class="store-modal-input"
+                class="modal-input"
               >
                 {CATEGORIES.map((category) => (
                   <option value={category}>{language.t(categoryKey(category))}</option>
                 ))}
               </select>
             </div>
-            <div class="store-modal-field" style={{ flex: "1" }}>
-              <label class="store-modal-label">
+            <div class="modal-field" style={{ flex: "1" }}>
+              <label class="modal-label">
                 {language.t("store.capabilityDialog.field.visibility")}
               </label>
               <div
-                class="store-modal-input"
+                class="modal-input"
                 style={{ display: "flex", "align-items": "center", opacity: "0.6" }}
               >
                 {visibilityLabel(selectedNamespace()?.visibility)}
@@ -293,14 +293,14 @@ export function CreateCapabilityDialog(props: CreateCapabilityDialogProps) {
           </div>
         </div>
 
-        <div class="store-modal-section">
+        <div class="modal-section">
           <ContentField
             archive={archive()}
             mode={store.contentMode}
             text={store.content}
             file={store.file}
             rows={6}
-            textClass="store-modal-input"
+            textClass="modal-input"
             onModeChange={(mode) => {
               setStore("contentMode", mode)
               setStore("error", "")
@@ -317,8 +317,8 @@ export function CreateCapabilityDialog(props: CreateCapabilityDialogProps) {
           />
         </div>
 
-        {store.error ? <p class="store-modal-error">{store.error}</p> : null}
-      </StoreDialog>
+        {store.error ? <p class="modal-error">{store.error}</p> : null}
+      </Modal>
     </form>
   )
 }

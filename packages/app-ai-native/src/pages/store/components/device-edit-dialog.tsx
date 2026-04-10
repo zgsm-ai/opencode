@@ -3,7 +3,7 @@ import { showToast } from "@opencode-ai/ui/toast"
 import { createStore } from "solid-js/store"
 import { useLanguage } from "@/context/language"
 import type { Device, UpdateDeviceRequest } from "@/pages/workspace/types"
-import { StoreDialog } from "./store-dialog"
+import { Modal } from "@/components/modal"
 
 type DeviceEditDialogProps = {
   device: Device
@@ -44,21 +44,21 @@ export function DeviceEditDialog(props: DeviceEditDialogProps) {
 
   return (
     <form onSubmit={handleSubmit}>
-      <StoreDialog
+      <Modal
         title={language.t("store.devices.dialog.editTitle")}
         maxWidth="480px"
         maxHeight="460px"
         footer={
           <>
             <button
-              class="store-modal-btn store-modal-btn-ghost"
+              class="modal-btn modal-btn-ghost"
               type="button"
               onClick={() => d.close()}
             >
               {language.t("common.cancel")}
             </button>
             <button
-              class="store-modal-btn store-modal-btn-primary"
+              class="modal-btn modal-btn-primary"
               type="submit"
               disabled={form.saving || !form.displayName.trim()}
             >
@@ -67,9 +67,9 @@ export function DeviceEditDialog(props: DeviceEditDialogProps) {
           </>
         }
       >
-        <div class="store-modal-section">
-          <div class="store-modal-field">
-            <label class="store-modal-label">
+        <div class="modal-section">
+          <div class="modal-field">
+            <label class="modal-label">
               {language.t("store.devices.dialog.name")} <span class="req">*</span>
             </label>
             <input
@@ -77,22 +77,22 @@ export function DeviceEditDialog(props: DeviceEditDialogProps) {
               value={form.displayName}
               onInput={(e) => setForm("displayName", e.currentTarget.value)}
               placeholder={language.t("store.devices.dialog.namePlaceholder")}
-              class="store-modal-input"
+              class="modal-input"
             />
           </div>
-          <div class="store-modal-field">
-            <label class="store-modal-label">
+          <div class="modal-field">
+            <label class="modal-label">
               {language.t("store.devices.dialog.description")}
             </label>
             <textarea
               value={form.description}
               onInput={(e) => setForm("description", e.currentTarget.value)}
               placeholder={language.t("store.devices.dialog.descriptionPlaceholder")}
-              class="store-modal-input"
+              class="modal-input"
             />
           </div>
         </div>
-      </StoreDialog>
+      </Modal>
     </form>
   )
 }

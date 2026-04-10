@@ -4,7 +4,7 @@ import { useLanguage } from "@/context/language"
 import { For, Show } from "solid-js"
 import { createStore } from "solid-js/store"
 import { repoApi, userApi, type SearchedUser } from "../lib/api"
-import { StoreDialog } from "./store-dialog"
+import { Modal } from "@/components/modal"
 
 type Props = {
   repoId: string
@@ -77,8 +77,8 @@ export function InviteDialog(props: Props) {
   }
 
   return (
-    <StoreDialog title={language.t("store.inviteDialog.title")} maxWidth="640px">
-      <div class="store-modal-section">
+    <Modal title={language.t("store.inviteDialog.title")} maxWidth="640px">
+      <div class="modal-section">
         <input
           autofocus
           placeholder={language.t("store.inviteDialog.searchPlaceholder")}
@@ -87,10 +87,10 @@ export function InviteDialog(props: Props) {
             setStore("query", e.currentTarget.value)
             search(e.currentTarget.value)
           }}
-          class="store-modal-input"
+          class="modal-input"
         />
       </div>
-      <div class="store-modal-section" style={{ flex: "1", "overflow-y": "auto" }}>
+      <div class="modal-section" style={{ flex: "1", "overflow-y": "auto" }}>
         <Show when={store.searching}>
           <div style={{ padding: "1rem 0", "text-align": "center", "font-size": "0.75rem", color: "var(--st-text-secondary)" }}>
             {language.t("store.loading")}
@@ -106,7 +106,7 @@ export function InviteDialog(props: Props) {
             <For each={store.results}>
               {(user) => (
                 <div
-                  class="store-modal-info-card"
+                  class="modal-info-card"
                   style={{ display: "flex", "align-items": "center", "justify-content": "space-between", gap: "0.75rem" }}
                 >
                   <div style={{ display: "flex", "align-items": "center", gap: "0.75rem", "min-width": "0" }}>
@@ -171,7 +171,7 @@ export function InviteDialog(props: Props) {
                     </div>
                   </div>
                   <button
-                    class="store-modal-btn store-modal-btn-ghost"
+                    class="modal-btn modal-btn-ghost"
                     style={{ height: "1.75rem", padding: "0 0.5rem", "flex-shrink": "0" }}
                     disabled={store.inviting === user.id || store.invited.has(user.id)}
                     onClick={() => void invite(user)}
@@ -186,6 +186,6 @@ export function InviteDialog(props: Props) {
           </div>
         </Show>
       </div>
-    </StoreDialog>
+    </Modal>
   )
 }

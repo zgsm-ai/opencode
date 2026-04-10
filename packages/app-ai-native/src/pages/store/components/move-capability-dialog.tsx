@@ -5,7 +5,7 @@ import { useLanguage } from "@/context/language"
 import { createMemo, For, Show } from "solid-js"
 import { createStore } from "solid-js/store"
 import { itemApi, registryApi2, type CapabilityItem, type Repository } from "../lib/api"
-import { StoreDialog } from "./store-dialog"
+import { Modal } from "@/components/modal"
 
 type MoveCapabilityDialogProps = {
   item: CapabilityItem
@@ -58,16 +58,16 @@ export function MoveCapabilityDialog(props: MoveCapabilityDialogProps) {
 
   return (
     <form onSubmit={handleSubmit}>
-      <StoreDialog
+      <Modal
         title={language.t("store.capabilityDialog.move.title")}
         maxWidth="720px"
         maxHeight="520px"
         footer={
           <>
-            <button class="store-modal-btn store-modal-btn-ghost" type="button" onClick={() => dialog.close()}>
+            <button class="modal-btn modal-btn-ghost" type="button" onClick={() => dialog.close()}>
               {language.t("common.cancel")}
             </button>
-            <button class="store-modal-btn store-modal-btn-primary" type="submit" disabled={store.saving || !store.repoId}>
+            <button class="modal-btn modal-btn-primary" type="submit" disabled={store.saving || !store.repoId}>
               {store.saving
                 ? language.t("store.capabilityDialog.move.submitting")
                 : language.t("store.capabilityDialog.move.submit")}
@@ -76,8 +76,8 @@ export function MoveCapabilityDialog(props: MoveCapabilityDialogProps) {
         }
       >
         {/* Capability info */}
-        <div class="store-modal-section">
-          <div class="store-modal-info-card">
+        <div class="modal-section">
+          <div class="modal-info-card">
             <label style={{ display: "block", "font-size": "0.6875rem", "font-weight": "600", color: "var(--st-text-secondary)", "margin-bottom": "0.5rem" }}>
               {language.t("store.capabilityDialog.move.currentCapability")}
             </label>
@@ -90,10 +90,10 @@ export function MoveCapabilityDialog(props: MoveCapabilityDialogProps) {
         </div>
 
         {/* Transfer direction */}
-        <div class="store-modal-section">
+        <div class="modal-section">
           <div style={{ display: "grid", "grid-template-columns": "1fr auto 1fr", "align-items": "stretch", gap: "1rem" }}>
             {/* Current repository */}
-            <div class="store-modal-info-card" style={{ display: "flex", "flex-direction": "column" }}>
+            <div class="modal-info-card" style={{ display: "flex", "flex-direction": "column" }}>
               <label style={{ display: "block", "font-size": "0.6875rem", "font-weight": "600", color: "var(--st-text-secondary)", "margin-bottom": "0.5rem" }}>
                 {language.t("store.capabilityDialog.move.currentRepository")}
               </label>
@@ -108,7 +108,7 @@ export function MoveCapabilityDialog(props: MoveCapabilityDialogProps) {
             </div>
 
             {/* Target repository */}
-            <div class="store-modal-info-card" style={{ display: "flex", "flex-direction": "column" }}>
+            <div class="modal-info-card" style={{ display: "flex", "flex-direction": "column" }}>
               <label style={{ display: "block", "font-size": "0.6875rem", "font-weight": "600", color: "var(--st-text-secondary)", "margin-bottom": "0.5rem" }}>
                 {language.t("store.capabilityDialog.move.targetRepository")}
               </label>
@@ -116,7 +116,7 @@ export function MoveCapabilityDialog(props: MoveCapabilityDialogProps) {
                 <select
                   value={store.repoId}
                   onInput={(e) => setStore("repoId", e.currentTarget.value)}
-                  class="store-modal-input"
+                  class="modal-input"
                   required
                 >
                   <option value="" disabled>
@@ -134,7 +134,7 @@ export function MoveCapabilityDialog(props: MoveCapabilityDialogProps) {
           </div>
 
           <Show when={selected() || store.repoId === "__public__"}>
-            <p class="store-modal-hint" style={{ "margin-top": "0.75rem", padding: "0.625rem 0.875rem", "border-radius": "var(--st-radius-sm, 0.5rem)", border: "1px solid color-mix(in srgb, var(--st-border-subtle) 12%, transparent)", background: "var(--st-surface-lowest)" }}>
+            <p class="modal-hint" style={{ "margin-top": "0.75rem", padding: "0.625rem 0.875rem", "border-radius": "var(--st-radius-sm, 0.5rem)", border: "1px solid color-mix(in srgb, var(--st-border-subtle) 12%, transparent)", background: "var(--st-surface-lowest)" }}>
               {language.t("store.capabilityDialog.move.transferHint", {
                 name: props.item.name,
                 repo:
@@ -146,10 +146,10 @@ export function MoveCapabilityDialog(props: MoveCapabilityDialogProps) {
           </Show>
 
           <Show when={store.error}>
-            <p class="store-modal-error">{store.error}</p>
+            <p class="modal-error">{store.error}</p>
           </Show>
         </div>
-      </StoreDialog>
+      </Modal>
     </form>
   )
 }
