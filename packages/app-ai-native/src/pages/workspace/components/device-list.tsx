@@ -35,6 +35,11 @@ export function DeviceList(props: DeviceListProps) {
     return parts.join(" · ") || device.deviceId
   }
 
+  const open = (device: Device) => {
+    if (device.status === "offline") return
+    props.onCreateWorkspace(device)
+  }
+
   return (
     <div class="flex flex-col py-1">
       {/* Header — matches code.html Devices section */}
@@ -66,10 +71,18 @@ export function DeviceList(props: DeviceListProps) {
                     "box-shadow": "var(--shadow-xs)",
                   }}
                 >
-                  <div class="flex-1 min-w-0 flex items-center gap-2 text-left">
+                  <button
+                    type="button"
+                    class="flex-1 min-w-0 flex items-center gap-2 text-left"
+                    classList={{
+                      "cursor-pointer": device.status !== "offline",
+                      "cursor-not-allowed": device.status === "offline",
+                    }}
+                    onClick={() => open(device)}
+                  >
                     <Icon name="server" class="text-sm" />
                     <span class="text-xs truncate flex-1">{device.displayName}</span>
-                  </div>
+                  </button>
                 </Tooltip>
                 <Tooltip
                   placement="bottom-end"
@@ -89,7 +102,7 @@ export function DeviceList(props: DeviceListProps) {
                     }}
                     onClick={(e) => {
                       e.stopPropagation()
-                      if (device.status !== "offline") props.onCreateWorkspace(device)
+                      open(device)
                     }}
                   >
                     <Icon name="plus-small" />
