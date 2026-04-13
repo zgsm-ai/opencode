@@ -157,7 +157,7 @@ export default function RootLayout(props: ParentProps) {
           </Tooltip>
         </div>
       </aside>
-      <div class="flex-1 min-w-0 h-full overflow-hidden ml-[48px]">{props.children}</div>
+      <div class="flex-1 min-w-0 h-full overflow-hidden ml-[48px] flex flex-col">{props.children}</div>
     </div>
   )
 }

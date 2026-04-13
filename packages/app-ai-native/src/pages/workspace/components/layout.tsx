@@ -302,21 +302,23 @@ function WorkspaceActivation(props: ParentProps) {
   return props.children
 }
 
-function WorkspaceShell(props: ParentProps<{ hide?: () => void; open?: () => boolean; mobile?: boolean }>) {
+function WorkspaceShell(props: ParentProps<{ hide?: () => void; open?: () => boolean; mobile?: boolean; offset?: boolean }>) {
   const language = useLanguage()
   const t = language.t
   const hide = () => props.hide?.()
   const open = () => props.open?.() ?? false
   return (
     <div class="flex h-full w-full min-h-0">
-      <div class="hidden xl:block shrink-0 w-[280px] h-full">
-        <WorkspaceSidebar hide={hide} />
+      <div class="hidden md:block shrink-0 w-[280px] h-full">
+        <WorkspaceSidebar />
       </div>
       <Show when={props.mobile}>
-        <div class="xl:hidden">
+        <div class="md:hidden">
           <div
             classList={{
-              "fixed inset-x-0 top-10 bottom-0 z-40 transition-opacity duration-200": true,
+              "fixed inset-x-0 bottom-0 z-40 transition-opacity duration-200": true,
+              "top-0": !props.offset,
+              "top-10": !!props.offset,
               "opacity-100 pointer-events-auto": open(),
               "opacity-0 pointer-events-none": !open(),
             }}
@@ -327,7 +329,9 @@ function WorkspaceShell(props: ParentProps<{ hide?: () => void; open?: () => boo
           <aside
             aria-label={t("workspace.page.title")}
             classList={{
-              "fixed top-10 bottom-0 left-0 z-50 w-[280px] max-w-[calc(100vw-2rem)] border-r border-sidebar-border bg-sidebar transition-transform duration-200 ease-out": true,
+              "fixed bottom-0 left-0 z-50 w-[280px] max-w-[calc(100vw-2rem)] border-r border-sidebar-border bg-sidebar transition-transform duration-200 ease-out": true,
+              "top-0": !props.offset,
+              "top-10": !!props.offset,
               "translate-x-0": open(),
               "-translate-x-full": !open(),
             }}
@@ -361,8 +365,8 @@ function WorkspaceLanding(props: ParentProps) {
   createEffect(() => setNav(open()))
   onCleanup(() => setNav(false))
   return (
-    <WorkspaceShell mobile hide={() => setOpen(false)} open={open}>
-      <div class="xl:hidden fixed top-0 left-[56px] z-50 flex h-[41px] items-center justify-center">
+    <WorkspaceShell mobile offset hide={() => setOpen(false)} open={open}>
+      <div class="md:hidden fixed top-0 left-[56px] z-50 flex h-[41px] items-center justify-center">
         <IconButton
           icon="menu"
           variant="ghost"

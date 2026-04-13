@@ -11,7 +11,6 @@ import type { Device, DeviceStatus, Workspace, WorkspaceDirectory } from "../typ
 import { DeviceList } from "./device-list"
 import { CreateWorkspaceDialogContent } from "./create-workspace-dialog"
 import { useWorkspace } from "../context"
-import { ServerConnection, useServer } from "@/context/server"
 import { getProxyUrl } from "../lib/url"
 import { useWorkspaceNavigate } from "@/hooks/use-workspace-navigate"
 import { useActiveWorkspace } from "../active-workspace"
@@ -27,7 +26,6 @@ export function WorkspaceSidebar(props: { hide?: () => void } = {}) {
     workspaces,
     devices,
     enabledWorkspaceIds,
-    selectWorkspace,
     enableWorkspace,
     disableWorkspace,
     createWorkspace,
@@ -35,7 +33,6 @@ export function WorkspaceSidebar(props: { hide?: () => void } = {}) {
     renameWorkspace,
   } = useWorkspace()
 
-  const server = useServer()
   const params = useParams()
   const rawNavigate = useNavigate()
   const { navigateToNewSession, encodeDirectory } = useWorkspaceNavigate()
@@ -60,17 +57,6 @@ export function WorkspaceSidebar(props: { hide?: () => void } = {}) {
     hide()
   }
 
-  const handleSelectWorkspace = (workspace: Workspace) => {
-    if (!workspace.deviceUniqueId) return
-    enableWorkspace(workspace.id)
-    selectWorkspace(workspace.id)
-    active.setActive(workspace.id, { ...workspace })
-    server.setActive(ServerConnection.Key.make(getProxyUrl(workspace.deviceUniqueId)))
-    const primaryDir = getPrimaryDirectory(workspace)
-    const dirSlug = primaryDir ? encodeDirectory(primaryDir.path) : "default"
-    navigateToNewSession({ workspaceId: workspace.id, dir: dirSlug })
-    hide()
-  }
 
   const [workspaceSearchQuery, setWorkspaceSearchQuery] = createSignal("")
   const [deviceSearchQuery, setDeviceSearchQuery] = createSignal("")
@@ -262,20 +248,7 @@ export function WorkspaceSidebar(props: { hide?: () => void } = {}) {
                       "text-sidebar-foreground font-medium": params.workspaceID === cardProps.id,
                       "text-sidebar-foreground": params.workspaceID !== cardProps.id,
                     }}
-                    onClick={() => {
-                      toggle()
-                      if (params.workspaceID !== cardProps.id) {
-                        const ws = workspace()
-                        if (!ws?.deviceUniqueId) return
-                        selectWorkspace(ws.id)
-                        active.setActive(ws.id, { ...ws })
-                        server.setActive(ServerConnection.Key.make(getProxyUrl(ws.deviceUniqueId)))
-                        const dir = primaryDir()
-                        const dirSlug = dir ? encodeDirectory(dir.path) : "default"
-                        navigateToNewSession({ workspaceId: ws.id, dir: dirSlug })
-                        hide()
-                      }
-                    }}
+                    onClick={toggle}
                   >
                     <div class="size-2 shrink-0 relative">
                       <div
@@ -342,7 +315,7 @@ export function WorkspaceSidebar(props: { hide?: () => void } = {}) {
       )
     }
 
-    // Idle card: same nav-item style, click to launch
+    // Idle card: same nav-item style, click to start
     return (
       <Show when={workspace()}>
         {(ws) => (
@@ -372,7 +345,7 @@ export function WorkspaceSidebar(props: { hide?: () => void } = {}) {
                   "cursor-pointer": !dot().offline,
                 }}
                 onClick={() => {
-                  if (!dot().offline) handleSelectWorkspace(ws())
+                  if (!dot().offline) handleOpenWorkspace(ws())
                 }}
               >
                 <div
