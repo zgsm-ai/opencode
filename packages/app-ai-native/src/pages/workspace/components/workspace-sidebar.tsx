@@ -17,10 +17,11 @@ import { useWorkspaceNavigate } from "@/hooks/use-workspace-navigate"
 import { useActiveWorkspace } from "../active-workspace"
 import { useLanguage } from "@/context/language"
 
-export function WorkspaceSidebar() {
+export function WorkspaceSidebar(props: { hide?: () => void } = {}) {
   const language = useLanguage()
   const t = language.t
   const dialog = useDialog()
+  const hide = () => props.hide?.()
   const active = useActiveWorkspace()!
   const {
     workspaces,
@@ -54,7 +55,9 @@ export function WorkspaceSidebar() {
   const handleCloseWorkspace = (workspace: Workspace) => {
     disableWorkspace(workspace.id)
     if (active.id === workspace.id) active.clear()
-    if (params.workspaceID === workspace.id) rawNavigate("/workspace")
+    if (params.workspaceID !== workspace.id) return
+    rawNavigate("/workspace")
+    hide()
   }
 
   const handleSelectWorkspace = (workspace: Workspace) => {
@@ -66,6 +69,7 @@ export function WorkspaceSidebar() {
     const primaryDir = getPrimaryDirectory(workspace)
     const dirSlug = primaryDir ? encodeDirectory(primaryDir.path) : "default"
     navigateToNewSession({ workspaceId: workspace.id, dir: dirSlug })
+    hide()
   }
 
   const [workspaceSearchQuery, setWorkspaceSearchQuery] = createSignal("")
@@ -269,6 +273,7 @@ export function WorkspaceSidebar() {
                         const dir = primaryDir()
                         const dirSlug = dir ? encodeDirectory(dir.path) : "default"
                         navigateToNewSession({ workspaceId: ws.id, dir: dirSlug })
+                        hide()
                       }
                     }}
                   >
@@ -319,6 +324,7 @@ export function WorkspaceSidebar() {
                         const dir = primaryDir()
                         const dirSlug = dir ? encodeDirectory(dir.path) : "default"
                         navigateToNewSession({ workspaceId: cardProps.id, dir: dirSlug })
+                        hide()
                       }}
                     />
                   </Tooltip>
@@ -327,7 +333,7 @@ export function WorkspaceSidebar() {
               </div>
               <Show when={mounted()}>
                 <div classList={{ hidden: !open() }}>
-                  <WorkspaceSessions id={cardProps.id} />
+                  <WorkspaceSessions id={cardProps.id} hide={hide} />
                 </div>
               </Show>
             </div>
@@ -494,9 +500,10 @@ type SessionData = Pick<Session, "id" | "title" | "directory" | "time" | "parent
  * Accepts a stable `id` prop instead of a workspace object to avoid
  * SolidJS <For> reference-reuse bugs.
  */
-function WorkspaceSessions(props: { id: string }) {
+function WorkspaceSessions(props: { id: string; hide?: () => void }) {
   const language = useLanguage()
   const t = language.t
+  const hide = () => props.hide?.()
   const { workspaces } = useWorkspace()
   const { navigateToSession, encodeDirectory: encodeDir } = useWorkspaceNavigate()
   const params = useParams()
@@ -651,6 +658,7 @@ function WorkspaceSessions(props: { id: string }) {
 
   const click = (session: SessionData) => {
     navigateToSession(session.id, { workspaceId: props.id, dir: encodeDir(session.directory) })
+    hide()
   }
 
   const archive = async (session: SessionData) => {
@@ -665,7 +673,9 @@ function WorkspaceSessions(props: { id: string }) {
     }).catch(() => null)
     setPending((prev) => prev.filter((s) => s.id !== session.id))
     setSessions((prev) => prev.filter((s) => s.id !== session.id))
-    if (params.id === session.id) navigateToSession("", { workspaceId: props.id, dir: encodeDir(session.directory) })
+    if (params.id !== session.id) return
+    navigateToSession("", { workspaceId: props.id, dir: encodeDir(session.directory) })
+    hide()
   }
 
   return (

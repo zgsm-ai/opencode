@@ -1,4 +1,4 @@
-﻿import {
+import {
   batch,
   createEffect,
   createMemo,
@@ -19,7 +19,7 @@ import { useWorkspaceNavigate } from "@/hooks/use-workspace-navigate"
 import { useLayout, LocalProject } from "@/context/layout"
 import { useGlobalSync } from "@/context/global-sync"
 import { useActiveWorkspace } from "@/pages/workspace/active-workspace"
-import { appPath } from "@/lib/router"
+import { appPath, isWorkspacePath } from "@/lib/router"
 import { Persist, persisted } from "@/utils/persist"
 import { decode64 } from "@/utils/base64"
 import { ResizeHandle } from "@opencode-ai/ui/resize-handle"
@@ -121,6 +121,8 @@ export default function Layout(props: ParentProps) {
   const permission = usePermission()
   const navigate = useNavigate()
   const location = useLocation()
+  const route = createMemo(() => appPath(location.pathname))
+  const workspace = createMemo(() => isWorkspacePath(route()))
   const [searchParams, setSearchParams] = useSearchParams<{ settings?: string }>()
   setNavigate(navigate)
   const providers = useProviders()
@@ -217,9 +219,9 @@ export default function Layout(props: ParentProps) {
 
   const autoselecting = createMemo(() => {
     if (params.dir) return false
-    const path = appPath(location.pathname)
-    if (path.startsWith("/store")) return false
-    if (path.startsWith("/projects")) return false
+    if (route().startsWith("/store")) return false
+    if (route().startsWith("/projects")) return false
+    if (workspace()) return false
     if (!state.autoselect) return false
     if (!pageReady()) return true
     if (!layoutReady()) return true
@@ -514,10 +516,9 @@ export default function Layout(props: ParentProps) {
         if (!value.layoutReady) return
         if (!state.autoselect) return
         if (value.dir) return
-        const path = appPath(location.pathname)
-        if (path.startsWith("/store")) return
-        if (path.startsWith("/projects")) return
-        if (path.startsWith("/workspace")) return
+        if (route().startsWith("/store")) return
+        if (route().startsWith("/projects")) return
+        if (workspace()) return
 
         const last = server.projects.last()
 
@@ -2157,48 +2158,50 @@ export default function Layout(props: ParentProps) {
             />
           </Show>
         </nav> */}
-        <div classList={{ "xl:hidden": true }}>
-          <div
-            classList={{
-              "fixed inset-x-0 top-10 bottom-0 z-40 transition-opacity duration-200": true,
-              "opacity-100 pointer-events-auto": layout.mobileSidebar.opened(),
-              "opacity-0 pointer-events-none": !layout.mobileSidebar.opened(),
-            }}
-            onClick={(e) => {
-              if (e.target === e.currentTarget) layout.mobileSidebar.hide()
-            }}
-          />
-          <nav
-            aria-label={language.t("sidebar.nav.projectsAndSessions")}
-            data-component="sidebar-nav-mobile"
-            classList={{
-              "@container fixed top-10 bottom-0 left-0 z-50 w-72 bg-background-base transition-transform duration-200 ease-out": true,
-              "translate-x-0": layout.mobileSidebar.opened(),
-              "-translate-x-full": !layout.mobileSidebar.opened(),
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <SidebarContent
-              mobile
-              opened={() => layout.sidebar.opened()}
-              aimMove={aim.move}
-              projects={() => layout.projects.list()}
-              renderProject={(project) => (
-                <SortableProject ctx={projectSidebarCtx} project={project} sortNow={sortNow} mobile />
-              )}
-              handleDragStart={handleDragStart}
-              handleDragEnd={handleDragEnd}
-              handleDragOver={handleDragOver}
-              openProjectLabel={language.t("command.project.open")}
-              openProjectKeybind={() => command.keybind("project.open")}
-              onOpenProject={chooseProject}
-              renderProjectOverlay={() => (
-                <ProjectDragOverlay projects={() => layout.projects.list()} activeProject={() => store.activeProject} />
-              )}
-              renderPanel={() => <SidebarPanel project={currentProject()} mobile />}
+        <Show when={!workspace()}>
+          <div classList={{ "xl:hidden": true }}>
+            <div
+              classList={{
+                "fixed inset-x-0 top-10 bottom-0 z-40 transition-opacity duration-200": true,
+                "opacity-100 pointer-events-auto": layout.mobileSidebar.opened(),
+                "opacity-0 pointer-events-none": !layout.mobileSidebar.opened(),
+              }}
+              onClick={(e) => {
+                if (e.target === e.currentTarget) layout.mobileSidebar.hide()
+              }}
             />
-          </nav>
-        </div>
+            <nav
+              aria-label={language.t("sidebar.nav.projectsAndSessions")}
+              data-component="sidebar-nav-mobile"
+              classList={{
+                "@container fixed top-10 bottom-0 left-0 z-50 w-72 bg-background-base transition-transform duration-200 ease-out": true,
+                "translate-x-0": layout.mobileSidebar.opened(),
+                "-translate-x-full": !layout.mobileSidebar.opened(),
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <SidebarContent
+                mobile
+                opened={() => layout.sidebar.opened()}
+                aimMove={aim.move}
+                projects={() => layout.projects.list()}
+                renderProject={(project) => (
+                  <SortableProject ctx={projectSidebarCtx} project={project} sortNow={sortNow} mobile />
+                )}
+                handleDragStart={handleDragStart}
+                handleDragEnd={handleDragEnd}
+                handleDragOver={handleDragOver}
+                openProjectLabel={language.t("command.project.open")}
+                openProjectKeybind={() => command.keybind("project.open")}
+                onOpenProject={chooseProject}
+                renderProjectOverlay={() => (
+                  <ProjectDragOverlay projects={() => layout.projects.list()} activeProject={() => store.activeProject} />
+                )}
+                renderPanel={() => <SidebarPanel project={currentProject()} mobile />}
+              />
+            </nav>
+          </div>
+        </Show>
 
         <main
           classList={{

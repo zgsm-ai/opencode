@@ -11,7 +11,7 @@ import { useLayout } from "@/context/layout"
 import { usePlatform } from "@/context/platform"
 import { useCommand } from "@/context/command"
 import { useLanguage } from "@/context/language"
-import { appPath } from "@/lib/router"
+import { appPath, isChromePath, isWorkspacePath } from "@/lib/router"
 import { applyPath, backPath, forwardPath } from "./titlebar-history"
 
 type TauriDesktopWindow = {
@@ -51,10 +51,12 @@ export function Titlebar() {
   const web = createMemo(() => platform.platform === "web")
   const zoom = () => platform.webviewZoom?.() ?? 1
   const minHeight = () => (mac() ? `${40 / zoom()}px` : undefined)
-  const inAppChrome = createMemo(() => {
-    const path = appPath(location.pathname)
-    return path.startsWith("/store") || path.startsWith("/projects")
-  })
+  const route = createMemo(() => appPath(location.pathname))
+  const inWorkspace = createMemo(() => isWorkspacePath(route()))
+  const menuLabel = createMemo(() =>
+    inWorkspace() ? language.t("workspace.page.title") : language.t("sidebar.menu.toggle"),
+  )
+  const inAppChrome = createMemo(() => isChromePath(route()))
   if (inAppChrome()) return null
 
   const [history, setHistory] = createStore({
@@ -181,7 +183,7 @@ export function Titlebar() {
               variant="ghost"
               class="titlebar-icon rounded-md"
               onClick={layout.mobileSidebar.toggle}
-              aria-label={language.t("sidebar.menu.toggle")}
+              aria-label={menuLabel()}
               aria-expanded={layout.mobileSidebar.opened()}
             />
           </div>
@@ -193,7 +195,7 @@ export function Titlebar() {
               variant="ghost"
               class="titlebar-icon rounded-md"
               onClick={layout.mobileSidebar.toggle}
-              aria-label={language.t("sidebar.menu.toggle")}
+              aria-label={menuLabel()}
               aria-expanded={layout.mobileSidebar.opened()}
             />
           </div>

@@ -11,7 +11,7 @@ export default function WorkspaceHome() {
   return (
     <div class="h-full flex flex-col bg-[#f7f9fc]">
       {/* Top Navigation Header */}
-      <header class="bg-white flex items-center px-6 h-[41px] w-full border-b border-[#DEE6F0] sticky top-0 z-30 font-['Inter'] antialiased tracking-tight text-sm shadow-sm shrink-0">
+      <header class="bg-white flex items-center pr-6 pl-14 md:px-6 h-[41px] w-full border-b border-[#DEE6F0] sticky top-0 z-30 font-['Inter'] antialiased tracking-tight text-sm shadow-sm shrink-0">
         <span class="text-lg font-bold tracking-tighter text-slate-900">CoStrict Cloud</span>
       </header>
 

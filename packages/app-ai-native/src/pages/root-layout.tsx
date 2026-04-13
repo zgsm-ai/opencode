@@ -116,7 +116,11 @@ export default function RootLayout(props: ParentProps) {
 
   return (
     <div class="flex h-full w-full overflow-hidden">
-      <aside class="fixed inset-y-0 left-0 z-40 flex w-12 flex-col items-center py-4" style={{ background: "var(--st-surface-lowest)", "border-right": "1px solid rgba(194,198,212,0.2)" }}>
+      <aside
+        data-component="root-layout-nav"
+        class="fixed inset-y-0 left-0 z-40 flex w-12 flex-col items-center py-4 transition-opacity duration-200"
+        style={{ background: "var(--st-surface-lowest)", "border-right": "1px solid rgba(194,198,212,0.2)" }}
+      >
         <nav class="flex flex-1 flex-col gap-2">
           <NavButton
             icon="store"

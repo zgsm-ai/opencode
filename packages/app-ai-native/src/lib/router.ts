@@ -9,3 +9,11 @@ export function appPath(path: string) {
 
   return path
 }
+
+export function isWorkspacePath(path: string) {
+  return path === "/workspace" || path.startsWith("/workspace/")
+}
+
+export function isChromePath(path: string) {
+  return path.startsWith("/store") || path.startsWith("/projects")
+}

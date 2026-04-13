@@ -2,6 +2,7 @@ import type { ParentProps } from "solid-js"
 import { createSignal, createMemo, onMount, Show, createEffect, untrack, onCleanup } from "solid-js"
 import { createStore, reconcile } from "solid-js/store"
 import { useNavigate, useParams } from "@solidjs/router"
+import { IconButton } from "@opencode-ai/ui/icon-button"
 import { showToast, Toast } from "@opencode-ai/ui/toast"
 import type { Device, Workspace, CreateWorkspaceRequest } from "../types"
 import { workspaceApi, deviceApi } from "../lib/api"
@@ -13,6 +14,16 @@ import { AppInterface } from "@/app-interface"
 import { getProxyUrl } from "../lib/url"
 import { ActiveWorkspaceProvider, useActiveWorkspace } from "../active-workspace"
 import { useLanguage } from "@/context/language"
+import { useLayout } from "@/context/layout"
+
+const setNav = (hidden: boolean) => {
+  if (typeof document === "undefined") return
+  const nav = document.querySelector<HTMLElement>('[data-component="root-layout-nav"]')
+  if (!nav) return
+  nav.style.opacity = hidden ? "0" : "1"
+  nav.style.pointerEvents = hidden ? "none" : ""
+}
+
 
 let inWorkspace = false
 
@@ -226,12 +237,7 @@ export default function WorkspaceLayout(props: ParentProps) {
       <ActiveWorkspaceProvider>
         <WorkspaceServerProvider>
           <WorkspaceActivation>
-            <div class="flex h-full w-full min-h-0">
-              <div class="shrink-0 w-[280px] h-full">
-                <WorkspaceSidebar />
-              </div>
-              <WorkspaceContent>{props.children}</WorkspaceContent>
-            </div>
+            <WorkspaceContent>{props.children}</WorkspaceContent>
           </WorkspaceActivation>
         </WorkspaceServerProvider>
       </ActiveWorkspaceProvider>
@@ -296,23 +302,99 @@ function WorkspaceActivation(props: ParentProps) {
   return props.children
 }
 
+function WorkspaceShell(props: ParentProps<{ hide?: () => void; open?: () => boolean; mobile?: boolean }>) {
+  const language = useLanguage()
+  const t = language.t
+  const hide = () => props.hide?.()
+  const open = () => props.open?.() ?? false
+  return (
+    <div class="flex h-full w-full min-h-0">
+      <div class="hidden xl:block shrink-0 w-[280px] h-full">
+        <WorkspaceSidebar hide={hide} />
+      </div>
+      <Show when={props.mobile}>
+        <div class="xl:hidden">
+          <div
+            classList={{
+              "fixed inset-x-0 top-10 bottom-0 z-40 transition-opacity duration-200": true,
+              "opacity-100 pointer-events-auto": open(),
+              "opacity-0 pointer-events-none": !open(),
+            }}
+            onClick={(e) => {
+              if (e.target === e.currentTarget) hide()
+            }}
+          />
+          <aside
+            aria-label={t("workspace.page.title")}
+            classList={{
+              "fixed top-10 bottom-0 left-0 z-50 w-[280px] max-w-[calc(100vw-2rem)] border-r border-sidebar-border bg-sidebar transition-transform duration-200 ease-out": true,
+              "translate-x-0": open(),
+              "-translate-x-full": !open(),
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <WorkspaceSidebar hide={hide} />
+          </aside>
+        </div>
+      </Show>
+      <div class="flex-1 min-w-0 h-full overflow-hidden flex flex-col">{props.children}</div>
+    </div>
+  )
+}
+
+function WorkspaceReady(props: ParentProps) {
+  const layout = useLayout()
+  createEffect(() => setNav(layout.mobileSidebar.opened()))
+  onCleanup(() => setNav(false))
+  return (
+    <WorkspaceShell mobile hide={layout.mobileSidebar.hide} open={layout.mobileSidebar.opened}>
+      {props.children}
+    </WorkspaceShell>
+  )
+}
+
+
+function WorkspaceLanding(props: ParentProps) {
+  const language = useLanguage()
+  const t = language.t
+  const [open, setOpen] = createSignal(false)
+  createEffect(() => setNav(open()))
+  onCleanup(() => setNav(false))
+  return (
+    <WorkspaceShell mobile hide={() => setOpen(false)} open={open}>
+      <div class="xl:hidden fixed top-0 left-[56px] z-50 flex h-[41px] items-center justify-center">
+        <IconButton
+          icon="menu"
+          variant="ghost"
+          class="titlebar-icon rounded-md"
+          onClick={() => setOpen((v) => !v)}
+          aria-label={t("workspace.page.title")}
+          aria-expanded={open()}
+        />
+      </div>
+      {props.children}
+      <Toast.Region />
+    </WorkspaceShell>
+  )
+}
+
+
 function WorkspaceContent(props: ParentProps) {
   const params = useParams()
   const server = useServer()
   const ready = createMemo(() => !!params.workspaceID && !!server.key)
   return (
-    <div class="flex-1 min-w-0 h-full overflow-hidden flex flex-col">
-      <Show
-        when={ready()}
-        fallback={
-          <Show when={!params.workspaceID} fallback={<div class="size-full" />}>
-            {props.children}
-            <Toast.Region />
-          </Show>
-        }
-      >
-        <AppInterface>{props.children}</AppInterface>
-      </Show>
-    </div>
+    <Show
+      when={ready()}
+      fallback={
+        <Show when={!params.workspaceID} fallback={<div class="size-full" />}>
+          <WorkspaceLanding>{props.children}</WorkspaceLanding>
+        </Show>
+      }
+    >
+      <AppInterface>
+        <WorkspaceReady>{props.children}</WorkspaceReady>
+      </AppInterface>
+    </Show>
   )
 }
