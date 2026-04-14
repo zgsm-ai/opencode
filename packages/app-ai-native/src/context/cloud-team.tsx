@@ -36,6 +36,7 @@ const CLOUD_TEAM_AGENT_NAME = "CloudTeam"
 
 export const { use: useCloudTeam, provider: CloudTeamProvider } = createSimpleContext({
   name: "CloudTeam",
+  gate: false,
   init() {
     const server = useServer()
 
