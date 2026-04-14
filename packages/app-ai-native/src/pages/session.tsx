@@ -15,6 +15,7 @@ import {
 import { createMediaQuery } from "@solid-primitives/media"
 import { createResizeObserver } from "@solid-primitives/resize-observer"
 import { useLocal } from "@/context/local"
+import { useCloudTeam } from "@/context/cloud-team"
 import { selectionFromLines, useFile, type FileSelection, type SelectedLineRange } from "@/context/file"
 import { createStore } from "solid-js/store"
 import { ResizeHandle } from "@opencode-ai/ui/resize-handle"
@@ -40,6 +41,7 @@ import { SessionMobileTabs } from "@/pages/session/session-mobile-tabs"
 import { SessionSidePanel } from "@/pages/session/session-side-panel"
 import { TerminalPanel } from "@/pages/session/terminal-panel"
 import { useSessionCommands } from "@/pages/session/use-session-commands"
+import { CloudTeamStatusBar } from "@/components/cloud-team"
 import { useSessionHashScroll } from "@/pages/session/use-session-hash-scroll"
 import { same } from "@/utils/same"
 
@@ -255,6 +257,7 @@ function createSessionHistoryWindow(input: SessionHistoryWindowInput) {
 export default function Page() {
   const layout = useLayout()
   const local = useLocal()
+  const cloudTeam = useCloudTeam()
   const file = useFile()
   const sync = useSync()
   const dialog = useDialog()
@@ -1272,6 +1275,12 @@ export default function Page() {
               </Match>
             </Switch>
           </div>
+
+          <Show when={cloudTeam.active()}>
+            <div class="shrink-0 w-full px-3 pb-1">
+              <CloudTeamStatusBar />
+            </div>
+          </Show>
 
           <SessionComposerRegion
             state={composer}

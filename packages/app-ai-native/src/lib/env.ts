@@ -94,4 +94,9 @@ export const env = {
   get OPENCODE_SERVER_PORT() {
     return getEnv("VITE_OPENCODE_SERVER_PORT", "8080")
   },
+
+  // Cloud Team WebSocket URL override
+  get CLOUD_TEAM_WS_URL() {
+    return getEnv("VITE_CLOUD_TEAM_WS_URL", "")
+  },
 }

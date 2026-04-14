@@ -4,6 +4,8 @@ import { createEffect, on, Component, Show, onCleanup, Switch, Match, createMemo
 import { createStore } from "solid-js/store"
 import { createFocusSignal } from "@solid-primitives/active-element"
 import { useLocal } from "@/context/local"
+import { useServer } from "@/context/server"
+import { useCloudTeam } from "@/context/cloud-team"
 import { selectionFromLines, type SelectedLineRange, useFile } from "@/context/file"
 import {
   ContentPart,
@@ -98,6 +100,8 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   const sdk = useSDK()
   const sync = useSync()
   const local = useLocal()
+  const server = useServer()
+  const cloudTeam = useCloudTeam()
   const files = useFile()
   const prompt = usePrompt()
   const layout = useLayout()
@@ -503,7 +507,11 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
       .filter((agent) => !agent.hidden && agent.mode !== "primary")
       .map((agent): AtOption => ({ type: "agent", name: agent.name, display: agent.name })),
   )
-  const agentNames = createMemo(() => local.agent.list().map((agent) => agent.name))
+  const agentNames = createMemo(() => {
+    const names = local.agent.list().map((agent) => agent.name)
+    if (!server.isLocal()) names.push(cloudTeam.agentName)
+    return names
+  })
 
   const handleAtSelect = (option: AtOption | undefined) => {
     if (!option) return
@@ -1393,8 +1401,15 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                   <Select
                     size="normal"
                     options={agentNames()}
-                    current={local.agent.current()?.name ?? ""}
-                    onSelect={local.agent.set}
+                    current={cloudTeam.active() ? cloudTeam.agentName : (local.agent.current()?.name ?? "")}
+                    onSelect={(name: string) => {
+                      if (name === cloudTeam.agentName) {
+                        cloudTeam.activate()
+                      } else {
+                        if (cloudTeam.active()) cloudTeam.deactivate()
+                        local.agent.set(name)
+                      }
+                    }}
                     class="capitalize max-w-[160px]"
                     valueClass="truncate text-13-regular"
                     triggerStyle={{

@@ -9,6 +9,7 @@ import { useGlobalSync } from "@/context/global-sync"
 import { useLanguage } from "@/context/language"
 import { useLayout } from "@/context/layout"
 import { useLocal } from "@/context/local"
+import { useCloudTeam } from "@/context/cloud-team"
 import { usePermission } from "@/context/permission"
 import { type ImageAttachmentPart, type Prompt, usePrompt } from "@/context/prompt"
 import { useSDK } from "@/context/sdk"
@@ -63,6 +64,7 @@ export function createPromptSubmit(input: PromptSubmitInput) {
   const sync = useSync()
   const globalSync = useGlobalSync()
   const local = useLocal()
+  const cloudTeam = useCloudTeam()
   const permission = usePermission()
   const prompt = usePrompt()
   const layout = useLayout()
@@ -80,6 +82,12 @@ export function createPromptSubmit(input: PromptSubmitInput) {
   const abort = async () => {
     const sessionID = params.id
     if (!sessionID) return Promise.resolve()
+
+    // If CloudTeam mode is active, handle abort differently
+    if (cloudTeam.active()) {
+      await cloudTeam.leaveSession()
+      return
+    }
 
     globalSync.todo.set(sessionID, [])
     const [, setStore] = globalSync.child(sdk.directory)
@@ -226,6 +234,19 @@ export function createPromptSubmit(input: PromptSubmitInput) {
     }
     const agent = currentAgent.name
     const variant = local.model.variant.current()
+
+    // CloudTeam mode: route prompt through cloud team submission
+    if (agent === cloudTeam.agentName) {
+      const clearInput = () => {
+        prompt.reset()
+        input.setMode("normal")
+        input.setPopover(null)
+      }
+      clearInput()
+      input.onSubmit?.()
+      await cloudTeam.submitPrompt(text, { parts: [], context: prompt.context.items() })
+      return
+    }
 
     const clearInput = () => {
       prompt.reset()
