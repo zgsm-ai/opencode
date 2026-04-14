@@ -17,7 +17,7 @@ export const CloudTeamStatusBar: Component = () => {
       {/* Status bar */}
       <div class="flex items-center gap-2 rounded-md border border-border-weak-base bg-background-base px-3 py-1.5">
         <div class="flex items-center gap-1.5 flex-1 min-w-0">
-          <Icon name="cloud" class="size-3.5 text-text-weak shrink-0" />
+          <Icon name="cloud-upload" class="size-3.5 text-text-weak shrink-0" />
           <span class="text-12-medium text-text-base">Cloud Team</span>
           <Show when={cloudTeam.session()?.title}>
             <span class="text-11-regular text-text-weak truncate">

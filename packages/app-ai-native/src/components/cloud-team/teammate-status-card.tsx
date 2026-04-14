@@ -36,7 +36,7 @@ export const TeammateStatusCard: Component = () => {
         onClick={() => setExpanded(!expanded())}
       >
         <div class="flex items-center gap-1.5 flex-1 min-w-0">
-          <Icon name="cloud" class="size-4 text-text-weak shrink-0" />
+          <Icon name="cloud-upload" class="size-4 text-text-weak shrink-0" />
           <span class="text-13-medium text-text-base truncate">
             Cloud Team
           </span>

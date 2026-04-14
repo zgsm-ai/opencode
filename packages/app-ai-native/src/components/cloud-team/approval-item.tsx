@@ -21,7 +21,7 @@ export const ApprovalItem: Component<{
   const [responding, setResponding] = createSignal(false)
   const risk = () => riskColors[props.riskLevel]
 
-  const handleApprove = async () => {
+  const handleApprove = () => {
     setResponding(true)
     try {
       props.onApprove(props.approvalId)
@@ -30,7 +30,7 @@ export const ApprovalItem: Component<{
     }
   }
 
-  const handleReject = async () => {
+  const handleReject = () => {
     setResponding(true)
     try {
       props.onReject(props.approvalId)
@@ -46,7 +46,7 @@ export const ApprovalItem: Component<{
         <div class="text-13-regular text-text-base truncate">{props.description}</div>
         <div class="flex items-center gap-2 mt-0.5">
           <span class="text-11-regular text-text-weak">{props.requesterName}</span>
-          <span class="text-11-regular text-text-weaker">·</span>
+          <span class="text-11-regular text-text-weaker">&#183;</span>
           <span class="text-11-regular text-text-weak">{props.toolName}</span>
           <span class={`text-10-regular px-1 py-0 rounded ${risk().badge} ${risk().text}`}>
             {props.riskLevel}
@@ -75,7 +75,7 @@ export const ApprovalItem: Component<{
           </Button>
         </div>
       </Show>
-      <Show when={props.status !== "pending'}>
+      <Show when={props.status !== "pending"}>
         <span class={`text-11-regular ${props.status === "approved" ? "text-green-600" : "text-red-600"}`}>
           {props.status}
         </span>

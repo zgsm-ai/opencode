@@ -1402,7 +1402,8 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                     size="normal"
                     options={agentNames()}
                     current={cloudTeam.active() ? cloudTeam.agentName : (local.agent.current()?.name ?? "")}
-                    onSelect={(name: string) => {
+                    onSelect={(name: string | undefined) => {
+                      if (!name) return
                       if (name === cloudTeam.agentName) {
                         cloudTeam.activate()
                       } else {

@@ -220,7 +220,7 @@ export const { use: useCloudTeam, provider: CloudTeamProvider } = createSimpleCo
 
     // ── Approval operations ────────────────────────────────
 
-    async function respondApproval(approvalId: string, status: ApprovalStatus, feedback?: string) {
+    async function respondApproval(approvalId: string, status: "approved" | "rejected", feedback?: string) {
       if (!store.session?.id) return
       await cloudTeamApi.approval.respond(store.session.id, approvalId, { status, feedback })
     }
