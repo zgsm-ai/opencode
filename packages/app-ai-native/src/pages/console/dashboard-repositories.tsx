@@ -178,7 +178,7 @@ export default function DashboardRepositories() {
               <h1 class={sx.toolbarTitle}>{language.t("store.console")}</h1>
               <p class={cn(sx.toolbarSub, "mb-3")}>{language.t("store.console.authDescription")}</p>
               <button
-                class={cn(sx.btn, sx.btnPrimary)}
+                class="inline-flex min-h-9 items-center justify-center rounded-[var(--native-radius-full)] bg-[var(--native-primary)] px-4 py-2 text-[0.8125rem] font-medium text-[var(--native-primary-foreground)] shadow-[0_1px_4px_color-mix(in_srgb,var(--native-primary)_25%,transparent)] transition-all duration-150 hover:bg-[color-mix(in_srgb,var(--native-primary)_88%,white)] hover:shadow-[var(--native-shadow-sm)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--native-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--native-panel)]"
                 onClick={() => { window.location.href = getLoginUrl("/store/dashboard/repositories") }}
               >
                 {language.t("store.console.login")}
@@ -193,8 +193,10 @@ export default function DashboardRepositories() {
               <h2 class={sx.toolbarTitle}>{language.t("store.dashboard.nav.repositories")}</h2>
               <p class={sx.toolbarSub}>{language.t("store.console.repositories.description")}</p>
             </div>
-            <button class={cn(sx.btn, sx.btnPrimary)} onClick={openCreateRepo}>
-              <Icon name="plus" size="small" />
+            <button
+              class="inline-flex min-h-9 items-center justify-center rounded-[var(--native-radius-full)] bg-[var(--native-primary)] px-4 py-2 text-[0.8125rem] font-medium text-[var(--native-primary-foreground)] shadow-[0_1px_4px_color-mix(in_srgb,var(--native-primary)_25%,transparent)] transition-all duration-150 hover:bg-[color-mix(in_srgb,var(--native-primary)_88%,white)] hover:shadow-[var(--native-shadow-sm)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--native-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--native-panel)]"
+              onClick={openCreateRepo}
+            >
               {language.t("store.console.repositories.create")}
             </button>
           </div>
@@ -256,10 +258,11 @@ export default function DashboardRepositories() {
                           })()}
                         </Show>
 
-                        <div class={sx.dashFoot}>
+                        <div class={cn(sx.dashFoot, "gap-2")}>
                           <Show when={repo.repoType === "sync"}>
                             <button
-                              class={sx.action}
+                              class="inline-flex h-8 w-8 items-center justify-center rounded-[var(--native-radius-full)] border border-[color:color-mix(in_srgb,var(--native-border)_14%,transparent)] bg-[color:color-mix(in_srgb,var(--native-panel)_88%,var(--native-surface))] text-[var(--native-muted)] transition-all duration-150 hover:border-[color:color-mix(in_srgb,var(--native-primary)_18%,transparent)] hover:bg-[color:color-mix(in_srgb,var(--native-primary)_7%,var(--native-panel))] hover:text-[var(--native-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--native-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--native-panel)] disabled:pointer-events-none disabled:opacity-50"
+                              aria-label={language.t("store.sync.syncNow")}
                               title={language.t("store.sync.syncNow")}
                               disabled={state.syncingRepoId === repo.id}
                               onClick={() => void syncNow(repo.id)}
@@ -267,7 +270,15 @@ export default function DashboardRepositories() {
                               <Icon name="reset" size="small" />
                             </button>
                             <button
-                              class={sx.action}
+                              class={cn(
+                                "inline-flex h-8 w-8 items-center justify-center rounded-[var(--native-radius-full)] border border-[color:color-mix(in_srgb,var(--native-border)_14%,transparent)] bg-[color:color-mix(in_srgb,var(--native-panel)_88%,var(--native-surface))] text-[var(--native-muted)] transition-all duration-150 hover:border-[color:color-mix(in_srgb,var(--native-primary)_18%,transparent)] hover:bg-[color:color-mix(in_srgb,var(--native-primary)_7%,var(--native-panel))] hover:text-[var(--native-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--native-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--native-panel)]",
+                                state.expandedSyncRepo === repo.id && "border-[color:color-mix(in_srgb,var(--native-primary)_18%,transparent)] bg-[color:color-mix(in_srgb,var(--native-primary)_7%,var(--native-panel))] text-[var(--native-primary)]",
+                              )}
+                              aria-label={
+                                state.expandedSyncRepo === repo.id
+                                  ? language.t("store.console.repositories.hideSync")
+                                  : language.t("store.console.repositories.syncSettings")
+                              }
                               title={
                                 state.expandedSyncRepo === repo.id
                                   ? language.t("store.console.repositories.hideSync")
@@ -281,21 +292,24 @@ export default function DashboardRepositories() {
                             </button>
                           </Show>
                           <button
-                            class={sx.action}
+                            class="inline-flex h-8 w-8 items-center justify-center rounded-[var(--native-radius-full)] border border-[color:color-mix(in_srgb,var(--native-border)_14%,transparent)] bg-[color:color-mix(in_srgb,var(--native-panel)_88%,var(--native-surface))] text-[var(--native-muted)] transition-all duration-150 hover:border-[color:color-mix(in_srgb,var(--native-primary)_18%,transparent)] hover:bg-[color:color-mix(in_srgb,var(--native-primary)_7%,var(--native-panel))] hover:text-[var(--native-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--native-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--native-panel)]"
+                            aria-label={language.t("store.console.repositories.invite")}
                             title={language.t("store.console.repositories.invite")}
                             onClick={() => openInvite(repo)}
                           >
                             <Icon name="plus-small" size="small" />
                           </button>
                           <button
-                            class={sx.action}
+                            class="inline-flex h-8 w-8 items-center justify-center rounded-[var(--native-radius-full)] border border-[color:color-mix(in_srgb,var(--native-border)_14%,transparent)] bg-[color:color-mix(in_srgb,var(--native-panel)_88%,var(--native-surface))] text-[var(--native-muted)] transition-all duration-150 hover:border-[color:color-mix(in_srgb,var(--native-primary)_18%,transparent)] hover:bg-[color:color-mix(in_srgb,var(--native-primary)_7%,var(--native-panel))] hover:text-[var(--native-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--native-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--native-panel)]"
+                            aria-label={language.t("store.console.repositories.edit")}
                             title={language.t("store.console.repositories.edit")}
                             onClick={() => openEditRepo(repo)}
                           >
                             <Icon name="edit" size="small" />
                           </button>
                           <button
-                            class={sx.action}
+                            class="inline-flex h-8 w-8 items-center justify-center rounded-[var(--native-radius-full)] border border-[color:color-mix(in_srgb,var(--native-border)_14%,transparent)] bg-[color:color-mix(in_srgb,var(--native-panel)_88%,var(--native-surface))] text-[var(--native-muted)] transition-all duration-150 hover:border-[color:color-mix(in_srgb,#ef4444_18%,transparent)] hover:bg-[color:color-mix(in_srgb,#ef4444_8%,var(--native-panel))] hover:text-[#ef4444] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--native-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--native-panel)]"
+                            aria-label={language.t("store.console.repositories.delete")}
                             title={language.t("store.console.repositories.delete")}
                             onClick={() => handleDeleteRepo(repo.id)}
                           >

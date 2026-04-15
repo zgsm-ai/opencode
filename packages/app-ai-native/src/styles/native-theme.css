@@ -40,50 +40,55 @@
   --sidebar-border: 220 13% 91%;
   --sidebar-ring: 217.2 91.2% 59.8%;
 
-  --native-bg: #f7f9fc;
-  --native-bg-subtle: #f2f4f7;
-  --native-surface: #eceef1;
-  --native-surface-strong: #e6e8eb;
-  --native-panel: #ffffff;
-  --native-panel-soft: color-mix(in srgb, var(--native-panel) 96%, var(--native-bg-subtle));
-  --native-foreground: #191c1e;
-  --native-muted: #424752;
-  --native-dim: #727783;
-  --native-border: #c2c6d4;
-  --native-border-strong: #727783;
-  --native-input: #ffffff;
-  --native-primary: #2e6cc4;
-  --native-primary-hover: #245bad;
-  --native-primary-soft: #d0e4fe;
-  --native-primary-muted: #35485d;
-  --native-primary-foreground: #ffffff;
-  --native-secondary: #d0e4fe;
-  --native-secondary-foreground: #35485d;
-  --native-success: #10b981;
-  --native-success-soft: #d1fae5;
-  --native-success-foreground: #064e3b;
-  --native-warning: #f59e0b;
-  --native-warning-soft: #fef3c7;
-  --native-warning-foreground: #78350f;
-  --native-error: #dc2626;
-  --native-error-soft: #ffdad6;
-  --native-error-foreground: #410002;
-  --native-info: #3b82f6;
-  --native-info-soft: #dbeafe;
-  --native-info-foreground: #1e3a5f;
+  --native-font-display: "Aptos Display", "Segoe UI Variable Display", "SF Pro Display", "Helvetica Neue", sans-serif;
+  --native-font-body: "Aptos", "Segoe UI Variable Text", "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
+  --native-font-mono: var(--font-family-mono, "Cascadia Mono", "SF Mono", "Consolas", monospace);
+
+  --native-bg: oklch(98.2% 0.007 255);
+  --native-bg-subtle: oklch(96.8% 0.01 255);
+  --native-surface: oklch(95.2% 0.013 255);
+  --native-surface-strong: oklch(92.7% 0.017 255);
+  --native-panel: oklch(99.3% 0.003 255);
+  --native-panel-soft: color-mix(in oklab, var(--native-panel) 90%, var(--native-bg-subtle));
+  --native-foreground: oklch(27.4% 0.031 258);
+  --native-muted: oklch(44.9% 0.018 255);
+  --native-dim: oklch(59.6% 0.014 255);
+  --native-border: oklch(82.8% 0.014 255);
+  --native-border-strong: oklch(65.5% 0.022 256);
+  --native-input: oklch(99.7% 0.002 255);
+  --native-primary: #0053dc;
+  --native-primary-hover: #0045b9;
+  --native-primary-soft: color-mix(in oklab, var(--native-primary) 11%, var(--native-panel));
+  --native-primary-muted: oklch(33.2% 0.073 260);
+  --native-primary-foreground: oklch(99.1% 0.003 255);
+  --native-secondary: color-mix(in oklab, var(--native-primary) 8%, var(--native-surface));
+  --native-secondary-foreground: oklch(35.3% 0.041 258);
+  --native-success: oklch(58.1% 0.129 160);
+  --native-success-soft: oklch(95.5% 0.035 163);
+  --native-success-foreground: oklch(36.7% 0.061 165);
+  --native-warning: oklch(71.8% 0.149 71);
+  --native-warning-soft: oklch(96.4% 0.038 80);
+  --native-warning-foreground: oklch(46.4% 0.085 62);
+  --native-error: oklch(60.8% 0.203 25);
+  --native-error-soft: oklch(96.1% 0.032 20);
+  --native-error-foreground: oklch(41.3% 0.105 25);
+  --native-info: oklch(64.2% 0.127 248);
+  --native-info-soft: oklch(95.9% 0.025 248);
+  --native-info-foreground: oklch(39.8% 0.064 248);
   --native-ring: var(--native-primary);
-  --native-hover: rgba(0, 0, 0, 0.04);
-  --native-active: rgba(0, 0, 0, 0.08);
-  --native-overlay: rgba(25, 28, 30, 0.18);
+  --native-hover: color-mix(in oklab, var(--native-primary) 6%, transparent);
+  --native-active: color-mix(in oklab, var(--native-primary) 12%, transparent);
+  --native-overlay: color-mix(in oklab, var(--native-foreground) 18%, transparent);
   --native-disabled-opacity: 0.45;
-  --native-radius-sm: 0.5rem;
-  --native-radius-md: 0.75rem;
-  --native-radius-lg: 1rem;
-  --native-radius-xl: 1.25rem;
+  --native-radius-sm: 0.625rem;
+  --native-radius-md: 0.875rem;
+  --native-radius-lg: 1.125rem;
+  --native-radius-xl: 1.5rem;
   --native-radius-full: 9999px;
-  --native-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
-  --native-shadow-md: 0 4px 16px -4px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04);
-  --native-shadow-lg: 0 12px 40px -12px rgba(46, 108, 196, 0.18), 0 4px 12px rgba(0, 0, 0, 0.06);
+  --native-sidebar-width: 17.5rem;
+  --native-shadow-sm: 0 10px 24px -20px color-mix(in oklab, var(--native-foreground) 14%, transparent);
+  --native-shadow-md: 0 18px 50px -28px color-mix(in oklab, var(--native-foreground) 20%, transparent), 0 10px 22px -18px color-mix(in oklab, var(--native-primary) 10%, transparent);
+  --native-shadow-lg: 0 32px 80px -34px color-mix(in oklab, var(--native-foreground) 22%, transparent), 0 16px 34px -22px color-mix(in oklab, var(--native-primary) 14%, transparent);
   --native-transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
   --native-transition-normal: 200ms cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -128,47 +133,49 @@
   --sidebar-border: 240 3.7% 15.9%;
   --sidebar-ring: 217.2 91.2% 59.8%;
 
-  --native-bg: #141618;
-  --native-bg-subtle: #1a1d20;
-  --native-surface: #1f2225;
-  --native-surface-strong: #262a2d;
-  --native-panel: #111315;
-  --native-panel-soft: color-mix(in srgb, var(--native-panel) 92%, var(--native-bg-subtle));
-  --native-foreground: #e0e3e6;
-  --native-muted: #9da2ad;
-  --native-dim: #727783;
-  --native-border: #3a3f4a;
-  --native-border-strong: #727783;
-  --native-input: #111315;
-  --native-primary: #8bb8ff;
-  --native-primary-hover: #a3c7ff;
-  --native-primary-soft: #1a3a5c;
-  --native-primary-muted: #b4c8e1;
-  --native-primary-foreground: #111315;
-  --native-secondary: #1a3a5c;
-  --native-secondary-foreground: #b4c8e1;
-  --native-success: #6ee7b7;
-  --native-success-soft: #064e3b;
-  --native-success-foreground: #d1fae5;
-  --native-warning: #fcd34d;
-  --native-warning-soft: #78350f;
-  --native-warning-foreground: #fef3c7;
-  --native-error: #ffb4ab;
-  --native-error-soft: #690005;
-  --native-error-foreground: #ffdad6;
-  --native-info: #93bbfd;
-  --native-info-soft: #1e3a5f;
-  --native-info-foreground: #dbeafe;
+  --native-bg: oklch(18.3% 0.017 258);
+  --native-bg-subtle: oklch(21.2% 0.016 258);
+  --native-surface: oklch(24.8% 0.017 258);
+  --native-surface-strong: oklch(29.4% 0.021 258);
+  --native-panel: oklch(16.2% 0.014 258);
+  --native-panel-soft: color-mix(in oklab, var(--native-panel) 88%, var(--native-bg-subtle));
+  --native-foreground: oklch(93.2% 0.009 255);
+  --native-muted: oklch(76.1% 0.011 255);
+  --native-dim: oklch(60.8% 0.011 255);
+  --native-border: oklch(35.8% 0.018 258);
+  --native-border-strong: oklch(53.8% 0.028 258);
+  --native-input: oklch(19.4% 0.015 258);
+  --native-primary: oklch(66.4% 0.202 260);
+  --native-primary-hover: oklch(72.4% 0.178 259);
+  --native-primary-soft: color-mix(in oklab, var(--native-primary) 20%, var(--native-panel));
+  --native-primary-muted: oklch(84.6% 0.067 257);
+  --native-primary-foreground: oklch(18.8% 0.015 258);
+  --native-secondary: color-mix(in oklab, var(--native-primary) 16%, var(--native-surface));
+  --native-secondary-foreground: oklch(86.9% 0.033 256);
+  --native-success: oklch(76.4% 0.146 161);
+  --native-success-soft: oklch(29.6% 0.065 164);
+  --native-success-foreground: oklch(93.6% 0.038 165);
+  --native-warning: oklch(82.7% 0.141 77);
+  --native-warning-soft: oklch(34.8% 0.074 72);
+  --native-warning-foreground: oklch(94.4% 0.038 82);
+  --native-error: oklch(78.4% 0.123 23);
+  --native-error-soft: oklch(31.2% 0.086 22);
+  --native-error-foreground: oklch(93.8% 0.026 16);
+  --native-info: oklch(76.8% 0.092 248);
+  --native-info-soft: oklch(31.5% 0.052 249);
+  --native-info-foreground: oklch(93.7% 0.024 249);
   --native-ring: var(--native-primary);
-  --native-hover: rgba(255, 255, 255, 0.06);
-  --native-active: rgba(255, 255, 255, 0.1);
-  --native-overlay: rgba(0, 0, 0, 0.4);
-  --native-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
-  --native-shadow-md: 0 4px 16px -4px rgba(0, 0, 0, 0.3), 0 2px 4px rgba(0, 0, 0, 0.2);
-  --native-shadow-lg: 0 12px 40px -12px rgba(0, 0, 0, 0.4), 0 4px 12px rgba(0, 0, 0, 0.2);
+  --native-hover: color-mix(in oklab, white 8%, transparent);
+  --native-active: color-mix(in oklab, var(--native-primary) 18%, transparent);
+  --native-overlay: color-mix(in oklab, black 56%, transparent);
+  --native-shadow-sm: 0 10px 24px -18px color-mix(in oklab, black 34%, transparent);
+  --native-shadow-md: 0 22px 56px -28px color-mix(in oklab, black 40%, transparent), 0 12px 26px -20px color-mix(in oklab, var(--native-primary) 14%, transparent);
+  --native-shadow-lg: 0 34px 90px -38px color-mix(in oklab, black 46%, transparent), 0 18px 38px -22px color-mix(in oklab, var(--native-primary) 14%, transparent);
 }
 
 @theme inline {
+  --font-sans: var(--native-font-body);
+  --font-mono: var(--native-font-mono);
   --color-background: var(--native-bg);
   --color-foreground: var(--native-foreground);
   --color-muted: var(--native-bg-subtle);
@@ -177,8 +184,8 @@
   --color-popover-foreground: var(--native-foreground);
   --color-card: var(--native-panel);
   --color-card-foreground: var(--native-foreground);
-  --color-border: color-mix(in srgb, var(--native-border) 42%, var(--native-panel));
-  --color-input: color-mix(in srgb, var(--native-border) 72%, var(--native-panel));
+  --color-border: color-mix(in srgb, var(--native-border) 32%, var(--native-panel));
+  --color-input: color-mix(in srgb, var(--native-border) 58%, var(--native-panel));
   --color-ring: var(--native-ring);
   --color-primary: var(--native-primary);
   --color-primary-foreground: var(--native-primary-foreground);
@@ -267,13 +274,57 @@
 }
 
 @layer base {
+  :root {
+    font-family: var(--native-font-body);
+    text-rendering: optimizeLegibility;
+    font-kerning: normal;
+  }
+
   * {
     border-color: var(--color-border);
   }
 
-  body {
+  html {
     background: var(--color-background);
+  }
+
+  body {
+    background:
+      radial-gradient(circle at top, color-mix(in oklab, var(--native-primary) 7%, transparent) 0, transparent 34%),
+      linear-gradient(180deg, color-mix(in oklab, var(--native-panel) 34%, transparent), transparent 18%),
+      var(--color-background);
     color: var(--color-foreground);
+    font-family: var(--native-font-body);
+    font-size: 0.9375rem;
+    line-height: 1.55;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--native-font-display);
+    color: var(--native-foreground);
+    letter-spacing: -0.03em;
+    text-wrap: balance;
+  }
+
+  h1 {
+    letter-spacing: -0.045em;
+  }
+
+  button,
+  input,
+  textarea,
+  select {
+    font: inherit;
+  }
+
+  ::selection {
+    background: color-mix(in oklab, var(--native-primary) 18%, transparent);
+    color: var(--native-foreground);
   }
 }
 
@@ -284,7 +335,7 @@
   }
 
   &:hover {
-    scrollbar-color: rgba(156, 163, 175, 0.35) transparent;
+    scrollbar-color: color-mix(in oklab, var(--native-border-strong) 42%, transparent) transparent;
   }
 
   &::-webkit-scrollbar {
@@ -301,7 +352,7 @@
   }
 
   &:hover::-webkit-scrollbar-thumb {
-    background: rgba(156, 163, 175, 0.35);
+    background: color-mix(in oklab, var(--native-border-strong) 42%, transparent);
   }
 
   &::-webkit-scrollbar-button {
@@ -317,16 +368,100 @@
   margin-bottom: 0.875rem;
 }
 
+@utility native-page {
+  min-width: 0;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding: clamp(1rem, 2vw, 2rem);
+  overflow-x: clip;
+}
+
+@utility native-page-main {
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+@utility native-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin: 0 0 0.625rem;
+  border-radius: var(--native-radius-full);
+  background: color-mix(in oklab, var(--native-primary) 8%, transparent);
+  padding: 0.3125rem 0.75rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--native-primary);
+}
+
+@utility native-page-title {
+  margin: 0;
+  max-width: 18ch;
+  font-family: var(--native-font-display);
+  font-size: 1.875rem;
+  line-height: 1.02;
+  font-weight: 600;
+  letter-spacing: -0.05em;
+  color: var(--native-foreground);
+}
+
+@utility native-page-subtitle {
+  margin: 0.75rem 0 0;
+  max-width: 66ch;
+  font-size: 0.9375rem;
+  line-height: 1.7;
+  color: var(--native-muted);
+}
+
+@utility native-panel {
+  border-radius: var(--native-radius-lg);
+  border: 1px solid color-mix(in oklab, var(--native-border) 30%, transparent);
+  background: color-mix(in oklab, var(--native-panel) 86%, var(--native-bg-subtle));
+  box-shadow: var(--native-shadow-sm);
+}
+
+@utility native-panel-soft {
+  border-radius: var(--native-radius-lg);
+  border: 1px solid color-mix(in oklab, var(--native-border) 24%, transparent);
+  background: color-mix(in oklab, var(--native-surface) 72%, var(--native-panel));
+}
+
+@utility native-code-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.625rem;
+  border-radius: var(--native-radius-md);
+  border: 1px solid color-mix(in oklab, var(--native-border) 32%, transparent);
+  background: color-mix(in oklab, var(--native-surface) 82%, var(--native-panel));
+  padding: 0.75rem 0.875rem;
+  font-family: var(--native-font-mono);
+  font-size: 0.8125rem;
+  color: var(--native-foreground);
+  box-shadow: var(--native-shadow-sm);
+}
+
 @utility native-toolbar-title {
   margin: 0;
-  font-size: 0.9375rem;
-  font-weight: 700;
+  font-family: var(--native-font-display);
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: -0.03em;
   color: var(--native-foreground);
 }
 
 @utility native-toolbar-sub {
   margin: 0.125rem 0 0;
+  max-width: 64ch;
   font-size: 0.8125rem;
+  line-height: 1.45;
   color: var(--native-muted);
 }
 
@@ -344,15 +479,18 @@
   width: 1.75rem;
   height: 1.75rem;
   cursor: pointer;
-  border: none;
+  border: 1px solid color-mix(in oklab, var(--native-border) 38%, transparent);
   border-radius: var(--native-radius-sm);
-  background: transparent;
+  background: color-mix(in oklab, var(--native-panel) 84%, transparent);
   color: var(--native-muted);
-  transition: background-color var(--native-transition-fast), color var(--native-transition-fast);
+  box-shadow: var(--native-shadow-sm);
+  transition: background-color var(--native-transition-fast), border-color var(--native-transition-fast), color var(--native-transition-fast), transform var(--native-transition-fast);
 
   &:hover {
-    background: var(--native-surface);
+    border-color: color-mix(in oklab, var(--native-primary) 22%, var(--native-border));
+    background: var(--native-primary-soft);
     color: var(--native-foreground);
+    transform: translateY(-1px);
   }
 }
 

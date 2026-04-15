@@ -1,5 +1,5 @@
 import type { ParentProps } from "solid-js"
-import { createSignal, createMemo, onMount, Show, createEffect, untrack, onCleanup } from "solid-js"
+import { createSignal, createMemo, Show, createEffect, untrack, onCleanup } from "solid-js"
 import { createStore, reconcile } from "solid-js/store"
 import { useNavigate, useParams } from "@solidjs/router"
 import { IconButton } from "@opencode-ai/ui/icon-button"
@@ -14,7 +14,7 @@ import { AppInterface } from "@/app-interface"
 import { getProxyUrl } from "../lib/url"
 import { ActiveWorkspaceProvider, useActiveWorkspace } from "../active-workspace"
 import { useLanguage } from "@/context/language"
-import { useLayout } from "@/context/layout"
+import { drawer } from "../drawer"
 
 const setNav = (hidden: boolean) => {
   if (typeof document === "undefined") return
@@ -237,7 +237,9 @@ export default function WorkspaceLayout(props: ParentProps) {
       <ActiveWorkspaceProvider>
         <WorkspaceServerProvider>
           <WorkspaceActivation>
-            <WorkspaceContent>{props.children}</WorkspaceContent>
+            <WorkspaceShell>
+              <WorkspaceContent>{props.children}</WorkspaceContent>
+            </WorkspaceShell>
           </WorkspaceActivation>
         </WorkspaceServerProvider>
       </ActiveWorkspaceProvider>
@@ -302,88 +304,47 @@ function WorkspaceActivation(props: ParentProps) {
   return props.children
 }
 
-function WorkspaceShell(props: ParentProps<{ hide?: () => void; open?: () => boolean; mobile?: boolean; offset?: boolean }>) {
+function WorkspaceShell(props: ParentProps) {
   const language = useLanguage()
-  const t = language.t
-  const hide = () => props.hide?.()
-  const open = () => props.open?.() ?? false
+  createEffect(() => setNav(drawer.opened()))
+  onCleanup(() => { drawer.hide(); setNav(false) })
   return (
-    <div class="flex h-full w-full min-h-0">
-      <div class="hidden md:block shrink-0 w-[280px] h-full">
+    <div class="flex h-full w-full min-h-0 overflow-x-hidden">
+      <div class="hidden h-full shrink-0 md:block w-[var(--native-sidebar-width)]">
         <WorkspaceSidebar />
       </div>
-      <Show when={props.mobile}>
-        <div class="md:hidden">
-          <div
-            classList={{
-              "fixed inset-x-0 bottom-0 z-40 transition-opacity duration-200": true,
-              "top-0": !props.offset,
-              "top-10": !!props.offset,
-              "opacity-100 pointer-events-auto": open(),
-              "opacity-0 pointer-events-none": !open(),
-            }}
-            onClick={(e) => {
-              if (e.target === e.currentTarget) hide()
-            }}
-          />
-          <aside
-            aria-label={t("workspace.page.title")}
-            classList={{
-              "fixed bottom-0 left-0 z-50 w-[280px] max-w-[calc(100vw-2rem)] border-r border-sidebar-border bg-sidebar transition-transform duration-200 ease-out": true,
-              "top-0": !props.offset,
-              "top-10": !!props.offset,
-              "translate-x-0": open(),
-              "-translate-x-full": !open(),
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <WorkspaceSidebar hide={hide} />
-          </aside>
-        </div>
-      </Show>
-      <div class="flex-1 min-w-0 h-full overflow-hidden flex flex-col">{props.children}</div>
+      <div class="md:hidden">
+        <div
+          classList={{
+            "fixed inset-x-0 top-0 bottom-0 z-40 transition-opacity duration-200": true,
+            "opacity-100 pointer-events-auto": drawer.opened(),
+            "opacity-0 pointer-events-none": !drawer.opened(),
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) drawer.hide()
+          }}
+        />
+        <aside
+          aria-label={language.t("workspace.page.title")}
+          classList={{
+            "fixed top-0 bottom-0 left-0 z-50 w-[var(--native-sidebar-width)] max-w-[calc(100vw-2rem)] border-r border-sidebar-border bg-sidebar transition-transform duration-200 ease-out": true,
+            "translate-x-0": drawer.opened(),
+            "-translate-x-full": !drawer.opened(),
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <WorkspaceSidebar hide={drawer.hide} />
+        </aside>
+      </div>
+      <div class="flex h-full min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-hidden bg-[linear-gradient(180deg,color-mix(in_oklab,var(--native-bg-subtle)_88%,var(--native-panel)),var(--native-bg))] md:rounded-l-[var(--native-radius-lg)] md:border-l md:border-l-[color:color-mix(in_oklab,var(--native-border)_24%,transparent)]">
+        {props.children}
+      </div>
     </div>
   )
 }
 
-function WorkspaceReady(props: ParentProps) {
-  const layout = useLayout()
-  createEffect(() => setNav(layout.mobileSidebar.opened()))
-  onCleanup(() => setNav(false))
-  return (
-    <WorkspaceShell mobile hide={layout.mobileSidebar.hide} open={layout.mobileSidebar.opened}>
-      {props.children}
-    </WorkspaceShell>
-  )
-}
-
-
-function WorkspaceLanding(props: ParentProps) {
-  const language = useLanguage()
-  const t = language.t
-  const [open, setOpen] = createSignal(false)
-  createEffect(() => setNav(open()))
-  onCleanup(() => setNav(false))
-  return (
-    <WorkspaceShell mobile offset hide={() => setOpen(false)} open={open}>
-      <div class="md:hidden fixed top-0 left-[56px] z-50 flex h-[41px] items-center justify-center">
-        <IconButton
-          icon="menu"
-          variant="ghost"
-          class="titlebar-icon rounded-md"
-          onClick={() => setOpen((v) => !v)}
-          aria-label={t("workspace.page.title")}
-          aria-expanded={open()}
-        />
-      </div>
-      {props.children}
-      <Toast.Region />
-    </WorkspaceShell>
-  )
-}
-
-
 function WorkspaceContent(props: ParentProps) {
+  const language = useLanguage()
   const params = useParams()
   const server = useServer()
   const ready = createMemo(() => !!params.workspaceID && !!server.key)
@@ -392,13 +353,22 @@ function WorkspaceContent(props: ParentProps) {
       when={ready()}
       fallback={
         <Show when={!params.workspaceID} fallback={<div class="size-full" />}>
-          <WorkspaceLanding>{props.children}</WorkspaceLanding>
+          <div class="md:hidden h-10 shrink-0 flex items-center pl-2">
+            <IconButton
+              icon="menu"
+              variant="ghost"
+              class="titlebar-icon rounded-md"
+              onClick={drawer.toggle}
+              aria-label={language.t("workspace.page.title")}
+              aria-expanded={drawer.opened()}
+            />
+          </div>
+          {props.children}
+          <Toast.Region />
         </Show>
       }
     >
-      <AppInterface>
-        <WorkspaceReady>{props.children}</WorkspaceReady>
-      </AppInterface>
+      <AppInterface>{props.children}</AppInterface>
     </Show>
   )
 }

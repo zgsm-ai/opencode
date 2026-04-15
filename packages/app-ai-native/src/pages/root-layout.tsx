@@ -1,6 +1,5 @@
 import { type ParentProps, Show } from "solid-js"
 import { useLocation, useNavigate } from "@solidjs/router"
-import { IconButton } from "@opencode-ai/ui/icon-button"
 import { Icon } from "@opencode-ai/ui/icon"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { DropdownMenu } from "@opencode-ai/ui/dropdown-menu"
@@ -9,6 +8,15 @@ import { useLanguage } from "@/context/language"
 import { useAuth } from "@/context/auth"
 import { appPath } from "@/lib/router"
 import { getLoginUrl } from "@/pages/store/lib/auth"
+
+function item(on: boolean) {
+  return [
+    "relative flex size-10 cursor-pointer items-center justify-center rounded-[var(--native-radius-md)] outline-none transition-colors",
+    on
+      ? "bg-[color-mix(in_srgb,var(--native-primary)_10%,transparent)] text-[var(--native-primary)] before:absolute before:top-2 before:bottom-2 before:left-[-0.5rem] before:w-[2px] before:rounded-r-full before:bg-[var(--native-primary)] before:content-['']"
+      : "text-[var(--native-dim)] hover:bg-[var(--native-surface)] hover:text-[var(--native-foreground)]",
+  ].join(" ")
+}
 
 function NavButton(props: {
   icon: "bubble-5" | "store" | "folder" | "folder-add-left" | "sliders"
@@ -22,12 +30,7 @@ function NavButton(props: {
         type="button"
         aria-label={props.label}
         onClick={props.onClick}
-        class={[
-          "relative flex size-10 items-center justify-center rounded-[var(--native-radius-md)] transition-colors cursor-pointer outline-none",
-          props.active
-            ? "bg-[color-mix(in_srgb,var(--native-primary)_10%,transparent)] text-[var(--native-primary)] before:absolute before:top-2 before:bottom-2 before:left-[-0.5rem] before:w-[2px] before:rounded-r-full before:bg-[var(--native-primary)] before:content-['']"
-            : "text-[var(--native-dim)] hover:bg-[var(--native-surface)] hover:text-[var(--native-foreground)]",
-        ].join(" ")}
+        class={item(props.active)}
       >
         <Icon name={props.icon} size="normal" />
       </button>
@@ -44,29 +47,25 @@ function UserButton() {
       when={user()}
       fallback={
         <Tooltip placement="right" value={language.t("sidebar.user.signIn")}>
-          <IconButton
-            icon="glasses"
-            variant="ghost"
-            size="large"
+          <button
+            type="button"
+            class={item(false)}
             aria-label={language.t("sidebar.user.signIn")}
             onClick={() => {
               window.location.href = getLoginUrl()
             }}
-          />
+          >
+            <Icon name="glasses" size="normal" />
+          </button>
         </Tooltip>
       }
     >
       <DropdownMenu placement="right-end">
         <DropdownMenu.Trigger
-          class="flex size-10 items-center justify-center rounded-[var(--native-radius-full)] text-[var(--native-dim)] transition-colors hover:bg-[var(--native-surface)] hover:text-[var(--native-foreground)]"
+          class={item(false)}
           aria-label={language.t("sidebar.user.menu")}
         >
-          <Show
-            when={user()?.picture}
-            fallback={
-              <IconButton icon="eye" variant="ghost" size="large" aria-label={language.t("sidebar.user.menu")} />
-            }
-          >
+          <Show when={user()?.picture} fallback={<Icon name="eye" size="normal" />}>
             <img src={user()?.picture} alt="" class="size-6 rounded-full" />
           </Show>
         </DropdownMenu.Trigger>
@@ -148,10 +147,10 @@ export default function RootLayout(props: ParentProps) {
             <button
               type="button"
               onClick={() => platform.openLink("https://docs.costrict.ai/cli/guide/installation")}
-              class="flex size-10 items-center justify-center rounded-[var(--native-radius-full)] text-[var(--native-dim)] transition-colors hover:bg-[var(--native-surface)] hover:text-[var(--native-foreground)]"
+              class={item(false)}
               aria-label={language.t("sidebar.help")}
             >
-              <Icon name="help" />
+              <Icon name="help" size="normal" />
             </button>
           </Tooltip>
         </div>

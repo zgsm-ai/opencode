@@ -2,141 +2,227 @@ import { useLanguage } from "@/context/language"
 import { usePlatform } from "@/context/platform"
 import { useNavigate } from "@solidjs/router"
 import { Icon } from "@opencode-ai/ui/icon"
+import { createMemo, createSignal, For, onCleanup, Show } from "solid-js"
+import { useWorkspace } from "../context"
 
 export default function WorkspaceHome() {
-  const language = useLanguage()
+  const t = useLanguage().t
   const navigate = useNavigate()
   const platform = usePlatform()
+  const work = useWorkspace()
+  const cmd = "cs cloud start"
+  const [copied, setCopied] = createSignal(false)
+  const steps = [
+    {
+      id: "01",
+      tone: "var(--native-warning)",
+      soft: "var(--native-warning-soft)",
+      title: t("workspace.home.step1.title"),
+      description: t("workspace.home.step1.description"),
+      kind: "cmd",
+    },
+    {
+      id: "02",
+      tone: "var(--native-primary)",
+      soft: "var(--native-primary-soft)",
+      title: t("workspace.home.step2.title"),
+      description: t("workspace.home.step2.description"),
+      kind: "nav",
+    },
+    {
+      id: "03",
+      tone: "var(--native-success)",
+      soft: "var(--native-success-soft)",
+      title: t("workspace.home.step3.title"),
+      description: t("workspace.home.step3.description"),
+      kind: "cta",
+    },
+  ] as const
+  const acts = [
+    {
+      icon: "store",
+      title: t("workspace.home.browseStore"),
+      tone: "var(--native-primary)",
+      soft: "var(--native-primary-soft)",
+      trail: "arrow-right",
+      run: () => navigate("/store"),
+    },
+    {
+      icon: "help",
+      title: t("workspace.home.viewDocs"),
+      tone: "var(--native-muted)",
+      soft: "var(--native-surface)",
+      trail: "square-arrow-top-right",
+      run: () => platform.openLink("https://docs.costrict.ai"),
+    },
+  ] as const
+  const run = createMemo(() => {
+    const ids = work.enabledWorkspaceIds()
+    return work
+      .workspaces()
+      .find((item) => ids.includes(item.id) && (item.directories?.length ?? 0) > 0)
+  })
+  const dir = createMemo(() => {
+    const item = run()
+    if (!item?.directories?.length) return
+    return item.directories.find((entry) => entry.isDefault) ?? item.directories[0]
+  })
+
+  let timer: ReturnType<typeof setTimeout> | undefined
+
+  onCleanup(() => {
+    if (!timer) return
+    clearTimeout(timer)
+  })
+
+  const copy = () => {
+    const task = navigator.clipboard?.writeText(cmd)
+    if (!task) return
+    void task.then(() => {
+      setCopied(true)
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(() => setCopied(false), 1600)
+    })
+  }
 
   return (
-    <div class="h-full flex flex-col bg-[#f7f9fc]">
-      {/* Top Navigation Header */}
-      <header class="bg-white flex items-center pr-6 pl-14 md:px-6 h-[41px] w-full border-b border-[#DEE6F0] sticky top-0 z-30 font-['Inter'] antialiased tracking-tight text-sm shadow-sm shrink-0">
-        <span class="text-lg font-bold tracking-tighter text-slate-900">CoStrict Cloud</span>
+    <div class="native-page custom-scrollbar overflow-y-auto">
+      <header class="native-page-header mx-auto w-full max-w-[1080px]">
+        <h1 class="native-page-title">{t("workspace.home.title")}</h1>
+        <p class="native-page-subtitle">{t("workspace.home.subtitle")}</p>
       </header>
 
-      {/* Page Content */}
-      <div class="flex-1 p-8 md:p-12 overflow-y-auto">
-        <div class="max-w-[900px] mx-auto">
-          {/* Welcome Header */}
-          <div class="mb-12">
-            <h1 class="text-[28px] font-extrabold text-[#191c1e] tracking-tight mb-2">{language.t("workspace.home.title")}</h1>
-            <p class="text-[14px] text-[#424752] font-medium">{language.t("workspace.home.subtitle")}</p>
+      <div class="native-page-main mx-auto w-full max-w-[1080px]">
+        <section class="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(18.5rem,0.9fr)]">
+          <div class="grid gap-4 sm:grid-cols-2">
+            <For each={steps.slice(0, 2)}>
+              {(step) => (
+                <article
+                  class="native-panel relative flex min-h-[17rem] flex-col overflow-hidden p-5 transition-[transform,box-shadow,border-color] motion-reduce:transform-none motion-reduce:transition-none hover:-translate-y-px hover:shadow-[var(--native-shadow-md)]"
+                  style={{ "--step-tone": step.tone, "--step-soft": step.soft }}
+                >
+                  <div class="mb-5">
+                    <span class="inline-flex min-h-11 min-w-11 items-center justify-center rounded-[var(--native-radius-full)] bg-[color:color-mix(in_oklab,var(--step-tone)_10%,transparent)] px-3 font-[var(--native-font-mono)] text-[0.875rem] font-semibold text-[var(--step-tone)]">
+                      {step.id}
+                    </span>
+                  </div>
+
+                  <h2 class="m-0 max-w-[16ch] font-[var(--native-font-display)] text-[1.125rem] font-semibold tracking-[-0.04em] text-[var(--native-foreground)]">
+                    {step.title}
+                  </h2>
+                  <p class="mt-2 max-w-[34ch] text-[0.875rem] leading-[1.65] text-[var(--native-muted)]">
+                    {step.description}
+                  </p>
+
+                  <div class="mt-auto pt-5">
+                    <Show when={step.kind === "cmd"}>
+                      <div class="native-code-chip w-full justify-between gap-3">
+                        <span class="truncate">{cmd}</span>
+                        <button
+                          type="button"
+                          class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--native-radius-sm)] text-[var(--native-dim)] transition-all motion-reduce:transition-none hover:bg-[var(--native-primary-soft)] hover:text-[var(--native-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--native-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--native-panel)]"
+                          onClick={copy}
+                          aria-label="Copy command"
+                          title="Copy command"
+                        >
+                          <Icon name={copied() ? "check" : "copy"} />
+                        </button>
+                      </div>
+                    </Show>
+
+
+                  </div>
+                </article>
+              )}
+            </For>
+
+            <article
+              class="native-panel relative flex min-h-[16.5rem] flex-col overflow-hidden p-5 sm:col-span-2 transition-[transform,box-shadow,border-color] motion-reduce:transform-none motion-reduce:transition-none hover:-translate-y-px hover:shadow-[var(--native-shadow-md)]"
+              style={{ "--step-tone": steps[2].tone, "--step-soft": steps[2].soft }}
+            >
+              <div class="mb-5">
+                <span class="inline-flex min-h-11 min-w-11 items-center justify-center rounded-[var(--native-radius-full)] bg-[color:color-mix(in_oklab,var(--step-tone)_10%,transparent)] px-3 font-[var(--native-font-mono)] text-[0.875rem] font-semibold text-[var(--step-tone)]">
+                  {steps[2].id}
+                </span>
+              </div>
+
+              <div class="min-w-0">
+                <div class="min-w-0">
+                  <h2 class="m-0 max-w-[14ch] font-[var(--native-font-display)] text-[1.25rem] font-semibold tracking-[-0.04em] text-[var(--native-foreground)]">
+                    {steps[2].title}
+                  </h2>
+                  <p class="mt-2 max-w-[40ch] text-[0.875rem] leading-[1.7] text-[var(--native-muted)]">
+                    {steps[2].description}
+                  </p>
+
+                  <div class="mt-5 min-h-[2.75rem]">
+                    <Show when={dir()}>
+                      {(entry) => (
+                        <div class="flex min-w-0 flex-col gap-1.5 rounded-[var(--native-radius-md)] border border-[color:color-mix(in_oklab,var(--step-tone)_16%,transparent)] bg-[color:color-mix(in_oklab,var(--step-soft)_55%,var(--native-panel))] px-3.5 py-3 shadow-[var(--native-shadow-sm)]">
+                          <span class="truncate text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--native-success-foreground)]">
+                            {run()?.name}
+                          </span>
+                          <span class="truncate text-[0.8125rem] leading-[1.5] text-[var(--native-muted)]" title={entry().path}>
+                            {entry().path}
+                          </span>
+                        </div>
+                      )}
+                    </Show>
+                  </div>
+                </div>
+              </div>
+            </article>
           </div>
 
-          {/* 3-Step Cards */}
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-            {/* Step 01 */}
-            <div class="bg-white border border-[#DEE6F0] p-5 flex flex-col relative overflow-hidden transition-all hover:shadow-sm">
-              {/* 左上角三角折角 + 数字 */}
-              <div class="absolute top-0 left-0 w-16 h-16 overflow-hidden">
-                <div class="absolute top-0 left-0 w-[80px] h-[80px] bg-[#F59E0B] -translate-x-1/2 -translate-y-1/2 rotate-45"></div>
-                <span class="absolute top-1.5 left-2 text-sm font-extrabold text-white">01</span>
+          <div class="grid gap-4">
+            <div class="native-panel p-5">
+              <div class="mb-4">
+                <p class="m-0 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--native-dim)]">
+                  {t("workspace.home.quickActions")}
+                </p>
               </div>
-              <div class="flex justify-end items-start mb-4">
-                <Icon name="terminal" class="text-[#F59E0B] p-2 bg-[#F59E0B]/5 rounded-xl" />
+
+              <div class="grid gap-3">
+                <For each={acts}>
+                  {(item) => (
+                    <button
+                      type="button"
+                      class="group flex min-h-[3rem] items-center justify-between gap-3 rounded-[var(--native-radius-md)] border border-[color:color-mix(in_oklab,var(--act-tone)_20%,transparent)] bg-[color:color-mix(in_oklab,var(--act-soft)_84%,var(--native-panel))] px-4 py-3 text-left transition-all motion-reduce:transform-none motion-reduce:transition-none hover:-translate-y-px hover:shadow-[var(--native-shadow-sm)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--native-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--native-panel)]"
+                      style={{ "--act-tone": item.tone, "--act-soft": item.soft }}
+                      onClick={item.run}
+                    >
+                      <span class="flex min-w-0 items-center gap-3 text-[0.875rem] font-medium text-[var(--native-foreground)]">
+                        <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--native-radius-sm)] bg-[color:color-mix(in_oklab,var(--act-soft)_84%,var(--native-panel))] text-[var(--act-tone)] shadow-[var(--native-shadow-sm)]">
+                          <Icon name={item.icon} />
+                        </span>
+                        <span class="truncate">{item.title}</span>
+                      </span>
+                      <Icon name={item.trail} class="shrink-0 text-[var(--act-tone)] transition-transform motion-reduce:transition-none group-hover:translate-x-0.5" />
+                    </button>
+                  )}
+                </For>
               </div>
-              <h3 class="text-[1rem] font-extrabold mb-2" style={{ color: "#000000" }}>{language.t("workspace.home.step1.title")}</h3>
-              <p class="text-xs text-[#424752] leading-relaxed mb-6">
-                {language.t("workspace.home.step1.description")}
-              </p>
-              <div class="mt-auto">
-                <div class="bg-[#eceef1] inline-flex items-center px-3 py-2 rounded-md text-sm font-mono font-semibold text-[#191c1e] border border-[#c2c6d4]/30 shadow-sm">
-                  cs cloud start
-                  <Icon name="copy" class="cursor-pointer hover:text-[#2E6CC4] ml-3 text-[#424752]" />
+            </div>
+
+            <div class="native-panel-soft relative overflow-hidden p-5">
+              <div class="absolute right-[-2.25rem] top-[-2.25rem] h-24 w-24 rounded-full bg-[color:color-mix(in_oklab,var(--native-primary)_10%,transparent)] blur-2xl" />
+              <div class="relative flex gap-3">
+                <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--native-radius-md)] bg-[var(--native-primary-soft)] text-[var(--native-primary)]">
+                  <Icon name="warning" />
+                </div>
+                <div class="min-w-0">
+                  <p class="mb-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--native-primary)]">
+                    {t("workspace.home.proTip")}
+                  </p>
+                  <p class="m-0 max-w-[34ch] text-[0.875rem] leading-[1.65] text-[var(--native-primary-muted)]">
+                    {t("workspace.home.proTipContent")}
+                  </p>
                 </div>
               </div>
             </div>
-
-            {/* Step 02 */}
-            <div class="bg-white border border-[#DEE6F0] p-5 flex flex-col relative overflow-hidden transition-all hover:shadow-sm">
-              {/* 左上角三角折角 + 数字 */}
-              <div class="absolute top-0 left-0 w-16 h-16 overflow-hidden">
-                <div class="absolute top-0 left-0 w-[80px] h-[80px] bg-[#2E6CC4] -translate-x-1/2 -translate-y-1/2 rotate-45"></div>
-                <span class="absolute top-1.5 left-2 text-sm font-extrabold text-white">02</span>
-              </div>
-              <div class="flex justify-end items-start mb-4">
-                <Icon name="folder-add-left" class="text-[#2E6CC4] p-2 bg-[#2E6CC4]/5 rounded-xl" />
-              </div>
-              <h3 class="text-[1rem] font-extrabold mb-2" style={{ color: "#000000" }}>{language.t("workspace.home.step2.title")}</h3>
-              <p class="text-xs text-[#424752] leading-relaxed mb-6">
-                {language.t("workspace.home.step2.description")}
-              </p>
-              <div class="mt-auto">
-                <Icon name="arrow-left" class="text-[#2E6CC4] animate-pulse" />
-              </div>
-            </div>
-
-            {/* Step 03 */}
-            <div class="bg-white border border-[#DEE6F0] p-5 flex flex-col relative overflow-hidden transition-all hover:shadow-sm">
-              {/* 左上角三角折角 + 数字 */}
-              <div class="absolute top-0 left-0 w-16 h-16 overflow-hidden">
-                <div class="absolute top-0 left-0 w-[80px] h-[80px] bg-[#10B981] -translate-x-1/2 -translate-y-1/2 rotate-45"></div>
-                <span class="absolute top-1.5 left-2 text-sm font-extrabold text-white">03</span>
-              </div>
-              <div class="flex justify-end items-start mb-4">
-                <Icon name="code" class="text-[#10B981] p-2 bg-[#10B981]/5 rounded-xl" />
-              </div>
-              <h3 class="text-[1rem] font-extrabold mb-2" style={{ color: "#000000" }}>{language.t("workspace.home.step3.title")}</h3>
-              <p class="text-xs text-[#424752] leading-relaxed mb-6">
-                {language.t("workspace.home.step3.description")}
-              </p>
-              <div class="mt-auto">
-                <button
-                  class="rounded uppercase tracking-wider font-bold text-sm px-5 py-2.5 hover:opacity-90 active:scale-95 transition-all"
-                  style={{ "background-color": "#2E6CC4", color: "#ffffff" }}
-                >
-                  {language.t("workspace.home.step3.button")}
-                </button>
-              </div>
-            </div>
           </div>
-
-          {/* 2-Column Section */}
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-            {/* Quick Actions */}
-            <div>
-              <h4 class="text-xs font-bold text-[#424752] uppercase tracking-widest mb-4">
-                {language.t("workspace.home.quickActions")}
-              </h4>
-              <div class="flex flex-col gap-3">
-                <button
-                  class="flex items-center justify-between px-4 py-3 border border-[#2E6CC4] text-[#2E6CC4] rounded-lg hover:bg-[#2E6CC4]/5 transition-all active:scale-[0.98]"
-                  onClick={() => navigate("/store")}
-                >
-                  <span class="flex items-center gap-3 font-semibold text-sm">
-                    <Icon name="store" />
-                    {language.t("workspace.home.browseStore")}
-                  </span>
-                  <Icon name="arrow-right" />
-                </button>
-                <button
-                  class="flex items-center justify-between px-4 py-3 border border-[#DEE6F0] text-[#424752] rounded-lg hover:bg-slate-50 transition-all active:scale-[0.98]"
-                  onClick={() => platform.openLink("https://docs.costrict.ai")}
-                >
-                  <span class="flex items-center gap-3 font-semibold text-sm">
-                    <Icon name="help" />
-                    {language.t("workspace.home.viewDocs")}
-                  </span>
-                  <Icon name="square-arrow-top-right" />
-                </button>
-              </div>
-            </div>
-
-            {/* Pro Tip — mt aligns top with Browse Store button (h4 height + mb-4) */}
-            <div class="bg-[#EFF6FF] border border-[#B6CAE3] border-l-4 border-l-[#2E6CC4] p-5 flex gap-4 mt-[36px] h-[112px]">
-              <Icon name="warning" class="text-[#2E6CC4] mt-0.5" />
-              <div>
-                <h4 class="text-sm font-bold text-[#071d30] mb-1">{language.t("workspace.home.proTip")}</h4>
-                <p class="text-xs text-[#35485d] leading-relaxed">
-                  {language.t("workspace.home.proTipContent")}
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
+        </section>
       </div>
-
     </div>
   )
 }

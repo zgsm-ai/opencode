@@ -7,11 +7,11 @@ import { appPath } from "@/lib/router"
 import { itemApi } from "../lib/api"
 
 const BROWSE_NAV = [
-  { href: "/store", labelKey: "store.sidebar.nav.home", localIcon: "home" as LocalIconName, color: "#2E6CC4", exact: true },
-  { href: "/store?type=skill", labelKey: "store.sidebar.nav.skills", icon: "sparkles" as IconProps["name"], color: "#F59E0B", statKey: "skill" },
-  { href: "/store?type=subagent", labelKey: "store.sidebar.nav.subagents", icon: "brain" as IconProps["name"], color: "#2E6CC4", statKey: "subagent" },
-  { href: "/store?type=command", labelKey: "store.sidebar.nav.commands", icon: "console" as IconProps["name"], color: "#10B981", statKey: "command" },
-  { href: "/store?type=mcp", labelKey: "store.sidebar.nav.mcpServers", icon: "mcp" as IconProps["name"], color: "#8B5CF6", statKey: "mcp" },
+  { href: "/store", labelKey: "store.sidebar.nav.home", localIcon: "home" as LocalIconName, exact: true },
+  { href: "/store?type=skill", labelKey: "store.sidebar.nav.skills", icon: "sparkles" as IconProps["name"], statKey: "skill" },
+  { href: "/store?type=subagent", labelKey: "store.sidebar.nav.subagents", icon: "brain" as IconProps["name"], statKey: "subagent" },
+  { href: "/store?type=command", labelKey: "store.sidebar.nav.commands", icon: "console" as IconProps["name"], statKey: "command" },
+  { href: "/store?type=mcp", labelKey: "store.sidebar.nav.mcpServers", icon: "mcp" as IconProps["name"], statKey: "mcp" },
 ] as const
 
 type StoreType = "skill" | "subagent" | "command" | "mcp"
@@ -52,16 +52,16 @@ export default function StoreSidebar() {
   }
 
   return (
-    <aside class="flex w-[15.5rem] shrink-0 flex-col overflow-hidden border-r border-[color:color-mix(in_srgb,var(--native-border)_20%,transparent)] bg-[var(--native-panel)]">
-      <div class="border-b border-[color:color-mix(in_srgb,var(--native-border)_12%,transparent)] px-4 pt-3.5 pb-2.5">
+    <aside class="flex w-[var(--native-sidebar-width)] shrink-0 flex-col overflow-hidden bg-[linear-gradient(180deg,color-mix(in_oklab,var(--native-panel)_90%,var(--native-bg-subtle)),var(--native-panel))]">
+      <div class="px-4 pt-4 pb-3">
         <div class="flex items-center gap-2">
-          <span class="text-sm tracking-[-0.01em] text-[var(--native-foreground)]">{language.t("store.sidebar.storeName")}</span>
+          <span class="font-[var(--native-font-display)] text-[1rem] font-semibold tracking-[-0.035em] text-[var(--native-foreground)]">{language.t("store.sidebar.storeName")}</span>
         </div>
       </div>
 
       <nav class="custom-scrollbar flex flex-1 flex-col gap-5 overflow-y-auto px-2 py-2.5">
         <div>
-          <div class="mb-0.5 px-2 text-[12px] uppercase tracking-[0.07em] text-[var(--native-dim)]">{language.t("store.sidebar.browse")}</div>
+          {/* <div class="mb-1 px-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--native-dim)]">{language.t("store.sidebar.browse")}</div> */}
           <div class="flex flex-col gap-px">
             <For each={BROWSE_NAV}>
               {(item) => {
@@ -70,23 +70,23 @@ export default function StoreSidebar() {
                   <A
                     href={item.href}
                     class={[
-                      "relative flex w-full items-center gap-2.5 rounded-[var(--native-radius-sm)] px-2 py-[0.4375rem] text-left text-[0.8125rem] transition-all",
+                      "relative flex w-full items-center gap-2.5 rounded-[var(--native-radius-md)] px-2.5 py-[0.5rem] text-left text-[0.8125rem] transition-all duration-150",
                       active()
-                        ? "bg-[color-mix(in_srgb,var(--native-primary)_8%,transparent)] text-[var(--native-primary)] before:absolute before:top-[0.3rem] before:bottom-[0.3rem] before:left-[-0.5rem] before:w-[3px] before:rounded-r-[3px] before:bg-[var(--native-primary)] before:content-['']"
-                        : "bg-transparent text-[var(--native-muted)] hover:bg-[var(--native-hover)] hover:text-[var(--native-foreground)]",
+                        ? "bg-[color:color-mix(in_oklab,var(--native-primary)_8%,var(--native-panel))] text-[var(--native-foreground)] shadow-[var(--native-shadow-sm)]"
+                        : "bg-transparent text-[var(--native-muted)] hover:bg-[color:color-mix(in_oklab,var(--native-surface)_62%,transparent)] hover:text-[var(--native-foreground)]",
                     ].join(" ")}
                   >
-                    <span class={[
-                      "flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--native-radius-sm)] transition-all [&_[data-component=icon]]:h-[15px] [&_[data-component=icon]]:w-[15px] [&_[data-slot=icon-svg]]:h-[15px] [&_[data-slot=icon-svg]]:w-[15px]",
-                      active() ? "text-[var(--native-primary)]" : "text-[var(--native-muted)]",
-                    ].join(" ")}>
+                    <span
+                      class="flex h-7 w-7 shrink-0 items-center justify-center transition-all [&_[data-component=icon]]:h-[15px] [&_[data-component=icon]]:w-[15px] [&_[data-slot=icon-svg]]:h-[15px] [&_[data-slot=icon-svg]]:w-[15px]"
+                      style={{ color: active() ? "var(--native-foreground)" : "var(--native-muted)" }}
+                    >
                       {"localIcon" in item
                         ? <LocalIcon name={item.localIcon} size="small" />
                         : <Icon name={item.icon} size="small" />}
                     </span>
-                    {language.t(item.labelKey)}
+                    <span class="font-medium">{language.t(item.labelKey)}</span>
                     <Show when={"statKey" in item && stats()?.[item.statKey!]}>
-                      {(count) => <span class="ml-auto rounded-[var(--native-radius-full)] bg-[color-mix(in_srgb,var(--native-primary)_8%,transparent)] px-[0.4375rem] text-[12px] leading-[1.625] text-[var(--native-primary)]">{count()}</span>}
+                      {(count) => <span class="ml-auto rounded-[var(--native-radius-full)] bg-[color:color-mix(in_oklab,var(--native-surface)_64%,var(--native-panel))] px-[0.5rem] text-[11px] font-medium leading-[1.65] text-[var(--native-muted)]">{count()}</span>}
                     </Show>
                   </A>
                 )

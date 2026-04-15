@@ -1,5 +1,6 @@
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { Icon } from "@opencode-ai/ui/icon"
+import { Show } from "solid-js"
 import { useLanguage } from "@/context/language"
 import { cn } from "@/lib/utils"
 import { sx } from "@/pages/store/lib/styles"
@@ -58,19 +59,21 @@ export function DeviceCard(props: DeviceCardProps) {
         ID: {props.device.deviceId.slice(0, 8)}
       </div>
 
-      <div class={sx.labels}>
-        {labels().map((label) => (
-          <span
-            class={sx.pill}
-            style={{
-              background: "color-mix(in srgb, var(--native-primary) 8%, transparent)",
-              color: "var(--native-primary)",
-            }}
-          >
-            {label}
-          </span>
-        ))}
-      </div>
+      <Show when={labels().length > 0}>
+        <div class={sx.labels}>
+          {labels().map((label) => (
+            <span
+              class={sx.pill}
+              style={{
+                background: "color-mix(in srgb, var(--native-primary) 8%, transparent)",
+                color: "var(--native-primary)",
+              }}
+            >
+              {label}
+            </span>
+          ))}
+        </div>
+      </Show>
 
       <div class={sx.dashFoot}>
         <button class={sx.action} title={language.t("common.edit")} onClick={handleEdit}>
