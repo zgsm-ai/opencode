@@ -8,14 +8,14 @@ import type {
   TeammateRegistration,
   Task,
   ApprovalRequest,
-  CloudMessage,
+  CloudEvent,
   ProgressUpdate,
-  ApprovalStatus,
 } from "@/client/cloud-team-types"
 import { applyCloudEvent } from "./cloud-team/event-reducer"
 
 type CloudTeamStore = {
   active: boolean
+  decomposing: boolean
   session?: {
     id: string
     title: string
@@ -25,11 +25,18 @@ type CloudTeamStore = {
   }
   teammates: TeammateRegistration[]
   tasks: Task[]
-  messages: CloudMessage[]
+  messages: CloudEvent[]
   approvals: ApprovalRequest[]
   progress: Record<string, ProgressUpdate>
   wsConnected: boolean
   lastEventId?: string
+  leader?: {
+    elected: boolean
+    fencingToken: number
+    leaderId: string
+    score?: import("@/client/cloud-team-types").LeaderScore
+  }
+  leaderScore?: import("@/client/cloud-team-types").LeaderScore
 }
 
 const CLOUD_TEAM_AGENT_NAME = "CloudTeam"
@@ -42,6 +49,7 @@ export const { use: useCloudTeam, provider: CloudTeamProvider } = createSimpleCo
 
     const [store, setStore] = createStore<CloudTeamStore>({
       active: false,
+      decomposing: false,
       teammates: [],
       tasks: [],
       messages: [],
@@ -65,7 +73,7 @@ export const { use: useCloudTeam, provider: CloudTeamProvider } = createSimpleCo
 
     const teammateById = createMemo(() => {
       const map = new Map<string, TeammateRegistration>()
-      for (const t of store.teammates) map.set(t.teammateId, t)
+      for (const t of store.teammates) map.set(t.id, t)
       return map
     })
 
@@ -99,7 +107,7 @@ export const { use: useCloudTeam, provider: CloudTeamProvider } = createSimpleCo
       // Leader heartbeat (only if this client is the leader)
       heartbeatInterval = setInterval(() => {
         if (store.session?.leaderId === getMachineId()) {
-          cloudTeamApi.leader.heartbeat(sessionId).catch(() => {})
+          cloudTeamApi.leader.heartbeat(sessionId, getMachineId()).catch(() => {})
         }
       }, 10_000)
     }
@@ -133,17 +141,38 @@ export const { use: useCloudTeam, provider: CloudTeamProvider } = createSimpleCo
 
     async function createSession(title: string, repoUrl?: string) {
       const result = await cloudTeamApi.session.create({ name: title, repoUrl })
+      const machineId = getMachineId()
       batch(() => {
         setStore("session", {
-          id: result.sessionId,
+          id: result.id,
           title: result.name,
           status: result.status,
           repoUrl,
-          leaderId: result.leaderId,
+          leaderId: result.leaderMachineId,
         })
         setStore("teammates", result.teammates ?? [])
       })
-      connectWS(result.sessionId)
+      connectWS(result.id)
+      // Attempt leader election as the session creator
+      try {
+        const electResult = await cloudTeamApi.leader.elect(result.id, {
+          machineId,
+          // Best-effort capability estimation from browser APIs
+          cpuIdlePercent: navigator.hardwareConcurrency ? 50 : undefined,
+          memoryFreeMB: (navigator as any).deviceMemory ? (navigator as any).deviceMemory * 1024 : undefined,
+        })
+        if (electResult.elected) {
+          batch(() => {
+            setStore("session", "leaderId", machineId)
+            setStore("leader", electResult)
+            if (electResult.score) {
+              setStore("leaderScore", electResult.score)
+            }
+          })
+        }
+      } catch {
+        // Election best effort — another client may have won
+      }
       return result
     }
 
@@ -156,11 +185,11 @@ export const { use: useCloudTeam, provider: CloudTeamProvider } = createSimpleCo
       const result = await cloudTeamApi.session.get(sessionId)
       batch(() => {
         setStore("session", {
-          id: result.sessionId,
+          id: result.id,
           title: result.name,
           status: result.status,
           repoUrl: undefined,
-          leaderId: result.leaderId,
+          leaderId: result.leaderMachineId,
         })
         setStore("teammates", result.teammates ?? [])
       })
@@ -178,10 +207,14 @@ export const { use: useCloudTeam, provider: CloudTeamProvider } = createSimpleCo
 
     async function leaveSession() {
       if (store.session?.id) {
-        try {
-          await cloudTeamApi.member.leave(store.session.id, getMachineId())
-        } catch {
-          // Best effort leave
+        // Find our member record ID to pass to the leave endpoint
+        const myMember = store.teammates.find((t) => t.machineId === getMachineId())
+        if (myMember) {
+          try {
+            await cloudTeamApi.member.leave(myMember.id)
+          } catch {
+            // Best effort leave
+          }
         }
       }
       disconnectWS()
@@ -214,35 +247,61 @@ export const { use: useCloudTeam, provider: CloudTeamProvider } = createSimpleCo
       let sessionId = store.session?.id
       if (!sessionId) {
         const session = await createSession(text.slice(0, 100))
-        sessionId = session.sessionId
+        sessionId = session.id
       }
-      return cloudTeamApi.prompt.submit(sessionId, { prompt: text, context })
+      setStore("decomposing", true)
+      try {
+        const result = await cloudTeamApi.prompt.decompose(sessionId, { prompt: text, context })
+        batch(() => {
+          setStore("tasks", result.tasks)
+          setStore("decomposing", false)
+        })
+        return result
+      } catch (err) {
+        setStore("decomposing", false)
+        throw err
+      }
     }
 
     // ── Approval operations ────────────────────────────────
 
     async function respondApproval(approvalId: string, status: "approved" | "rejected", feedback?: string) {
       if (!store.session?.id) return
-      await cloudTeamApi.approval.respond(store.session.id, approvalId, { status, feedback })
+      await cloudTeamApi.approval.respond(approvalId, { status, feedback })
     }
 
     // ── Message operations ─────────────────────────────────
 
     async function sendMessage(content: string, type: string = "task_message") {
       if (!store.session?.id) return
-      // Send via REST; the event will come back through WebSocket
-      const message: CloudMessage = {
-        messageId: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
-        sessionId: store.session.id,
-        from: getMachineId(),
-        to: "broadcast",
-        type: type as CloudMessage["type"],
-        payload: { content },
-        timestamp: Date.now(),
-      }
       if (wsClient) {
-        wsClient.send(message)
+        wsClient.send({
+          type: "message.send",
+          payload: {
+            from: getMachineId(),
+            to: "broadcast",
+            messageType: type,
+            content,
+          },
+        })
       }
+    }
+
+    // ── Repo registration ─────────────────────────────────
+
+    async function registerRepo(body: {
+      repoRemoteUrl: string
+      repoLocalPath: string
+      currentBranch: string
+      hasUncommittedChanges: boolean
+    }) {
+      if (!store.session?.id) return
+      return cloudTeamApi.registry.registerRepo(store.session.id, body)
+    }
+
+    async function listRepos(remoteUrl?: string) {
+      if (!store.session?.id) return []
+      return cloudTeamApi.registry.listRepos(store.session.id, remoteUrl)
     }
 
     // ── Cleanup ────────────────────────────────────────────
@@ -255,6 +314,7 @@ export const { use: useCloudTeam, provider: CloudTeamProvider } = createSimpleCo
       // State accessors
       isAvailable,
       active: () => store.active,
+      decomposing: () => store.decomposing,
       session: () => store.session,
       teammates: () => store.teammates,
       tasks: () => store.tasks,
@@ -266,6 +326,8 @@ export const { use: useCloudTeam, provider: CloudTeamProvider } = createSimpleCo
       activeTasks,
       pendingApprovals,
       teammateById,
+      leader: () => store.leader,
+      leaderScore: () => store.leaderScore,
 
       // Agent name constant
       agentName: CLOUD_TEAM_AGENT_NAME,
@@ -279,6 +341,8 @@ export const { use: useCloudTeam, provider: CloudTeamProvider } = createSimpleCo
       submitPrompt,
       respondApproval,
       sendMessage,
+      registerRepo,
+      listRepos,
     }
   },
 })

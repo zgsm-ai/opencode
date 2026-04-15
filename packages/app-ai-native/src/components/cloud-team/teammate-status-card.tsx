@@ -1,11 +1,15 @@
 import { type Component, For, Show, createMemo, createSignal } from "solid-js"
 import { Button } from "@opencode-ai/ui/button"
 import { Icon } from "@opencode-ai/ui/icon"
+import { Spinner } from "@opencode-ai/ui/spinner"
 import { useCloudTeam } from "@/context/cloud-team"
 import { TeammateAvatar } from "./teammate-avatar"
 import { TaskItem } from "./task-item"
 import { ApprovalItem } from "./approval-item"
 import { CloudTeamMessages } from "./cloud-team-messages"
+import { CloudTeamExplore } from "./cloud-team-explore"
+import { CloudTeamTaskPlanReview } from "./cloud-team-task-plan-review"
+import { CloudTeamSessionBrowser } from "./cloud-team-session-browser"
 
 export const TeammateStatusCard: Component = () => {
   const cloudTeam = useCloudTeam()
@@ -65,6 +69,13 @@ export const TeammateStatusCard: Component = () => {
       {/* Expanded content */}
       <Show when={expanded()}>
         <div class="border-t border-border-weak-base">
+          {/* Session browser (when not in a session) */}
+          <Show when={!cloudTeam.session()}>
+            <div class="border-b border-border-weak-base">
+              <CloudTeamSessionBrowser />
+            </div>
+          </Show>
+
           {/* Teammates */}
           <Show when={cloudTeam.teammates().length > 0}>
             <div class="px-3 py-2 border-b border-border-weak-base">
@@ -75,11 +86,11 @@ export const TeammateStatusCard: Component = () => {
                 <For each={cloudTeam.teammates()}>
                   {(teammate) => {
                     const currentTask = createMemo(() =>
-                      cloudTeam.tasks().find((t) => t.taskId === teammate.currentTaskId),
+                      cloudTeam.tasks().find((t) => t.id === teammate.currentTaskId),
                     )
                     return (
                       <TeammateAvatar
-                        teammateId={teammate.teammateId}
+                        id={teammate.id}
                         machineName={teammate.machineName}
                         status={teammate.status}
                         currentTaskName={currentTask()?.description}
@@ -92,6 +103,14 @@ export const TeammateStatusCard: Component = () => {
           </Show>
 
           {/* Tasks */}
+          <Show when={cloudTeam.decomposing() && cloudTeam.tasks().length === 0}>
+            <div class="px-3 py-2 border-b border-border-weak-base">
+              <div class="flex items-center gap-2 text-11-regular text-blue-500">
+                <Spinner class="size-3.5" />
+                Decomposing tasks...
+              </div>
+            </div>
+          </Show>
           <Show when={cloudTeam.tasks().length > 0}>
             <div class="px-3 py-2 border-b border-border-weak-base">
               <div class="flex items-center justify-between mb-1.5">
@@ -114,11 +133,11 @@ export const TeammateStatusCard: Component = () => {
                 <For each={cloudTeam.tasks()}>
                   {(task) => (
                     <TaskItem
-                      taskId={task.taskId}
+                      id={task.id}
                       description={task.description}
                       status={task.status}
-                      assigneeName={getTeammateName(task.assignedTeammateId)}
-                      progress={getTaskProgress(task.taskId)}
+                      assigneeName={getTeammateName(task.assignedMemberId ?? undefined)}
+                      progress={getTaskProgress(task.id)}
                     />
                   )}
                 </For>
@@ -136,7 +155,7 @@ export const TeammateStatusCard: Component = () => {
                 <For each={cloudTeam.approvals()}>
                   {(approval) => (
                     <ApprovalItem
-                      approvalId={approval.approvalId}
+                      id={approval.id}
                       description={approval.description}
                       toolName={approval.toolName}
                       requesterName={approval.requesterName}
@@ -148,6 +167,20 @@ export const TeammateStatusCard: Component = () => {
                   )}
                 </For>
               </div>
+            </div>
+          </Show>
+
+          {/* Task plan review (when there are pending tasks) */}
+          <Show when={cloudTeam.tasks().length > 0 && cloudTeam.leader()?.elected}>
+            <div class="border-b border-border-weak-base">
+              <CloudTeamTaskPlanReview />
+            </div>
+          </Show>
+
+          {/* Explore (Leader only) */}
+          <Show when={cloudTeam.leader()?.elected && cloudTeam.teammates().length > 0}>
+            <div class="border-b border-border-weak-base">
+              <CloudTeamExplore />
             </div>
           </Show>
 

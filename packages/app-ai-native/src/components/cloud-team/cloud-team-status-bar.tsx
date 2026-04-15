@@ -29,7 +29,12 @@ export const CloudTeamStatusBar: Component = () => {
           </Show>
         </div>
         <div class="flex items-center gap-2 shrink-0">
-          <Show when={cloudTeam.tasks().length > 0}>
+          <Show when={cloudTeam.decomposing()}>
+            <span class="text-11-regular text-blue-500 animate-pulse">
+              Decomposing tasks...
+            </span>
+          </Show>
+          <Show when={cloudTeam.tasks().length > 0 && !cloudTeam.decomposing()}>
             <span class="text-11-regular text-text-weak">
               {cloudTeam.tasks().filter((t) => t.status === "completed").length}/{cloudTeam.tasks().length} tasks
             </span>

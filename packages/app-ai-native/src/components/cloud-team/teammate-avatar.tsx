@@ -15,7 +15,7 @@ const statusLabels: Record<TeammateStatus, string> = {
 }
 
 export const TeammateAvatar: Component<{
-  teammateId: string
+  id: string
   machineName: string
   status: TeammateStatus
   currentTaskName?: string

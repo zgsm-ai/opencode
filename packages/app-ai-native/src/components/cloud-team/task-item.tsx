@@ -8,10 +8,11 @@ const statusConfig: Record<TaskStatus, { label: string; color: string; bgColor: 
   running: { label: "running", color: "text-amber-600", bgColor: "bg-amber-50" },
   completed: { label: "completed", color: "text-green-600", bgColor: "bg-green-50" },
   failed: { label: "failed", color: "text-red-600", bgColor: "bg-red-50" },
+  interrupted: { label: "interrupted", color: "text-orange-600", bgColor: "bg-orange-50" },
 }
 
 export const TaskItem: Component<{
-  taskId: string
+  id: string
   description: string
   status: TaskStatus
   assigneeName?: string

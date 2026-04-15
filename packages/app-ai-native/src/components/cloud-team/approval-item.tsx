@@ -9,7 +9,7 @@ const riskColors: Record<RiskLevel, { dot: string; badge: string; text: string }
 }
 
 export const ApprovalItem: Component<{
-  approvalId: string
+  id: string
   description: string
   toolName: string
   requesterName: string
@@ -24,7 +24,7 @@ export const ApprovalItem: Component<{
   const handleApprove = () => {
     setResponding(true)
     try {
-      props.onApprove(props.approvalId)
+      props.onApprove(props.id)
     } finally {
       setResponding(false)
     }
@@ -33,7 +33,7 @@ export const ApprovalItem: Component<{
   const handleReject = () => {
     setResponding(true)
     try {
-      props.onReject(props.approvalId)
+      props.onReject(props.id)
     } finally {
       setResponding(false)
     }

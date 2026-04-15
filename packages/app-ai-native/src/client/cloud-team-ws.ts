@@ -1,5 +1,5 @@
 import { env } from "@/lib/env"
-import type { CloudEvent, CloudMessage } from "./cloud-team-types"
+import type { CloudEvent } from "./cloud-team-types"
 
 type CloudTeamWSOptions = {
   sessionId: string
@@ -94,12 +94,19 @@ export function createCloudTeamWS(options: CloudTeamWSOptions) {
     onDisconnect()
   }
 
-  function send(message: CloudMessage) {
+  function send(event: Partial<CloudEvent> & { type: CloudEvent["type"] }) {
     if (!ws || ws.readyState !== WebSocket.OPEN) {
       console.warn("[cloud-team-ws] Cannot send: WebSocket not open")
       return
     }
-    ws.send(JSON.stringify(message))
+    const cloudEvent: CloudEvent = {
+      eventId: event.eventId ?? `evt-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+      type: event.type,
+      sessionId: event.sessionId ?? sessionId,
+      timestamp: event.timestamp ?? Date.now(),
+      payload: event.payload ?? {},
+    }
+    ws.send(JSON.stringify(cloudEvent))
   }
 
   function scheduleReconnect() {

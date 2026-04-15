@@ -1,6 +1,6 @@
 /**
  * Cloud Team Agent types
- * Aligned with docs/proposals/CLOUD_TEAM_ARCHITECTURE.md v0.1.0
+ * Field names aligned with server Go model JSON tags.
  */
 
 // ─── Session ──────────────────────────────────────────────
@@ -8,14 +8,19 @@
 export type TeamSessionStatus = "active" | "paused" | "completed" | "failed"
 
 export interface TeamSession {
-  sessionId: string
+  id: string
   name: string
-  createdAt: number
+  creatorId: string
+  createdAt: string
+  updatedAt: string
   status: TeamSessionStatus
-  leaderId: string
   leaderMachineId: string
-  teammates: TeammateRegistration[]
-  taskPlanId?: string
+  leaderUserId: string
+  fencingToken: number
+  metadata: Record<string, unknown>
+  // Joined data (not in DB model, assembled by handler)
+  leaderId?: string
+  teammates?: TeammateRegistration[]
 }
 
 export type TeammateStatus = "online" | "offline" | "busy"
@@ -28,19 +33,24 @@ export interface RepoInfo {
 }
 
 export interface TeammateRegistration {
-  teammateId: string
+  id: string
+  sessionId: string
+  userId: string
   machineId: string
   machineName: string
+  role: string
   status: TeammateStatus
   repos: RepoInfo[]
   currentTaskId?: string
-  connectedAt: number
-  lastHeartbeat: number
+  connectedAt: string
+  lastHeartbeat: string
+  createdAt: string
+  updatedAt: string
 }
 
 // ─── Task ─────────────────────────────────────────────────
 
-export type TaskStatus = "pending" | "assigned" | "claimed" | "running" | "completed" | "failed"
+export type TaskStatus = "pending" | "assigned" | "claimed" | "running" | "completed" | "failed" | "interrupted"
 
 export interface TaskResult {
   summary: string
@@ -49,20 +59,24 @@ export interface TaskResult {
 }
 
 export interface Task {
-  taskId: string
+  id: string
   sessionId: string
   description: string
   repoAffinity: string[]
   fileHints: string[]
   dependencies: string[]
-  assignedTeammateId: string
+  assignedMemberId: string | null
   status: TaskStatus
-  createdAt: number
-  claimedAt?: number
-  startedAt?: number
-  completedAt?: number
-  result?: TaskResult
+  priority: number
+  result: TaskResult | null
   retryCount: number
+  maxRetries: number
+  errorMessage: string
+  createdAt: string
+  claimedAt: string | null
+  startedAt: string | null
+  completedAt: string | null
+  updatedAt: string
 }
 
 export interface SubTask {
@@ -71,7 +85,7 @@ export interface SubTask {
   repoAffinity: string[]
   fileHints: string[]
   dependencies: string[]
-  assignedTeammateId?: string
+  assignedMemberId?: string | null
 }
 
 // ─── Message ──────────────────────────────────────────────
@@ -101,49 +115,46 @@ export type RiskLevel = "low" | "medium" | "high"
 export type ApprovalStatus = "pending" | "approved" | "rejected"
 
 export interface ApprovalRequest {
-  approvalId: string
+  id: string
   sessionId: string
   requesterId: string
   requesterName: string
   toolName: string
-  toolInput: Record<string, unknown>
+  toolInput: Record<string, unknown> | null
   description: string
   riskLevel: RiskLevel
   status: ApprovalStatus
-  feedback?: string
-  permissionUpdates?: unknown[]
-  createdAt: number
-  resolvedAt?: number
+  feedback: string
+  permissionUpdates: unknown[] | null
+  createdAt: string
+  resolvedAt: string | null
 }
 
 // ─── Progress ─────────────────────────────────────────────
 
 export interface TaskSummary {
-  taskId: string
+  id: string
   description: string
   status: TaskStatus
   progress?: number
 }
 
 export interface TeammateProgress {
-  teammateId: string
-  name: string
-  machineId: string
-  currentTask?: TaskSummary
-  completedCount: number
-  failedCount: number
-  lastActivity: number
+  memberId: string
+  machineName: string
+  currentTaskId: string | null
+  completed: number
+  failed: number
+  running: number
 }
 
 export interface SessionProgress {
-  sessionId: string
   totalTasks: number
   completedTasks: number
   failedTasks: number
   runningTasks: number
   pendingTasks: number
   teammates: TeammateProgress[]
-  timeline: ProgressEvent[]
 }
 
 export interface ProgressEvent {
@@ -163,13 +174,16 @@ export interface ProgressUpdate {
 // ─── Repo Affinity ────────────────────────────────────────
 
 export interface RepoAffinityEntry {
+  id: string
+  sessionId: string
+  memberId: string
   repoRemoteUrl: string
   repoLocalPath: string
-  machineId: string
-  teammateId: string
-  lastSyncedAt: number
   currentBranch: string
   hasUncommittedChanges: boolean
+  lastSyncedAt: string
+  createdAt: string
+  updatedAt: string
 }
 
 // ─── Explore (Remote Code Exploration) ────────────────────
@@ -182,11 +196,7 @@ export interface ExploreQuery {
 }
 
 export interface ExploreRequest {
-  requestId: string
-  sessionId: string
-  fromLeaderId: string
-  targetTeammateId: string
-  repoRemoteUrl: string
+  targetMachineId: string
   queries: ExploreQuery[]
 }
 
@@ -211,45 +221,69 @@ export type CloudEventType =
   | "task.claim"
   | "task.progress"
   | "task.complete"
+  | "task.fail"
+  | "decompose.request"
+  | "decompose.result"
   | "approval.request"
   | "approval.respond"
   | "message.send"
   | "repo.register"
   | "explore.request"
   | "explore.result"
+  | "leader.elect"
+  | "leader.heartbeat"
   // Cloud → Client
   | "task.assigned"
-  | "approval.request"
+  | "task.interrupted"
+  | "approval.push"
   | "approval.response"
   | "message.receive"
   | "session.updated"
   | "teammate.status"
+  | "leader.elected"
+  | "leader.expired"
+  | "error"
 
 export interface CloudEvent {
   eventId: string
   type: CloudEventType
   sessionId: string
   timestamp: number
-  payload: unknown
+  payload: Record<string, unknown>
 }
 
 // ─── Leader Election ──────────────────────────────────────
 
-export interface LeaderCandidate {
-  teammateId: string
+export interface LeaderScore {
   machineId: string
-  capabilities: {
-    repoCoverage: number
-    heartbeatStability: number
-    cpuScore: number
-    rttMs: number
-  }
+  totalScore: number
+  repoCoverageScore: number
+  heartbeatScore: number
+  performanceScore: number
+  latencyScore: number
+}
+
+export interface LeaderCandidate {
+  machineId: string
+  repos?: string[]
+  heartbeatSuccessRate?: number
+  cpuIdlePercent?: number
+  memoryFreeMB?: number
+  rttMs?: number
 }
 
 export interface LeaderStatus {
-  leaderId: string
-  machineId: string
+  elected: boolean
   fencingToken: number
-  electedAt: number
-  lastHeartbeat: number
+  leaderId: string
+  score?: LeaderScore
+}
+
+// ─── Task Assignment ──────────────────────────────────────
+
+export interface TaskAssignmentInfo {
+  taskId: string
+  assignedMemberId: string
+  priorityTier: number
+  assignmentReason: string
 }

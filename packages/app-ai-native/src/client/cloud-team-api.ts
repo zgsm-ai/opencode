@@ -7,10 +7,9 @@ import type {
   RepoAffinityEntry,
   SessionProgress,
   ExploreRequest,
-  ExploreResult,
-  LeaderCandidate,
   LeaderStatus,
   SubTask,
+  TaskAssignmentInfo,
 } from "./cloud-team-types"
 
 const PREFIX = env.API_PREFIX
@@ -45,40 +44,38 @@ type UpdateSessionBody = {
 
 const session = {
   create(body: CreateSessionBody) {
-    return apiFetch<TeamSession>("/api/sessions", { method: "POST", body: JSON.stringify(body) })
+    return apiFetch<TeamSession>("/api/team/sessions", { method: "POST", body: JSON.stringify(body) })
   },
   get(sessionId: string) {
-    return apiFetch<TeamSession>(`/api/sessions/${sessionId}`)
+    return apiFetch<TeamSession>(`/api/team/sessions/${sessionId}`)
   },
   list() {
-    return apiFetch<TeamSession[]>("/api/sessions")
+    return apiFetch<{ sessions: TeamSession[] }>("/api/team/sessions").then((r) => r.sessions)
   },
   update(sessionId: string, body: UpdateSessionBody) {
-    return apiFetch<TeamSession>(`/api/sessions/${sessionId}`, { method: "PATCH", body: JSON.stringify(body) })
+    return apiFetch<TeamSession>(`/api/team/sessions/${sessionId}`, { method: "PATCH", body: JSON.stringify(body) })
   },
   delete(sessionId: string) {
-    return apiFetch<void>(`/api/sessions/${sessionId}`, { method: "DELETE" })
+    return apiFetch<void>(`/api/team/sessions/${sessionId}`, { method: "DELETE" })
   },
 }
 
 // ─── Member ───────────────────────────────────────────────
 
 type JoinSessionBody = {
-  teammateId?: string
   machineId: string
   machineName: string
-  repos?: TeammateRegistration["repos"]
 }
 
 const member = {
   join(sessionId: string, body: JoinSessionBody) {
-    return apiFetch<TeammateRegistration>(`/api/sessions/${sessionId}/members`, {
+    return apiFetch<TeammateRegistration>(`/api/team/sessions/${sessionId}/members`, {
       method: "POST",
       body: JSON.stringify(body),
     })
   },
-  leave(sessionId: string, machineId: string) {
-    return apiFetch<void>(`/api/sessions/${sessionId}/members/${machineId}`, { method: "DELETE" })
+  leave(memberId: string) {
+    return apiFetch<void>(`/api/team/sessions/${memberId}/members/${memberId}`, { method: "DELETE" })
   },
 }
 
@@ -86,26 +83,27 @@ const member = {
 
 type TaskPlanBody = {
   tasks: SubTask[]
+  fencingToken?: number
 }
 
 type UpdateTaskBody = {
   status?: Task["status"]
-  assignedTeammateId?: string
   result?: Task["result"]
+  errorMessage?: string
 }
 
 const task = {
   submitPlan(sessionId: string, body: TaskPlanBody) {
-    return apiFetch<Task[]>(`/api/sessions/${sessionId}/tasks`, { method: "POST", body: JSON.stringify(body) })
+    return apiFetch<{ tasks: Task[] }>(`/api/team/sessions/${sessionId}/tasks`, { method: "POST", body: JSON.stringify(body) }).then((r) => r.tasks)
   },
   list(sessionId: string) {
-    return apiFetch<Task[]>(`/api/sessions/${sessionId}/tasks`)
+    return apiFetch<{ tasks: Task[] }>(`/api/team/sessions/${sessionId}/tasks`).then((r) => r.tasks)
   },
-  get(sessionId: string, taskId: string) {
-    return apiFetch<Task>(`/api/sessions/${sessionId}/tasks/${taskId}`)
+  get(taskId: string) {
+    return apiFetch<Task>(`/api/team/tasks/${taskId}`)
   },
-  update(sessionId: string, taskId: string, body: UpdateTaskBody) {
-    return apiFetch<Task>(`/api/sessions/${sessionId}/tasks/${taskId}`, {
+  update(taskId: string, body: UpdateTaskBody) {
+    return apiFetch<Task>(`/api/team/tasks/${taskId}`, {
       method: "PATCH",
       body: JSON.stringify(body),
     })
@@ -117,15 +115,14 @@ const task = {
 type RespondApprovalBody = {
   status: "approved" | "rejected"
   feedback?: string
-  permissionUpdates?: unknown[]
 }
 
 const approval = {
   list(sessionId: string) {
-    return apiFetch<ApprovalRequest[]>(`/api/sessions/${sessionId}/approvals`)
+    return apiFetch<{ approvals: ApprovalRequest[] }>(`/api/team/sessions/${sessionId}/approvals`).then((r) => r.approvals)
   },
-  respond(sessionId: string, approvalId: string, body: RespondApprovalBody) {
-    return apiFetch<ApprovalRequest>(`/api/sessions/${sessionId}/approvals/${approvalId}`, {
+  respond(approvalId: string, body: RespondApprovalBody) {
+    return apiFetch<ApprovalRequest>(`/api/team/approvals/${approvalId}`, {
       method: "PATCH",
       body: JSON.stringify(body),
     })
@@ -142,12 +139,12 @@ type RegisterRepoBody = {
 }
 
 const registry = {
-  registerRepo(body: RegisterRepoBody) {
-    return apiFetch<RepoAffinityEntry>("/api/registry/repos", { method: "POST", body: JSON.stringify(body) })
+  registerRepo(sessionId: string, body: RegisterRepoBody) {
+    return apiFetch<RepoAffinityEntry>(`/api/team/sessions/${sessionId}/repos`, { method: "POST", body: JSON.stringify(body) })
   },
-  listRepos(remoteUrl?: string) {
+  listRepos(sessionId: string, remoteUrl?: string) {
     const query = remoteUrl ? `?remoteUrl=${encodeURIComponent(remoteUrl)}` : ""
-    return apiFetch<RepoAffinityEntry[]>(`/api/registry/repos${query}`)
+    return apiFetch<{ repos: RepoAffinityEntry[] }>(`/api/team/sessions/${sessionId}/repos${query}`).then((r) => r.repos)
   },
 }
 
@@ -155,7 +152,7 @@ const registry = {
 
 const progress = {
   get(sessionId: string) {
-    return apiFetch<SessionProgress>(`/api/sessions/${sessionId}/progress`)
+    return apiFetch<SessionProgress>(`/api/team/sessions/${sessionId}/progress`)
   },
 }
 
@@ -163,7 +160,7 @@ const progress = {
 
 const explore = {
   submit(sessionId: string, body: ExploreRequest) {
-    return apiFetch<{ requestId: string }>(`/api/sessions/${sessionId}/explore`, {
+    return apiFetch<{ result: unknown }>(`/api/team/sessions/${sessionId}/explore`, {
       method: "POST",
       body: JSON.stringify(body),
     })
@@ -173,34 +170,47 @@ const explore = {
 // ─── Leader ───────────────────────────────────────────────
 
 type ElectLeaderBody = {
-  candidate: LeaderCandidate
+  machineId: string
+  repos?: string[]
+  heartbeatSuccessRate?: number
+  cpuIdlePercent?: number
+  memoryFreeMB?: number
+  rttMs?: number
 }
 
 const leader = {
   elect(sessionId: string, body: ElectLeaderBody) {
-    return apiFetch<LeaderStatus>(`/api/sessions/${sessionId}/leader/elect`, {
+    return apiFetch<LeaderStatus>(`/api/team/sessions/${sessionId}/leader/elect`, {
       method: "POST",
       body: JSON.stringify(body),
     })
   },
-  heartbeat(sessionId: string) {
-    return apiFetch<void>(`/api/sessions/${sessionId}/leader/heartbeat`, { method: "POST" })
+  heartbeat(sessionId: string, machineId: string, caps?: Omit<ElectLeaderBody, "machineId">) {
+    return apiFetch<{ renewed: boolean }>(`/api/team/sessions/${sessionId}/leader/heartbeat`, {
+      method: "POST",
+      body: JSON.stringify({ machineId, ...caps }),
+    })
   },
   getStatus(sessionId: string) {
-    return apiFetch<LeaderStatus>(`/api/sessions/${sessionId}/leader`)
+    return apiFetch<LeaderStatus>(`/api/team/sessions/${sessionId}/leader`)
   },
 }
 
-// ─── Prompt (submit a goal for task decomposition) ────────
+// ─── Prompt / Decompose ───────────────────────────────────
 
-type SubmitPromptBody = {
+type DecomposeBody = {
   prompt: string
   context?: unknown
 }
 
+type DecomposeResponse = {
+  tasks: Task[]
+  assignments?: TaskAssignmentInfo[]
+}
+
 const prompt = {
-  submit(sessionId: string, body: SubmitPromptBody) {
-    return apiFetch<{ taskPlanId: string }>(`/api/sessions/${sessionId}/prompt`, {
+  decompose(sessionId: string, body: DecomposeBody) {
+    return apiFetch<DecomposeResponse>(`/api/team/sessions/${sessionId}/decompose`, {
       method: "POST",
       body: JSON.stringify(body),
     })

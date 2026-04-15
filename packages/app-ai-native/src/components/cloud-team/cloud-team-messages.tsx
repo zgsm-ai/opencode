@@ -1,6 +1,6 @@
 import { type Component, For, Show, createSignal, onMount, onCleanup } from "solid-js"
 import { useCloudTeam } from "@/context/cloud-team"
-import type { CloudMessage } from "@/client/cloud-team-types"
+import type { CloudEvent } from "@/client/cloud-team-types"
 
 export const CloudTeamMessages: Component = () => {
   const cloudTeam = useCloudTeam()
@@ -32,16 +32,19 @@ export const CloudTeamMessages: Component = () => {
     <div class="flex flex-col gap-1">
       <div ref={scrollRef} class="max-h-32 overflow-y-auto space-y-1 px-2">
         <For each={cloudTeam.messages()}>
-          {(msg: CloudMessage) => (
-            <div class="text-12-regular">
-              <span class="text-text-weak font-medium">{msg.from}: </span>
-              <span class="text-text-base">
-                {typeof msg.payload === "object" && msg.payload !== null && "content" in msg.payload
-                  ? String((msg.payload as { content: string }).content)
-                  : JSON.stringify(msg.payload)}
-              </span>
-            </div>
-          )}
+          {(msg: CloudEvent) => {
+            const from = (msg.payload?.from as string) ?? "unknown"
+            const content =
+              typeof msg.payload?.content === "string"
+                ? msg.payload.content
+                : JSON.stringify(msg.payload)
+            return (
+              <div class="text-12-regular">
+                <span class="text-text-weak font-medium">{from}: </span>
+                <span class="text-text-base">{content}</span>
+              </div>
+            )
+          }}
         </For>
         <Show when={cloudTeam.messages().length === 0}>
           <div class="text-12-regular text-text-weaker px-2">No messages yet</div>

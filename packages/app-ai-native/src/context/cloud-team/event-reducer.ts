@@ -8,13 +8,14 @@ import type {
   TaskStatus,
   ApprovalRequest,
   ApprovalStatus,
-  CloudMessage,
   ProgressUpdate,
   LeaderStatus,
+  LeaderScore,
 } from "../../client/cloud-team-types"
 
 type CloudTeamStore = {
   active: boolean
+  decomposing: boolean
   session?: {
     id: string
     title: string
@@ -24,12 +25,13 @@ type CloudTeamStore = {
   }
   teammates: TeammateRegistration[]
   tasks: Task[]
-  messages: CloudMessage[]
+  messages: CloudEvent[]
   approvals: ApprovalRequest[]
   progress: Record<string, ProgressUpdate>
   wsConnected: boolean
   lastEventId?: string
   leader?: LeaderStatus
+  leaderScore?: LeaderScore
 }
 
 type SetStore = (fn: (state: CloudTeamStore) => void) => void
@@ -45,34 +47,38 @@ export function applyCloudEvent(store: CloudTeamStore, setStore: SetStore, event
     })
   }
 
+  const p = event.payload
+
   switch (event.type) {
     case "session.create":
     case "session.updated": {
-      const payload = event.payload as TeamSession
       batch(() => {
         setStore((s) => {
           s.session = {
-            id: payload.sessionId,
-            title: payload.name,
-            status: payload.status,
+            id: (p.id as string) ?? event.sessionId,
+            title: (p.name as string) ?? "",
+            status: ((p.status as string) ?? "active") as TeamSession["status"],
             repoUrl: undefined,
-            leaderId: payload.leaderId,
+            leaderId: (p.leaderMachineId as string) ?? (p.leaderId as string),
           }
-          s.teammates = payload.teammates ?? []
+          // Teammates may come as part of session payload
+          if (Array.isArray(p.teammates)) {
+            s.teammates = p.teammates as TeammateRegistration[]
+          }
         })
       })
       break
     }
 
     case "session.join": {
-      const payload = event.payload as TeammateRegistration
+      const member = p as unknown as TeammateRegistration
       batch(() => {
         setStore((s) => {
-          const idx = s.teammates.findIndex((t) => t.teammateId === payload.teammateId)
+          const idx = s.teammates.findIndex((t) => t.id === member.id)
           if (idx >= 0) {
-            s.teammates[idx] = payload
+            s.teammates[idx] = member
           } else {
-            s.teammates.push(payload)
+            s.teammates.push(member)
           }
         })
       })
@@ -80,12 +86,13 @@ export function applyCloudEvent(store: CloudTeamStore, setStore: SetStore, event
     }
 
     case "teammate.status": {
-      const payload = event.payload as { teammateId: string; status: TeammateStatus }
+      const machineId = p.machineId as string
+      const status = p.status as TeammateStatus
       batch(() => {
         setStore((s) => {
-          const idx = s.teammates.findIndex((t) => t.teammateId === payload.teammateId)
+          const idx = s.teammates.findIndex((t) => t.machineId === machineId)
           if (idx >= 0) {
-            s.teammates[idx].status = payload.status
+            s.teammates[idx].status = status
           }
         })
       })
@@ -93,23 +100,26 @@ export function applyCloudEvent(store: CloudTeamStore, setStore: SetStore, event
     }
 
     case "task.plan.submit": {
-      const payload = event.payload as { tasks: Task[] }
+      const tasks = (p.tasks as Task[]) ?? []
       batch(() => {
         setStore((s) => {
-          s.tasks = payload.tasks
+          s.tasks = tasks
         })
       })
       break
     }
 
     case "task.assigned": {
-      const payload = event.payload as { taskId: string; assignedTeammateId: string; status: TaskStatus }
+      const taskId = p.taskId as string
+      const task = p.task as Task | undefined
       batch(() => {
         setStore((s) => {
-          const idx = s.tasks.findIndex((t) => t.taskId === payload.taskId)
-          if (idx >= 0) {
-            s.tasks[idx].assignedTeammateId = payload.assignedTeammateId
-            s.tasks[idx].status = payload.status
+          const id = task?.id ?? taskId
+          const idx = s.tasks.findIndex((t) => t.id === id)
+          if (idx >= 0 && task) {
+            s.tasks[idx] = task
+          } else if (task) {
+            s.tasks.push(task)
           }
         })
       })
@@ -117,14 +127,12 @@ export function applyCloudEvent(store: CloudTeamStore, setStore: SetStore, event
     }
 
     case "task.claim": {
-      const payload = event.payload as { taskId: string; teammateId: string }
+      const taskId = p.taskId as string
       batch(() => {
         setStore((s) => {
-          const idx = s.tasks.findIndex((t) => t.taskId === payload.taskId)
+          const idx = s.tasks.findIndex((t) => t.id === taskId)
           if (idx >= 0) {
-            s.tasks[idx].assignedTeammateId = payload.teammateId
-            s.tasks[idx].status = "claimed"
-            s.tasks[idx].claimedAt = Date.now()
+            s.tasks[idx].status = "claimed" as TaskStatus
           }
         })
       })
@@ -132,62 +140,105 @@ export function applyCloudEvent(store: CloudTeamStore, setStore: SetStore, event
     }
 
     case "task.progress": {
-      const payload = event.payload as ProgressUpdate
+      const taskId = p.taskId as string
       batch(() => {
         setStore((s) => {
-          s.progress[payload.taskId] = payload
+          s.progress[taskId] = p as unknown as ProgressUpdate
         })
       })
       break
     }
 
     case "task.complete": {
-      const payload = event.payload as { taskId: string; result?: Task["result"] }
+      const taskId = p.taskId as string
       batch(() => {
         setStore((s) => {
-          const idx = s.tasks.findIndex((t) => t.taskId === payload.taskId)
+          const idx = s.tasks.findIndex((t) => t.id === taskId)
           if (idx >= 0) {
-            s.tasks[idx].status = "completed"
-            s.tasks[idx].completedAt = Date.now()
-            if (payload.result) s.tasks[idx].result = payload.result
-          }
-          // Update teammate's currentTaskId
-          const tIdx = s.teammates.findIndex(
-            (t) => t.currentTaskId === payload.taskId,
-          )
-          if (tIdx >= 0) {
-            s.teammates[tIdx].currentTaskId = undefined
+            s.tasks[idx].status = "completed" as TaskStatus
           }
         })
       })
       break
     }
 
-    case "approval.request": {
-      const payload = event.payload as ApprovalRequest
+    case "task.fail": {
+      const taskId = p.taskId as string
       batch(() => {
         setStore((s) => {
-          const idx = s.approvals.findIndex((a) => a.approvalId === payload.approvalId)
+          const idx = s.tasks.findIndex((t) => t.id === taskId)
           if (idx >= 0) {
-            s.approvals[idx] = payload
-          } else {
-            s.approvals.push(payload)
+            s.tasks[idx].status = "failed" as TaskStatus
           }
         })
       })
+      break
+    }
+
+    case "task.interrupted": {
+      const taskId = p.taskId as string
+      batch(() => {
+        setStore((s) => {
+          const idx = s.tasks.findIndex((t) => t.id === taskId)
+          if (idx >= 0) {
+            s.tasks[idx].status = "interrupted" as TaskStatus
+          }
+        })
+      })
+      break
+    }
+
+    case "decompose.request": {
+      batch(() => {
+        setStore((s) => {
+          s.decomposing = true
+        })
+      })
+      break
+    }
+
+    case "decompose.result": {
+      const tasks = (p.tasks as Task[]) ?? []
+      batch(() => {
+        setStore((s) => {
+          s.decomposing = false
+          if (tasks.length > 0) {
+            s.tasks = tasks
+          }
+        })
+      })
+      break
+    }
+
+    case "approval.request":
+    case "approval.push": {
+      const approval = p.approval as ApprovalRequest | undefined
+      if (approval) {
+        batch(() => {
+          setStore((s) => {
+            const idx = s.approvals.findIndex((a) => a.id === approval.id)
+            if (idx >= 0) {
+              s.approvals[idx] = approval
+            } else {
+              s.approvals.push(approval)
+            }
+          })
+        })
+      }
       break
     }
 
     case "approval.response":
     case "approval.respond": {
-      const payload = event.payload as { approvalId: string; status: ApprovalStatus; feedback?: string }
+      const approvalId = p.approvalId as string
+      const status = p.status as ApprovalStatus
+      const feedback = p.feedback as string | undefined
       batch(() => {
         setStore((s) => {
-          const idx = s.approvals.findIndex((a) => a.approvalId === payload.approvalId)
+          const idx = s.approvals.findIndex((a) => a.id === approvalId)
           if (idx >= 0) {
-            s.approvals[idx].status = payload.status
-            if (payload.feedback) s.approvals[idx].feedback = payload.feedback
-            s.approvals[idx].resolvedAt = Date.now()
+            s.approvals[idx].status = status
+            if (feedback) s.approvals[idx].feedback = feedback
           }
         })
       })
@@ -196,26 +247,63 @@ export function applyCloudEvent(store: CloudTeamStore, setStore: SetStore, event
 
     case "message.send":
     case "message.receive": {
-      const payload = event.payload as CloudMessage
       batch(() => {
         setStore((s) => {
-          const exists = s.messages.some((m) => m.messageId === payload.messageId)
+          const exists = s.messages.some((m) => m.eventId === event.eventId)
           if (!exists) {
-            s.messages.push(payload)
+            s.messages.push(event)
           }
         })
       })
       break
     }
 
-    case "repo.register": {
-      // Repo registration is informational; no store update needed on leader side
+    case "leader.elected": {
+      const leaderId = p.leaderId as string
+      const fencingToken = p.fencingToken as number
+      const score = p.score as LeaderScore | undefined
+      batch(() => {
+        setStore((s) => {
+          if (s.session) {
+            s.session.leaderId = leaderId
+          }
+          s.leader = {
+            elected: true,
+            fencingToken,
+            leaderId,
+            score,
+          }
+          if (score) {
+            s.leaderScore = score
+          }
+        })
+      })
       break
     }
 
+    case "leader.expired": {
+      batch(() => {
+        setStore((s) => {
+          if (s.session) {
+            s.session.leaderId = undefined
+          }
+          s.leader = undefined
+        })
+      })
+      break
+    }
+
+    case "repo.register":
     case "explore.request":
-    case "explore.result": {
-      // Explore events are handled directly by the request initiator, not stored
+    case "explore.result":
+    case "decompose.request":
+    case "decompose.result": {
+      // Informational or handled by request initiator — no store update needed
+      break
+    }
+
+    case "error": {
+      console.error("[cloud-team] Server error event:", p.message ?? p)
       break
     }
 
