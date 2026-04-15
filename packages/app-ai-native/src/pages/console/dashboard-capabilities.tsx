@@ -17,6 +17,7 @@ import { MoveCapabilityDialog } from "@/pages/store/components/move-capability-d
 import { typeKey } from "@/pages/store/lib/constants"
 import { cn } from "@/lib/utils"
 import { st, sx } from "@/pages/store/lib/styles"
+import { Button } from "@/components/ui/button"
 
 const PAGE_SIZE = 10
 
@@ -26,7 +27,6 @@ const TYPE_COLORS: Record<string, string> = {
   command: "#10B981",
   mcp: "#8B5CF6",
 }
-
 
 const SUB = {
   "font-size": "0.8125rem",
@@ -246,27 +246,41 @@ export default function DashboardCapabilities() {
           })}
         </p>
         <div class={sx.pagerActs}>
-          <button class={st.page(false)} disabled={props.page <= 1} onClick={() => props.onPage(props.page - 1)}>
+          <Button
+            variant="ghost"
+            size="sm"
+            type="button"
+            disabled={props.page <= 1}
+            onClick={() => props.onPage(props.page - 1)}
+          >
             <Icon name="chevron-left" size="small" />
-          </button>
+          </Button>
           <For each={props.pages}>
             {(p) => (
               <Show
                 when={p !== "..."}
                 fallback={<span class={cn(sx.page, "cursor-default hover:bg-transparent hover:text-[var(--native-muted)]")}>...</span>}
               >
-                <button
-                  class={st.page(props.page === p)}
+                <Button
+                  variant={props.page === p ? "default" : "ghost"}
+                  size="sm"
+                  type="button"
                   onClick={() => props.onPage(p as number)}
                 >
                   {p}
-                </button>
+                </Button>
               </Show>
             )}
           </For>
-          <button class={st.page(false)} disabled={props.page >= props.totalPages} onClick={() => props.onPage(props.page + 1)}>
+          <Button
+            variant="ghost"
+            size="sm"
+            type="button"
+            disabled={props.page >= props.totalPages}
+            onClick={() => props.onPage(props.page + 1)}
+          >
             <Icon name="chevron-right" size="small" />
-          </button>
+          </Button>
         </div>
       </div>
     </Show>
@@ -284,12 +298,13 @@ export default function DashboardCapabilities() {
             <div style={{ "text-align": "center" }}>
               <h1 class={sx.toolbarTitle}>{language.t("store.console")}</h1>
               <p class={cn(sx.toolbarSub, "mb-3")}>{language.t("store.console.authDescription")}</p>
-              <button
-                class="inline-flex min-h-9 items-center justify-center rounded-[var(--native-radius-full)] bg-[var(--native-primary)] px-4 py-2 text-[0.8125rem] font-medium text-[var(--native-primary-foreground)] shadow-[0_1px_4px_color-mix(in_srgb,var(--native-primary)_25%,transparent)] transition-all duration-150 hover:bg-[color-mix(in_srgb,var(--native-primary)_88%,white)] hover:shadow-[var(--native-shadow-sm)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--native-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--native-panel)]"
+              <Button
+                type="button"
+                size="sm"
                 onClick={() => { window.location.href = getLoginUrl("/store/dashboard/capabilities") }}
               >
                 {language.t("store.console.login")}
-              </button>
+              </Button>
             </div>
           </div>
         }
@@ -305,20 +320,23 @@ export default function DashboardCapabilities() {
         <section class={cn(sx.cshell, "mb-4")}>
           <div class="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p style={{ ...SUB, "margin-bottom": 0 }}>{language.t("store.console.capabilities.myCreated")}</p>
-            <button
-              class="inline-flex min-h-9 items-center justify-center rounded-[var(--native-radius-full)] bg-[var(--native-primary)] px-4 py-2 text-[0.8125rem] font-medium text-[var(--native-primary-foreground)] shadow-[0_1px_4px_color-mix(in_srgb,var(--native-primary)_25%,transparent)] transition-all duration-150 hover:bg-[color-mix(in_srgb,var(--native-primary)_88%,white)] hover:shadow-[var(--native-shadow-sm)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--native-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--native-panel)]"
+            <Button
+              type="button"
+              size="sm"
               onClick={openCreateCapability}
             >
               {language.t("store.console.newCapability")}
-            </button>
+            </Button>
           </div>
 
           <Show when={state.filtersShown || state.items.length > 0 || state.totalItems > 0}>
             <div class={sx.filterBar}>
               <For each={["all", "skill", "subagent", "command", "mcp"]}>
                 {(type) => (
-                  <button
-                    class={st.filter(state.itemTypeFilter === type)}
+                  <Button
+                    variant={state.itemTypeFilter === type ? "default" : "outline"}
+                    size="sm"
+                    type="button"
                     onClick={() => {
                       setState("itemTypeFilter", type)
                       setState("itemPage", 1)
@@ -327,7 +345,7 @@ export default function DashboardCapabilities() {
                     }}
                   >
                     {type === "all" ? language.t("store.console.filters.all") : typeLabel(type)}
-                  </button>
+                  </Button>
                 )}
               </For>
             </div>
@@ -388,38 +406,47 @@ export default function DashboardCapabilities() {
                             <td class={sx.mut}>{item.repoName || "—"}</td>
                             <td style={{ "text-align": "right" }}>
                               <div class="flex flex-wrap justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-                                <button
-                                  class="inline-flex h-8 w-8 items-center justify-center rounded-[var(--native-radius-sm)] text-[var(--native-muted)] transition-colors duration-150 hover:bg-[color:color-mix(in_srgb,var(--native-primary)_7%,transparent)] hover:text-[var(--native-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--native-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--native-panel)]"
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  type="button"
                                   aria-label={language.t("common.open")}
                                   title={language.t("common.open")}
                                   onClick={() => setSelectedItemId(item.id)}
                                 >
                                   <Icon name="arrow-right" size="small" />
-                                </button>
-                                <button
-                                  class="inline-flex h-8 w-8 items-center justify-center rounded-[var(--native-radius-sm)] text-[var(--native-muted)] transition-colors duration-150 hover:bg-[color:color-mix(in_srgb,var(--native-primary)_7%,transparent)] hover:text-[var(--native-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--native-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--native-panel)]"
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  type="button"
                                   aria-label={language.t("store.console.capabilities.move")}
                                   title={language.t("store.console.capabilities.move")}
                                   onClick={() => openMoveCapability(item)}
                                 >
                                   <Icon name="share" size="small" />
-                                </button>
-                                <button
-                                  class="inline-flex h-8 w-8 items-center justify-center rounded-[var(--native-radius-sm)] text-[var(--native-muted)] transition-colors duration-150 hover:bg-[color:color-mix(in_srgb,var(--native-primary)_7%,transparent)] hover:text-[var(--native-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--native-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--native-panel)]"
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  type="button"
                                   aria-label={language.t("store.console.capabilities.edit")}
                                   title={language.t("store.console.capabilities.edit")}
                                   onClick={() => openEditCapability(item)}
                                 >
                                   <Icon name="edit" size="small" />
-                                </button>
-                                <button
-                                  class="inline-flex h-8 w-8 items-center justify-center rounded-[var(--native-radius-sm)] text-[var(--native-muted)] transition-colors duration-150 hover:bg-[color:color-mix(in_srgb,#ef4444_8%,transparent)] hover:text-[#ef4444] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--native-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--native-panel)]"
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  type="button"
+                                  class="text-destructive hover:text-destructive"
                                   aria-label={language.t("store.console.capabilities.delete")}
                                   title={language.t("store.console.capabilities.delete")}
                                   onClick={() => handleDeleteItem(item.id)}
                                 >
                                   <Icon name="trash" size="small" />
-                                </button>
+                                </Button>
                               </div>
                             </td>
                           </tr>
@@ -488,14 +515,17 @@ export default function DashboardCapabilities() {
                             </td>
                             <td class={sx.mut}>{item.repoName || "—"}</td>
                             <td style={{ "text-align": "right" }}>
-                              <button
-                                class="inline-flex h-8 w-8 items-center justify-center rounded-[var(--native-radius-sm)] text-[rgb(202,138,4)] transition-colors duration-150 hover:bg-[color:color-mix(in_srgb,rgb(234,179,8)_12%,transparent)] hover:text-[rgb(161,98,7)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--native-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--native-panel)]"
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                type="button"
+                                class="text-[rgb(202,138,4)] hover:text-[rgb(161,98,7)]"
                                 aria-label={language.t("store.detail.unfavorite")}
                                 title={language.t("store.detail.unfavorite")}
                                 onClick={(e) => { e.stopPropagation(); void unfavoriteItem(item.id) }}
                               >
                                 <LocalIcon name="star-filled" size="small" style={{ color: "currentColor" }} />
-                              </button>
+                              </Button>
                             </td>
                           </tr>
                         )

@@ -5,6 +5,7 @@ import { type WecomChannel } from "@/context/settings"
 import { notificationChannelApi } from "@/pages/store/lib/api"
 import { useLanguage } from "@/context/language"
 import { Modal } from "@/components/modal"
+import { Button } from "@/components/ui/button"
 
 type AddWecomChannelDialogProps = {
   onCreated: (ch: Omit<WecomChannel, "id">) => Promise<void> | void
@@ -65,22 +66,23 @@ export function AddWecomChannelDialog(props: AddWecomChannelDialogProps) {
         maxHeight="460px"
         footer={
           <>
-            <button
-              class="modal-btn modal-btn-ghost"
+            <Button
+              variant="outline"
+              size="sm"
               type="button"
               onClick={() => dialog.close()}
             >
               {language.t("common.cancel")}
-            </button>
-            <button
-              class="modal-btn modal-btn-primary"
+            </Button>
+            <Button
+              size="sm"
               type="submit"
               disabled={form.saving}
             >
               {form.saving
                 ? language.t("store.notificationChannels.dialog.adding")
                 : language.t("store.notificationChannels.dialog.confirmAdd")}
-            </button>
+            </Button>
           </>
         }
       >

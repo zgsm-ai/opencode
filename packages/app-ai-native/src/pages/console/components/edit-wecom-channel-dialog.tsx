@@ -3,6 +3,7 @@ import { createStore } from "solid-js/store"
 import { type WecomChannel } from "@/context/settings"
 import { useLanguage } from "@/context/language"
 import { Modal } from "@/components/modal"
+import { Button } from "@/components/ui/button"
 
 type EditWecomChannelDialogProps = {
   channel: WecomChannel
@@ -70,20 +71,21 @@ export function EditWecomChannelDialog(props: EditWecomChannelDialogProps) {
         maxHeight="460px"
         footer={
           <>
-            <button
-              class="modal-btn modal-btn-ghost"
+            <Button
+              variant="outline"
+              size="sm"
               type="button"
               onClick={() => dialog.close()}
             >
               {language.t("common.cancel")}
-            </button>
-            <button
-              class="modal-btn modal-btn-primary"
+            </Button>
+            <Button
+              size="sm"
               type="submit"
               disabled={form.saving}
             >
               {form.saving ? language.t("common.saving") : language.t("common.save")}
-            </button>
+            </Button>
           </>
         }
       >

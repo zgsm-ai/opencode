@@ -9,6 +9,7 @@ import { WecomChannelCard } from "./wecom-channel-card"
 import { notificationChannelService } from "../lib/notification-channel-service"
 import { ConfirmDialog } from "@/pages/store/components/confirm-dialog"
 import { sx } from "@/pages/store/lib/styles"
+import { Button } from "@/components/ui/button"
 
 export function NotificationChannelsSection() {
   const dialog = useDialog()
@@ -135,12 +136,13 @@ export function NotificationChannelsSection() {
           <h2 class={sx.toolbarTitle}>{language.t("store.notificationChannels.title")}</h2>
           <p class={sx.toolbarSub}>{language.t("store.notificationChannels.description")}</p>
         </div>
-        <button
-          class="inline-flex min-h-9 items-center justify-center rounded-[var(--native-radius-full)] bg-[var(--native-primary)] px-4 py-2 text-[0.8125rem] font-medium text-[var(--native-primary-foreground)] shadow-[0_1px_4px_color-mix(in_srgb,var(--native-primary)_25%,transparent)] transition-all duration-150 hover:bg-[color-mix(in_srgb,var(--native-primary)_88%,white)] hover:shadow-[var(--native-shadow-sm)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--native-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--native-panel)]"
+        <Button
+          type="button"
+          size="sm"
           onClick={openAddDialog}
         >
           {language.t("store.notificationChannels.add")}
-        </button>
+        </Button>
       </div>
 
       <Show

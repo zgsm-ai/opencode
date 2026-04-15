@@ -4,6 +4,7 @@ import { createStore } from "solid-js/store"
 import { useLanguage } from "@/context/language"
 import type { Device, UpdateDeviceRequest } from "@/pages/workspace/types"
 import { Modal } from "@/components/modal"
+import { Button } from "@/components/ui/button"
 
 type DeviceEditDialogProps = {
   device: Device
@@ -50,20 +51,21 @@ export function DeviceEditDialog(props: DeviceEditDialogProps) {
         maxHeight="460px"
         footer={
           <>
-            <button
-              class="modal-btn modal-btn-ghost"
+            <Button
+              variant="outline"
+              size="sm"
               type="button"
               onClick={() => d.close()}
             >
               {language.t("common.cancel")}
-            </button>
-            <button
-              class="modal-btn modal-btn-primary"
+            </Button>
+            <Button
+              size="sm"
               type="submit"
               disabled={form.saving || !form.displayName.trim()}
             >
               {form.saving ? language.t("common.saving") : language.t("common.save")}
-            </button>
+            </Button>
           </>
         }
       >

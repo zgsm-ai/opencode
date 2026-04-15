@@ -24,10 +24,12 @@ export default function ConsoleSidebar() {
   const [devices] = createResource(async () => deviceManagementService.list())
   const [channels] = createResource(async () => notificationChannelService.listWecom())
 
-  const counts = () => ({
-    devices: devices()?.length ?? 0,
-    channels: channels()?.length ?? 0,
-  })
+  const total = (kind: Count) =>
+    kind === "devices"
+      ? devices()?.filter((item) => item.status === "online").length ?? 0
+      : channels()?.filter((item) => item.enabled).length ?? 0
+
+  const done = (kind: Count) => (kind === "devices" ? !devices.loading : !channels.loading)
 
   const active = (href: string, exact?: boolean) => {
     const p = path()
@@ -49,7 +51,6 @@ export default function ConsoleSidebar() {
             <For each={NAV}>
               {(item) => {
                 const on = () => active(item.href, "exact" in item ? item.exact : false)
-                const total = "badge" in item ? counts()[item.badge] : null
                 return (
                   <A
                     href={item.href}
@@ -73,10 +74,14 @@ export default function ConsoleSidebar() {
                         : <Icon name={item.icon} size="small" />}
                     </span>
                     <span class="font-medium">{language.t(item.labelKey)}</span>
-                    <Show when={"badge" in item && !devices.loading && !channels.loading}>
-                      <span class="ml-auto rounded-[var(--native-radius-full)] bg-[color:color-mix(in_oklab,var(--native-surface)_64%,var(--native-panel))] px-[0.5rem] text-[11px] font-medium leading-[1.65] text-[var(--native-muted)]">
-                        {total}
-                      </span>
+                    <Show when={"badge" in item ? item.badge : null}>
+                      {(badge) => (
+                        <Show when={done(badge())}>
+                          <span class="ml-auto rounded-[var(--native-radius-full)] bg-[color:color-mix(in_oklab,var(--native-surface)_64%,var(--native-panel))] px-[0.5rem] text-[11px] font-medium leading-[1.65] text-[var(--native-muted)]">
+                            {total(badge())}
+                          </span>
+                        </Show>
+                      )}
                     </Show>
                   </A>
                 )

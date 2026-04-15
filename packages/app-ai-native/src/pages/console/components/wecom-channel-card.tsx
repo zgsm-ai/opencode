@@ -1,5 +1,6 @@
 import { Icon } from "@opencode-ai/ui/icon"
 import { LocalIcon } from "@/components/local-icon"
+import { Button } from "@/components/ui/button"
 import { createSignal, Show } from "solid-js"
 import { type WecomChannel } from "@/context/settings"
 import { useLanguage } from "@/context/language"
@@ -17,7 +18,6 @@ type WecomChannelCardProps = {
 export function WecomChannelCard(props: WecomChannelCardProps) {
   const [testing, setTesting] = createSignal(false)
   const language = useLanguage()
-  const tool = "inline-flex h-8 w-8 items-center justify-center rounded-[var(--native-radius-sm)] border border-[color:color-mix(in_oklab,var(--native-border)_44%,transparent)] bg-[color:color-mix(in_oklab,var(--native-panel)_88%,var(--native-bg-subtle))] text-[var(--native-muted)] transition-all duration-150 hover:border-[color:color-mix(in_oklab,var(--native-border-strong)_34%,transparent)] hover:bg-[var(--native-surface)] hover:text-[var(--native-foreground)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--native-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--native-panel)]"
 
   const handleTest = async () => {
     setTesting(true)
@@ -74,32 +74,39 @@ export function WecomChannelCard(props: WecomChannelCardProps) {
       </div>
 
       <div class={cn(sx.dashFoot, "justify-between")}>
-        <button
-          class={sx.notifTest}
+        <Button
+          variant="outline"
+          size="sm"
+          type="button"
           aria-label={testing() ? language.t("store.notificationChannels.testing") : language.t("store.notificationChannels.test")}
           title={testing() ? language.t("store.notificationChannels.testing") : language.t("store.notificationChannels.test")}
           disabled={!props.channel.enabled || testing()}
           onClick={handleTest}
         >
           <LocalIcon name="bell" size="small" />
-        </button>
+        </Button>
         <div class="flex gap-2">
-          <button
-            class={tool}
+          <Button
+            variant="ghost"
+            size="sm"
+            type="button"
             aria-label={language.t("common.edit")}
             title={language.t("common.edit")}
             onClick={() => props.onEdit(props.channel)}
           >
             <Icon name="edit" size="small" />
-          </button>
-          <button
-            class={cn(tool, "hover:border-[color:color-mix(in_oklab,#ef4444_18%,transparent)] hover:bg-[color:color-mix(in_oklab,#ef4444_8%,var(--native-panel))] hover:text-[#ef4444]")}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            type="button"
+            class="text-destructive hover:text-destructive"
             aria-label={language.t("common.delete")}
             title={language.t("common.delete")}
             onClick={() => void props.onRemove(props.channel.id)}
           >
             <Icon name="trash" size="small" />
-          </button>
+          </Button>
         </div>
       </div>
     </div>

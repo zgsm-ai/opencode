@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils"
 import { sx } from "@/pages/store/lib/styles"
 import type { UpdateDeviceRequest, Device } from "@/pages/workspace/types"
 import { DeviceEditDialog } from "./device-edit-dialog"
+import { Button } from "@/components/ui/button"
 
 type DeviceCardProps = {
   device: Device
@@ -76,9 +77,16 @@ export function DeviceCard(props: DeviceCardProps) {
       </Show>
 
       <div class={sx.dashFoot}>
-        <button class={sx.action} title={language.t("common.edit")} onClick={handleEdit}>
+        <Button
+          variant="ghost"
+          size="sm"
+          type="button"
+          aria-label={language.t("common.edit")}
+          title={language.t("common.edit")}
+          onClick={handleEdit}
+        >
           <Icon name="edit" size="small" />
-        </button>
+        </Button>
       </div>
     </div>
   )
