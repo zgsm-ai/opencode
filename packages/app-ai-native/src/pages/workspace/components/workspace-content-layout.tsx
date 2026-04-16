@@ -86,28 +86,49 @@ function ContentTabPanel() {
           onChange={tabStore.activate}
           class="h-full flex flex-col"
         >
-          <Tabs.List class="h-[41px] shrink-0  border-b [&::after]:border-b-0 overflow-x-auto scrollbar-none" onWheel={(e) => { e.currentTarget.scrollLeft += e.deltaY }}>
-            <For each={tabStore.tabs()}>
-              {(tab) => (
-                <Tabs.Trigger
-                  value={tab.id}
-                  class="group h-full min-w-[100px] max-w-[180px] !bg-background-weak !border-b-0 has-[[data-selected]]:!bg-background-base has-[[data-selected]]:!border-b has-[[data-selected]]:before:absolute has-[[data-selected]]:before:top-0 has-[[data-selected]]:before:left-0 has-[[data-selected]]:before:right-0 has-[[data-selected]]:before:h-[2px] has-[[data-selected]]:before:bg-icon-strong-base [&>[data-slot=tabs-trigger]]:h-full [&>[data-slot=tabs-trigger]]:w-full [&>[data-slot=tabs-trigger]]:px-2 [&>[data-slot=tabs-trigger]]:gap-1.5 flex items-center gap-1.5 text-13-regular text-text-weak hover:text-text-base has-[[data-selected]]:text-text-base transition-colors relative"
-                >
-                  <TabIcon tab={tab} />
-                  <span class="truncate flex-1 min-w-0">{tab.title}</span>
-                  <button
-                    class="flex items-center justify-center h-full w-6 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      closeTab(tab.id)
-                    }}
+          <div class="h-[41px] shrink-0 flex items-center  border-b pr-2">
+            <Tabs.List class="flex-1 min-w-0 h-full [&::after]:border-b-0 overflow-x-auto scrollbar-none" onWheel={(e) => { e.currentTarget.scrollLeft += e.deltaY }}>
+              <For each={tabStore.tabs()}>
+                {(tab) => (
+                  <Tabs.Trigger
+                    value={tab.id}
+                    class="group h-full min-w-[100px] max-w-[180px] !bg-background-weak !border-b-0 has-[[data-selected]]:!bg-background-base has-[[data-selected]]:!border-b has-[[data-selected]]:before:absolute has-[[data-selected]]:before:top-0 has-[[data-selected]]:before:left-0 has-[[data-selected]]:before:right-0 has-[[data-selected]]:before:h-[2px] has-[[data-selected]]:before:bg-icon-strong-base [&>[data-slot=tabs-trigger]]:h-full [&>[data-slot=tabs-trigger]]:w-full [&>[data-slot=tabs-trigger]]:px-2 [&>[data-slot=tabs-trigger]]:gap-1.5 flex items-center gap-1.5 text-13-regular text-text-weak hover:text-text-base has-[[data-selected]]:text-text-base transition-colors relative"
                   >
-                    <Icon name={"close-small" as any} size="small" class="text-text-weak" />
-                  </button>
-                </Tabs.Trigger>
-              )}
-            </For>
-          </Tabs.List>
+                    <TabIcon tab={tab} />
+                    <span class="truncate flex-1 min-w-0">{tab.title}</span>
+                    <button
+                      class="flex items-center justify-center h-full w-6 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        closeTab(tab.id)
+                      }}
+                    >
+                      <Icon name={"close-small" as any} size="small" class="text-text-weak" />
+                    </button>
+                  </Tabs.Trigger>
+                )}
+              </For>
+            </Tabs.List>
+            <div class="shrink-0 flex items-center px-1">
+              <Tooltip value={language.t("workspace.content.closeAll")} placement="bottom">
+                <IconButton
+                  icon="trash"
+                  variant="ghost"
+                  iconSize="small"
+                  onClick={() => {
+                    for (const t of tabStore.tabs()) {
+                      if (t.kind === "terminal") {
+                        const sid = t.meta?.sessionId as string | undefined
+                        if (sid) terminal.close(sid)
+                      }
+                    }
+                    tabStore.closeAll()
+                  }}
+                  aria-label={language.t("workspace.content.closeAll")}
+                />
+              </Tooltip>
+            </div>
+          </div>
           <For each={tabStore.tabs()}>
             {(tab) => (
               <Show when={tabStore.activeId() === tab.id}>
@@ -306,7 +327,7 @@ function ContentSidebar(props: { directory: string }) {
           <IconButton
             icon="plus-small"
             variant="ghost"
-            iconSize="medium"
+            iconSize="small"
             onClick={() => {
               newSessionCounter++
               tabStore.open({
@@ -324,7 +345,7 @@ function ContentSidebar(props: { directory: string }) {
           <IconButton
             icon="terminal"
             variant="ghost"
-            iconSize="medium"
+            iconSize="small"
             onClick={() => {
               newTerminalCounter++
               const pendingKey = `pending-${newTerminalCounter}`
@@ -353,23 +374,6 @@ function ContentSidebar(props: { directory: string }) {
           />
         </Tooltip>
         <div class="flex-1" />
-        <Tooltip value={language.t("workspace.content.closeAll")} placement="bottom">
-          <IconButton
-            icon="trash"
-            variant="ghost"
-            iconSize="medium"
-            onClick={() => {
-              for (const t of tabStore.tabs()) {
-                if (t.kind === "terminal") {
-                  const sid = t.meta?.sessionId as string | undefined
-                  if (sid) terminal.close(sid)
-                }
-              }
-              tabStore.closeAll()
-            }}
-            aria-label={language.t("workspace.content.closeAll")}
-          />
-        </Tooltip>
       </div>
 
       <div class="flex-1 min-h-0 flex flex-col">
