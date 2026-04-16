@@ -364,7 +364,7 @@ function WorkspaceShell(props: ParentProps) {
           <WorkspaceSidebar hide={drawer.hide} />
         </aside>
       </div>
-      <div class="flex h-full min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-hidden bg-[linear-gradient(180deg,color-mix(in_oklab,var(--native-bg-subtle)_88%,var(--native-panel)),var(--native-bg))] md:rounded-l-[var(--native-radius-lg)] md:border-l md:border-l-[color:color-mix(in_oklab,var(--native-border)_24%,transparent)]">
+      <div class="flex h-full min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-hidden bg-background-base md:rounded-l-[var(--native-radius-lg)] md:border-l md:border-l-[color:color-mix(in_oklab,var(--native-border)_24%,transparent)]">
         {props.children}
       </div>
     </div>

@@ -210,7 +210,7 @@ export function WorkspaceSidebar(props: { hide?: () => void } = {}) {
       <Show when={workspace()}>
         {(ws) => (
           <div
-            class="group/workspace flex items-center rounded-[var(--native-radius-md)] transition-all duration-150 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
+            class="group/workspace flex items-center rounded-md transition-all duration-150 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
             classList={{
               "bg-[color:color-mix(in_oklab,var(--native-primary)_8%,var(--native-panel))] text-sidebar-foreground shadow-[var(--native-shadow-sm)]": isActive(),
             }}
@@ -226,7 +226,7 @@ export function WorkspaceSidebar(props: { hide?: () => void } = {}) {
               }}
             >
               <button
-                class="flex min-w-0 flex-1 items-center gap-2 rounded-[var(--native-radius-md)] px-2.5 py-2 text-left text-sm transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+                class="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
                 classList={{
                   "text-sidebar-foreground font-medium cursor-pointer": isActive(),
                   "text-sidebar-foreground/75 cursor-pointer": !isActive() && !dot().offline,

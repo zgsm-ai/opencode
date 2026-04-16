@@ -86,7 +86,7 @@ function ContentTabPanel() {
           onChange={tabStore.activate}
           class="h-full flex flex-col"
         >
-          <Tabs.List class="h-[41px] shrink-0 border-b bg-background-base [&::after]:border-b-0 overflow-x-auto scrollbar-none" onWheel={(e) => { e.currentTarget.scrollLeft += e.deltaY }}>
+          <Tabs.List class="h-[41px] shrink-0  border-b [&::after]:border-b-0 overflow-x-auto scrollbar-none" onWheel={(e) => { e.currentTarget.scrollLeft += e.deltaY }}>
             <For each={tabStore.tabs()}>
               {(tab) => (
                 <Tabs.Trigger
@@ -219,6 +219,16 @@ function ContentSidebar(props: { directory: string }) {
   }
 
   createEffect(() => {
+    if (dw.data.status !== "ready") return
+    const live = new Set(dw.data.session.map((s) => s.id))
+    const ids = tabStore.tabs()
+      .filter((tab) => tab.kind === "session" && tab.meta?.sessionID && !live.has(tab.meta.sessionID))
+      .map((tab) => tab.id)
+    if (ids.length === 0) return
+    ids.forEach(tabStore.close)
+  })
+
+  createEffect(() => {
     const unsub = dw.subscribe((payload) => {
       if (payload.type === "session.status") {
         const props = payload.properties as { sessionID: string; status: { type: string } }
@@ -290,7 +300,7 @@ function ContentSidebar(props: { directory: string }) {
   ])
 
   return (
-    <div class="flex flex-col h-full bg-background-base border-r">
+    <div class="flex flex-col h-full border-r">
       <div class="h-[41px] shrink-0 flex items-center gap-1 px-2 border-b">
         <Tooltip value={language.t("workspace.content.newSession")} placement="bottom">
           <IconButton
@@ -419,11 +429,11 @@ function ContentSidebar(props: { directory: string }) {
                             {language.t("workspace.emptySessions")}
                           </div>
                         }>
-                          <div class="px-2 py-1">
+                          <div class="px-1.5 py-1">
                             <For each={sessionGroups()}>
                               {(group) => (
                                 <>
-                                  <div class="px-1 py-1 text-11-regular text-text-weak">{group.label}</div>
+                                  <div class="px-1.5 pt-1.5 pb-0.5 text-11-regular font-medium text-native-dim tracking-wide uppercase">{group.label}</div>
                                   <For each={group.sessions}>
                                     {(session) => {
                                       const isActive = createMemo(() => {
@@ -432,33 +442,39 @@ function ContentSidebar(props: { directory: string }) {
                                       })
                                       return (
                                         <div
-                                          class="group/s flex items-center gap-1.5 px-1 py-0.5 text-12-regular rounded-sm cursor-pointer"
+                                          class="group/s flex items-center gap-2 h-10 px-1.5 text-12-regular rounded-md cursor-pointer transition-colors duration-150"
                                           classList={{
-                                            "bg-surface-interactive-base text-text-strong": isActive(),
-                                            "hover:bg-background-stronger": !isActive(),
+                                            "bg-native-primary-soft text-native-foreground": isActive(),
+                                            "text-native-muted hover:bg-native-hover hover:text-native-foreground": !isActive(),
                                           }}
                                           onClick={() => openSession(session)}
                                         >
-                                        <Show
-                                          when={isWorking(session.id)}
-                                          fallback={
-                                            <Icon name="dash" size="small" class="shrink-0 text-text-weak" />
-                                          }
-                                        >
-                                          <Spinner class="size-3.5 shrink-0" />
-                                        </Show>
-                                        <span class="truncate flex-1 min-w-0">{session.title || language.t("command.session.new")}</span>
-                                        <button
-                                          class="shrink-0 opacity-0 group-hover/s:opacity-100 transition-opacity"
-                                          onClick={(e) => {
-                                            e.stopPropagation()
-                                            archiveSession(session)
-                                          }}
-                                        >
-                                          <Icon name="archive" size="small" class="text-text-weak hover:text-text-base" />
-                                        </button>
-                                      </div>
-                                    )
+                                          <Show
+                                            when={isWorking(session.id)}
+                                            fallback={
+                                              <div
+                                                class="size-1.5 shrink-0 rounded-full"
+                                                classList={{
+                                                  "bg-native-primary": isActive(),
+                                                  "bg-native-border": !isActive(),
+                                                }}
+                                              />
+                                            }
+                                          >
+                                            <Spinner class="size-3.5 shrink-0" />
+                                          </Show>
+                                          <span class="truncate flex-1 min-w-0">{session.title || language.t("command.session.new")}</span>
+                                          <button
+                                            class="shrink-0 size-5 flex items-center justify-center rounded opacity-0 group-hover/s:opacity-100 transition-opacity duration-150 hover:bg-native-active"
+                                            onClick={(e) => {
+                                              e.stopPropagation()
+                                              archiveSession(session)
+                                            }}
+                                          >
+                                            <Icon name="archive" size="small" class="text-native-dim" />
+                                          </button>
+                                        </div>
+                                      )
                                     }}
                                   </For>
                                 </>
@@ -497,7 +513,7 @@ function ContentSidebar(props: { directory: string }) {
                             </Show>
                             <For each={diffFiles()}>
                               {(file) => (
-                                <div class="flex items-center gap-1.5 px-1 py-0.5 text-12-regular hover:bg-background-stronger rounded-sm cursor-pointer group/diff"
+                                <div class="flex items-center gap-1.5 h-10 px-1.5 text-12-regular hover:bg-native-hover rounded-md cursor-pointer transition-colors duration-150 group/diff"
                                   onClick={() => {
                                     tabStore.open({
                                       kind: "diff",
