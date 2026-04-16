@@ -1,0 +1,74 @@
+diff --git a/dist/ghostty-web.js b/dist/ghostty-web.js
+index 7c9d64a617bbeb29d757a1acd54686e582868313..f59217d52c2ae820849b697fdb4f473c759fdc7e 100644
+--- a/dist/ghostty-web.js
++++ b/dist/ghostty-web.js
+@@ -1285,7 +1285,7 @@ const e = class H {
+         continue;
+       }
+       const C = g.getCodepoint();
+-      C === 0 || C < 32 ? B.push(" ") : B.push(String.fromCodePoint(C));
++      C === 0 || C < 32 || C > 1114111 || (C >= 55296 && C <= 57343) ? B.push(" ") : B.push(String.fromCodePoint(C));
+     }
+     return B.join("");
+   }
+@@ -1325,7 +1325,7 @@ class _ {
+     const Q = A.getContext("2d", { alpha: !1 });
+     if (!Q)
+       throw new Error("Failed to get 2D rendering context");
+-    this.ctx = Q, this.fontSize = B.fontSize ?? 15, this.fontFamily = B.fontFamily ?? "monospace", this.cursorStyle = B.cursorStyle ?? "block", this.cursorBlink = B.cursorBlink ?? !1, this.theme = { ...r, ...B.theme }, this.devicePixelRatio = B.devicePixelRatio ?? window.devicePixelRatio ?? 1, this.palette = [
++    this.ctx = Q, this.fontSize = B.fontSize ?? 15, this.fontFamily = B.fontFamily ?? "monospace", this.lineHeight = B.lineHeight ?? 1, this.cursorStyle = B.cursorStyle ?? "block", this.cursorBlink = B.cursorBlink ?? !1, this.theme = { ...r, ...B.theme }, this.devicePixelRatio = B.devicePixelRatio ?? window.devicePixelRatio ?? 1, this.palette = [
+       this.theme.black,
+       this.theme.red,
+       this.theme.green,
+@@ -1350,7 +1350,7 @@ class _ {
+   measureFont() {
+     const B = document.createElement("canvas").getContext("2d");
+     B.font = `${this.fontSize}px ${this.fontFamily}`;
+-    const Q = B.measureText("M"), g = Math.ceil(Q.width), C = Q.actualBoundingBoxAscent || this.fontSize * 0.8, I = Q.actualBoundingBoxDescent || this.fontSize * 0.2, w = Math.ceil(C + I) + 2, o = Math.ceil(C) + 1;
++    const Q = B.measureText("M"), g = Math.ceil(Q.width), C = Q.actualBoundingBoxAscent || this.fontSize * 0.8, I = Q.actualBoundingBoxDescent || this.fontSize * 0.2, w0 = Math.ceil(C + I), extra = Math.max(0, Math.round((this.lineHeight - 1) * w0)), w = w0 + 2 + extra, o = Math.ceil(C) + 1;
+     return { width: g, height: w, baseline: o };
+   }
+   /**
+@@ -1484,7 +1484,7 @@ class _ {
+       return;
+     let J = "";
+     A.flags & U.ITALIC && (J += "italic "), A.flags & U.BOLD && (J += "bold "), this.ctx.font = `${J}${this.fontSize}px ${this.fontFamily}`, this.ctx.fillStyle = this.rgbToCSS(w, o, i), A.flags & U.FAINT && (this.ctx.globalAlpha = 0.5);
+-    const s = g, F = C + this.metrics.baseline, a = String.fromCodePoint(A.codepoint || 32);
++    const s = g, F = C + this.metrics.baseline, a = (A.codepoint === 0 || A.codepoint == null || A.codepoint < 0 || A.codepoint > 1114111 || (A.codepoint >= 55296 && A.codepoint <= 57343)) ? " " : String.fromCodePoint(A.codepoint);
+     if (this.ctx.fillText(a, s, F), A.flags & U.FAINT && (this.ctx.globalAlpha = 1), A.flags & U.UNDERLINE) {
+       const N = C + this.metrics.baseline + 2;
+       this.ctx.strokeStyle = this.ctx.fillStyle, this.ctx.lineWidth = 1, this.ctx.beginPath(), this.ctx.moveTo(g, N), this.ctx.lineTo(g + I, N), this.ctx.stroke();
+@@ -1730,7 +1730,7 @@ const L = class R {
+       let G = "";
+       for (let J = M; J <= k; J++) {
+         const s = o[J];
+-        if (s && s.codepoint !== 0) {
++        if (s && s.codepoint !== 0 && s.codepoint <= 1114111 && !(s.codepoint >= 55296 && s.codepoint <= 57343)) {
+           const F = String.fromCodePoint(s.codepoint);
+           G += F, F.trim() && (i = G.length);
+         } else
+@@ -1995,7 +1995,7 @@ const L = class R {
+     if (!Q)
+       return null;
+     const g = (w) => {
+-      if (!w || w.codepoint === 0)
++      if (!w || w.codepoint === 0 || w.codepoint > 1114111 || (w.codepoint >= 55296 && w.codepoint <= 57343))
+         return !1;
+       const o = String.fromCodePoint(w.codepoint);
+       return /[\w-]/.test(o);
+@@ -2147,6 +2147,7 @@ class CA {
+       scrollback: A.scrollback ?? 1e3,
+       fontSize: A.fontSize ?? 15,
+       fontFamily: A.fontFamily ?? "monospace",
++      lineHeight: A.lineHeight ?? 1,
+       allowTransparency: A.allowTransparency ?? !1,
+       convertEol: A.convertEol ?? !1,
+       disableStdin: A.disableStdin ?? !1,
+@@ -2266,6 +2267,7 @@ class CA {
+       this.wasmTerm = this.ghostty.createTerminal(this.cols, this.rows, B), this.canvas = document.createElement("canvas"), this.canvas.style.display = "block", A.appendChild(this.canvas), this.textarea = document.createElement("textarea"), this.textarea.setAttribute("autocorrect", "off"), this.textarea.setAttribute("autocapitalize", "off"), this.textarea.setAttribute("spellcheck", "false"), this.textarea.setAttribute("tabindex", "-1"), this.textarea.setAttribute("aria-label", "Terminal input"), this.textarea.style.position = "absolute", this.textarea.style.left = "0", this.textarea.style.top = "0", this.textarea.style.width = "0", this.textarea.style.height = "0", this.textarea.style.zIndex = "-10", this.textarea.style.opacity = "0", this.textarea.style.overflow = "hidden", this.textarea.style.pointerEvents = "none", this.textarea.style.resize = "none", this.textarea.style.border = "none", this.textarea.style.outline = "none", A.appendChild(this.textarea), this.renderer = new _(this.canvas, {
+         fontSize: this.options.fontSize,
+         fontFamily: this.options.fontFamily,
++        lineHeight: this.options.lineHeight,
+         cursorStyle: this.options.cursorStyle,
+         cursorBlink: this.options.cursorBlink,
+         theme: this.options.theme

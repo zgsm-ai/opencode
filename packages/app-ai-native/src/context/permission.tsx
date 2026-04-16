@@ -17,7 +17,7 @@ type PermissionRespondFn = (input: {
   directory?: string
 }) => void
 
-export const { use: usePermission, provider: PermissionProvider } = createSimpleContext({
+export const { use: usePermission, provider: PermissionProvider, context: PermissionContext } = createSimpleContext({
   name: "Permission",
   init: () => {
     const params = useParams()
@@ -76,7 +76,7 @@ export const { use: usePermission, provider: PermissionProvider } = createSimple
     }
 
     const respond: PermissionRespondFn = (input) => {
-      globalSDK.client.interaction.permissionRespond(input.permissionID, input).catch(() => {
+      globalSDK.client.permission.respond(input.permissionID, input).catch(() => {
         responded.delete(input.permissionID)
       })
     }

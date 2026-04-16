@@ -263,7 +263,7 @@ export default function Page() {
   const dialog = useDialog()
   const language = useLanguage()
   const params = useParams()
-  const { navigateToNewSession, encodeDirectory } = useWorkspaceNavigate()
+  const { navigateToNewSession } = useWorkspaceNavigate()
   const sdk = useSDK()
   const prompt = usePrompt()
   const comments = useComments()
@@ -1269,7 +1269,7 @@ export default function Page() {
                     if (target === sdk.directory) return
                     layout.projects.open(target)
                     // 使用当前 workspaceID，dir 使用目标目录的编码
-                    navigateToNewSession({ dir: encodeDirectory(target) })
+                    navigateToNewSession({})
                   }}
                 />
               </Match>

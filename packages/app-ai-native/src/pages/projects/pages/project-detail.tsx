@@ -163,7 +163,7 @@ export default function ProjectDetail() {
           {(item) => (
             <div class="projects-page-main project-detail-main gap-6">
               <header class="projects-page-header project-detail-header space-y-4">
-                <A href="/projects" class="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
+                <A href="/projects" class="inline-flex items-center gap-2 text-sm text-[var(--native-muted)] transition-colors hover:text-[var(--native-foreground)]">
                   <Icon name="chevron-left" />
                   {language.t("projects.detail.back")}
                 </A>
@@ -177,7 +177,7 @@ export default function ProjectDetail() {
                     </Show>
                     <div class="project-detail-header-title-wrap min-w-0 flex items-center gap-3">
                       <div class="project-detail-header-title-row flex min-w-0 flex-wrap items-center gap-3">
-                        <h1 class="project-detail-title text-[2.25rem] leading-none font-bold tracking-tight text-foreground whitespace-nowrap">{item().project.name}</h1>
+                        <h1 class="project-detail-title text-[2.25rem] leading-[0.95] font-semibold tracking-[-0.05em] text-[var(--native-foreground)]">{item().project.name}</h1>
                         <span class={cn("project-detail-role-badge shrink-0", sx.badge)}>{currentUserRole()}</span>
                         <Show when={item().project.archivedAt}>
                           <span class={cn("project-detail-archived-badge shrink-0", sx.badge)}>{language.t("projects.detail.archivedBadge")}</span>

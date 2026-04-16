@@ -6,14 +6,12 @@ import { Icon } from "@opencode-ai/ui/icon"
 import { showToast } from "@opencode-ai/ui/toast"
 import type { QuestionAnswer, QuestionRequest } from "@opencode-ai/sdk/v2"
 import { useLanguage } from "@/context/language"
-import { useSDK } from "@/context/sdk"
-import { workspaceAdapter } from "@/context/workspace-adapter"
+import { useConversationAdapter } from "@/context/device-adapter"
 
 const cache = new Map<string, { tab: number; answers: QuestionAnswer[]; custom: string[]; customOn: boolean[] }>()
 
 export const SessionQuestionDock: Component<{ request: QuestionRequest; onSubmit: () => void }> = (props) => {
-  const sdk = useSDK()
-  const api = workspaceAdapter(sdk.client)
+  const api = useConversationAdapter()
   const language = useLanguage()
 
   const questions = createMemo(() => props.request.questions)

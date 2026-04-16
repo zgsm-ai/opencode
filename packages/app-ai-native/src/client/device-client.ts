@@ -11,6 +11,28 @@ type ClientOpts = {
   throwOnError?: boolean
 }
 
+export type DiffFileEntry = {
+  path: string
+  status: string
+  additions: number
+  deletions: number
+}
+
+export type DiffData = {
+  directory: string
+  branch: string
+  files: DiffFileEntry[]
+  diff?: string
+}
+
+export type RuntimeConfig = {
+  allow_absolute_paths: boolean
+  max_list_depth: number
+  allowed_operations: string[]
+  blacklist_count: number
+  whitelist_enabled: boolean
+}
+
 export type DeviceClient = {
   baseUrl: string
   transport: ReturnType<typeof createDeviceTransport>
@@ -21,109 +43,64 @@ export type DeviceClient = {
     event: OpencodeClient["global"]["event"]
     dispose: OpencodeClient["global"]["dispose"]
   }
-  path: {
-    get: () => Promise<{ data: unknown }>
-  }
-  app: {
-    agents: () => Promise<{ data: unknown }>
-  }
-  provider: OpencodeClient["provider"]
-  auth: OpencodeClient["auth"]
-  worktree: OpencodeClient["worktree"]
-  project: OpencodeClient["project"]
-  file: OpencodeClient["file"]
-  find: OpencodeClient["find"]
-  pty: OpencodeClient["pty"]
-  command: OpencodeClient["command"]
-  mcp: {
-    status: () => Promise<{ data: unknown }>
-    connect: OpencodeClient["mcp"]["connect"]
-    disconnect: OpencodeClient["mcp"]["disconnect"]
-  }
-  lsp: {
-    status: () => Promise<{ data: unknown }>
-  }
-  vcs: {
-    get: () => Promise<{ data: unknown }>
-  }
-  instance: {
-    dispose: OpencodeClient["instance"]["dispose"]
-  }
-  permission: {
-    list: () => Promise<{ data: unknown }>
-    respond: OpencodeClient["permission"]["respond"]
-  }
-  question: {
-    list: () => Promise<{ data: unknown }>
-    reply: OpencodeClient["question"]["reply"]
-    reject: OpencodeClient["question"]["reject"]
-  }
-  session: {
-    create: (body?: unknown) => Promise<{ data: unknown }>
-    get: ({ sessionID }: { sessionID: string }) => Promise<{ data: unknown }>
-    list: (input?: QueryInput) => Promise<{ data: unknown }>
-    messages: (input: { sessionID: string; directory?: string; limit?: number }) => Promise<{ data: unknown }>
-    status: () => Promise<{ data: unknown }>
-    diff: ({ sessionID }: { sessionID: string }) => Promise<{ data: unknown }>
-    todo: ({ sessionID }: { sessionID: string }) => Promise<{ data: unknown }>
-    update: ({ sessionID, ...body }: { sessionID: string } & Record<string, unknown>) => Promise<{ data: unknown }>
-    delete: ({ sessionID }: { sessionID: string }) => Promise<{ data: unknown }>
-    abort: ({ sessionID }: { sessionID: string }) => Promise<{ data: unknown }>
-    revert: ({ sessionID, messageID }: { sessionID: string; messageID: string }) => Promise<{ data: unknown }>
-    unrevert: ({ sessionID }: { sessionID: string }) => Promise<{ data: unknown }>
-    summarize: ({ sessionID, ...body }: { sessionID: string } & Record<string, unknown>) => Promise<{ data: unknown }>
-    shell: ({ sessionID, ...body }: { sessionID: string } & Record<string, unknown>) => Promise<{ data: unknown }>
-    command: ({ sessionID, ...body }: { sessionID: string } & Record<string, unknown>) => Promise<{ data: unknown }>
-    promptAsync: ({ sessionID, ...body }: { sessionID: string } & Record<string, unknown>) => Promise<{ data: unknown }>
-    share: OpencodeClient["session"]["share"]
-    unshare: OpencodeClient["session"]["unshare"]
-  }
   runtime: {
     health: () => Promise<{ healthy: boolean; version?: string }>
-    targetContext: (directory?: string) => Promise<unknown>
-    modelCapabilities: (directory?: string) => Promise<unknown>
-    agents: (directory?: string) => Promise<unknown>
-    commands: (directory?: string) => Promise<unknown>
-    fileList: (path: string) => Promise<unknown>
-    fileRead: (path: string) => Promise<unknown>
-    findFiles: (query: string, dirs: "true" | "false", directory?: string) => Promise<unknown>
-    mcpStatus: (directory?: string) => Promise<unknown>
-    lspStatus: (directory?: string) => Promise<unknown>
-    vcs: (directory?: string) => Promise<unknown>
-    terminalCreate: (input: unknown) => Promise<unknown>
-    terminalUpdate: (input: { ptyID: string } & Record<string, unknown>) => Promise<unknown>
-    terminalRemove: (ptyID: string) => Promise<unknown>
-    instanceDispose: (directory?: string) => Promise<unknown>
+    config: () => Promise<RuntimeConfig>
+    path: () => Promise<unknown>
+    vcs: () => Promise<unknown>
+    fileList: (path: string) => Promise<Array<{ name: string; path: string; absolute: string; type: "directory" | "file"; ignored: boolean }>>
+    fileRead: (path: string) => Promise<{ type: "text"; content: string }>
+    findFiles: (query: string, dirs: "true" | "false") => Promise<unknown>
+    diff: (input?: { staged?: boolean; stat?: boolean; path?: string }) => Promise<DiffData | undefined>
+    dispose: () => Promise<unknown>
   }
-  interaction: {
-    permissions: (directory?: string) => Promise<unknown>
-    permissionRespond: (requestID: string, input: unknown) => Promise<unknown>
-    questions: (directory?: string) => Promise<unknown>
-    questionReply: (requestID: string, input: unknown) => Promise<unknown>
-    questionReject: (requestID: string) => Promise<unknown>
+  agent: {
+    list: () => Promise<unknown>
+    health: () => Promise<unknown>
+    models: () => Promise<unknown>
+    sessionModes: () => Promise<unknown>
+    commands: () => Promise<unknown>
+    mcp: () => Promise<unknown>
+    lsp: () => Promise<unknown>
   }
   conversation: {
     create: (body?: unknown) => Promise<unknown>
-    get: (sessionID: string, directory?: string) => Promise<unknown>
     list: (input?: QueryInput) => Promise<unknown>
-    messages: (sessionID: string, input?: QueryInput) => Promise<unknown>
-    status: (directory?: string) => Promise<unknown>
-    diff: (sessionID: string, directory?: string) => Promise<unknown>
-    todo: (sessionID: string, directory?: string) => Promise<unknown>
-    update: (sessionID: string, body: unknown) => Promise<unknown>
-    delete: (sessionID: string) => Promise<unknown>
-    abort: (sessionID: string) => Promise<unknown>
-    revert: (sessionID: string, messageID: string) => Promise<unknown>
-    unrevert: (sessionID: string) => Promise<unknown>
-    summarize: (sessionID: string, body?: unknown) => Promise<unknown>
-    shell: (sessionID: string, body: unknown) => Promise<unknown>
-    command: (sessionID: string, body: unknown) => Promise<unknown>
-    prompt: (sessionID: string, body: unknown) => Promise<unknown>
-    promptAsync: (sessionID: string, body: unknown) => Promise<unknown>
+    status: () => Promise<unknown>
+    get: (id: string) => Promise<unknown>
+    update: (id: string, body: unknown) => Promise<unknown>
+    delete: (id: string) => Promise<unknown>
+    abort: (id: string) => Promise<unknown>
+    prompt: (id: string, body: unknown) => Promise<unknown>
+    promptAsync: (id: string, body: unknown) => Promise<unknown>
+    messages: (id: string, input?: QueryInput) => Promise<unknown>
+    todo: (id: string) => Promise<unknown>
+    diff: (id: string) => Promise<unknown>
+    shell: (id: string, body: unknown) => Promise<unknown>
+    command: (id: string, body: unknown) => Promise<unknown>
+  }
+  terminal: {
+    create: (input: unknown) => Promise<unknown>
+    kill: (id: string) => Promise<unknown>
+    resize: (id: string, body: unknown) => Promise<unknown>
+    restart: (id: string) => Promise<unknown>
+    stream: (id: string) => Promise<unknown>
+    input: (id: string, body: unknown) => Promise<unknown>
+  }
+  permission: {
+    list: () => Promise<unknown>
+    respond: (id: string, input: unknown) => Promise<unknown>
+  }
+  question: {
+    list: () => Promise<unknown>
+    reply: (id: string, input: unknown) => Promise<unknown>
+    reject: (id: string) => Promise<unknown>
   }
   event: {
     stream: (input?: { signal?: AbortSignal; onSseError?: (error: unknown) => void }) => Promise<{ stream: AsyncIterable<{ directory?: string; payload: Event }> }>
   }
+  provider: OpencodeClient["provider"]
+  auth: OpencodeClient["auth"]
   createClient(next: Omit<ClientOpts, "baseUrl" | "headers" | "fetch">): DeviceClient
 }
 
@@ -144,8 +121,6 @@ export function createDeviceClient(opts: ClientOpts): DeviceClient {
     throwOnError: opts.throwOnError,
   })
 
-  const dir = (input?: string) => input ?? opts.directory ?? ""
-
   return {
     baseUrl: opts.baseUrl,
     transport: http,
@@ -158,120 +133,127 @@ export function createDeviceClient(opts: ClientOpts): DeviceClient {
       event: sdk.global.event.bind(sdk.global),
       dispose: () => sdk.global.dispose(),
     },
-    path: {
-      get: () => http.get("/path", { directory: dir() }).then((data) => ({ data })),
+    runtime: {
+      health: () => http.get<{ status?: string; version?: string }>("/api/v1/runtime/health").then((res) => ({ healthy: !!res && (res as any).status === "ok", version: (res as any)?.version })),
+      config: () => http.get<RuntimeConfig>("/api/v1/runtime/config"),
+      path: () => http.get("/api/v1/runtime/path"),
+      vcs: () => http.get("/api/v1/runtime/vcs"),
+      fileList: (path: string) => http.get<{ path?: string; entries?: Array<{ name: string; type: string }> }>("/api/v1/runtime/files", { path }).then((res) => {
+        const entries = res?.entries ?? []
+        const basePath = res?.path ?? path
+        return entries.map((e) => ({
+          name: e.name,
+          path: basePath === "/" ? `/${e.name}` : `${basePath}/${e.name}`,
+          absolute: basePath === "/" ? `/${e.name}` : `${basePath}/${e.name}`,
+          type: e.type === "directory" ? "directory" as const : "file" as const,
+          ignored: false,
+        }))
+      }),
+      fileRead: (path: string) => http.get<{ content?: string; lines?: number; diff?: string; patch?: { oldStart: number; oldLines: number; newStart: number; newLines: number; lines: string[] }[] }>("/api/v1/runtime/files/content", { path }).then((res) => ({
+        type: "text" as const,
+        content: res?.content ?? "",
+        diff: res?.diff,
+        patch: res?.patch,
+      })),
+      findFiles: (query: string, dirs: "true" | "false") =>
+        http.get("/api/v1/runtime/find/file", { query, dirs }),
+      diff: (input?: { staged?: boolean; stat?: boolean; path?: string }) =>
+        http.get<DiffData>("/api/v1/runtime/diff", input as Record<string, string | number | boolean | undefined>),
+      dispose: () => http.post("/api/v1/runtime/dispose"),
     },
-    app: {
-      agents: () => http.get("/agent", { directory: dir() }).then((data) => ({ data })),
+    agent: {
+      list: () => http.get("/api/v1/agents"),
+      health: () => http.get("/api/v1/agents/health"),
+      models: () => http.get("/api/v1/agents/models"),
+      sessionModes: () => http.get("/api/v1/agents/session-modes"),
+      commands: () => http.get("/api/v1/agents/commands"),
+      mcp: () => http.get("/api/v1/agents/mcp"),
+      lsp: () => http.get("/api/v1/agents/lsp"),
+    },
+    conversation: {
+      create: (body?: unknown) => http.post("/api/v1/conversations", body),
+      list: (input?: QueryInput) => http.get("/api/v1/conversations", input),
+      status: () => http.get("/api/v1/conversations/status"),
+      get: (id: string) => http.get(`/api/v1/conversations/${id}`),
+      update: (id: string, body: unknown) => http.patch(`/api/v1/conversations/${id}`, body),
+      delete: (id: string) => http.delete(`/api/v1/conversations/${id}`),
+      abort: (id: string) => http.post(`/api/v1/conversations/${id}/abort`),
+      prompt: (id: string, body: unknown) => http.post(`/api/v1/conversations/${id}/prompt`, body),
+      promptAsync: (id: string, body: unknown) => http.post(`/api/v1/conversations/${id}/prompt/async`, body),
+      messages: (id: string, input?: QueryInput) => http.get(`/api/v1/conversations/${id}/messages`, input),
+      todo: (id: string) => http.get(`/api/v1/conversations/${id}/todo`),
+      diff: (id: string) => http.get(`/api/v1/conversations/${id}/diff`),
+      shell: (id: string, body: unknown) => http.post(`/api/v1/conversations/${id}/shell`, body),
+      command: (id: string, body: unknown) => http.post(`/api/v1/conversations/${id}/command`, body),
+    },
+    terminal: {
+      create: (input: unknown) => http.post("/api/v1/terminal", input),
+      kill: (id: string) => http.delete(`/api/v1/terminal/${id}`),
+      resize: (id: string, body: unknown) => http.post(`/api/v1/terminal/${id}/resize`, body),
+      restart: (id: string) => http.post(`/api/v1/terminal/${id}/restart`),
+      stream: (id: string) => http.get(`/api/v1/terminal/${id}/stream`),
+      input: (id: string, body: unknown) => http.post(`/api/v1/terminal/${id}/input`, body),
+    },
+    permission: {
+      list: () => http.get("/api/v1/permissions"),
+      respond: (id: string, input: unknown) => http.post(`/api/v1/permissions/${id}/reply`, input),
+    },
+    question: {
+      list: () => http.get("/api/v1/questions"),
+      reply: (id: string, input: unknown) => http.post(`/api/v1/questions/${id}/reply`, input),
+      reject: (id: string) => http.post(`/api/v1/questions/${id}/reject`),
+    },
+    event: {
+      stream: (input?: { signal?: AbortSignal; onSseError?: (error: unknown) => void }) => {
+        const fn = opts.fetch ?? globalThis.fetch
+        const url = `${opts.baseUrl.replace(/\/$/, "")}/api/v1/events`
+        const controller = new AbortController()
+        const signal = input?.signal
+        if (signal) signal.addEventListener("abort", () => controller.abort())
+        const stream = (async function* () {
+          try {
+            const res = await fn(url, {
+              method: "GET",
+              credentials: "include",
+              headers: {
+                Accept: "text/event-stream",
+                ...(opts.directory ? { "X-Workspace-Directory": opts.directory } : {}),
+                ...(opts.headers ?? {}),
+              },
+              signal: controller.signal,
+            })
+            if (!res.ok || !res.body) {
+              input?.onSseError?.(new Error(`SSE connect failed: ${res.status}`))
+              return
+            }
+            const reader = res.body.getReader()
+            const decoder = new TextDecoder()
+            let buffer = ""
+            while (true) {
+              const { done, value } = await reader.read()
+              if (done) break
+              buffer += decoder.decode(value, { stream: true })
+              const lines = buffer.split("\n")
+              buffer = lines.pop() ?? ""
+              for (const line of lines) {
+                if (!line.startsWith("data: ")) continue
+                const text = line.slice(6).trim()
+                if (!text) continue
+                try {
+                  const parsed = JSON.parse(text)
+                  yield { directory: parsed.directory, payload: parsed.payload ?? parsed }
+                } catch {}
+              }
+            }
+          } catch (e) {
+            if ((e as any)?.name !== "AbortError") input?.onSseError?.(e)
+          }
+        })()
+        return Promise.resolve({ stream })
+      },
     },
     provider: sdk.provider,
     auth: sdk.auth,
-    worktree: sdk.worktree,
-    project: sdk.project,
-    file: sdk.file,
-    find: sdk.find,
-    pty: sdk.pty,
-    command: sdk.command,
-    mcp: {
-      status: () => http.get("/mcp", { directory: dir() }).then((data) => ({ data })),
-      connect: sdk.mcp.connect,
-      disconnect: sdk.mcp.disconnect,
-    },
-    lsp: {
-      status: () => http.get("/lsp", { directory: dir() }).then((data) => ({ data })),
-    },
-    vcs: {
-      get: () => http.get("/vcs", { directory: dir() }).then((data) => ({ data })),
-    },
-    instance: {
-      dispose: sdk.instance.dispose,
-    },
-    permission: {
-      list: () => http.get("/permission", { directory: dir() }).then((data) => ({ data })),
-      respond: sdk.permission.respond,
-    },
-    question: {
-      list: () => http.get("/question", { directory: dir() }).then((data) => ({ data })),
-      reply: sdk.question.reply,
-      reject: sdk.question.reject,
-    },
-    session: {
-      create: (body?: unknown) => http.post("/session", body).then((data) => ({ data })),
-      get: ({ sessionID }: { sessionID: string }) => http.get(`/session/${sessionID}`, { directory: dir() }).then((data) => ({ data })),
-      list: (input?: QueryInput) => http.get("/session", { directory: dir(), ...input }).then((data) => ({ data })),
-      messages: ({ sessionID, directory, limit }: { sessionID: string; directory?: string; limit?: number }) =>
-        http.get(`/session/${sessionID}/message`, { directory: directory ?? dir(), limit }).then((data) => ({ data })),
-      status: () => http.get("/session/status", { directory: dir() }).then((data) => ({ data })),
-      diff: ({ sessionID }: { sessionID: string }) => http.get(`/session/${sessionID}/diff`, { directory: dir() }).then((data) => ({ data })),
-      todo: ({ sessionID }: { sessionID: string }) => http.get(`/session/${sessionID}/todo`, { directory: dir() }).then((data) => ({ data })),
-      update: ({ sessionID, ...body }: { sessionID: string } & Record<string, unknown>) =>
-        http.patch(`/session/${sessionID}`, body).then((data) => ({ data })),
-      delete: ({ sessionID }: { sessionID: string }) => http.delete(`/session/${sessionID}`).then((data) => ({ data })),
-      abort: ({ sessionID }: { sessionID: string }) => http.post(`/session/${sessionID}/abort`).then((data) => ({ data })),
-      revert: ({ sessionID, messageID }: { sessionID: string; messageID: string }) =>
-        http.post(`/session/${sessionID}/revert`, { messageID }).then((data) => ({ data })),
-      unrevert: ({ sessionID }: { sessionID: string }) => http.post(`/session/${sessionID}/unrevert`).then((data) => ({ data })),
-      summarize: ({ sessionID, ...body }: { sessionID: string } & Record<string, unknown>) =>
-        http.post(`/session/${sessionID}/summarize`, body).then((data) => ({ data })),
-      shell: ({ sessionID, ...body }: { sessionID: string } & Record<string, unknown>) =>
-        http.post(`/session/${sessionID}/shell`, body).then((data) => ({ data })),
-      command: ({ sessionID, ...body }: { sessionID: string } & Record<string, unknown>) =>
-        http.post(`/session/${sessionID}/command`, body).then((data) => ({ data })),
-      promptAsync: ({ sessionID, ...body }: { sessionID: string } & Record<string, unknown>) =>
-        http.post(`/session/${sessionID}/prompt_async`, body).then((data) => ({ data })),
-      share: sdk.session.share,
-      unshare: sdk.session.unshare,
-    },
-    runtime: {
-      health: () => http.get<{ healthy: boolean; version?: string }>("/global/health"),
-      targetContext: (directory?: string) => http.get("/path", { directory: dir(directory) }),
-      modelCapabilities: (directory?: string) => http.get("/provider/capabilities", { directory: dir(directory) }),
-      agents: (directory?: string) => http.get("/agent", { directory: dir(directory) }),
-      commands: (directory?: string) => http.get("/command", { directory: dir(directory) }),
-      fileList: (path: string) => http.get("/file/file", { path }),
-      fileRead: (path: string) => http.get("/file/file/content", { path }),
-      findFiles: (query: string, dirs: "true" | "false", directory?: string) =>
-        http.get("/file/find/file", { directory: dir(directory), query, dirs }),
-      mcpStatus: (directory?: string) => http.get("/mcp", { directory: dir(directory) }),
-      lspStatus: (directory?: string) => http.get("/lsp", { directory: dir(directory) }),
-      vcs: (directory?: string) => http.get("/vcs", { directory: dir(directory) }),
-      terminalCreate: (input: unknown) => http.post("/pty", input),
-      terminalUpdate: (input: { ptyID: string } & Record<string, unknown>) => http.put(`/pty/${input.ptyID}`, input),
-      terminalRemove: (ptyID: string) => http.delete(`/pty/${ptyID}`),
-      instanceDispose: (directory?: string) => http.post("/instance/dispose", { directory: dir(directory) }),
-    },
-    interaction: {
-      permissions: (directory?: string) => http.get("/permission", { directory: dir(directory) }),
-      permissionRespond: (requestID: string, input: unknown) => http.post(`/permission/${requestID}/reply`, input),
-      questions: (directory?: string) => http.get("/question", { directory: dir(directory) }),
-      questionReply: (requestID: string, input: unknown) => http.post(`/question/${requestID}/reply`, input),
-      questionReject: (requestID: string) => http.post(`/question/${requestID}/reject`),
-    },
-    conversation: {
-      create: (body?: unknown) => http.post("/session", body),
-      get: (sessionID: string, directory?: string) => http.get(`/session/${sessionID}`, { directory: dir(directory) }),
-      list: (input?: QueryInput) => http.get("/session", input),
-      messages: (sessionID: string, input?: QueryInput) => http.get(`/session/${sessionID}/message`, input),
-      status: (directory?: string) => http.get("/session/status", { directory: dir(directory) }),
-      diff: (sessionID: string, directory?: string) => http.get(`/session/${sessionID}/diff`, { directory: dir(directory) }),
-      todo: (sessionID: string, directory?: string) => http.get(`/session/${sessionID}/todo`, { directory: dir(directory) }),
-      update: (sessionID: string, body: unknown) => http.patch(`/session/${sessionID}`, body),
-      delete: (sessionID: string) => http.delete(`/session/${sessionID}`),
-      abort: (sessionID: string) => http.post(`/session/${sessionID}/abort`),
-      revert: (sessionID: string, messageID: string) => http.post(`/session/${sessionID}/revert`, { messageID }),
-      unrevert: (sessionID: string) => http.post(`/session/${sessionID}/unrevert`),
-      summarize: (sessionID: string, body?: unknown) => http.post(`/session/${sessionID}/summarize`, body),
-      shell: (sessionID: string, body: unknown) => http.post(`/session/${sessionID}/shell`, body),
-      command: (sessionID: string, body: unknown) => http.post(`/session/${sessionID}/command`, body),
-      prompt: (sessionID: string, body: unknown) => http.post(`/session/${sessionID}/message`, body),
-      promptAsync: (sessionID: string, body: unknown) => http.post(`/session/${sessionID}/prompt_async`, body),
-    },
-    event: {
-      stream: sdk.global.event.bind(sdk.global) as (input?: {
-        signal?: AbortSignal
-        onSseError?: (error: unknown) => void
-      }) => Promise<{ stream: AsyncIterable<{ directory?: string; payload: Event }> }>,
-    },
     createClient(next: Omit<ClientOpts, "baseUrl" | "headers" | "fetch">) {
       return createDeviceClient({
         ...opts,

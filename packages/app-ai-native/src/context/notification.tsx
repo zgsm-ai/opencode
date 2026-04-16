@@ -254,7 +254,7 @@ export const { use: useNotification, provider: NotificationProvider } = createSi
 
         const dirSlug = base64Encode(directory)
         const workspaceId = active?.id ?? dirSlug
-        const href = `/workspace/${workspaceId}/${dirSlug}/session/${sessionID}`
+        const href = `/workspace/${workspaceId}/${sessionID}`
         if (settings.notifications.agent()) {
           void platform.notify(language.t("notification.session.responseReady.title"), session.title ?? sessionID, href)
         }
@@ -290,7 +290,7 @@ export const { use: useNotification, provider: NotificationProvider } = createSi
           (typeof error === "string" ? error : language.t("notification.session.error.fallbackDescription"))
         const dirSlug = base64Encode(directory)
         const workspaceId = active?.id ?? dirSlug
-        const href = sessionID ? `/workspace/${workspaceId}/${dirSlug}/session/${sessionID}` : `/workspace/${workspaceId}/${dirSlug}`
+        const href = sessionID ? `/workspace/${workspaceId}/${sessionID}` : `/workspace/${workspaceId}`
         if (settings.notifications.errors()) {
           void platform.notify(language.t("notification.session.error.title"), description, href)
         }

@@ -69,11 +69,11 @@ export const routeConfig: RouteConfig[] = [
     children: [
       { path: "/", component: WorkspaceHome },
       {
-        path: "/:workspaceID/:dir",
+        path: "/:workspaceID",
         component: DirectoryLayout,
         children: [
-          { path: "/", component: SessionIndexRoute },
-          { path: "/session/:id?", component: SessionRoute },
+          { path: "/", component: SessionRoute },
+          { path: "/:id", component: SessionRoute },
         ],
       },
     ],

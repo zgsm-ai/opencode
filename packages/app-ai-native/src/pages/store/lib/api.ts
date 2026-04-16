@@ -862,3 +862,77 @@ export interface Category {
 export const categoryApi = {
   list: () => apiFetch<{ categories: Category[] }>("/api/categories").then((res) => res.categories),
 }
+
+export interface ChannelConfig {
+  id: string
+  userId: string
+  channelType: string
+  name: string
+  enabled: boolean
+  config: Record<string, string>
+  webhookVerified: boolean
+  lastActiveAt?: string
+  lastError?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ChannelType {
+  type: string
+  capabilities: {
+    inboundMessages: boolean
+    outboundMessages: boolean
+    directChat: boolean
+    groupChat: boolean
+    markdown: boolean
+    media: boolean
+    contentTypes: string[]
+  }
+  schema: Array<{
+    key: string
+    label: string
+    type: string
+    required: boolean
+    placeholder?: string
+    helpText?: string
+  }>
+}
+
+export const channelApi = {
+  list: () =>
+    apiFetch<{ channels: ChannelConfig[] }>("/api/channels").then((res) => res.channels ?? []),
+
+  get: (id: string) =>
+    apiFetch<{ channel: ChannelConfig; webhookUrl: string }>(`/api/channels/${id}`),
+
+  create: (data: { channelType: string; name: string; config: Record<string, string> }) =>
+    apiFetch<{ channel: ChannelConfig; webhookUrl: string }>("/api/channels", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  update: (id: string, data: { name?: string; config?: Record<string, string>; enabled?: boolean }) =>
+    apiFetch<{ channel: ChannelConfig; webhookUrl: string }>(`/api/channels/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+
+  remove: (id: string) =>
+    apiFetch<{ success: boolean }>(`/api/channels/${id}`, { method: "DELETE" }),
+
+  test: (id: string) =>
+    apiFetch<{ success: boolean }>(`/api/channels/${id}/test`, { method: "POST" }),
+
+  available: () =>
+    apiFetch<{ channelTypes: ChannelType[] }>("/api/channels/available"),
+
+  wechatQRCode: () =>
+    apiFetch<{ qrcode: string; qrcodeImageUrl: string }>("/api/channels/wechat/login/qrcode", {
+      method: "POST",
+    }),
+
+  wechatLoginStatus: (qrcode: string) =>
+    apiFetch<{ status: string; token?: string }>(
+      `/api/channels/wechat/login/status?qrcode=${encodeURIComponent(qrcode)}`,
+    ),
+}

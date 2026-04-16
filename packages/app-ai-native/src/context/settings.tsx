@@ -133,7 +133,7 @@ function withFallback<T>(read: () => T | undefined, fallback: T) {
   return createMemo(() => read() ?? fallback)
 }
 
-export const { use: useSettings, provider: SettingsProvider } = createSimpleContext({
+export const { use: useSettings, provider: SettingsProvider, context: SettingsContext } = createSimpleContext({
   name: "Settings",
   init: () => {
     const [store, setStore, _, ready] = persisted("settings.v3", createStore<Settings>(defaultSettings))

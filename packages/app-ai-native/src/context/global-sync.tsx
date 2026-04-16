@@ -26,7 +26,7 @@ import type { ProjectMeta } from "./global-sync/types"
 import { SESSION_RECENT_LIMIT } from "./global-sync/types"
 import { sanitizeProject } from "./global-sync/utils"
 import { formatServerError } from "@/utils/server-errors"
-import { workspaceAdapter } from "./workspace-adapter"
+import { useConversationAdapter, sdkAdapter } from "./device-adapter"
 import { workspaceKey } from "@/pages/layout/helpers"
 
 type GlobalStore = {
@@ -182,11 +182,11 @@ function createGlobalSync() {
     }
 
     const limit = Math.max(store.limit + SESSION_RECENT_LIMIT, SESSION_RECENT_LIMIT)
-    const api = workspaceAdapter(globalSDK.client)
+    const api = useConversationAdapter()
     const promise = loadRootSessionsWithFallback({
       directory,
       limit,
-      list: (query) => api.sessionList(query.directory),
+      list: (query) => api.sessionList(query.directory) as Promise<{ data?: import("@opencode-ai/sdk/v2/client").Session[] }>,
     })
       .then((x) => {
         if (!active) return
@@ -249,6 +249,7 @@ function createGlobalSync() {
       await bootstrapDirectory({
         directory,
         sdk,
+        api: sdkAdapter(sdk),
         baseUrl: globalSDK.createClient({ directory, throwOnError: true }).getConfig().baseUrl ?? "",
         store: child[0],
         setStore: child[1],
@@ -314,10 +315,10 @@ function createGlobalSync() {
       loadLsp: () => {
         if (!active) return
         sdkFor(directory)
-          .lsp.status()
+          .agent.lsp()
           .then((x) => {
             if (!active) return
-            setStore("lsp", x.data ?? [])
+            setStore("lsp", (x as any)?.data ?? x ?? [])
           })
       },
     })
@@ -384,7 +385,7 @@ function createGlobalSync() {
     }
     if (Date.now() - lastBoot < BOOT_COOLDOWN_MS) return
     pending = bootstrapGlobal({
-      globalSDK: globalSDK.client,
+      api: sdkAdapter(globalSDK.client),
       connectErrorTitle: language.t("dialog.server.add.error"),
       connectErrorDescription: language.t("error.globalSync.connectFailed", {
         url: globalSDK.url,
@@ -433,6 +434,8 @@ function createGlobalSync() {
 }
 
 const GlobalSyncContext = createContext<ReturnType<typeof createGlobalSync>>()
+
+export { GlobalSyncContext }
 
 export function GlobalSyncProvider(props: ParentProps) {
   const value = createGlobalSync()

@@ -95,6 +95,7 @@ export type ProjectMeta = {
 export type State = {
   status: "loading" | "partial" | "complete"
   agent: Agent[]
+  agentRuntimes: unknown[]
   command: Command[]
   project: string
   projectMeta: ProjectMeta | undefined

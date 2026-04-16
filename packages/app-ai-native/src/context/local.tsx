@@ -10,7 +10,7 @@ import { cycleModelVariant, getConfiguredAgentVariant, resolveModelVariant } fro
 
 export type ModelKey = { providerID: string; modelID: string }
 
-export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
+export const { use: useLocal, provider: LocalProvider, context: LocalContext } = createSimpleContext({
   name: "Local",
   init: () => {
     const sdk = useSDK()

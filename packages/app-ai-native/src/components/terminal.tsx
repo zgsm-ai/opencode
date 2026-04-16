@@ -1,4 +1,4 @@
-import { type HexColor, resolveThemeVariant, useTheme, withAlpha } from "@opencode-ai/ui/theme"
+import { useTheme } from "@opencode-ai/ui/theme"
 import { showToast } from "@opencode-ai/ui/toast"
 import type { FitAddon, Ghostty, Terminal as Term } from "ghostty-web"
 import { type ComponentProps, createEffect, createMemo, onCleanup, onMount, splitProps } from "solid-js"
@@ -6,12 +6,13 @@ import { SerializeAddon } from "@/addons/serialize"
 import { matchKeybind, parseKeybind } from "@/context/command"
 import { useLanguage } from "@/context/language"
 import { usePlatform } from "@/context/platform"
-import { useSDK } from "@/context/sdk"
 import { useServer } from "@/context/server"
 import { monoFontFamily, useSettings } from "@/context/settings"
-import type { LocalPTY } from "@/context/terminal"
+import type { LocalPTY } from "@/context/device-terminal"
 import { disposeIfDisposable, getHoveredLinkText, setOptionIfSupported } from "@/utils/runtime-adapters"
 import { terminalWriter } from "@/utils/terminal-writer"
+import { CloudTerminalApi } from "@/lib/cloud-terminal-api"
+import "@/styles/terminal-fonts.css"
 
 const TOGGLE_TERMINAL_ID = "terminal.toggle"
 const DEFAULT_TOGGLE_TERMINAL_KEYBIND = "ctrl+`"
@@ -21,6 +22,7 @@ export interface TerminalProps extends ComponentProps<"div"> {
   onCleanup?: (pty: Partial<LocalPTY> & { id: string }) => void
   onConnect?: () => void
   onConnectError?: (error: unknown) => void
+  forceDark?: boolean
 }
 
 let shared: Promise<{ mod: typeof import("ghostty-web"); ghostty: Ghostty }> | undefined
@@ -40,21 +42,75 @@ type TerminalColors = {
   background: string
   foreground: string
   cursor: string
+  cursorAccent: string
   selectionBackground: string
+  selectionForeground: string
+  black: string
+  red: string
+  green: string
+  yellow: string
+  blue: string
+  magenta: string
+  cyan: string
+  white: string
+  brightBlack: string
+  brightRed: string
+  brightGreen: string
+  brightYellow: string
+  brightBlue: string
+  brightMagenta: string
+  brightCyan: string
+  brightWhite: string
 }
 
 const DEFAULT_TERMINAL_COLORS: Record<"light" | "dark", TerminalColors> = {
   light: {
-    background: "#fcfcfc",
-    foreground: "#211e1e",
-    cursor: "#211e1e",
-    selectionBackground: withAlpha("#211e1e", 0.2),
+    background: "#ffffff",
+    foreground: "#383a42",
+    cursor: "#526fff",
+    cursorAccent: "#ffffff",
+    selectionBackground: "#add6ff",
+    selectionForeground: "#383a42",
+    black: "#383a42",
+    red: "#e45649",
+    green: "#50a14f",
+    yellow: "#c18401",
+    blue: "#4078f2",
+    magenta: "#a626a4",
+    cyan: "#0184bc",
+    white: "#a0a1a7",
+    brightBlack: "#4f525e",
+    brightRed: "#e06c75",
+    brightGreen: "#98c379",
+    brightYellow: "#e5c07b",
+    brightBlue: "#61afef",
+    brightMagenta: "#c678dd",
+    brightCyan: "#56b6c2",
+    brightWhite: "#ffffff",
   },
   dark: {
-    background: "#191515",
-    foreground: "#d4d4d4",
-    cursor: "#d4d4d4",
-    selectionBackground: withAlpha("#d4d4d4", 0.25),
+    background: "#1e1e2e",
+    foreground: "#cdd6f4",
+    cursor: "#f5e0dc",
+    cursorAccent: "#1e1e2e",
+    selectionBackground: "#585b70",
+    selectionForeground: "#cdd6f4",
+    black: "#45475a",
+    red: "#f38ba8",
+    green: "#a6e3a1",
+    yellow: "#f9e2af",
+    blue: "#89b4fa",
+    magenta: "#f5c2e7",
+    cyan: "#94e2d5",
+    white: "#bac2de",
+    brightBlack: "#585b70",
+    brightRed: "#f38ba8",
+    brightGreen: "#a6e3a1",
+    brightYellow: "#f9e2af",
+    brightBlue: "#89b4fa",
+    brightMagenta: "#f5c2e7",
+    brightCyan: "#94e2d5",
+    brightWhite: "#a6adc8",
   },
 }
 
@@ -73,10 +129,8 @@ const useTerminalUiBindings = (input: {
   const handleCopy = (event: ClipboardEvent) => {
     const selection = input.term.getSelection()
     if (!selection) return
-
     const clipboard = event.clipboardData
     if (!clipboard) return
-
     event.preventDefault()
     clipboard.setData("text/plain", selection)
   }
@@ -85,7 +139,6 @@ const useTerminalUiBindings = (input: {
     const clipboard = event.clipboardData
     const text = clipboard?.getData("text/plain") ?? clipboard?.getData("text") ?? ""
     if (!text) return
-
     event.preventDefault()
     event.stopPropagation()
     input.term.paste(text)
@@ -100,22 +153,14 @@ const useTerminalUiBindings = (input: {
 
   input.container.addEventListener("copy", handleCopy, true)
   input.cleanups.push(() => input.container.removeEventListener("copy", handleCopy, true))
-
   input.container.addEventListener("paste", handlePaste, true)
   input.cleanups.push(() => input.container.removeEventListener("paste", handlePaste, true))
-
   input.container.addEventListener("pointerdown", input.handlePointerDown)
   input.cleanups.push(() => input.container.removeEventListener("pointerdown", input.handlePointerDown))
-
-  input.container.addEventListener("click", input.handleLinkClick, {
-    capture: true,
-  })
+  input.container.addEventListener("click", input.handleLinkClick, { capture: true })
   input.cleanups.push(() =>
-    input.container.removeEventListener("click", input.handleLinkClick, {
-      capture: true,
-    }),
+    input.container.removeEventListener("click", input.handleLinkClick, { capture: true }),
   )
-
   input.term.textarea?.addEventListener("focus", handleTextareaFocus)
   input.term.textarea?.addEventListener("blur", handleTextareaBlur)
   input.cleanups.push(() => input.term.textarea?.removeEventListener("focus", handleTextareaFocus))
@@ -138,7 +183,6 @@ const persistTerminal = (input: {
       return ""
     }
   })()
-
   input.onCleanup({
     id: input.id,
     buffer,
@@ -151,13 +195,12 @@ const persistTerminal = (input: {
 
 export const Terminal = (props: TerminalProps) => {
   const platform = usePlatform()
-  const sdk = useSDK()
   const settings = useSettings()
   const theme = useTheme()
   const language = useLanguage()
   const server = useServer()
   let container!: HTMLDivElement
-  const [local, others] = splitProps(props, ["pty", "class", "classList", "onConnect", "onConnectError"])
+  const [local, others] = splitProps(props, ["pty", "class", "classList", "onConnect", "onConnectError", "forceDark"])
   const id = local.pty.id
   const restore = typeof local.pty.buffer === "string" ? local.pty.buffer : ""
   const restoreSize =
@@ -171,7 +214,6 @@ export const Terminal = (props: TerminalProps) => {
       ? { cols: local.pty.cols, rows: local.pty.rows }
       : undefined
   const scrollY = typeof local.pty.scrollY === "number" ? local.pty.scrollY : undefined
-  let ws: WebSocket | undefined
   let term: Term | undefined
   let ghostty: Ghostty
   let serializeAddon: SerializeAddon
@@ -187,6 +229,7 @@ export const Terminal = (props: TerminalProps) => {
     typeof local.pty.cursor === "number" && Number.isSafeInteger(local.pty.cursor) ? local.pty.cursor : undefined
   let cursor = start ?? 0
   let output: ReturnType<typeof terminalWriter> | undefined
+  let cloudApi: CloudTerminalApi | undefined
 
   const cleanup = () => {
     if (!cleanups.length) return
@@ -201,35 +244,15 @@ export const Terminal = (props: TerminalProps) => {
   }
 
   const pushSize = (cols: number, rows: number) => {
-    return sdk.client.pty
-      .update({
-        ptyID: id,
-        size: { cols, rows },
-      })
-      .catch((err) => {
-        debugTerminal("failed to sync terminal size", err)
-      })
+    if (!cloudApi) return
+    return cloudApi.resize(id, rows, cols).catch((err) => {
+      debugTerminal("failed to sync cloud terminal size", err)
+    })
   }
 
   const getTerminalColors = (): TerminalColors => {
-    const mode = theme.mode() === "dark" ? "dark" : "light"
-    const fallback = DEFAULT_TERMINAL_COLORS[mode]
-    const currentTheme = theme.themes()[theme.themeId()]
-    if (!currentTheme) return fallback
-    const variant = mode === "dark" ? currentTheme.dark : currentTheme.light
-    if (!variant?.seeds) return fallback
-    const resolved = resolveThemeVariant(variant, mode === "dark")
-    const text = resolved["text-stronger"] ?? fallback.foreground
-    const background = resolved["background-stronger"] ?? fallback.background
-    const alpha = mode === "dark" ? 0.25 : 0.2
-    const base = text.startsWith("#") ? (text as HexColor) : (fallback.foreground as HexColor)
-    const selectionBackground = withAlpha(base, alpha)
-    return {
-      background,
-      foreground: text,
-      cursor: text,
-      selectionBackground,
-    }
+    const mode = local.forceDark || theme.mode() === "dark" ? "dark" : "light"
+    return DEFAULT_TERMINAL_COLORS[mode]
   }
 
   const terminalColors = createMemo(getTerminalColors)
@@ -238,7 +261,6 @@ export const Terminal = (props: TerminalProps) => {
     if (disposed) return
     if (!fitAddon) return
     if (fitFrame !== undefined) return
-
     fitFrame = requestAnimationFrame(() => {
       fitFrame = undefined
       if (disposed) return
@@ -249,15 +271,12 @@ export const Terminal = (props: TerminalProps) => {
   const scheduleSize = (cols: number, rows: number) => {
     if (disposed) return
     if (lastSize?.cols === cols && lastSize?.rows === rows) return
-
     pendingSize = { cols, rows }
-
     if (!lastSize) {
       lastSize = pendingSize
       void pushSize(cols, rows)
       return
     }
-
     if (sizeTimer !== undefined) return
     sizeTimer = setTimeout(() => {
       sizeTimer = undefined
@@ -312,13 +331,10 @@ export const Terminal = (props: TerminalProps) => {
     if (!event.shiftKey && !event.ctrlKey && !event.metaKey) return
     if (event.altKey) return
     if (event.button !== 0) return
-
     const t = term
     if (!t) return
-
     const text = getHoveredLinkText(t)
     if (!text) return
-
     event.preventDefault()
     event.stopImmediatePropagation()
     platform.openLink(text)
@@ -329,8 +345,23 @@ export const Terminal = (props: TerminalProps) => {
       const loaded = await loadGhostty()
       if (disposed) return
 
+      // Wait for terminal font to load before measuring metrics
+      if (typeof document !== "undefined" && document.fonts) {
+        try {
+          await document.fonts.load('14px "FiraCode Nerd Font Mono"')
+        } catch {}
+      }
+
       const mod = loaded.mod
       const g = loaded.ghostty
+
+      const currentServer = server.current
+      if (!currentServer) throw new Error("No server configured")
+
+      const deviceId = server.key?.replace(/.*\/cloud\/device\/([^/]+)\/proxy.*/, "$1")
+      if (!deviceId || deviceId === server.key) throw new Error("Cloud device ID not found in server URL")
+
+      cloudApi = new CloudTerminalApi({ server: currentServer, deviceId })
 
       const t = new mod.Terminal({
         cursorBlink: true,
@@ -338,13 +369,13 @@ export const Terminal = (props: TerminalProps) => {
         cols: restoreSize?.cols,
         rows: restoreSize?.rows,
         fontSize: 14,
-        fontFamily: monoFontFamily(settings.appearance.font()),
+        fontFamily: '"FiraCode Nerd Font Mono", "JetBrainsMonoNL Nerd Font", "Cascadia Code PL", "Fira Code", "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, "Liberation Mono", "Courier New", monospace',
         allowTransparency: false,
         convertEol: false,
         theme: terminalColors(),
         scrollback: 10_000,
         ghostty: g,
-      })
+      } as any)
       cleanups.push(() => t.dispose())
       if (disposed) {
         cleanup()
@@ -356,16 +387,12 @@ export const Terminal = (props: TerminalProps) => {
 
       t.attachCustomKeyEventHandler((event) => {
         const key = event.key.toLowerCase()
-
         if (event.ctrlKey && event.shiftKey && !event.metaKey && key === "c") {
           document.execCommand("copy")
           return true
         }
-
-        // allow for toggle terminal keybinds in parent
         const config = settings.keybinds.get(TOGGLE_TERMINAL_ID) ?? DEFAULT_TOGGLE_TERMINAL_KEYBIND
         const keybinds = parseKeybind(config)
-
         return matchKeybind(keybinds, event)
       })
 
@@ -378,15 +405,39 @@ export const Terminal = (props: TerminalProps) => {
       serializeAddon = serializer
 
       t.open(container)
-      useTerminalUiBindings({
-        container,
-        term: t,
-        cleanups,
-        handlePointerDown,
-        handleLinkClick,
-      })
-
+      useTerminalUiBindings({ container, term: t, cleanups, handlePointerDown, handleLinkClick })
       focusTerminal()
+
+      // IME support: ghostty-web doesn't handle compositionend natively
+      const textarea = container.querySelector("textarea") as HTMLTextAreaElement | null
+      if (textarea) {
+        let composing = false
+        const onCompositionStart = () => { composing = true }
+        const onCompositionEnd = (e: CompositionEvent) => {
+          composing = false
+          const data = e.data
+          if (data) {
+            cloudApi?.sendInput(id, data).catch((err) => {
+              debugTerminal("failed to send IME input", err)
+            })
+          }
+          textarea.value = ""
+        }
+        const onInput = (e: InputEvent) => {
+          if (composing) return
+          if (e.isComposing) return
+          if (e.inputType === "insertCompositionText") return
+          // For non-IME input, let ghostty-web's keydown handler deal with it
+        }
+        textarea.addEventListener("compositionstart", onCompositionStart)
+        textarea.addEventListener("compositionend", onCompositionEnd as EventListener)
+        textarea.addEventListener("input", onInput as EventListener)
+        cleanups.push(() => {
+          textarea.removeEventListener("compositionstart", onCompositionStart)
+          textarea.removeEventListener("compositionend", onCompositionEnd as EventListener)
+          textarea.removeEventListener("input", onInput as EventListener)
+        })
+      }
 
       if (typeof document !== "undefined" && document.fonts) {
         document.fonts.ready.then(scheduleFit)
@@ -396,10 +447,14 @@ export const Terminal = (props: TerminalProps) => {
         scheduleSize(size.cols, size.rows)
       })
       cleanups.push(() => disposeIfDisposable(onResize))
+
       const onData = t.onData((data) => {
-        if (ws?.readyState === WebSocket.OPEN) ws.send(data)
+        cloudApi?.sendInput(id, data).catch((err) => {
+          debugTerminal("failed to send cloud terminal input", err)
+        })
       })
       cleanups.push(() => disposeIfDisposable(onData))
+
       const onKey = t.onKey((key) => {
         if (key.key == "Enter") {
           props.onSubmit?.()
@@ -440,89 +495,39 @@ export const Terminal = (props: TerminalProps) => {
         startResize()
       }
 
-      // t.onScroll((ydisp) => {
-      // console.log("Scroll position:", ydisp)
-      // })
-
-      const once = { value: false }
-      let closing = false
-
-      const url = new URL(sdk.url + `/pty/${id}/connect`)
-      url.searchParams.set("directory", sdk.directory)
-      url.searchParams.set("cursor", String(start !== undefined ? start : restore ? -1 : 0))
-      url.protocol = url.protocol === "https:" ? "wss:" : "ws:"
-      url.username = server.current?.http.username ?? ""
-      url.password = server.current?.http.password ?? ""
-
-      const socket = new WebSocket(url)
-      socket.binaryType = "arraybuffer"
-      ws = socket
-
-      const handleOpen = () => {
-        local.onConnect?.()
-        scheduleSize(t.cols, t.rows)
-      }
-      socket.addEventListener("open", handleOpen)
-      if (socket.readyState === WebSocket.OPEN) handleOpen()
-
-      const decoder = new TextDecoder()
-      const handleMessage = (event: MessageEvent) => {
-        if (disposed) return
-        if (closing) return
-        if (event.data instanceof ArrayBuffer) {
-          const bytes = new Uint8Array(event.data)
-          if (bytes[0] !== 0) return
-          const json = decoder.decode(bytes.subarray(1))
-          try {
-            const meta = JSON.parse(json) as { cursor?: unknown }
-            const next = meta?.cursor
-            if (typeof next === "number" && Number.isSafeInteger(next) && next >= 0) {
-              cursor = next
+      // SSE output stream
+      const cleanupSse = cloudApi.connectSse(
+        id,
+        (event) => {
+          if (disposed) return
+          if (event.type === "data" && event.data) {
+            try {
+              const bin = atob(event.data)
+              const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0))
+              const decoded = new TextDecoder().decode(bytes)
+              output?.push(decoded)
+              cursor += decoded.length
+            } catch (err) {
+              debugTerminal("failed to decode SSE base64 data", err)
             }
-          } catch (err) {
-            debugTerminal("invalid websocket control frame", err)
+          } else if (event.type === "exit") {
+            local.onConnectError?.(new Error(`Terminal exited with code ${event.exitCode ?? 0}`))
           }
-          return
-        }
+        },
+        (error, fatal) => {
+          if (disposed) return
+          debugTerminal("SSE error", error, fatal)
+          if (fatal) {
+            local.onConnectError?.(error)
+          }
+        },
+      )
+      cleanups.push(cleanupSse)
 
-        const data = typeof event.data === "string" ? event.data : ""
-        if (!data) return
-        output?.push(data)
-        cursor += data.length
-      }
-      socket.addEventListener("message", handleMessage)
-
-      const handleError = (error: Event) => {
-        if (disposed) return
-        if (closing) return
-        if (once.value) return
-        once.value = true
-        console.error("WebSocket error:", error)
-        local.onConnectError?.(error)
-      }
-      socket.addEventListener("error", handleError)
-
-      const handleClose = (event: CloseEvent) => {
-        if (disposed) return
-        if (closing) return
-        // Normal closure (code 1000) means PTY process exited - server event handles cleanup
-        // For other codes (network issues, server restart), trigger error handler
-        if (event.code !== 1000) {
-          if (once.value) return
-          once.value = true
-          local.onConnectError?.(new Error(`WebSocket closed abnormally: ${event.code}`))
-        }
-      }
-      socket.addEventListener("close", handleClose)
-
-      cleanups.push(() => {
-        closing = true
-        socket.removeEventListener("open", handleOpen)
-        socket.removeEventListener("message", handleMessage)
-        socket.removeEventListener("error", handleError)
-        socket.removeEventListener("close", handleClose)
-        if (socket.readyState !== WebSocket.CLOSED && socket.readyState !== WebSocket.CLOSING) socket.close(1000)
-      })
+      // WS input channel
+      cloudApi.connectInputWs()
+      local.onConnect?.()
+      scheduleSize(t.cols, t.rows)
     }
 
     void run().catch((err) => {
@@ -540,7 +545,7 @@ export const Terminal = (props: TerminalProps) => {
     disposed = true
     if (fitFrame !== undefined) cancelAnimationFrame(fitFrame)
     if (sizeTimer !== undefined) clearTimeout(sizeTimer)
-    if (ws && ws.readyState !== WebSocket.CLOSED && ws.readyState !== WebSocket.CLOSING) ws.close(1000)
+    cloudApi?.disconnect()
 
     const finalize = () => {
       persistTerminal({ term, addon: serializeAddon, cursor, id, onCleanup: props.onCleanup })
@@ -565,7 +570,7 @@ export const Terminal = (props: TerminalProps) => {
       classList={{
         ...(local.classList ?? {}),
         "select-text": true,
-        "size-full px-6 py-3 font-mono relative overflow-hidden": true,
+        "size-full p-2 font-mono relative overflow-hidden": true,
         [local.class ?? ""]: !!local.class,
       }}
       {...others}

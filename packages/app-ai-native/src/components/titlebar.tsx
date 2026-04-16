@@ -13,6 +13,7 @@ import { useCommand } from "@/context/command"
 import { useLanguage } from "@/context/language"
 import { appPath, isChromePath, isWorkspacePath } from "@/lib/router"
 import { applyPath, backPath, forwardPath } from "./titlebar-history"
+import { drawer } from "@/pages/workspace/drawer"
 
 type TauriDesktopWindow = {
   startDragging?: () => Promise<void>
@@ -56,6 +57,8 @@ export function Titlebar() {
   const menuLabel = createMemo(() =>
     inWorkspace() ? language.t("workspace.page.title") : language.t("sidebar.menu.toggle"),
   )
+  const toggle = () => inWorkspace() ? drawer.toggle() : layout.mobileSidebar.toggle()
+  const expanded = () => inWorkspace() ? drawer.opened() : layout.mobileSidebar.opened()
   const inAppChrome = createMemo(() => isChromePath(route()))
   if (inAppChrome()) return null
 
@@ -182,9 +185,9 @@ export function Titlebar() {
               icon="menu"
               variant="ghost"
               class="titlebar-icon rounded-md"
-              onClick={layout.mobileSidebar.toggle}
+              onClick={toggle}
               aria-label={menuLabel()}
-              aria-expanded={layout.mobileSidebar.opened()}
+              aria-expanded={expanded()}
             />
           </div>
         </Show>
@@ -194,9 +197,9 @@ export function Titlebar() {
               icon="menu"
               variant="ghost"
               class="titlebar-icon rounded-md"
-              onClick={layout.mobileSidebar.toggle}
+              onClick={toggle}
               aria-label={menuLabel()}
-              aria-expanded={layout.mobileSidebar.opened()}
+              aria-expanded={expanded()}
             />
           </div>
         </Show>
@@ -236,52 +239,7 @@ export function Titlebar() {
               </Button>
             </TooltipKeybind>
           </Show> */}
-          <Show when={!inAppChrome()}>
-            <div class="hidden xl:flex items-center shrink-0">
-              <Show when={params.dir}>
-                <TooltipKeybind
-                  placement="bottom"
-                  title={language.t("command.session.new")}
-                  keybind={command.keybind("session.new")}
-                  openDelay={2000}
-                >
-                  <Button
-                    variant="ghost"
-                    icon="new-session"
-                    class="titlebar-icon w-8 h-6 p-0 box-border"
-                    onClick={() => {
-                      if (!params.dir) return
-                      navigate(`/workspace/${params.workspaceID}/${params.dir}/session`)
-                    }}
-                    aria-label={language.t("command.session.new")}
-                  />
-                </TooltipKeybind>
-              </Show>
-              {/* back/forward buttons hidden for workspace mode */}
-              {/* <div class="flex items-center gap-0" classList={{ "ml-1": !!params.dir }}>
-                <Tooltip placement="bottom" value={language.t("common.goBack")} openDelay={2000}>
-                  <Button
-                    variant="ghost"
-                    icon="chevron-left"
-                    class="titlebar-icon w-6 h-6 p-0 box-border"
-                    disabled={!canBack()}
-                    onClick={back}
-                    aria-label={language.t("common.goBack")}
-                  />
-                </Tooltip>
-                <Tooltip placement="bottom" value={language.t("common.goForward")} openDelay={2000}>
-                  <Button
-                    variant="ghost"
-                    icon="chevron-right"
-                    class="titlebar-icon w-6 h-6 p-0 box-border"
-                    disabled={!canForward()}
-                    onClick={forward}
-                    aria-label={language.t("common.goForward")}
-                  />
-                </Tooltip>
-              </div> */}
-            </div>
-          </Show>
+          {/* new session and back/forward buttons removed for workspace mode */}
         </div>
         <div id="opencode-titlebar-left" class="flex items-center gap-3 min-w-0 px-2" />
       </div>

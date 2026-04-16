@@ -437,7 +437,7 @@ export const SortableWorkspace = (props: {
                 root={props.project.worktree}
                 setHoverSession={props.ctx.setHoverSession}
                 clearHoverProjectSoon={props.ctx.clearHoverProjectSoon}
-                navigateToNewSession={() => navigate(`/workspace/${params.workspaceID}/${slug()}/session`)}
+                navigateToNewSession={() => navigate(`/workspace/${params.workspaceID}`)}
               />
             </div>
           </div>

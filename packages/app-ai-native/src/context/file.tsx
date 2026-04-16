@@ -49,7 +49,7 @@ function errorMessage(error: unknown) {
   return "Unknown error"
 }
 
-export const { use: useFile, provider: FileProvider } = createSimpleContext({
+export const { use: useFile, provider: FileProvider, context: FileContext } = createSimpleContext({
   name: "File",
   gate: false,
   init: () => {

@@ -260,7 +260,7 @@ export function DialogSelectFile(props: { mode?: DialogSelectFileMode; onOpenFil
   const file = useFile()
   const dialog = useDialog()
   const params = useParams()
-  const { navigateToSession, encodeDirectory } = useWorkspaceNavigate()
+  const { navigateToSession } = useWorkspaceNavigate()
   const globalSDK = useGlobalSDK()
   const globalSync = useGlobalSync()
   const filesOnly = () => props.mode === "files"
@@ -369,9 +369,8 @@ export function DialogSelectFile(props: { mode?: DialogSelectFileMode; onOpenFil
 
     if (item.type === "session") {
       if (!item.directory || !item.sessionID) return
-      navigateToSession(item.sessionID, { 
-        workspaceId: params.workspaceID, 
-        dir: encodeDirectory(item.directory) 
+      navigateToSession(item.sessionID, {
+        workspaceId: params.workspaceID,
       })
       return
     }

@@ -1,5 +1,6 @@
 import { Icon } from "@opencode-ai/ui/icon"
 import { LocalIcon } from "@/components/local-icon"
+import { Button } from "@/components/ui/button"
 import { createSignal, Show } from "solid-js"
 import { type WecomChannel } from "@/context/settings"
 import { useLanguage } from "@/context/language"
@@ -73,31 +74,39 @@ export function WecomChannelCard(props: WecomChannelCardProps) {
       </div>
 
       <div class={cn(sx.dashFoot, "justify-between")}>
-        <button
-          class={sx.notifTest}
+        <Button
+          variant="outline"
+          size="sm"
+          type="button"
+          aria-label={testing() ? language.t("store.notificationChannels.testing") : language.t("store.notificationChannels.test")}
+          title={testing() ? language.t("store.notificationChannels.testing") : language.t("store.notificationChannels.test")}
           disabled={!props.channel.enabled || testing()}
           onClick={handleTest}
         >
           <LocalIcon name="bell" size="small" />
-          {testing()
-            ? language.t("store.notificationChannels.testing")
-            : language.t("store.notificationChannels.test")}
-        </button>
-        <div style={{ display: "flex", gap: "2px" }}>
-          <button
-            class={sx.action}
+        </Button>
+        <div class="flex gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            type="button"
+            aria-label={language.t("common.edit")}
             title={language.t("common.edit")}
             onClick={() => props.onEdit(props.channel)}
           >
             <Icon name="edit" size="small" />
-          </button>
-          <button
-            class={sx.action}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            type="button"
+            class="text-destructive hover:text-destructive"
+            aria-label={language.t("common.delete")}
             title={language.t("common.delete")}
             onClick={() => void props.onRemove(props.channel.id)}
           >
             <Icon name="trash" size="small" />
-          </button>
+          </Button>
         </div>
       </div>
     </div>

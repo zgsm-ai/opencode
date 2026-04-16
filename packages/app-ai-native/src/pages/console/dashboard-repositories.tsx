@@ -14,6 +14,8 @@ import { InviteDialog } from "@/pages/store/components/invite-dialog"
 import { RepoSyncTab } from "@/pages/store/components/repo-sync-tab"
 import { cn } from "@/lib/utils"
 import { sx, st } from "@/pages/store/lib/styles"
+import { Button } from "@/components/ui/button"
+
 
 export default function DashboardRepositories() {
   const dialog = useDialog()
@@ -177,12 +179,13 @@ export default function DashboardRepositories() {
             <div style={{ "text-align": "center" }}>
               <h1 class={sx.toolbarTitle}>{language.t("store.console")}</h1>
               <p class={cn(sx.toolbarSub, "mb-3")}>{language.t("store.console.authDescription")}</p>
-              <button
-                class={cn(sx.btn, sx.btnPrimary)}
+              <Button
+                type="button"
+                size="sm"
                 onClick={() => { window.location.href = getLoginUrl("/store/dashboard/repositories") }}
               >
                 {language.t("store.console.login")}
-              </button>
+              </Button>
             </div>
           </div>
         }
@@ -193,10 +196,13 @@ export default function DashboardRepositories() {
               <h2 class={sx.toolbarTitle}>{language.t("store.dashboard.nav.repositories")}</h2>
               <p class={sx.toolbarSub}>{language.t("store.console.repositories.description")}</p>
             </div>
-            <button class={cn(sx.btn, sx.btnPrimary)} onClick={openCreateRepo}>
-              <Icon name="plus" size="small" />
+            <Button
+              type="button"
+              size="sm"
+              onClick={openCreateRepo}
+            >
               {language.t("store.console.repositories.create")}
-            </button>
+            </Button>
           </div>
 
           <Show
@@ -256,18 +262,28 @@ export default function DashboardRepositories() {
                           })()}
                         </Show>
 
-                        <div class={sx.dashFoot}>
+                        <div class={cn(sx.dashFoot, "gap-2")}>
                           <Show when={repo.repoType === "sync"}>
-                            <button
-                              class={sx.action}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              type="button"
+                              aria-label={language.t("store.sync.syncNow")}
                               title={language.t("store.sync.syncNow")}
                               disabled={state.syncingRepoId === repo.id}
                               onClick={() => void syncNow(repo.id)}
                             >
                               <Icon name="reset" size="small" />
-                            </button>
-                            <button
-                              class={sx.action}
+                            </Button>
+                            <Button
+                              variant={state.expandedSyncRepo === repo.id ? "secondary" : "outline"}
+                              size="sm"
+                              type="button"
+                              aria-label={
+                                state.expandedSyncRepo === repo.id
+                                  ? language.t("store.console.repositories.hideSync")
+                                  : language.t("store.console.repositories.syncSettings")
+                              }
                               title={
                                 state.expandedSyncRepo === repo.id
                                   ? language.t("store.console.repositories.hideSync")
@@ -278,29 +294,39 @@ export default function DashboardRepositories() {
                               }
                             >
                               <Icon name="settings-gear" size="small" />
-                            </button>
+                            </Button>
                           </Show>
-                          <button
-                            class={sx.action}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            type="button"
+                            aria-label={language.t("store.console.repositories.invite")}
                             title={language.t("store.console.repositories.invite")}
                             onClick={() => openInvite(repo)}
                           >
                             <Icon name="plus-small" size="small" />
-                          </button>
-                          <button
-                            class={sx.action}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            type="button"
+                            aria-label={language.t("store.console.repositories.edit")}
                             title={language.t("store.console.repositories.edit")}
                             onClick={() => openEditRepo(repo)}
                           >
                             <Icon name="edit" size="small" />
-                          </button>
-                          <button
-                            class={sx.action}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            type="button"
+                            class="text-destructive hover:text-destructive"
+                            aria-label={language.t("store.console.repositories.delete")}
                             title={language.t("store.console.repositories.delete")}
                             onClick={() => handleDeleteRepo(repo.id)}
                           >
                             <Icon name="trash" size="small" />
-                          </button>
+                          </Button>
                         </div>
 
                         <Show when={repo.repoType === "sync" && state.expandedSyncRepo === repo.id}>

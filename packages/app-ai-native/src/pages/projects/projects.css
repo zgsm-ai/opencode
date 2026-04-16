@@ -1,10 +1,12 @@
 .projects-page {
   height: 100%;
   min-height: 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  padding: 2rem;
-  gap: 1.5rem;
+  padding: clamp(1rem, 2vw, 2rem);
+  gap: 1.25rem;
+  overflow-x: clip;
 }
 
 .projects-page-header {
@@ -17,6 +19,7 @@
   flex: 1 1 auto;
   display: flex;
   flex-direction: column;
+  gap: 1.25rem;
 }
 
 .projects-list-shell {
@@ -31,18 +34,17 @@
 .projects-top-panels {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 22rem;
-  gap: 1rem;
-  margin-bottom: 1rem;
+  gap: 1.25rem;
 }
 
 .projects-pinned-shell,
 .projects-invitations-shell {
   min-width: 0;
   min-height: 14rem;
-  border-radius: 1rem;
-  border: 1px solid color-mix(in srgb, var(--color-native-border) 12%, transparent);
-  background-color: color-mix(in srgb, var(--color-native-panel) 98%, transparent);
-  box-shadow: 0 20px 44px -36px color-mix(in srgb, var(--color-native-primary) 18%, transparent);
+  border-radius: var(--native-radius-lg);
+  border: 1px solid color-mix(in oklab, var(--color-native-border) 28%, transparent);
+  background: color-mix(in oklab, var(--color-native-panel) 84%, var(--color-native-bg-subtle));
+  box-shadow: var(--native-shadow-sm);
   padding: 1rem;
 }
 
@@ -57,7 +59,7 @@
 .projects-pinned-list {
   display: flex;
   flex-wrap: nowrap;
-  gap: 0.75rem;
+  gap: 1rem;
   overflow-x: auto;
   padding-bottom: 0.25rem;
 }
@@ -66,14 +68,15 @@
   min-width: 16rem;
   max-width: 18rem;
   min-height: 10rem;
-  border-radius: 0.875rem;
-  border: 1px solid color-mix(in srgb, var(--color-native-primary) 22%, white);
-  background-color: color-mix(in srgb, var(--color-native-primary) 78%, #1d4ed8);
+  border-radius: var(--native-radius-md);
+  border: 1px solid color-mix(in oklab, var(--color-native-primary) 14%, transparent);
+  background: linear-gradient(160deg, color-mix(in oklab, var(--color-native-primary) 9%, var(--color-native-panel)), color-mix(in oklab, var(--color-native-panel) 82%, var(--color-native-bg-subtle)));
   padding: 1rem;
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  color: white;
+  color: var(--color-native-foreground);
+  box-shadow: var(--native-shadow-sm);
 }
 
 .projects-pinned-card-actions {
@@ -83,16 +86,18 @@
 
 .projects-pinned-card-title {
   margin: 0;
-  font-size: 0.95rem;
-  font-weight: 700;
-  color: white;
+  font-family: var(--native-font-display);
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  color: var(--color-native-foreground);
 }
 
 .projects-pinned-card-desc {
   margin: 0;
   font-size: 0.8125rem;
-  color: color-mix(in srgb, white 82%, transparent);
-  line-height: 1.5;
+  color: var(--color-native-muted);
+  line-height: 1.65;
 }
 
 .projects-pinned-card-meta {
@@ -117,14 +122,21 @@
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  border-radius: 0.875rem;
-  border: 1px solid color-mix(in srgb, var(--color-native-border) 12%, transparent);
+  border-radius: var(--native-radius-md);
+  border: 1px solid color-mix(in oklab, var(--color-native-border) 28%, transparent);
   padding: 0.5rem 0.75rem;
-  background-color: color-mix(in srgb, var(--color-native-bg-subtle) 78%, transparent);
+  background: color-mix(in oklab, var(--color-native-panel) 76%, var(--color-native-bg-subtle));
   min-height: 2.5rem;
   width: 100%;
   text-align: left;
   cursor: pointer;
+  transition: border-color 150ms ease, background-color 150ms ease, transform 150ms ease;
+}
+
+.projects-invitation-item:hover {
+  border-color: color-mix(in oklab, var(--color-native-primary) 16%, transparent);
+  background: color-mix(in oklab, var(--color-native-primary) 4%, var(--color-native-panel));
+  transform: translateY(-1px);
 }
 
 .projects-invitation-item-main {
@@ -145,14 +157,14 @@
 }
 
 .projects-invitation-item-actions button:hover {
-  background-color: color-mix(in srgb, var(--color-native-panel) 94%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-native-border) 18%, transparent);
+  background-color: color-mix(in oklab, var(--color-native-panel) 94%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--color-native-border) 24%, transparent);
 }
 
 .projects-invitation-item-title {
   margin: 0;
   font-size: 0.8125rem;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--color-native-foreground);
 }
 
@@ -169,7 +181,7 @@
 }
 
 .projects-search-field {
-  width: 14rem;
+  width: 15rem;
 }
 
 .projects-table-shell {
@@ -179,11 +191,19 @@
 }
 
 .project-detail-page {
-  gap: 1rem;
+  gap: 1.25rem;
 }
 
 .project-detail-main {
-  gap: 1rem;
+  gap: 1.25rem;
+}
+
+.project-detail-header-bar {
+  border-color: color-mix(in oklab, var(--color-native-border) 34%, transparent);
+}
+
+.project-detail-title {
+  max-width: 16ch;
 }
 
 .project-detail-content {
@@ -206,9 +226,10 @@
 .project-detail-activity-repo,
 .project-detail-tab-panel-members,
 .project-detail-tab-panel-invitations {
-  border-radius: 1rem;
-  background-color: color-mix(in srgb, var(--color-native-panel) 98%, transparent);
-  box-shadow: 0 20px 44px -36px color-mix(in srgb, var(--color-native-primary) 14%, transparent);
+  border-radius: var(--native-radius-lg);
+  border: 1px solid color-mix(in oklab, var(--color-native-border) 28%, transparent);
+  background: color-mix(in oklab, var(--color-native-panel) 84%, var(--color-native-bg-subtle));
+  box-shadow: var(--native-shadow-sm);
 }
 
 .project-detail-bound-repositories {
@@ -248,9 +269,9 @@
   flex: 0 0 auto;
   min-height: 7.5rem;
   height: 7.5rem;
-  background-color: color-mix(in srgb, var(--color-native-bg-subtle) 92%, transparent);
-  border: 1px solid color-mix(in srgb, var(--color-native-border) 14%, transparent);
-  box-shadow: 0 12px 28px -24px color-mix(in srgb, var(--color-native-primary) 20%, transparent);
+  background: color-mix(in oklab, var(--color-native-panel) 74%, var(--color-native-bg-subtle));
+  border: 1px solid color-mix(in oklab, var(--color-native-border) 24%, transparent);
+  box-shadow: var(--native-shadow-sm);
 }
 
 .project-detail-activity-repo-layout {
@@ -290,8 +311,8 @@
   height: 2rem;
   border-radius: 9999px;
   overflow: hidden;
-  border: 2px solid color-mix(in srgb, var(--color-native-panel) 96%, transparent);
-  background-color: color-mix(in srgb, var(--color-native-bg-subtle) 92%, transparent);
+  border: 2px solid color-mix(in oklab, var(--color-native-panel) 96%, transparent);
+  background-color: color-mix(in oklab, var(--color-native-bg-subtle) 92%, transparent);
 }
 
 .project-detail-activity-user-avatar-overflow {
@@ -317,11 +338,17 @@
 
 .project-detail-activity-sparkline-line {
   fill: none;
-  stroke: #3fb950;
+  stroke: var(--color-native-primary);
   stroke-width: 1.45;
   stroke-linecap: round;
   stroke-linejoin: round;
   opacity: 0.9;
+}
+
+@media (max-width: 768px) {
+  .projects-page {
+    padding: 1rem;
+  }
 }
 
 @media (max-width: 900px) {

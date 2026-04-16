@@ -1,7 +1,8 @@
 import { createEffect, createMemo, Show, type ParentProps } from "solid-js"
 import { useNavigate, useParams } from "@solidjs/router"
-import { SDKProvider } from "@/context/sdk"
+import { SDKProvider, useSDK } from "@/context/sdk"
 import { SyncProvider, useSync } from "@/context/sync"
+import { ConversationAdapterContext, sdkAdapter } from "@/context/device-adapter"
 import { LocalProvider } from "@/context/local"
 import { DataProvider } from "@opencode-ai/ui/context"
 import { decode64 } from "@/utils/base64"
@@ -70,15 +71,21 @@ function legacyProvider(input: ReturnType<typeof useSync>["data"]["provider"]): 
   }
 }
 
-function DirectoryDataProvider(props: ParentProps<{ directory: string; workspaceId: string; dirSlug: string }>) {
+function AdapterBridge(props: ParentProps) {
+  const sdk = useSDK()
+  const adapter = createMemo(() => sdkAdapter(sdk.client))
+  return <ConversationAdapterContext.Provider value={adapter()}>{props.children}</ConversationAdapterContext.Provider>
+}
+
+function DirectoryDataProvider(props: ParentProps<{ directory: string; workspaceId: string }>) {
   const sync = useSync()
 
   return (
     <DataProvider
       data={{ ...sync.data, provider: legacyProvider(sync.data.provider) }}
       directory={props.directory}
-      onNavigateToSession={(sessionID: string) => `/workspace/${props.workspaceId}/${props.dirSlug}/session/${sessionID}`}
-      onSessionHref={(sessionID: string) => `/workspace/${props.workspaceId}/${props.dirSlug}/session/${sessionID}`}
+      onNavigateToSession={(sessionID: string) => `/workspace/${props.workspaceId}/${sessionID}`}
+      onSessionHref={(sessionID: string) => `/workspace/${props.workspaceId}/${sessionID}`}
     >
       <LocalProvider>{props.children}</LocalProvider>
     </DataProvider>
@@ -98,9 +105,15 @@ export default function Layout(props: ParentProps) {
   })
 
   const directory = createMemo(() => {
-    const dir = decode64(params.dir) ?? ""
-    if (!dir) return ""
-    return workspaceKey(dir)
+    if (params.dir) {
+      const dir = decode64(params.dir) ?? ""
+      if (dir) return workspaceKey(dir)
+    }
+    const ws = currentWorkspace()
+    if (!ws) return ""
+    const primary = ws.directories?.find((d) => d.isDefault) || ws.directories?.[0]
+    if (!primary?.path) return ""
+    return workspaceKey(primary.path)
   })
 
   createEffect(() => {
@@ -112,7 +125,6 @@ export default function Layout(props: ParentProps) {
 
   createEffect(() => {
     if (!params.workspaceID) return
-    if (!params.dir) return
     if (directory()) return
     showToast({
       variant: "error",
@@ -126,11 +138,13 @@ export default function Layout(props: ParentProps) {
     <Show when={directory()}>
       <DirectoryContext.Provider value={directory}>
         <SDKProvider directory={directory}>
+          <AdapterBridge>
           <SyncProvider>
-            <DirectoryDataProvider directory={directory()!} workspaceId={params.workspaceID ?? ""} dirSlug={params.dir ?? ""}>
+            <DirectoryDataProvider directory={directory()!} workspaceId={params.workspaceID ?? ""}>
               {props.children}
             </DirectoryDataProvider>
           </SyncProvider>
+          </AdapterBridge>
         </SDKProvider>
       </DirectoryContext.Provider>
     </Show>

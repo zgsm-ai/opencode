@@ -195,7 +195,7 @@ function createCommentSession(dir: string, id: string | undefined) {
   }
 }
 
-export const { use: useComments, provider: CommentsProvider } = createSimpleContext({
+export const { use: useComments, provider: CommentsProvider, context: CommentsContext } = createSimpleContext({
   name: "Comments",
   gate: false,
   init: () => {

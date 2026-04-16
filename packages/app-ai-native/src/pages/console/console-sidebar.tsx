@@ -7,11 +7,13 @@ import { appPath } from "@/lib/router"
 import { deviceManagementService } from "./lib/device-management-service"
 import { notificationChannelService } from "./lib/notification-channel-service"
 
+type Count = "devices" | "channels"
+
 const NAV = [
-  { href: "/console", labelKey: "store.dashboard.nav.repositories", localIcon: "repo" as LocalIconName, color: "#2E6CC4", exact: true },
-  { href: "/console/capabilities", labelKey: "store.dashboard.nav.capabilities", icon: "sparkles" as IconProps["name"], color: "#F59E0B" },
-  { href: "/console/devices", labelKey: "store.dashboard.nav.devices", icon: "server" as IconProps["name"], color: "#22c55e", badge: "devices" as const },
-  { href: "/console/notifications", labelKey: "store.dashboard.nav.notifications", localIcon: "bell" as LocalIconName, color: "#a855f7", badge: "channels" as const },
+  { href: "/console", labelKey: "store.dashboard.nav.repositories", localIcon: "repo" as LocalIconName, exact: true },
+  { href: "/console/capabilities", labelKey: "store.dashboard.nav.capabilities", icon: "sparkles" as IconProps["name"] },
+  { href: "/console/devices", labelKey: "store.dashboard.nav.devices", icon: "server" as IconProps["name"], badge: "devices" as Count },
+  { href: "/console/notifications", labelKey: "store.dashboard.nav.notifications", localIcon: "bell" as LocalIconName, badge: "channels" as Count },
 ] as const
 
 export default function ConsoleSidebar() {
@@ -22,10 +24,12 @@ export default function ConsoleSidebar() {
   const [devices] = createResource(async () => deviceManagementService.list())
   const [channels] = createResource(async () => notificationChannelService.listWecom())
 
-  const counts = () => ({
-    devices: devices()?.length ?? 0,
-    channels: channels()?.length ?? 0,
-  })
+  const total = (kind: Count) =>
+    kind === "devices"
+      ? devices()?.filter((item) => item.status === "online").length ?? 0
+      : channels()?.filter((item) => item.enabled).length ?? 0
+
+  const done = (kind: Count) => (kind === "devices" ? !devices.loading : !channels.loading)
 
   const active = (href: string, exact?: boolean) => {
     const p = path()
@@ -34,10 +38,10 @@ export default function ConsoleSidebar() {
   }
 
   return (
-    <aside class="flex w-[15.5rem] shrink-0 flex-col overflow-hidden border-r border-[color:color-mix(in_srgb,var(--native-border)_20%,transparent)] bg-[var(--native-panel)]">
-      <div class="border-b border-[color:color-mix(in_srgb,var(--native-border)_12%,transparent)] px-4 pt-3.5 pb-2.5">
+    <aside class="flex w-[var(--native-sidebar-width)] shrink-0 flex-col overflow-hidden bg-[linear-gradient(180deg,color-mix(in_oklab,var(--native-panel)_90%,var(--native-bg-subtle)),var(--native-panel))]">
+      <div class="px-4 pt-4 pb-3">
         <div class="flex items-center gap-2">
-          <span class="text-sm font-bold tracking-[-0.01em] text-[var(--native-foreground)]">{language.t("store.dashboard.title")}</span>
+          <span class="font-[var(--native-font-display)] text-[1rem] font-semibold tracking-[-0.035em] text-[var(--native-foreground)]">{language.t("store.dashboard.title")}</span>
         </div>
       </div>
 
@@ -51,22 +55,33 @@ export default function ConsoleSidebar() {
                   <A
                     href={item.href}
                     class={[
-                      "relative flex w-full items-center gap-2.5 rounded-[var(--native-radius-sm)] px-2 py-[0.4375rem] text-left text-[0.8125rem] font-medium transition-all",
+                      "flex w-full items-center gap-2.5 rounded-[var(--native-radius-md)] px-2.5 py-[0.5rem] text-left text-[0.8125rem] transition-all duration-150",
                       on()
-                        ? "bg-[color-mix(in_srgb,var(--native-primary)_8%,transparent)] text-[var(--native-primary)] font-semibold before:absolute before:top-[0.3rem] before:bottom-[0.3rem] before:left-[-0.5rem] before:w-[3px] before:rounded-r-[3px] before:bg-[var(--native-primary)] before:content-['']"
-                        : "bg-transparent text-[var(--native-muted)] hover:bg-[var(--native-hover)] hover:text-[var(--native-foreground)]",
+                        ? "bg-[color:color-mix(in_oklab,var(--native-primary)_8%,var(--native-panel))] text-[var(--native-foreground)] shadow-[var(--native-shadow-sm)]"
+                        : "bg-transparent text-[var(--native-muted)] hover:bg-[color:color-mix(in_oklab,var(--native-surface)_62%,transparent)] hover:text-[var(--native-foreground)]",
                     ].join(" ")}
                   >
-                    <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--native-radius-sm)] text-[var(--native-muted)] transition-all [&_[data-slot=icon-svg]]:h-[15px] [&_[data-slot=icon-svg]]:w-[15px] [&_[data-component=icon]]:h-[15px] [&_[data-component=icon]]:w-[15px]">
+                    <span
+                      class={[
+                        "flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--native-radius-sm)] transition-all [&_[data-slot=icon-svg]]:h-[15px] [&_[data-slot=icon-svg]]:w-[15px] [&_[data-component=icon]]:h-[15px] [&_[data-component=icon]]:w-[15px]",
+                        on()
+                          ? "text-[var(--native-foreground)]"
+                          : "text-[var(--native-muted)]",
+                      ].join(" ")}
+                    >
                       {"localIcon" in item
                         ? <LocalIcon name={item.localIcon} size="small" />
                         : <Icon name={item.icon} size="small" />}
                     </span>
-                    {language.t(item.labelKey)}
-                    <Show when={"badge" in item && !devices.loading && !channels.loading}>
-                      <span class="ml-auto rounded-[var(--native-radius-full)] bg-[color-mix(in_srgb,var(--native-primary)_8%,transparent)] px-[0.4375rem] text-[0.625rem] font-semibold leading-[1.625] text-[var(--native-primary)]">
-                        {counts()[(item as any).badge]}
-                      </span>
+                    <span class="font-medium">{language.t(item.labelKey)}</span>
+                    <Show when={"badge" in item ? item.badge : null}>
+                      {(badge) => (
+                        <Show when={done(badge())}>
+                          <span class="ml-auto rounded-[var(--native-radius-full)] bg-[color:color-mix(in_oklab,var(--native-surface)_64%,var(--native-panel))] px-[0.5rem] text-[11px] font-medium leading-[1.65] text-[var(--native-muted)]">
+                            {total(badge())}
+                          </span>
+                        </Show>
+                      )}
                     </Show>
                   </A>
                 )

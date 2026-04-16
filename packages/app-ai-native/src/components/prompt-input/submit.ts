@@ -14,7 +14,7 @@ import { usePermission } from "@/context/permission"
 import { type ImageAttachmentPart, type Prompt, usePrompt } from "@/context/prompt"
 import { useSDK } from "@/context/sdk"
 import { useSync } from "@/context/sync"
-import { workspaceAdapter } from "@/context/workspace-adapter"
+import { useConversationAdapter } from "@/context/device-adapter"
 import { Identifier } from "@/utils/id"
 import { Worktree as WorktreeState } from "@/utils/worktree"
 import { buildRequestParts } from "./build-request-parts"
@@ -59,7 +59,7 @@ type CommentItem = {
 export function createPromptSubmit(input: PromptSubmitInput) {
   const navigate = useNavigate()
   const params = useParams()
-  const { navigateToSession, encodeDirectory } = useWorkspaceNavigate()
+  const { navigateToSession } = useWorkspaceNavigate()
   const sdk = useSDK()
   const sync = useSync()
   const globalSync = useGlobalSync()
@@ -69,6 +69,7 @@ export function createPromptSubmit(input: PromptSubmitInput) {
   const prompt = usePrompt()
   const layout = useLayout()
   const language = useLanguage()
+  const deviceAdapter = useConversationAdapter()
 
   const errorMessage = (err: unknown) => {
     if (err && typeof err === "object" && "data" in err) {
@@ -80,7 +81,7 @@ export function createPromptSubmit(input: PromptSubmitInput) {
   }
 
   const abort = async () => {
-    const sessionID = params.id
+    const sessionID = params.id || (layout.deviceMode && (sync as any).currentSessionID?.())
     if (!sessionID) return Promise.resolve()
 
     // If CloudTeam mode is active, handle abort differently
@@ -89,9 +90,13 @@ export function createPromptSubmit(input: PromptSubmitInput) {
       return
     }
 
-    globalSync.todo.set(sessionID, [])
-    const [, setStore] = globalSync.child(sdk.directory)
-    setStore("todo", sessionID, [])
+    if (!layout.deviceMode) {
+      globalSync.todo.set(sessionID, [])
+      const [, setStore] = globalSync.child(sdk.directory)
+      setStore("todo", sessionID, [])
+    } else {
+      sync.set("todo", sessionID, [])
+    }
 
     const queued = pending.get(sessionID)
     if (queued) {
@@ -100,7 +105,7 @@ export function createPromptSubmit(input: PromptSubmitInput) {
       pending.delete(sessionID)
       return Promise.resolve()
     }
-    return workspaceAdapter(sdk.client)
+    return deviceAdapter
       .sessionAbort(sessionID)
       .catch(() => {})
   }
@@ -152,19 +157,24 @@ export function createPromptSubmit(input: PromptSubmitInput) {
     input.resetHistoryNavigation()
 
     const projectDirectory = sdk.directory
-    const isNewSession = !params.id
-    const shouldAutoAccept = isNewSession && input.autoAccept()
+    const existingSession = input.info() as Session | undefined
+    const deviceCurrentSession = layout.deviceMode && !params.id && (sync as any).currentSessionID?.()
+      ? sync.session.get((sync as any).currentSessionID())
+      : undefined
+    const currentSession = existingSession ?? deviceCurrentSession
+    const isNewSession = !currentSession
+    const shouldAutoAccept = !params.id && input.autoAccept()
     const worktreeSelection = input.newSessionWorktree?.() || "main"
 
     let sessionDirectory = projectDirectory
     let client = sdk.client
-    let conversation = workspaceAdapter(client)
+    let conversation = deviceAdapter
 
     if (isNewSession) {
       if (worktreeSelection === "create") {
         const createdWorktree = await conversation
           .worktreeCreate(projectDirectory)
-          .then((x) => x.data)
+          .then((x: any) => x?.data ?? x)
           .catch((err) => {
             showToast({
               title: language.t("prompt.toast.worktreeCreateFailed.title"),
@@ -193,29 +203,30 @@ export function createPromptSubmit(input: PromptSubmitInput) {
           directory: sessionDirectory,
           throwOnError: true,
         })
-        conversation = workspaceAdapter(client)
+        conversation = deviceAdapter
         globalSync.child(sessionDirectory)
       }
 
       input.onNewSessionWorktreeReset?.()
     }
 
-    let session = input.info() as Session | undefined
+    let session = currentSession as Session | undefined
     if (!session && isNewSession) {
-      session = await conversation
+      session = (await conversation
         .sessionCreate()
-        .then((x) => x.data ?? undefined)
+        .then((x: any) => x.data ?? undefined)
         .catch((err) => {
           showToast({
             title: language.t("prompt.toast.sessionCreateFailed.title"),
             description: errorMessage(err),
           })
           return undefined
-        })
-      if (session) {
+        })) as Session | undefined
+        if (session) {
         if (shouldAutoAccept) permission.enableAutoAccept(session.id, sessionDirectory)
-        layout.handoff.setTabs(encodeDirectory(sessionDirectory), session.id)
-        navigateToSession(session.id, { dir: encodeDirectory(sessionDirectory) })
+        if (!layout.deviceMode) {
+          navigateToSession(session.id, {})
+        }
       }
     }
     if (!session) {

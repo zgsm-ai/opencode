@@ -404,7 +404,7 @@ export default function Layout(props: ParentProps) {
             : language.t("notification.question.description", { sessionTitle, projectName })
         const dirSlug = base64Encode(directory)
         const workspaceId = active?.id ?? dirSlug
-        const href = `/workspace/${workspaceId}/${dirSlug}/session/${props.sessionID}`
+        const href = `/workspace/${workspaceId}/${props.sessionID}`
 
         const now = Date.now()
         const lastAlerted = alertedAtBySession.get(sessionKey) ?? 0
@@ -884,9 +884,9 @@ export default function Layout(props: ParentProps) {
     )
     if (session.id === params.id) {
       if (nextSession) {
-        navigate(`/workspace/${params.workspaceID}/${params.dir}/session/${nextSession.id}`)
+        navigate(`/workspace/${params.workspaceID}/${nextSession.id}`)
       } else {
-        navigate(`/workspace/${params.workspaceID}/${params.dir}/session`)
+        navigate(`/workspace/${params.workspaceID}`)
       }
     }
   }
@@ -1166,7 +1166,7 @@ export default function Layout(props: ParentProps) {
       setStore("lastProjectSession", scopedKey(root), { directory: resolved.directory, id: resolved.id, at: Date.now() })
       const dirSlug = base64Encode(resolved.directory)
       const workspaceId = active?.id ?? dirSlug
-      navigateWithSidebarReset(`/workspace/${workspaceId}/${dirSlug}/session/${resolved.id}`)
+      navigateWithSidebarReset(`/workspace/${workspaceId}/${resolved.id}`)
       return true
     }
 
@@ -1202,14 +1202,12 @@ export default function Layout(props: ParentProps) {
       return
     }
 
-    wsNavigateToNewSession({ dir: base64Encode(root) })
+    wsNavigateToNewSession({})
   }
 
   function navigateToSession(session: Session | undefined) {
     if (!session) return
-    wsNavigateToSession(session.id, { 
-      dir: base64Encode(session.directory) 
-    })
+    wsNavigateToSession(session.id, {})
   }
 
   function openWorkspace(directory: string, navigate = true) {
@@ -1297,7 +1295,7 @@ export default function Layout(props: ParentProps) {
       return
     }
 
-    wsNavigateToNewSession({ dir: base64Encode(next.worktree) })
+    wsNavigateToNewSession({})
     layout.projects.close(directory)
     queueMicrotask(() => {
       void navigateToWorkspace(next.worktree)
@@ -1363,7 +1361,7 @@ export default function Layout(props: ParentProps) {
     const deletedKey = workspaceKey(directory)
     const shouldLeave = leaveDeletedWorkspace || (!!params.dir && currentKey === deletedKey)
     if (!leaveDeletedWorkspace && shouldLeave) {
-      wsNavigateToNewSession({ dir: base64Encode(root) })
+      wsNavigateToNewSession({})
     }
 
     setBusy(directory, true)
@@ -1411,7 +1409,7 @@ export default function Layout(props: ParentProps) {
     const valid = dirs.some((item) => workspaceKey(item) === nextKey)
 
     if (params.dir && projectRoot(nextCurrent) === root && !valid) {
-      wsNavigateToNewSession({ dir: base64Encode(root) })
+      wsNavigateToNewSession({})
     }
   }
 
@@ -1482,7 +1480,7 @@ export default function Layout(props: ParentProps) {
           onClick: () => {
             const dirSlug = base64Encode(directory)
             const workspaceId = active?.id ?? dirSlug
-            navigate(`/workspace/${workspaceId}/${dirSlug}/session`)
+            navigate(`/workspace/${workspaceId}`)
             layout.mobileSidebar.hide()
           },
         },
@@ -1517,7 +1515,7 @@ export default function Layout(props: ParentProps) {
     const handleDelete = () => {
       const leaveDeletedWorkspace = !!params.dir && workspaceKey(currentDir()) === workspaceKey(props.directory)
       if (leaveDeletedWorkspace) {
-        wsNavigateToNewSession({ dir: base64Encode(props.root) })
+        wsNavigateToNewSession({})
       }
       dialog.close()
       void deleteWorkspace(props.root, props.directory, leaveDeletedWorkspace)
@@ -1817,7 +1815,7 @@ export default function Layout(props: ParentProps) {
     globalSync.child(created.directory)
     const dirSlug = base64Encode(created.directory)
     const workspaceId = active?.id ?? dirSlug
-    navigateWithSidebarReset(`/workspace/${workspaceId}/${dirSlug}/session`)
+    navigateWithSidebarReset(`/workspace/${workspaceId}`)
   }
 
   const workspaceSidebarCtx: WorkspaceSidebarContext = {
@@ -2012,7 +2010,7 @@ export default function Layout(props: ParentProps) {
                           onClick={() => {
                             const dirSlug = base64Encode(p.worktree)
                             const workspaceId = active?.id ?? dirSlug
-                            navigateWithSidebarReset(`/workspace/${workspaceId}/${dirSlug}/session`)
+                            navigateWithSidebarReset(`/workspace/${workspaceId}`)
                           }}
                         >
                           {language.t("command.session.new")}

@@ -2,11 +2,22 @@ import { useGlobalSync } from "@/context/global-sync"
 import type { ProviderCapabilitiesResponse } from "@/context/global-sync/types"
 import { decode64 } from "@/utils/base64"
 import { useParams } from "@solidjs/router"
-import { createMemo } from "solid-js"
+import { createMemo, useContext } from "solid-js"
+import { DeviceWorkspaceContext } from "@/context/device-workspace"
 
 const EMPTY: ProviderCapabilitiesResponse = { connected: [] }
 
 export function useProviders() {
+  const workspace = useContext(DeviceWorkspaceContext)
+
+  if (workspace) {
+    const connected = createMemo(() => workspace.data.provider.connected)
+    const paid = createMemo(() =>
+      connected().filter((p: any) => p.id !== "opencode" || Object.values(p.models).find((m: any) => m.cost?.input)),
+    )
+    return { connected, paid }
+  }
+
   const globalSync = useGlobalSync()
   const params = useParams()
   const currentDirectory = createMemo(() => {
@@ -16,8 +27,7 @@ export function useProviders() {
   })
   const providers = createMemo(() => {
     const dir = currentDirectory()
-    if (!dir) return EMPTY
-    const [projectStore] = globalSync.child(dir)
+    const [projectStore] = globalSync.child(dir || "")
     return projectStore.provider
   })
   const connected = createMemo(() => providers().connected)

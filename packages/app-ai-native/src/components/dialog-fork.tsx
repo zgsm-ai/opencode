@@ -75,7 +75,7 @@ export const DialogFork: Component = () => {
           return
         }
         dialog.close()
-        navigateToSession(forked.data.id, { dir: forked.data.directory })
+        navigateToSession(forked.data.id, {})
         requestAnimationFrame(() => {
           prompt.set(restored)
         })

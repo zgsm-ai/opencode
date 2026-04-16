@@ -185,7 +185,7 @@ function isEditableTarget(target: EventTarget | null) {
   return false
 }
 
-export const { use: useCommand, provider: CommandProvider } = createSimpleContext({
+export const { use: useCommand, provider: CommandProvider, context: CommandContext } = createSimpleContext({
   name: "Command",
   init: () => {
     const dialog = useDialog()

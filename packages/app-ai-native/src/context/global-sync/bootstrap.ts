@@ -13,7 +13,7 @@ import { reconcile, type SetStoreFunction, type Store } from "solid-js/store"
 import type { ProviderCapabilitiesResponse, State, VcsCache } from "./types"
 import { cmp, normalizeProviderList } from "./utils"
 import { formatServerError } from "@/utils/server-errors"
-import { workspaceAdapter } from "@/context/workspace-adapter"
+import type { ConversationAdapter } from "@/context/device-adapter"
 
 type GlobalStore = {
   ready: boolean
@@ -25,7 +25,7 @@ type GlobalStore = {
 }
 
 export async function bootstrapGlobal(input: {
-  globalSDK: OpencodeClient
+  api: ConversationAdapter
   connectErrorTitle: string
   connectErrorDescription: string
   requestFailedTitle: string
@@ -33,10 +33,10 @@ export async function bootstrapGlobal(input: {
   formatMoreCount: (count: number) => string
   setGlobalStore: SetStoreFunction<GlobalStore>
 }) {
-  const api = workspaceAdapter(input.globalSDK)
+  const api = input.api
   const health = await api
     .health()
-    .then((x) => x.data)
+    .then((x) => x.data as any)
     .catch(() => undefined)
   if (!health?.healthy) {
     showToast({
@@ -192,6 +192,7 @@ async function loadProviderCapabilities(input: {
 export async function bootstrapDirectory(input: {
   directory: string
   sdk: OpencodeClient
+  api: ConversationAdapter
   baseUrl: string
   store: Store<State>
   setStore: SetStoreFunction<State>
@@ -199,11 +200,12 @@ export async function bootstrapDirectory(input: {
   loadSessions: (directory: string) => Promise<void> | void
   translate: (key: string, vars?: Record<string, string | number>) => string
 }) {
-  const api = workspaceAdapter(input.sdk)
+  const api = input.api
   if (input.store.status !== "complete") input.setStore("status", "loading")
 
   const required = {
-    agent: () => api.agents().then((x) => input.setStore("agent", x.data ?? [])),
+    agent: () => api.sessionModes().then((x) => input.setStore("agent", (x.data ?? []) as any)),
+    agentRuntimes: () => api.agentRuntimes().then((x) => input.setStore("agentRuntimes", (x.data ?? []) as any)),
   }
 
   try {

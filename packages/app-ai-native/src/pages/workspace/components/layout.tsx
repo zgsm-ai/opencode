@@ -1,5 +1,5 @@
 import type { ParentProps } from "solid-js"
-import { createSignal, createMemo, onMount, Show, createEffect, untrack, onCleanup } from "solid-js"
+import { createSignal, createMemo, Show, createEffect, untrack, onCleanup, For } from "solid-js"
 import { createStore, reconcile } from "solid-js/store"
 import { useNavigate, useParams } from "@solidjs/router"
 import { IconButton } from "@opencode-ai/ui/icon-button"
@@ -11,10 +11,25 @@ import { WorkspaceProvider, useWorkspace, type WorkspaceContextValue } from "../
 import { ServerConnection, ServerProvider, useServer } from "@/context/server"
 import { useAuth } from "@/context/auth"
 import { AppInterface } from "@/app-interface"
+import { WorkspaceContentLayout } from "./workspace-content-layout"
 import { getProxyUrl } from "../lib/url"
 import { ActiveWorkspaceProvider, useActiveWorkspace } from "../active-workspace"
 import { useLanguage } from "@/context/language"
-import { useLayout } from "@/context/layout"
+import { drawer } from "../drawer"
+import { usePlatform } from "@/context/platform"
+import { createSdkForServer } from "@/utils/server"
+import { DeviceClientContext } from "@/context/device-client"
+import { DeviceSDKContext } from "@/context/device-sdk"
+import { DeviceInitGate } from "@/context/device-init"
+import { DeviceFileProvider } from "@/context/device-file"
+import { DeviceTerminalProvider } from "@/context/device-terminal"
+import { DeviceProjectProvider } from "@/context/device-project"
+import { DeviceWorkspaceProvider } from "@/context/device-workspace"
+import { DeviceLocalProvider } from "@/context/device-local"
+import { DirectoryContext } from "@/context/directory"
+import { LayoutContext } from "@/context/layout"
+import { useDeviceLayout } from "./device-interface"
+import { ContentTabContext, createContentTabStore } from "@/context/content-tabs"
 
 const setNav = (hidden: boolean) => {
   if (typeof document === "undefined") return
@@ -35,6 +50,7 @@ export default function WorkspaceLayout(props: ParentProps) {
   const [isLoading, setIsLoading] = createSignal(false)
   const [selectedWorkspaceId, setSelectedWorkspaceId] = createSignal<string | undefined>(undefined)
   const [enabledIds, setEnabledIds] = createSignal<string[]>([])
+  const [visitedIds, setVisitedIds] = createSignal<string[]>([])
   const closed = new Set<string>()
   const auth = useAuth()
   const navigate = useNavigate()
@@ -135,8 +151,19 @@ export default function WorkspaceLayout(props: ParentProps) {
 
   const handleDisableWorkspace = (id: string) => {
     closed.add(id)
-    setEnabledIds((prev) => prev.filter((x) => x !== id))
-    if (selectedWorkspaceId() === id) setSelectedWorkspaceId(undefined)
+    const next = enabledIds().filter((x) => x !== id)
+    setEnabledIds(next)
+    setVisitedIds((prev) => prev.filter((x) => x !== id))
+    if (selectedWorkspaceId() === id) {
+      setSelectedWorkspaceId(undefined)
+    }
+    if (params.workspaceID === id) {
+      if (next.length > 0) {
+        navigate(`/workspace/${next[0]}`)
+      } else {
+        navigate("/workspace")
+      }
+    }
   }
 
   const refreshWorkspaces = async () => {
@@ -230,6 +257,7 @@ export default function WorkspaceLayout(props: ParentProps) {
     createWorkspace: handleCreateWorkspace,
     deleteWorkspace: handleDeleteWorkspace,
     renameWorkspace: handleRenameWorkspace,
+    removeVisited: (id: string) => setVisitedIds((prev) => prev.filter((x) => x !== id)),
   }
 
   return (
@@ -237,7 +265,9 @@ export default function WorkspaceLayout(props: ParentProps) {
       <ActiveWorkspaceProvider>
         <WorkspaceServerProvider>
           <WorkspaceActivation>
-            <WorkspaceContent>{props.children}</WorkspaceContent>
+            <WorkspaceShell>
+              <WorkspaceContent>{props.children}</WorkspaceContent>
+            </WorkspaceShell>
           </WorkspaceActivation>
         </WorkspaceServerProvider>
       </ActiveWorkspaceProvider>
@@ -302,103 +332,190 @@ function WorkspaceActivation(props: ParentProps) {
   return props.children
 }
 
-function WorkspaceShell(props: ParentProps<{ hide?: () => void; open?: () => boolean; mobile?: boolean; offset?: boolean }>) {
+function WorkspaceShell(props: ParentProps) {
   const language = useLanguage()
-  const t = language.t
-  const hide = () => props.hide?.()
-  const open = () => props.open?.() ?? false
+  createEffect(() => setNav(drawer.opened()))
+  onCleanup(() => { drawer.hide(); setNav(false) })
   return (
-    <div class="flex h-full w-full min-h-0">
-      <div class="hidden md:block shrink-0 w-[280px] h-full">
+    <div class="flex h-full w-full min-h-0 overflow-x-hidden">
+      <div class="hidden h-full shrink-0 md:block w-[var(--native-sidebar-width)]">
         <WorkspaceSidebar />
       </div>
-      <Show when={props.mobile}>
-        <div class="md:hidden">
-          <div
-            classList={{
-              "fixed inset-x-0 bottom-0 z-40 transition-opacity duration-200": true,
-              "top-0": !props.offset,
-              "top-10": !!props.offset,
-              "opacity-100 pointer-events-auto": open(),
-              "opacity-0 pointer-events-none": !open(),
-            }}
-            onClick={(e) => {
-              if (e.target === e.currentTarget) hide()
-            }}
-          />
-          <aside
-            aria-label={t("workspace.page.title")}
-            classList={{
-              "fixed bottom-0 left-0 z-50 w-[280px] max-w-[calc(100vw-2rem)] border-r border-sidebar-border bg-sidebar transition-transform duration-200 ease-out": true,
-              "top-0": !props.offset,
-              "top-10": !!props.offset,
-              "translate-x-0": open(),
-              "-translate-x-full": !open(),
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <WorkspaceSidebar hide={hide} />
-          </aside>
-        </div>
-      </Show>
-      <div class="flex-1 min-w-0 h-full overflow-hidden flex flex-col">{props.children}</div>
+      <div class="md:hidden">
+        <div
+          classList={{
+            "fixed inset-x-0 top-0 bottom-0 z-40 transition-opacity duration-200": true,
+            "opacity-100 pointer-events-auto": drawer.opened(),
+            "opacity-0 pointer-events-none": !drawer.opened(),
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) drawer.hide()
+          }}
+        />
+        <aside
+          aria-label={language.t("workspace.page.title")}
+          classList={{
+            "fixed top-0 bottom-0 left-0 z-50 w-[var(--native-sidebar-width)] max-w-[calc(100vw-2rem)] border-r border-sidebar-border bg-sidebar transition-transform duration-200 ease-out": true,
+            "translate-x-0": drawer.opened(),
+            "-translate-x-full": !drawer.opened(),
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <WorkspaceSidebar hide={drawer.hide} />
+        </aside>
+      </div>
+      <div class="flex h-full min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-hidden bg-[linear-gradient(180deg,color-mix(in_oklab,var(--native-bg-subtle)_88%,var(--native-panel)),var(--native-bg))] md:rounded-l-[var(--native-radius-lg)] md:border-l md:border-l-[color:color-mix(in_oklab,var(--native-border)_24%,transparent)]">
+        {props.children}
+      </div>
     </div>
   )
 }
 
-function WorkspaceReady(props: ParentProps) {
-  const layout = useLayout()
-  createEffect(() => setNav(layout.mobileSidebar.opened()))
-  onCleanup(() => setNav(false))
+function WorkspaceContentInstance(props: { workspaceId: string; directory: string; serverUrl: string }) {
+  const dl = useDeviceLayout()
+  const tabStore = createContentTabStore()
+
   return (
-    <WorkspaceShell mobile hide={layout.mobileSidebar.hide} open={layout.mobileSidebar.opened}>
-      {props.children}
-    </WorkspaceShell>
+    <DirectDeviceProviders serverUrl={props.serverUrl} directory={props.directory}>
+      <DeviceInitGate>
+        <DeviceLayoutProvider deviceLayout={dl}>
+          <DirectoryContext.Provider value={() => props.directory}>
+            <DeviceWorkspaceProvider>
+              <DeviceProjectProvider>
+                <DeviceFileProvider>
+                  <DeviceTerminalProvider>
+                    <DeviceLocalProvider>
+                      <ContentTabContext.Provider value={tabStore}>
+                        <WorkspaceContentLayout workspaceId={props.workspaceId} directory={props.directory} />
+                      </ContentTabContext.Provider>
+                    </DeviceLocalProvider>
+                  </DeviceTerminalProvider>
+                </DeviceFileProvider>
+              </DeviceProjectProvider>
+            </DeviceWorkspaceProvider>
+          </DirectoryContext.Provider>
+        </DeviceLayoutProvider>
+      </DeviceInitGate>
+    </DirectDeviceProviders>
   )
 }
 
+function DirectDeviceProviders(props: ParentProps<{ serverUrl: string; directory: string }>) {
+  const platform = usePlatform()
+  const conn = createMemo(() => ({
+    type: "http" as const,
+    http: { url: props.serverUrl },
+  }))
 
-function WorkspaceLanding(props: ParentProps) {
-  const language = useLanguage()
-  const t = language.t
-  const [open, setOpen] = createSignal(false)
-  createEffect(() => setNav(open()))
-  onCleanup(() => setNav(false))
+  const clientValue = createMemo(() => {
+    const c = conn()
+    const client = createSdkForServer({ server: c.http, fetch: platform.fetch, throwOnError: true })
+    return {
+      client,
+      url: c.http.url,
+      createClient(opts: { directory: string; throwOnError?: boolean }) {
+        return createSdkForServer({ server: c.http, fetch: platform.fetch, ...opts })
+      },
+    }
+  })
+
+  const sdkValue = createMemo(() => {
+    const c = conn()
+    const dirClient = createSdkForServer({ server: c.http, fetch: platform.fetch, directory: props.directory, throwOnError: true })
+    return {
+      client: dirClient,
+      directory: props.directory,
+      url: c.http.url,
+      createClient(opts: { directory: string; throwOnError?: boolean }) {
+        return createSdkForServer({ server: c.http, fetch: platform.fetch, ...opts })
+      },
+    }
+  })
+
   return (
-    <WorkspaceShell mobile offset hide={() => setOpen(false)} open={open}>
-      <div class="md:hidden fixed top-0 left-[56px] z-50 flex h-[41px] items-center justify-center">
-        <IconButton
-          icon="menu"
-          variant="ghost"
-          class="titlebar-icon rounded-md"
-          onClick={() => setOpen((v) => !v)}
-          aria-label={t("workspace.page.title")}
-          aria-expanded={open()}
-        />
-      </div>
-      {props.children}
-      <Toast.Region />
-    </WorkspaceShell>
+    <DeviceClientContext.Provider value={clientValue()}>
+      <DeviceSDKContext.Provider value={sdkValue()}>
+        {props.children}
+      </DeviceSDKContext.Provider>
+    </DeviceClientContext.Provider>
   )
 }
 
+const DEFAULT_PANEL_WIDTH = 280
+
+function DeviceLayoutProvider(props: ParentProps<{ deviceLayout: ReturnType<typeof useDeviceLayout> }>) {
+  const dl = props.deviceLayout
+  const value = {
+    ready: () => true,
+    deviceMode: true as boolean,
+    handoff: { tabs: () => undefined, setTabs() {}, clearTabs() {} },
+    projects: { list: () => [], open() {}, close() {}, expand() {}, collapse() {}, move() {} },
+    sidebar: { opened: () => false, open() {}, close() {}, toggle() {}, width: () => 280, resize() {}, workspaces: () => () => false, setWorkspaces() {}, toggleWorkspaces() {} },
+    terminal: { height: () => 200, width: dl.terminal.width, resize: dl.terminal.resize },
+    review: { diffStyle: dl.diffStyle, setDiffStyle: dl.setDiffStyle },
+    fileTree: { opened: dl.fileTree.opened, width: dl.fileTree.width, tab: () => "all" as const, setTab() {}, open: dl.fileTree.open, close: dl.fileTree.close, toggle: dl.fileTree.toggle, resize: dl.fileTree.resize },
+    session: { width: () => 400, resize() {} },
+    mobileSidebar: { opened: () => false, show() {}, hide() {}, toggle() {} },
+    pendingMessage: { set() {}, consume() { return undefined } },
+    view() {
+      return {
+        scroll: () => ({ x: 0, y: 0 }),
+        setScroll() {},
+        terminal: { opened: dl.terminal.opened, open: dl.terminal.open, close: dl.terminal.close, toggle: dl.terminal.toggle },
+        reviewPanel: { opened: () => false, open() {}, close() {}, toggle() {} },
+        review: { open: () => undefined, setOpen() {} },
+      }
+    },
+    tabs() { return { tabs: () => ({ all: [], active: undefined }), active: () => undefined, all: () => [], setActive() {}, setAll() {}, async open() {}, close() {}, move() {} } },
+  }
+  return <LayoutContext.Provider value={value}>{props.children}</LayoutContext.Provider>
+}
 
 function WorkspaceContent(props: ParentProps) {
   const params = useParams()
-  const server = useServer()
-  const ready = createMemo(() => !!params.workspaceID && !!server.key)
+  const workspace = useWorkspace()
+
+  createEffect(() => {
+    const id = params.workspaceID
+    if (!id) return
+    if (workspace.closedWorkspaceIds().includes(id)) return
+    if (!workspace.enabledWorkspaceIds().includes(id)) workspace.enableWorkspace(id)
+  })
+
   return (
-    <Show
-      when={ready()}
-      fallback={
-        <Show when={!params.workspaceID} fallback={<div class="size-full" />}>
-          <WorkspaceLanding>{props.children}</WorkspaceLanding>
-        </Show>
-      }
-    >
-      <AppInterface>
-        <WorkspaceReady>{props.children}</WorkspaceReady>
-      </AppInterface>
-    </Show>
+    <div class="flex-1 min-w-0 h-full overflow-hidden flex flex-col">
+      <Show when={!params.workspaceID}>
+        {props.children}
+        <Toast.Region />
+      </Show>
+      <For each={workspace.enabledWorkspaceIds()}>
+        {(id) => {
+          const ws = createMemo(() => workspace.workspaces().find((w) => w.id === id))
+          const dir = createMemo(() => {
+            const w = ws()
+            if (!w) return ""
+            const primary = w.directories?.find((d) => d.isDefault) || w.directories?.[0]
+            return primary?.path ?? ""
+          })
+          const serverUrl = createMemo(() => ws()?.deviceUniqueId ? getProxyUrl(ws()!.deviceUniqueId!) : "")
+          const isActive = createMemo(() => params.workspaceID === id)
+
+          return (
+            <Show when={dir() && serverUrl()}>
+              <div
+                class="flex-1 min-w-0 h-full flex flex-col"
+                style={{ display: isActive() ? "flex" : "none" }}
+              >
+                <WorkspaceContentInstance
+                  workspaceId={id}
+                  directory={dir()!}
+                  serverUrl={serverUrl()!}
+                />
+              </div>
+            </Show>
+          )
+        }}
+      </For>
+    </div>
   )
 }

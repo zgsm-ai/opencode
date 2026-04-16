@@ -2,10 +2,11 @@ import { createStore, produce } from "solid-js/store"
 import { createSimpleContext } from "@opencode-ai/ui/context"
 import { batch, createEffect, createMemo, createRoot, onCleanup } from "solid-js"
 import { useParams } from "@solidjs/router"
-import { useSDK } from "./sdk"
 import type { Platform } from "./platform"
 import { Persist, persisted, removePersisted } from "@/utils/persist"
 import { useActiveWorkspace } from "@/pages/workspace/active-workspace"
+import { useServer } from "./server"
+import { CloudTerminalApi } from "@/lib/cloud-terminal-api"
 
 export type LocalPTY = {
   id: string
@@ -62,7 +63,7 @@ export function clearWorkspaceTerminals(dir: string, sessionIDs?: string[], plat
   }
 }
 
-function createWorkspaceTerminalSession(sdk: ReturnType<typeof useSDK>, dir: string, workspaceId?: string, legacySessionID?: string) {
+function createWorkspaceTerminalSession(dir: string, workspaceId?: string, legacySessionID?: string, server?: ReturnType<typeof useServer>) {
   const legacy = getLegacyTerminalStorageKeys(dir, legacySessionID)
 
   const persistTarget = workspaceId
@@ -105,46 +106,11 @@ function createWorkspaceTerminalSession(sdk: ReturnType<typeof useSDK>, dir: str
     )
   }
 
-  const removeExited = (id: string) => {
-    const all = store.all
-    const index = all.findIndex((x) => x.id === id)
-    if (index === -1) return
-    const active = store.active === id ? (index === 0 ? all[1]?.id : all[0]?.id) : store.active
-    batch(() => {
-      setStore("active", active)
-      setStore(
-        "all",
-        produce((draft) => {
-          draft.splice(index, 1)
-        }),
-      )
-    })
+  const cloudApi = (): CloudTerminalApi | null => {
+    const s = server?.current
+    if (!s || !workspaceId) return null
+    return new CloudTerminalApi({ server: s, deviceId: workspaceId })
   }
-
-  const unsub = sdk.event.on("pty.exited", (event: { properties: { id: string } }) => {
-    removeExited(event.properties.id)
-  })
-  onCleanup(unsub)
-
-  const meta = { migrated: false }
-
-  createEffect(() => {
-    if (!ready()) return
-    if (meta.migrated) return
-    meta.migrated = true
-
-    setStore("all", (all) => {
-      const next = all.map((pty) => {
-        const direct = Number.isFinite(pty.titleNumber) && pty.titleNumber > 0 ? pty.titleNumber : undefined
-        if (direct !== undefined) return pty
-        const parsed = numberFromTitle(pty.title)
-        if (parsed === undefined) return pty
-        return { ...pty, titleNumber: parsed }
-      })
-      if (next.every((pty, index) => pty === all[index])) return all
-      return next
-    })
-  })
 
   return {
     ready,
@@ -158,66 +124,54 @@ function createWorkspaceTerminalSession(sdk: ReturnType<typeof useSDK>, dir: str
     },
     new() {
       const nextNumber = pickNextTerminalNumber()
+      const api = cloudApi()
+      if (!api) return
 
-      sdk.client.pty
-        .create({ title: `Terminal ${nextNumber}` })
-        .then((pty: { data?: { id?: string; title?: string } }) => {
-          const id = pty.data?.id
-          if (!id) return
-          const newTerminal = {
+      api.create(dir, 24, 80)
+        .then((session) => {
+          const id = session.sessionId
+          setStore("all", store.all.length, {
             id,
-            title: pty.data?.title ?? "Terminal",
+            title: `Terminal ${nextNumber}`,
             titleNumber: nextNumber,
-          }
-          setStore("all", store.all.length, newTerminal)
+          })
           setStore("active", id)
         })
         .catch((error: unknown) => {
-          console.error("Failed to create terminal", error)
+          console.error("Failed to create cloud terminal", error)
         })
     },
     update(pty: Partial<LocalPTY> & { id: string }) {
       const index = store.all.findIndex((x) => x.id === pty.id)
-      const previous = index >= 0 ? store.all[index] : undefined
       if (index >= 0) {
         setStore("all", index, (item) => ({ ...item, ...pty }))
       }
-      sdk.client.runtime
-        .terminalUpdate({
-          ptyID: pty.id,
-          title: pty.title,
-          size: pty.cols && pty.rows ? { rows: pty.rows, cols: pty.cols } : undefined,
+      const api = cloudApi()
+      if (api && pty.cols && pty.rows) {
+        api.resize(pty.id, pty.rows, pty.cols).catch((error: unknown) => {
+          console.error("Failed to update cloud terminal", error)
         })
-        .catch((error: unknown) => {
-          if (previous) {
-            const currentIndex = store.all.findIndex((item) => item.id === pty.id)
-            if (currentIndex >= 0) setStore("all", currentIndex, previous)
-          }
-          console.error("Failed to update terminal", error)
-        })
+      }
     },
     async clone(id: string) {
       const index = store.all.findIndex((x) => x.id === id)
       const pty = store.all[index]
       if (!pty) return
-      const clone = await sdk.client.runtime
-        .terminalCreate({
-          title: pty.title,
-        })
-        .catch((error: unknown) => {
-          console.error("Failed to clone terminal", error)
-          return undefined
-        })
-      if (!clone?.data) return
+      const api = cloudApi()
+      if (!api) return
+
+      const session = await api.restart(id, dir).catch((error: unknown) => {
+        console.error("Failed to clone cloud terminal", error)
+        return null
+      })
+      if (!session) return
 
       const active = store.active === pty.id
-
       batch(() => {
         setStore("all", index, {
-          id: clone.data.id,
-          title: clone.data.title ?? pty.title,
+          id: session.sessionId,
+          title: pty.title,
           titleNumber: pty.titleNumber,
-          // New PTY process, so start clean.
           buffer: undefined,
           cursor: undefined,
           scrollY: undefined,
@@ -225,7 +179,7 @@ function createWorkspaceTerminalSession(sdk: ReturnType<typeof useSDK>, dir: str
           cols: undefined,
         })
         if (active) {
-          setStore("active", clone.data.id)
+          setStore("active", session.sessionId)
         }
       })
     },
@@ -261,9 +215,12 @@ function createWorkspaceTerminalSession(sdk: ReturnType<typeof useSDK>, dir: str
         })
       }
 
-      await sdk.client.runtime.terminalRemove(id).catch((error: unknown) => {
-        console.error("Failed to close terminal", error)
-      })
+      const api = cloudApi()
+      if (api) {
+        await api.kill(id).catch((error: unknown) => {
+          console.error("Failed to close cloud terminal", error)
+        })
+      }
     },
     move(id: string, to: number) {
       const index = store.all.findIndex((f) => f.id === id)
@@ -282,9 +239,9 @@ export const { use: useTerminal, provider: TerminalProvider } = createSimpleCont
   name: "Terminal",
   gate: false,
   init: () => {
-    const sdk = useSDK()
     const params = useParams()
     const active = useActiveWorkspace()
+    const server = useServer()
     const cache = new Map<string, TerminalCacheEntry>()
 
     caches.add(cache)
@@ -319,7 +276,7 @@ export const { use: useTerminal, provider: TerminalProvider } = createSimpleCont
       }
 
       const entry = createRoot((dispose) => ({
-        value: createWorkspaceTerminalSession(sdk, dir, active?.id, legacySessionID),
+        value: createWorkspaceTerminalSession(dir, active?.id, legacySessionID, server),
         dispose,
       }))
 

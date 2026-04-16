@@ -6,7 +6,7 @@ import fuzzysort from "fuzzysort"
 import { createSignal, createMemo, Show, batch, onCleanup } from "solid-js"
 import { Icon } from "@opencode-ai/ui/icon"
 import { getDirectory, getFilename } from "@opencode-ai/util/path"
-import { cloudDeviceFileApi, type FileNode, checkCloudFileSupport } from "../lib/cloud-device-api"
+import { deviceFileApi, type FileEntry, checkRuntimeConfig } from "../lib/cloud-device-api"
 import type { Device } from "../types"
 import { useLanguage } from "@/context/language"
 
@@ -66,10 +66,10 @@ function normalizeWindowsPath(input: string): string {
 }
 
 function useDirectoryCache(deviceId: () => string) {
-  const cache = new Map<string, Promise<FileNode[]>>()
+  const cache = new Map<string, Promise<FileEntry[]>>()
   const pending = new Map<string, AbortController>()
 
-  const fetch = async (path: string): Promise<FileNode[]> => {
+  const fetch = async (path: string): Promise<FileEntry[]> => {
     const key = normalizePath(trimTrailing(path))
     const existing = cache.get(key)
     if (existing) return existing
@@ -77,7 +77,7 @@ function useDirectoryCache(deviceId: () => string) {
     const controller = new AbortController()
     pending.set(key, controller)
 
-    const request = cloudDeviceFileApi
+    const request = deviceFileApi
       .list(deviceId(), path)
       .then((result) => {
         pending.delete(key)
@@ -93,7 +93,7 @@ function useDirectoryCache(deviceId: () => string) {
     return request
   }
 
-  const get = (path: string): FileNode[] | undefined => {
+  const get = (path: string): FileEntry[] | undefined => {
     const key = normalizePath(trimTrailing(path))
     const promise = cache.get(key)
     if (!promise) return undefined
@@ -118,7 +118,7 @@ export function RemoteDirectorySelector(props: RemoteDirectorySelectorProps) {
   const [selectedPath, setSelectedPath] = createSignal<string | null>(null)
   const [notSupported, setNotSupported] = createSignal<string | null>(null)
   const [loading, setLoading] = createSignal(false)
-  const [directories, setDirectories] = createSignal<FileNode[]>([])
+  const [directories, setDirectories] = createSignal<FileEntry[]>([])
   let list: ListRef | undefined
 
   const dirCache = useDirectoryCache(() => props.device.deviceId)
@@ -138,7 +138,7 @@ export function RemoteDirectorySelector(props: RemoteDirectorySelectorProps) {
   }
 
   const checkSupport = async () => {
-    const result = await checkCloudFileSupport(props.device.deviceId)
+    const result = await checkRuntimeConfig(props.device.deviceId)
     if (!result.supported) {
       setNotSupported(result.error || t("workspace.directory.notSupported"))
     } else {

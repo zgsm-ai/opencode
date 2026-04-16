@@ -1,17 +1,14 @@
-import { createSignal, createMemo, createEffect, on, For, Show, onCleanup } from "solid-js"
-import { useNavigate, useParams } from "@solidjs/router"
+import { createSignal, createMemo, For, Show } from "solid-js"
+import { useParams } from "@solidjs/router"
 import { Icon } from "@opencode-ai/ui/icon"
 import { IconButton } from "@opencode-ai/ui/icon-button"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
-import { Spinner } from "@opencode-ai/ui/spinner"
 import { DropdownMenu } from "@opencode-ai/ui/dropdown-menu"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
-import type { Session } from "@opencode-ai/sdk/v2/client"
 import type { Device, DeviceStatus, Workspace, WorkspaceDirectory } from "../types"
 import { DeviceList } from "./device-list"
 import { CreateWorkspaceDialogContent } from "./create-workspace-dialog"
 import { useWorkspace } from "../context"
-import { getProxyUrl } from "../lib/url"
 import { useWorkspaceNavigate } from "@/hooks/use-workspace-navigate"
 import { useActiveWorkspace } from "../active-workspace"
 import { useLanguage } from "@/context/language"
@@ -34,8 +31,7 @@ export function WorkspaceSidebar(props: { hide?: () => void } = {}) {
   } = useWorkspace()
 
   const params = useParams()
-  const rawNavigate = useNavigate()
-  const { navigateToNewSession, encodeDirectory } = useWorkspaceNavigate()
+  const { navigateToNewSession } = useWorkspaceNavigate()
 
   const isEnabled = (workspace: Workspace) => enabledWorkspaceIds().includes(workspace.id)
 
@@ -47,16 +43,14 @@ export function WorkspaceSidebar(props: { hide?: () => void } = {}) {
   const handleOpenWorkspace = (workspace: Workspace) => {
     if (!workspace.deviceUniqueId) return
     enableWorkspace(workspace.id)
+    navigateToNewSession({ workspaceId: workspace.id })
+    hide()
   }
 
   const handleCloseWorkspace = (workspace: Workspace) => {
     disableWorkspace(workspace.id)
     if (active.id === workspace.id) active.clear()
-    if (params.workspaceID !== workspace.id) return
-    rawNavigate("/workspace")
-    hide()
   }
-
 
   const [workspaceSearchQuery, setWorkspaceSearchQuery] = createSignal("")
   const [deviceSearchQuery, setDeviceSearchQuery] = createSignal("")
@@ -85,7 +79,6 @@ export function WorkspaceSidebar(props: { hide?: () => void } = {}) {
     )
   })
 
-  // Use stable ID arrays so <For> tracks by string value equality, not object reference
   const runningIds = createMemo(() =>
     filteredWorkspaces()
       .filter((w) => isEnabled(w))
@@ -97,7 +90,6 @@ export function WorkspaceSidebar(props: { hide?: () => void } = {}) {
       .map((w) => w.id),
   )
 
-  // Lookup helper: always reads from workspaces() to get latest data
   const findWorkspace = (id: string) => workspaces().find((w) => w.id === id)
 
   const handleCreateWorkspace = (device: Device) => {
@@ -112,7 +104,6 @@ export function WorkspaceSidebar(props: { hide?: () => void } = {}) {
   }
 
   const WorkspaceCard = (cardProps: { id: string; isRunning: boolean }) => {
-    // Derive workspace reactively from the stable id
     const workspace = createMemo(() => findWorkspace(cardProps.id))
     const primaryDir = createMemo(() => {
       const ws = workspace()
@@ -124,8 +115,6 @@ export function WorkspaceSidebar(props: { hide?: () => void } = {}) {
       if (!ws?.deviceId) return undefined
       return devices().find((d) => d.id === ws.deviceId)
     })
-    const [open, setOpen] = createSignal(false)
-    const [mounted, setMounted] = createSignal(false)
     const [renaming, setRenaming] = createSignal(false)
     const [renameValue, setRenameValue] = createSignal("")
 
@@ -140,7 +129,7 @@ export function WorkspaceSidebar(props: { hide?: () => void } = {}) {
         />
         <DropdownMenu.Portal>
           <DropdownMenu.Content
-            class="min-w-36 bg-sidebar border border-sidebar-border shadow-md"
+            class="min-w-36 bg-sidebar shadow-md"
           >
             <Show when={cardProps.isRunning}>
               <DropdownMenu.Item class="hover:bg-sidebar-accent" onSelect={() => handleCloseWorkspace(workspace()!)}>
@@ -169,10 +158,6 @@ export function WorkspaceSidebar(props: { hide?: () => void } = {}) {
         </DropdownMenu.Portal>
       </DropdownMenu>
     )
-    const toggle = () => {
-      if (!mounted()) setMounted(true)
-      setOpen((v) => !v)
-    }
 
     const startRename = () => {
       setRenameValue(workspace()?.name ?? "")
@@ -202,7 +187,7 @@ export function WorkspaceSidebar(props: { hide?: () => void } = {}) {
 
     const renameInput = () => (
       <input
-        class="flex-1 min-w-0 text-sm font-medium text-sidebar-foreground bg-sidebar-accent border border-sidebar-border rounded-lg px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-sidebar-ring"
+        class="flex-1 min-w-0 rounded-[var(--native-radius-sm)] bg-[color:color-mix(in_oklab,var(--native-panel)_80%,var(--native-bg-subtle))] px-2 py-1 text-sm font-medium text-sidebar-foreground shadow-[var(--native-shadow-sm)] focus:outline-none focus:ring-1 focus:ring-sidebar-ring"
         value={renameValue()}
         placeholder={t("workspace.rename.placeholder")}
         onInput={(e: Event) => setRenameValue((e.target as HTMLInputElement).value)}
@@ -213,116 +198,21 @@ export function WorkspaceSidebar(props: { hide?: () => void } = {}) {
       />
     )
 
-    // Detail tooltip: device · path · default
     const detail = () => {
       const parts = [device()?.displayName, primaryDir()?.path].filter(Boolean)
       if (workspace()?.isDefault) parts.push(t("common.default"))
       return parts.join(" · ") || t("workspace.device.unbound")
     }
 
-    if (cardProps.isRunning) {
-      return (
-        <Show when={workspace()}>
-          {(ws) => (
-            <div>
-              <div
-                class="group/workspace flex items-center rounded-md transition-all duration-150 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                classList={{
-                  "bg-sidebar-accent text-sidebar-accent-foreground": params.workspaceID === cardProps.id,
-                }}
-              >
-                <Tooltip
-                  placement="bottom-end"
-                  value={detail()}
-                  class="flex-1 min-w-0"
-                  contentStyle={{
-                    background: "hsl(var(--sidebar-accent))",
-                    color: "hsl(var(--sidebar-accent-foreground))",
-                    border: "1px solid hsl(var(--sidebar-border))",
-                    "box-shadow": "var(--shadow-xs)",
-                  }}
-                >
-                  <button
-                    class="flex-1 min-w-0 flex items-center gap-2 px-2 py-1.5 rounded-md transition-all duration-150 cursor-pointer text-left text-sm"
-                    classList={{
-                      "text-sidebar-foreground font-medium": params.workspaceID === cardProps.id,
-                      "text-sidebar-foreground": params.workspaceID !== cardProps.id,
-                    }}
-                    onClick={toggle}
-                  >
-                    <div class="size-2 shrink-0 relative">
-                      <div
-                        classList={{
-                          "size-2 rounded-full group-hover/workspace:opacity-0": true,
-                          "bg-icon-success-base": dot().online,
-                          "bg-icon-critical-base": dot().offline,
-                          "bg-sidebar-border": !dot().online && !dot().offline,
-                        }}
-                      />
-                      <Icon
-                        name={open() ? "chevron-down" : "chevron-right"}
-                        size="small"
-                        class="size-4 text-sidebar-foreground/50 opacity-0 group-hover/workspace:opacity-100 absolute -left-1 -top-1"
-                      />
-                    </div>
-                    <Show
-                      when={renaming()}
-                      fallback={
-                        <span
-                          class="text-sm truncate flex-1"
-                          onDblClick={(e: MouseEvent) => {
-                            e.stopPropagation()
-                            startRename()
-                          }}
-                        >
-                          {workspace()?.name}
-                        </span>
-                      }
-                    >
-                      {renameInput()}
-                    </Show>
-                  </button>
-                </Tooltip>
-                <div class="shrink-0 flex items-center gap-0.5 ml-auto opacity-0 group-hover/workspace:opacity-100 transition-opacity duration-150 pr-1">
-                  <Tooltip placement="top" value={t("workspace.newSession")}>
-                    <IconButton
-                      icon="plus-small"
-                      variant="ghost"
-                      class="size-7 rounded-md cursor-pointer text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"
-                      aria-label={t("workspace.newSession")}
-                      onClick={(event: MouseEvent) => {
-                        event.stopPropagation()
-                        if (!mounted()) setMounted(true)
-                        if (!open()) setOpen(true)
-                        const dir = primaryDir()
-                        const dirSlug = dir ? encodeDirectory(dir.path) : "default"
-                        navigateToNewSession({ workspaceId: cardProps.id, dir: dirSlug })
-                        hide()
-                      }}
-                    />
-                  </Tooltip>
-                  {menu()}
-                </div>
-              </div>
-              <Show when={mounted()}>
-                <div classList={{ hidden: !open() }}>
-                  <WorkspaceSessions id={cardProps.id} hide={hide} />
-                </div>
-              </Show>
-            </div>
-          )}
-        </Show>
-      )
-    }
+    const isActive = createMemo(() => params.workspaceID === cardProps.id)
 
-    // Idle card: same nav-item style, click to start
     return (
       <Show when={workspace()}>
         {(ws) => (
           <div
-            class="group/workspace flex items-center rounded-md transition-all duration-150 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            class="group/workspace flex items-center rounded-[var(--native-radius-md)] transition-all duration-150 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
             classList={{
-              "bg-sidebar-accent text-sidebar-accent-foreground": params.workspaceID === cardProps.id,
+              "bg-[color:color-mix(in_oklab,var(--native-primary)_8%,var(--native-panel))] text-sidebar-foreground shadow-[var(--native-shadow-sm)]": isActive(),
             }}
           >
             <Tooltip
@@ -332,17 +222,15 @@ export function WorkspaceSidebar(props: { hide?: () => void } = {}) {
               contentStyle={{
                 background: "hsl(var(--sidebar-accent))",
                 color: "hsl(var(--sidebar-accent-foreground))",
-                border: "1px solid hsl(var(--sidebar-border))",
                 "box-shadow": "var(--shadow-xs)",
               }}
             >
               <button
-                class="flex-1 min-w-0 flex items-center gap-2 px-2 py-1.5 rounded-md transition-all duration-150 text-left text-sm"
+                class="flex min-w-0 flex-1 items-center gap-2 rounded-[var(--native-radius-md)] px-2.5 py-2 text-left text-sm transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
                 classList={{
-                  "text-sidebar-foreground font-medium": params.workspaceID === cardProps.id,
-                  "text-sidebar-foreground/70": params.workspaceID !== cardProps.id && !dot().offline,
+                  "text-sidebar-foreground font-medium cursor-pointer": isActive(),
+                  "text-sidebar-foreground/75 cursor-pointer": !isActive() && !dot().offline,
                   "text-sidebar-foreground/40 cursor-not-allowed": dot().offline,
-                  "cursor-pointer": !dot().offline,
                 }}
                 onClick={() => {
                   if (!dot().offline) handleOpenWorkspace(ws())
@@ -374,7 +262,7 @@ export function WorkspaceSidebar(props: { hide?: () => void } = {}) {
                 </Show>
               </button>
             </Tooltip>
-            <div class="shrink-0 flex items-center gap-0.5 ml-auto opacity-0 group-hover/workspace:opacity-100 transition-opacity duration-150 pr-1">
+            <div class="ml-auto flex shrink-0 items-center gap-0.5 pr-1 opacity-0 transition-opacity duration-150 group-hover/workspace:opacity-100 group-focus-within/workspace:opacity-100">
               {menu()}
             </div>
           </div>
@@ -384,17 +272,15 @@ export function WorkspaceSidebar(props: { hide?: () => void } = {}) {
   }
 
   return (
-    <aside class="flex flex-col h-full w-full bg-sidebar text-sidebar-foreground border-r border-sidebar-border">
-      {/* Header */}
-      <div class="shrink-0 h-[41px] px-3 border-b border-sidebar-border flex items-center">
+    <aside class="flex h-full w-full flex-col bg-[linear-gradient(180deg,color-mix(in_oklab,var(--native-panel)_88%,var(--native-bg-subtle)),var(--native-panel))] text-sidebar-foreground">
+      <div class="flex h-[41px] shrink-0 items-center px-3">
         <div class="flex items-center gap-2.5">
-          <span class="text-sm font-semibold text-sidebar-foreground">{t("workspace.page.title")}</span>
+          <span class="font-[var(--native-font-display)] text-[1rem] font-semibold tracking-[-0.035em] text-sidebar-foreground">{t("workspace.page.title")}</span>
         </div>
       </div>
 
-      {/* Search */}
       <div class="shrink-0 px-3 py-2.5">
-        <div class="flex items-center h-8 w-full rounded-md bg-sidebar-accent border border-sidebar-border focus-within:border-sidebar-ring focus-within:ring-1 focus-within:ring-sidebar-ring transition-all duration-200">
+        <div class="flex h-8 w-full items-center rounded-[var(--native-radius-sm)] border border-sidebar-border bg-[color:color-mix(in_oklab,var(--native-panel)_82%,var(--native-bg-subtle))] shadow-[var(--native-shadow-sm)] transition-all duration-200 focus-within:border-sidebar-ring focus-within:ring-1 focus-within:ring-sidebar-ring">
           <Icon name="magnifying-glass" class="size-4 text-sidebar-foreground/50 shrink-0 ml-3" />
           <input
             type="text"
@@ -415,42 +301,38 @@ export function WorkspaceSidebar(props: { hide?: () => void } = {}) {
         </div>
       </div>
 
-      {/* Workspace list — 60% */}
-      <div class="flex-[3] min-h-0 overflow-y-auto thin-scrollbar py-1">
-        {/* Running workspaces */}
+      <div class="custom-scrollbar flex-[3] min-h-0 overflow-y-auto py-1 pr-1">
         <Show when={runningIds().length > 0}>
-          <div class="mb-2">
-            <div class="flex items-center gap-1.5 px-4 py-1.5">
-              <span class="text-xs font-medium text-sidebar-foreground/70 uppercase tracking-wider">{t("workspace.running")}</span>
-              <span class="text-[11px] text-sidebar-foreground/50 ml-auto">{runningIds().length}</span>
+          <div class="mb-3 px-2">
+            <div class="mb-1 flex items-center gap-1.5 px-2.5 py-1.5">
+              <span class="text-[11px] font-semibold uppercase tracking-[0.12em] text-sidebar-foreground/70">{t("workspace.running")}</span>
+              <span class="ml-auto rounded-[var(--native-radius-full)] bg-[color:color-mix(in_oklab,var(--native-primary)_8%,transparent)] px-2 py-0.5 text-[11px] font-medium text-[var(--native-primary)]">{runningIds().length}</span>
             </div>
-            <div class="flex flex-col gap-0.5 px-2">
+            <div class="flex flex-col gap-1">
               <For each={runningIds()}>{(id) => <WorkspaceCard id={id} isRunning={true} />}</For>
             </div>
           </div>
         </Show>
 
-        {/* Idle workspaces */}
-        <div>
-          <div class="flex items-center gap-1.5 px-4 py-1.5">
-            <span class="text-xs font-medium text-sidebar-foreground/70 uppercase tracking-wider">{t("workspace.idle")}</span>
-            <span class="text-[11px] text-sidebar-foreground/50 ml-auto">{idleIds().length}</span>
+        <div class="px-2">
+          <div class="mb-1 flex items-center gap-1.5 px-2.5 py-1.5">
+            <span class="text-[11px] font-semibold uppercase tracking-[0.12em] text-sidebar-foreground/70">{t("workspace.idle")}</span>
+            <span class="ml-auto rounded-[var(--native-radius-full)] bg-[color:color-mix(in_oklab,var(--native-panel)_82%,var(--native-bg-subtle))] px-2 py-0.5 text-[11px] font-medium text-sidebar-foreground/55">{idleIds().length}</span>
           </div>
-          <div class="flex flex-col gap-1.5 px-2">
+          <div class="flex flex-col gap-1.5">
             <For each={idleIds()}>{(id) => <WorkspaceCard id={id} isRunning={false} />}</For>
             <Show when={filteredWorkspaces().length === 0}>
-              <div class="flex flex-col items-center justify-center py-8 text-sidebar-foreground/50">
-                <Icon name="folder" class="size-8 mb-2 opacity-30" />
-                <span class="text-xs">{t("workspace.empty")}</span>
-                <span class="text-[11px] text-sidebar-foreground/40 mt-1">{t("workspace.emptyHint")}</span>
+              <div class="native-panel-soft flex flex-col items-center justify-center py-8 text-sidebar-foreground/50">
+                <Icon name="folder" class="mb-2 size-8 opacity-30" />
+                <span class="text-xs font-medium text-sidebar-foreground/65">{t("workspace.empty")}</span>
+                <span class="mt-1 text-[11px] leading-[1.5] text-sidebar-foreground/40">{t("workspace.emptyHint")}</span>
               </div>
             </Show>
           </div>
         </div>
       </div>
 
-      {/* Device list — 40% */}
-      <div class="flex-[2] min-h-0 overflow-y-auto thin-scrollbar border-t border-sidebar-border">
+      <div class="custom-scrollbar flex-[2] min-h-0 overflow-y-auto pt-1">
         <DeviceList
           devices={devices}
           onCreateWorkspace={handleCreateWorkspace}
@@ -461,271 +343,5 @@ export function WorkspaceSidebar(props: { hide?: () => void } = {}) {
         />
       </div>
     </aside>
-  )
-}
-
-const PAGE_SIZE = 10
-
-type SessionData = Pick<Session, "id" | "title" | "directory" | "time" | "parentID">
-
-/**
- * Loads and displays sessions for a workspace.
- * Accepts a stable `id` prop instead of a workspace object to avoid
- * SolidJS <For> reference-reuse bugs.
- */
-function WorkspaceSessions(props: { id: string; hide?: () => void }) {
-  const language = useLanguage()
-  const t = language.t
-  const hide = () => props.hide?.()
-  const { workspaces } = useWorkspace()
-  const { navigateToSession, encodeDirectory: encodeDir } = useWorkspaceNavigate()
-  const params = useParams()
-  const [loading, setLoading] = createSignal(false)
-  const [statusMap, setStatusMap] = createSignal<Record<string, { type: string }>>({})
-  const [pending, setPending] = createSignal<SessionData[]>([])
-  const [sessions, setSessions] = createSignal<SessionData[]>([])
-  const [more, setMore] = createSignal(false)
-  const [limit, setLimit] = createSignal(PAGE_SIZE)
-
-  // Always derive workspace from the stable id
-  const workspace = createMemo(() => workspaces().find((w) => w.id === props.id))
-  const dirs = createMemo(() => workspace()?.directories ?? [])
-  const device = createMemo(() => workspace()?.deviceUniqueId)
-
-  const isWorking = (sessionId: string) => {
-    const s = statusMap()[sessionId]
-    return s?.type === "busy" || s?.type === "retry"
-  }
-
-  const merged = createMemo(() => {
-    const seen = new Set<string>()
-    const extra = pending().filter((s) => {
-      if (seen.has(s.id)) return false
-      seen.add(s.id)
-      return true
-    })
-    const list = sessions().filter((s) => {
-      if (seen.has(s.id)) return false
-      seen.add(s.id)
-      return true
-    })
-    return [...extra, ...list]
-  })
-
-  const load = async (cap: number) => {
-    const uid = device()
-    if (!uid) return
-    const directories = dirs()
-    if (directories.length === 0) return
-    setLoading(true)
-    try {
-      const url = getProxyUrl(uid)
-      const all: SessionData[] = []
-      for (const dir of directories) {
-        const qs = new URLSearchParams({ directory: dir.path, archived: "false", roots: "true", limit: String(cap) })
-        const res = await fetch(`${url}/session?${qs}`, { credentials: "include" }).catch(() => null)
-        if (!res?.ok) continue
-        const body = await res.json().catch(() => [])
-        const items = (Array.isArray(body) ? body : (body.data ?? [])) as SessionData[]
-        for (const s of items) {
-          if (s.time?.archived || s.parentID || all.some((x) => x.id === s.id)) continue
-          all.push(s)
-        }
-      }
-      all.sort((a, b) => (b.time.updated ?? b.time.created) - (a.time.updated ?? a.time.created))
-      setMore(all.length >= cap)
-      setSessions(all)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  createEffect(
-    on([device, dirs], ([uid, directories]) => {
-      if (!uid || directories.length === 0) return
-      const base = getProxyUrl(uid)
-      const connections = directories.map((dir) => {
-        const qs = new URLSearchParams({ directory: dir.path })
-        const es = new EventSource(`${base}/event?${qs}`, { withCredentials: true })
-        es.onmessage = (e) => {
-          try {
-            const msg = JSON.parse(e.data) as { type: string; properties?: unknown }
-            if (msg.type !== "session.status") return
-            const props = msg.properties as { sessionID: string; status: { type: string } }
-            if (props.status.type === "idle") {
-              setStatusMap((prev) => {
-                const next = { ...prev }
-                delete next[props.sessionID]
-                return next
-              })
-            } else {
-              setStatusMap((prev) => ({ ...prev, [props.sessionID]: props.status }))
-            }
-          } catch {}
-        }
-        return es
-      })
-      onCleanup(() => connections.forEach((es) => es.close()))
-    }),
-  )
-
-  // Track whether initial load has been done
-  let loaded = false
-
-  // Reload when the workspace's directories or device changes
-  createEffect(
-    on([dirs, device], ([newDirs, newDevice], prev) => {
-      if (!loaded) {
-        loaded = true
-        void load(PAGE_SIZE)
-        return
-      }
-      if (!prev || newDirs !== prev[0] || newDevice !== prev[1]) {
-        setPending([])
-        setSessions([])
-        setLimit(PAGE_SIZE)
-        void load(PAGE_SIZE)
-      }
-    }),
-  )
-
-  const loadMore = () => {
-    const next = limit() + PAGE_SIZE
-    setLimit(next)
-    void load(next)
-  }
-
-  // Watch current session ID: insert placeholder if not in list
-  createEffect(
-    on(
-      () => params.id,
-      (id) => {
-        if (params.workspaceID !== props.id) return
-        // Insert placeholder for new session not yet in list
-        if (id && !merged().some((s) => s.id === id)) {
-          const primary = dirs()[0]
-          if (primary) {
-            const now = Date.now()
-            setPending((list) => [
-              {
-                id,
-                title: "",
-                directory: primary.path,
-                time: { created: now, updated: now },
-              },
-              ...list.filter((s) => s.id !== id),
-            ])
-          }
-          return
-        }
-        if (!id) return
-        setPending((list) => list.filter((s) => s.id !== id))
-      },
-    ),
-  )
-
-  createEffect(() => {
-    const ids = new Set(sessions().map((s) => s.id))
-    setPending((list) => list.filter((s) => !ids.has(s.id) || !s.title))
-  })
-
-  const click = (session: SessionData) => {
-    navigateToSession(session.id, { workspaceId: props.id, dir: encodeDir(session.directory) })
-    hide()
-  }
-
-  const archive = async (session: SessionData) => {
-    const uid = device()
-    if (!uid) return
-    const url = getProxyUrl(uid)
-    await fetch(`${url}/session/${session.id}`, {
-      method: "PATCH",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ time: { archived: Date.now() } }),
-    }).catch(() => null)
-    setPending((prev) => prev.filter((s) => s.id !== session.id))
-    setSessions((prev) => prev.filter((s) => s.id !== session.id))
-    if (params.id !== session.id) return
-    navigateToSession("", { workspaceId: props.id, dir: encodeDir(session.directory) })
-    hide()
-  }
-
-  return (
-    <div class="pl-2 pr-1 py-1">
-      <Show when={merged().length > 0}>
-        <nav class="flex flex-col gap-0.5">
-          <For each={merged()}>
-            {(session) => {
-              const active = () => params.id === session.id
-              return (
-                <div class="group/session relative">
-                  <button
-                    class="flex items-center gap-2 px-2.5 py-1.5 rounded-md text-left transition-all duration-150 w-full group-hover/session:pr-8 text-sm"
-                    classList={{
-                      "bg-sidebar-accent text-sidebar-accent-foreground font-medium": active(),
-                      "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/60": !active(),
-                    }}
-                    onClick={() => click(session)}
-                  >
-                    <Show
-                      when={isWorking(session.id)}
-                      fallback={
-                        <Icon
-                          name="dash"
-                          class="size-3 shrink-0"
-                          size="small"
-                          classList={{ "text-sidebar-foreground/40": true }}
-                        />
-                      }
-                    >
-                      <Spinner class="size-3.5 shrink-0" style={{ color: "hsl(var(--sidebar-primary))" }} />
-                    </Show>
-                    <span class="text-xs truncate flex-1">{session.title || t("workspace.session.new")}</span>
-                  </button>
-                  <div class="absolute top-0.5 right-0.5 flex items-center opacity-0 pointer-events-none group-hover/session:opacity-100 group-hover/session:pointer-events-auto transition-opacity duration-150">
-                    <Tooltip value={t("common.archive")} placement="top">
-                      <IconButton
-                        icon="archive"
-                        variant="ghost"
-                        class="size-7 rounded-md text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"
-                        aria-label={t("common.archive")}
-                        onClick={(event: MouseEvent) => {
-                          event.preventDefault()
-                          event.stopPropagation()
-                          archive(session)
-                        }}
-                      />
-                    </Tooltip>
-                  </div>
-                </div>
-              )
-            }}
-          </For>
-          <Show when={more()}>
-            <button
-              class="flex items-center justify-center h-8 w-full rounded-md text-xs text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/60 transition-all duration-150"
-              disabled={loading()}
-              onClick={loadMore}
-            >
-              <Show when={loading()} fallback={t("workspace.loadMore")}>
-                <Spinner class="size-3" />
-              </Show>
-            </button>
-          </Show>
-        </nav>
-      </Show>
-      <Show when={loading() && merged().length === 0}>
-        <div class="flex items-center gap-2 py-3 px-2">
-          <Spinner class="size-3.5" />
-          <span class="text-xs text-sidebar-foreground/50">{t("workspace.loadingSessions")}</span>
-        </div>
-      </Show>
-      <Show when={!loading() && merged().length === 0}>
-        <div class="flex items-center gap-2 py-3 px-2">
-          <span class="text-xs text-sidebar-foreground/50">{t("workspace.emptySessions")}</span>
-        </div>
-      </Show>
-    </div>
   )
 }

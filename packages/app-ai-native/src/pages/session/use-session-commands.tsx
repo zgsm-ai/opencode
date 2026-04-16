@@ -10,15 +10,13 @@ import { usePermission } from "@/context/permission"
 import { usePrompt } from "@/context/prompt"
 import { useSDK } from "@/context/sdk"
 import { useSync } from "@/context/sync"
-import { workspaceAdapter } from "@/context/workspace-adapter"
+import { useConversationAdapter } from "@/context/device-adapter"
 import { useTerminal } from "@/context/terminal"
 import { DialogSelectFile } from "@/components/dialog-select-file"
 import { DialogSelectModel } from "@/components/dialog-select-model"
 import { DialogSelectMcp } from "@/components/dialog-select-mcp"
 import { DialogFork } from "@/components/dialog-fork"
 import { showToast } from "@opencode-ai/ui/toast"
-import { findLast } from "@opencode-ai/util/array"
-import { extractPromptFromParts } from "@/utils/prompt"
 import { UserMessage } from "@opencode-ai/sdk/v2"
 import { canAddSelectionContext } from "@/pages/session/session-command-helpers"
 
@@ -44,7 +42,7 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
   const permission = usePermission()
   const prompt = usePrompt()
   const sdk = useSDK()
-  const conversation = createMemo(() => workspaceAdapter(sdk.client))
+  const conversation = useConversationAdapter()
   const sync = useSync()
   const terminal = useTerminal()
   const layout = useLayout()
@@ -107,7 +105,7 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
       title: language.t("command.session.new"),
       keybind: "mod+shift+s",
       slash: "new",
-      onSelect: () => navigate(`/workspace/${params.workspaceID}/${params.dir}/session`),
+      onSelect: () => navigate(`/workspace/${params.workspaceID}`),
     }),
   ])
 
@@ -300,55 +298,6 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
 
   const sessionActionCommands = createMemo(() => [
     sessionCommand({
-      id: "session.undo",
-      title: language.t("command.session.undo"),
-      description: language.t("command.session.undo.description"),
-      slash: "undo",
-      disabled: !params.id || visibleUserMessages().length === 0,
-      onSelect: async () => {
-        const sessionID = params.id
-        if (!sessionID) return
-        if (status()?.type !== "idle") {
-          await conversation().sessionAbort(sessionID).catch(() => {})
-        }
-        const revert = info()?.revert?.messageID
-        const message = findLast(userMessages(), (x) => !revert || x.id < revert)
-        if (!message) return
-        await conversation().sessionRevert(sessionID, message.id)
-        const parts = sync.data.part[message.id]
-        if (parts) {
-          const restored = extractPromptFromParts(parts, { directory: sdk.directory })
-          prompt.set(restored)
-        }
-        const priorMessage = findLast(userMessages(), (x) => x.id < message.id)
-        setActiveMessage(priorMessage)
-      },
-    }),
-    sessionCommand({
-      id: "session.redo",
-      title: language.t("command.session.redo"),
-      description: language.t("command.session.redo.description"),
-      slash: "redo",
-      disabled: !params.id || !info()?.revert?.messageID,
-      onSelect: async () => {
-        const sessionID = params.id
-        if (!sessionID) return
-        const revertMessageID = info()?.revert?.messageID
-        if (!revertMessageID) return
-        const nextMessage = userMessages().find((x) => x.id > revertMessageID)
-        if (!nextMessage) {
-          await conversation().sessionUnrevert(sessionID)
-          prompt.reset()
-          const lastMsg = findLast(userMessages(), (x) => x.id >= revertMessageID)
-          setActiveMessage(lastMsg)
-          return
-        }
-        await conversation().sessionRevert(sessionID, nextMessage.id)
-        const priorMsg = findLast(userMessages(), (x) => x.id < nextMessage.id)
-        setActiveMessage(priorMsg)
-      },
-    }),
-    sessionCommand({
       id: "session.compact",
       title: language.t("command.session.compact"),
       description: language.t("command.session.compact.description"),
@@ -357,18 +306,9 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
       onSelect: async () => {
         const sessionID = params.id
         if (!sessionID) return
-        const model = local.model.current()
-        if (!model) {
-          showToast({
-            title: language.t("toast.model.none.title"),
-            description: language.t("toast.model.none.description"),
-          })
-          return
-        }
-        await conversation().sessionSummarize({
+        await conversation.sessionCommand({
           sessionID,
-          modelID: model.id,
-          providerID: model.provider.id,
+          command: "/compact",
         })
       },
     }),

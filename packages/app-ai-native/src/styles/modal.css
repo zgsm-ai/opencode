@@ -5,7 +5,7 @@
 /* Override Kobalte dialog overlay */
 [data-component="dialog-overlay"] {
   background: var(--native-overlay) !important;
-  backdrop-filter: blur(2px) !important;
+  backdrop-filter: blur(6px) !important;
   animation: modal-fade-in 150ms ease-out;
 }
 
@@ -23,9 +23,10 @@
   pointer-events: auto;
   width: min(calc(100vw - 32px), 640px);
   max-height: min(calc(100vh - 32px), 580px);
-  background: var(--native-panel);
+  background: linear-gradient(180deg, color-mix(in oklab, var(--native-panel) 88%, var(--native-bg-subtle)), var(--native-panel));
   border-radius: var(--native-radius-xl);
-  box-shadow: 0 24px 48px -12px rgba(0, 0, 0, 0.15), 0 0 0 1px color-mix(in srgb, var(--native-border) 12%, transparent);
+  border: 1px solid color-mix(in oklab, var(--native-border) 58%, transparent);
+  box-shadow: var(--native-shadow-lg);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -38,14 +39,16 @@
   justify-content: space-between;
   padding: 0.875rem 1.25rem;
   flex-shrink: 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--native-border) 12%, transparent);
+  border-bottom: 1px solid color-mix(in oklab, var(--native-border) 44%, transparent);
+  background: color-mix(in oklab, var(--native-panel) 84%, var(--native-bg-subtle));
 }
 
 .modal-title {
-  font-size: 0.9375rem;
-  font-weight: 700;
+  font-family: var(--native-font-display);
+  font-size: 1rem;
+  font-weight: 600;
   color: var(--native-foreground);
-  letter-spacing: -0.01em;
+  letter-spacing: -0.03em;
 }
 
 .modal-close {
@@ -54,17 +57,20 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: none;
+  border: 1px solid color-mix(in oklab, var(--native-border) 50%, transparent);
   border-radius: var(--native-radius-sm);
-  background: transparent;
+  background: color-mix(in oklab, var(--native-panel) 84%, transparent);
   color: var(--native-muted);
   cursor: pointer;
-  transition: all var(--native-transition-fast);
+  box-shadow: var(--native-shadow-sm);
+  transition: background-color var(--native-transition-fast), border-color var(--native-transition-fast), color var(--native-transition-fast), transform var(--native-transition-fast);
 }
 
 .modal-close:hover {
-  background: var(--native-surface);
+  background: var(--native-primary-soft);
+  border-color: color-mix(in oklab, var(--native-primary) 18%, var(--native-border));
   color: var(--native-foreground);
+  transform: translateY(-1px);
 }
 
 .modal-close svg {
@@ -82,7 +88,7 @@
 /* ── Modal Sections ── */
 .modal-section {
   padding: 1rem 1.25rem;
-  border-bottom: 1px solid color-mix(in srgb, var(--native-border) 8%, transparent);
+  border-bottom: 1px solid color-mix(in oklab, var(--native-border) 34%, transparent);
 }
 
 .modal-section:last-child {
@@ -92,6 +98,7 @@
 .modal-section-title {
   font-size: 0.8125rem;
   font-weight: 600;
+  letter-spacing: -0.01em;
   color: var(--native-foreground);
   margin-bottom: 0.125rem;
 }
@@ -128,7 +135,7 @@
   height: 2.125rem;
   padding: 0 0.625rem;
   border-radius: var(--native-radius-sm);
-  border: 1px solid color-mix(in srgb, var(--native-border) 20%, transparent);
+  border: 1px solid color-mix(in oklab, var(--native-border) 56%, transparent);
   background: var(--native-input);
   font-size: 0.8125rem;
   color: var(--native-foreground);
@@ -139,7 +146,7 @@
 
 .modal-input:focus {
   border-color: var(--native-primary);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--native-primary) 8%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--native-primary) 10%, transparent);
 }
 
 .modal-input::placeholder {
@@ -195,23 +202,24 @@ textarea.modal-input.mono {
   flex: 1;
   padding: 0.4375rem 0.625rem;
   border-radius: var(--native-radius-sm);
-  border: 1px solid color-mix(in srgb, var(--native-border) 20%, transparent);
-  background: transparent;
+  border: 1px solid color-mix(in oklab, var(--native-border) 50%, transparent);
+  background: color-mix(in oklab, var(--native-panel) 78%, transparent);
   font-size: 0.8125rem;
   color: var(--native-muted);
   cursor: pointer;
-  transition: all var(--native-transition-fast);
+  transition: background-color var(--native-transition-fast), border-color var(--native-transition-fast), color var(--native-transition-fast), transform var(--native-transition-fast);
   text-align: center;
 }
 
 .modal-toggle:hover {
-  border-color: color-mix(in srgb, var(--native-border) 45%, transparent);
+  border-color: color-mix(in oklab, var(--native-primary) 18%, var(--native-border));
+  background: color-mix(in oklab, var(--native-primary) 5%, var(--native-panel));
   color: var(--native-foreground);
 }
 
 .modal-toggle.on {
   border-color: var(--native-primary);
-  background: color-mix(in srgb, var(--native-primary) 8%, transparent);
+  background: color-mix(in oklab, var(--native-primary) 12%, transparent);
   color: var(--native-primary);
 }
 
@@ -223,8 +231,8 @@ textarea.modal-input.mono {
   gap: 0.375rem;
   padding: 0.625rem 1.25rem;
   flex-shrink: 0;
-  border-top: 1px solid color-mix(in srgb, var(--native-border) 12%, transparent);
-  background: var(--native-bg-subtle);
+  border-top: 1px solid color-mix(in oklab, var(--native-border) 44%, transparent);
+  background: color-mix(in oklab, var(--native-bg-subtle) 78%, var(--native-panel));
 }
 
 .modal-btn {
@@ -235,8 +243,9 @@ textarea.modal-input.mono {
   padding: 0 1rem;
   border-radius: var(--native-radius-sm);
   font-size: 0.8125rem;
+  font-weight: 600;
   cursor: pointer;
-  transition: all var(--native-transition-fast);
+  transition: background-color var(--native-transition-fast), border-color var(--native-transition-fast), color var(--native-transition-fast), transform var(--native-transition-fast);
   border: none;
 }
 
@@ -246,14 +255,16 @@ textarea.modal-input.mono {
 }
 
 .modal-btn-ghost {
-  background: transparent;
+  background: color-mix(in oklab, var(--native-panel) 78%, transparent);
   color: var(--native-muted);
-  border: 1px solid color-mix(in srgb, var(--native-border) 20%, transparent);
+  border: 1px solid color-mix(in oklab, var(--native-border) 50%, transparent);
 }
 
 .modal-btn-ghost:hover:not(:disabled) {
   background: var(--native-surface);
+  border-color: color-mix(in oklab, var(--native-border-strong) 34%, transparent);
   color: var(--native-foreground);
+  transform: translateY(-1px);
 }
 
 .modal-btn-primary {
@@ -263,15 +274,17 @@ textarea.modal-input.mono {
 
 .modal-btn-primary:hover:not(:disabled) {
   background: var(--native-primary-hover);
+  transform: translateY(-1px);
 }
 
 .modal-btn-danger {
-  background: #dc2626;
-  color: #fff;
+  background: var(--native-error);
+  color: var(--native-primary-foreground);
 }
 
 .modal-btn-danger:hover:not(:disabled) {
-  background: #b91c1c;
+  background: color-mix(in oklab, var(--native-error) 88%, black);
+  transform: translateY(-1px);
 }
 
 /* ── Extras ── */
@@ -306,8 +319,9 @@ textarea.modal-input.mono {
 
 .modal-info-card {
   border-radius: var(--native-radius-lg);
-  border: 1px solid color-mix(in srgb, var(--native-border) 12%, transparent);
-  background: var(--native-panel);
+  border: 1px solid color-mix(in oklab, var(--native-border) 44%, transparent);
+  background: color-mix(in oklab, var(--native-panel) 80%, var(--native-bg-subtle));
+  box-shadow: var(--native-shadow-sm);
   padding: 0.875rem 1rem;
 }
 

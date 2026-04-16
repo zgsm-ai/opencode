@@ -20,7 +20,7 @@ export default function Home() {
   const layout = useLayout()
   const platform = usePlatform()
   const dialog = useDialog()
-  const { navigateToNewSession, encodeDirectory } = useWorkspaceNavigate()
+  const { navigateToNewSession } = useWorkspaceNavigate()
   const server = useServer()
   const language = useLanguage()
   const home = (directory: string) => sync.child(directory, { bootstrap: false })[0].path.home
@@ -45,14 +45,14 @@ export default function Home() {
     try {
       const defaultWorkspace = await workspaceApi.getDefault()
       if (defaultWorkspace.workspace) {
-        navigateToNewSession({ workspaceId: defaultWorkspace.workspace.id, dir: encodeDirectory(directory) })
+        navigateToNewSession({ workspaceId: defaultWorkspace.workspace.id })
         return
       }
     } catch {
       // 如果获取失败，使用备用方案
     }
     // 备用：导航到 workspace 首页
-    navigateToNewSession({ dir: encodeDirectory(directory) })
+    navigateToNewSession({})
   }
 
   async function chooseProject() {

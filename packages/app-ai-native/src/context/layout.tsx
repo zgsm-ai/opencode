@@ -131,7 +131,7 @@ const normalizeStoredSessionTabs = (key: string, tabs: SessionTabs) => {
   }
 }
 
-export const { use: useLayout, provider: LayoutProvider } = createSimpleContext({
+export const { use: useLayout, provider: LayoutProvider, context: LayoutContext } = createSimpleContext({
   name: "Layout",
   init: () => {
     const globalSdk = useGlobalSDK()
@@ -549,6 +549,7 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
 
     return {
       ready,
+      deviceMode: false as boolean,
       handoff: {
         tabs: createMemo(() => store.handoff?.tabs),
         setTabs(dir: string, id: string) {

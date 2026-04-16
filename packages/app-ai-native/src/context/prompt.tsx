@@ -219,7 +219,7 @@ function createPromptSession(dir: string, id: string | undefined) {
   }
 }
 
-export const { use: usePrompt, provider: PromptProvider } = createSimpleContext({
+export const { use: usePrompt, provider: PromptProvider, context: PromptContext } = createSimpleContext({
   name: "Prompt",
   gate: false,
   init: () => {

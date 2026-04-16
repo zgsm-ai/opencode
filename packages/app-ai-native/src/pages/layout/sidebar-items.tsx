@@ -189,7 +189,7 @@ const SessionHoverPreview = (props: {
 export const SessionItem = (props: SessionItemProps): JSX.Element => {
   const params = useParams()
   const navigate = useNavigate()
-  const { navigateToSession, encodeDirectory } = useWorkspaceNavigate()
+  const { navigateToSession } = useWorkspaceNavigate()
   const layout = useLayout()
   const language = useLanguage()
   const notification = useNotification()
@@ -307,7 +307,7 @@ export const SessionItem = (props: SessionItemProps): JSX.Element => {
             if (!isActive())
               layout.pendingMessage.set(`${base64Encode(props.session.directory)}/${props.session.id}`, message.id)
 
-            navigateToSession(props.session.id, { dir: encodeDirectory(props.session.directory) })
+            navigateToSession(props.session.id, {})
             navigate(`#message-${message.id}`, { replace: true })
           }}
           trigger={item}

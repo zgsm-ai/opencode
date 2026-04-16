@@ -8,7 +8,7 @@ type SDKEventMap = {
   [key in Event["type"]]: Extract<Event, { type: key }>
 }
 
-export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
+export const { use: useSDK, provider: SDKProvider, context: SDKContext } = createSimpleContext({
   name: "SDK",
   init: (props: { directory: Accessor<string> }) => {
     const globalSDK = useGlobalSDK()
