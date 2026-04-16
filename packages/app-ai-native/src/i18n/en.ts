@@ -1038,6 +1038,7 @@ export const dict = {
   "sidebar.user.console": "Console",
   "sidebar.store": "Skill Store",
   "sidebar.projects": "Projects",
+  "sidebar.workspace": "Workspace",
 
   "projects.nav.title": "Projects",
   "projects.home.hero.title": "Projects",

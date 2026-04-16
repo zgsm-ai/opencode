@@ -132,7 +132,12 @@ export default function RootLayout(props: ParentProps) {
             active={isProjects()}
             onClick={() => navigate("/projects")}
           />
-          <NavButton icon="folder" label="Workspace" active={isWorkspace()} onClick={() => navigate("/workspace")} />
+          <NavButton
+            icon="folder"
+            label={language.t("sidebar.workspace")}
+            active={isWorkspace()}
+            onClick={() => navigate("/workspace")}
+          />
         </nav>
         <div class="mt-auto flex flex-col gap-2">
           <UserButton />
