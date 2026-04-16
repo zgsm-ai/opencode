@@ -7,7 +7,6 @@ import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { ResizeHandle } from "@opencode-ai/ui/resize-handle"
 import { Tabs } from "@opencode-ai/ui/tabs"
 import { Collapsible } from "@opencode-ai/ui/collapsible"
-import { Spinner } from "@opencode-ai/ui/spinner"
 import { useLanguage } from "@/context/language"
 import { useFile } from "@/context/file"
 import { useDeviceProject } from "@/context/device-project"
@@ -455,17 +454,14 @@ function ContentSidebar(props: { directory: string }) {
                                         >
                                           <Show
                                             when={isWorking(session.id)}
-                                            fallback={
-                                              <div
-                                                class="size-1.5 shrink-0 rounded-full"
-                                                classList={{
-                                                  "bg-native-primary": isActive(),
-                                                  "bg-native-border": !isActive(),
-                                                }}
-                                              />
-                                            }
                                           >
-                                            <Spinner class="size-3.5 shrink-0" />
+                                            <div
+                                              class="size-3 shrink-0 rounded-full border border-t-transparent animate-spin"
+                                              classList={{
+                                                "border-native-primary": isActive(),
+                                                "border-native-dim": !isActive(),
+                                              }}
+                                            />
                                           </Show>
                                           <span class="truncate flex-1 min-w-0">{session.title || language.t("command.session.new")}</span>
                                           <button

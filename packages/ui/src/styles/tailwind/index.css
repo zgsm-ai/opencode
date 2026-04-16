@@ -72,6 +72,7 @@
   --shadow-xs-border-critical-base: var(--shadow-xs-border-critical-base);
   --shadow-lg-border-base: var(--shadow-lg-border-base);
 
+  --animate-spin: spin 1s linear infinite;
   --animate-pulse: var(--animate-pulse);
 }
 
