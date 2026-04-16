@@ -8,6 +8,18 @@ const basePath = (process.env.VITE_BASE_PATH ?? "").replace(/\/+$/, "") // e.g. 
 const dist = join(import.meta.dir, "../dist")
 const STATIC_CACHE_CONTROL = "public, max-age=2592000, immutable"
 const ENTRY_CACHE_CONTROL = "no-cache, no-store, must-revalidate"
+const types = new Set([
+  "application/javascript",
+  "application/json",
+  "application/manifest+json",
+  "application/wasm",
+  "application/xml",
+  "image/svg+xml",
+  "text/css",
+  "text/javascript",
+  "text/plain",
+  "text/xml",
+])
 
 const rewrite = (p: string) => p.replace(new RegExp(`^${prefix}`), "")
 
@@ -17,10 +29,22 @@ const stripBase = (p: string) =>
 
 const isEntryDocument = (p: string) => p === "/" || p.endsWith(".html")
 
+const isCompressible = (file: Bun.BunFile, p: string) => {
+  if (p.endsWith(".gz")) return false
+  const mime = file.type.split(";")[0]
+  return mime.startsWith("text/") || types.has(mime)
+}
+
+const wantsGzip = (req: Request) => {
+  const enc = req.headers.get("accept-encoding") ?? ""
+  return /\bgzip\b/i.test(enc) && !/\bgzip\s*;\s*q=0(?:\.0+)?\b/i.test(enc)
+}
+
 const withCacheHeaders = (file: Bun.BunFile, cacheControl: string) =>
   new Response(file, {
     headers: {
       "Cache-Control": cacheControl,
+      Vary: "Accept-Encoding",
       ...(cacheControl === ENTRY_CACHE_CONTROL
         ? {
             Pragma: "no-cache",
@@ -29,6 +53,37 @@ const withCacheHeaders = (file: Bun.BunFile, cacheControl: string) =>
         : {}),
     },
   })
+
+const withGzipHeaders = (body: BodyInit, type: string, cacheControl: string) =>
+  new Response(body, {
+    headers: {
+      "Cache-Control": cacheControl,
+      "Content-Encoding": "gzip",
+      "Content-Type": type || "application/octet-stream",
+      Vary: "Accept-Encoding",
+      ...(cacheControl === ENTRY_CACHE_CONTROL
+        ? {
+            Pragma: "no-cache",
+            Expires: "0",
+          }
+        : {}),
+    },
+  })
+
+const serve = async (req: Request, p: string, cacheControl: string) => {
+  const file = Bun.file(join(dist, p))
+  if (!(await file.exists())) return
+  if (req.headers.has("range") || !wantsGzip(req) || !isCompressible(file, p)) {
+    return withCacheHeaders(file, cacheControl)
+  }
+
+  const pre = Bun.file(join(dist, `${p}.gz`))
+  if (await pre.exists()) {
+    return withGzipHeaders(pre, file.type, cacheControl)
+  }
+
+  return withCacheHeaders(file, cacheControl)
+}
 
 const proxyHttp = async (req: Request) => {
   const url = new URL(req.url)
@@ -55,14 +110,13 @@ Bun.serve({
     if (path.startsWith(`${prefix}/api`)) return proxyHttp(req)
 
     const filePath = stripBase(path)
-    const file = Bun.file(join(dist, filePath))
-    return file.exists().then((ok) =>
-      ok
-        ? withCacheHeaders(
-            file,
-            isEntryDocument(filePath) ? ENTRY_CACHE_CONTROL : STATIC_CACHE_CONTROL,
-          )
-        : withCacheHeaders(Bun.file(join(dist, "index.html")), ENTRY_CACHE_CONTROL),
+    return serve(
+      req,
+      filePath,
+      isEntryDocument(filePath) ? ENTRY_CACHE_CONTROL : STATIC_CACHE_CONTROL,
+    ).then(
+      (res) =>
+        res ?? withCacheHeaders(Bun.file(join(dist, "index.html")), ENTRY_CACHE_CONTROL),
     )
   },
   websocket: {
