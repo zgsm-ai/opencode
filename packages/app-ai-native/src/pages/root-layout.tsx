@@ -19,7 +19,7 @@ function item(on: boolean) {
 }
 
 function NavButton(props: {
-  icon: "bubble-5" | "store" | "folder" | "folder-add-left" | "sliders"
+  icon: "bubble-5" | "store" | "folder" | "folder-add-left" | "configuration" | "inbox"
   label: string
   active: boolean
   onClick: () => void
@@ -127,7 +127,7 @@ export default function RootLayout(props: ParentProps) {
             onClick={() => navigate("/store")}
           />
           <NavButton
-            icon="folder-add-left"
+            icon="inbox"
             label={language.t("sidebar.projects")}
             active={isProjects()}
             onClick={() => navigate("/projects")}
@@ -137,7 +137,7 @@ export default function RootLayout(props: ParentProps) {
         <div class="mt-auto flex flex-col gap-2">
           <UserButton />
           <NavButton
-            icon="sliders"
+            icon="configuration"
             label={language.t("sidebar.console")}
             active={isConsole()}
             onClick={() => navigate("/console")}
