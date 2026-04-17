@@ -4,6 +4,7 @@ import { createStore, produce, reconcile } from "solid-js/store"
 import { useDeviceSDK } from "./device-sdk"
 import { useDeviceWorkspace } from "./device-workspace"
 import type { Message, Part, Session, SessionStatus, FileDiff, Todo, PermissionRequest, QuestionRequest } from "@opencode-ai/sdk/v2/client"
+import { sessionTreeIDs } from "@/pages/session/composer/session-request-tree"
 
 type SessionData = {
   session: Session | undefined
@@ -60,6 +61,40 @@ export { DeviceSessionContext }
 
 const MESSAGE_PAGE_SIZE = 50
 
+export function group<T extends { id: string; sessionID: string }>(input: T[]) {
+  return input.reduce<Record<string, T[]>>((acc, item) => {
+    const list = acc[item.sessionID]
+    if (list) list.push(item)
+    if (!list) acc[item.sessionID] = [item]
+    return acc
+  }, {})
+}
+
+export function treeItems<T extends { id?: string; sessionID?: string }>(input: T[], ids: Set<string>) {
+  return group(
+    input.filter((item): item is T & { id: string; sessionID: string } => {
+      return !!item?.id && !!item.sessionID && ids.has(item.sessionID)
+    }),
+  )
+}
+
+export function treeEvent(input: {
+  root?: string
+  eventSID?: string
+  type: string
+  tree: Set<string>
+}) {
+  if (!input.root || !input.eventSID) return true
+  const request =
+    input.type === "permission.asked" ||
+    input.type === "permission.replied" ||
+    input.type === "question.asked" ||
+    input.type === "question.replied" ||
+    input.type === "question.rejected"
+  if (request) return input.tree.has(input.eventSID)
+  return input.eventSID === input.root
+}
+
 export function DeviceSessionProvider(props: ParentProps<{ sessionID?: string }>) {
   const device = useDeviceSDK()
   const workspace = useDeviceWorkspace()
@@ -93,8 +128,15 @@ export function DeviceSessionProvider(props: ParentProps<{ sessionID?: string }>
 
   const sid = createMemo(() => props.sessionID)
 
+  const tree = createMemo(() => new Set(sessionTreeIDs(workspace.data.session, sid())))
+
   createEffect(() => {
     if (sid()) void syncSession()
+  })
+
+  createEffect(() => {
+    tree()
+    if (sid()) void loadRequests()
   })
 
   const loadMessages = async (limit: number) => {
@@ -120,13 +162,33 @@ export function DeviceSessionProvider(props: ParentProps<{ sessionID?: string }>
     })
   }
 
+  const loadRequests = async () => {
+    const id = sid()
+    if (!id || !workspace.agentAvailable()) return
+    return runInflight("requests", async () => {
+      try {
+        const ids = tree()
+        const [perms, questions] = await Promise.all([
+          device.client.permission.list(),
+          device.client.question.list(),
+        ])
+        const perm = Array.isArray(perms) ? perms : []
+        const question = Array.isArray(questions) ? questions : []
+        batch(() => {
+          setStore("permissions", reconcile(treeItems(perm, ids)))
+          setStore("questions", reconcile(treeItems(question, ids)))
+        })
+      } catch {}
+    })
+  }
+
   const syncSession = async () => {
     const id = sid()
     if (!id || !workspace.agentAvailable()) return
     try {
       const result = await device.client.conversation.get(id)
       if (result) setStore("session", result as Session)
-      await loadMessages(MESSAGE_PAGE_SIZE)
+      await Promise.all([loadMessages(MESSAGE_PAGE_SIZE), loadRequests()])
     } catch {}
   }
 
@@ -190,7 +252,8 @@ export function DeviceSessionProvider(props: ParentProps<{ sessionID?: string }>
 
   const unsubscribe = workspace.subscribe((payload) => {
     const eventSID = payload.sessionID ?? (payload.properties as any)?.sessionID ?? ((payload.properties as any)?.part as any)?.sessionID ?? ((payload.properties as any)?.info as any)?.sessionID ?? ((payload.properties as any)?.status as any)?.sessionID ?? ((payload.properties as any)?.diff as any[])?.[0]?.sessionID ?? ((payload.properties as any)?.todos as any[])?.[0]?.sessionID
-    if (sid() && eventSID && eventSID !== sid()) return
+    if (!treeEvent({ root: sid(), eventSID, type: payload.type, tree: tree() })) return
+
 
     batch(() => {
       switch (payload.type) {
