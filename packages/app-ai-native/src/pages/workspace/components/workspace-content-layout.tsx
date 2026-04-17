@@ -450,7 +450,7 @@ function ContentSidebar(props: { directory: string }) {
                             <For each={sessionGroups()}>
                               {(group) => (
                                 <>
-                                  <div class="px-1.5 pt-1.5 pb-0.5 text-11-regular font-medium text-native-dim tracking-wide uppercase">{group.label}</div>
+                                  <div class="px-1.5 pt-1.5 pb-0.5 text-[12px] font-[600] text-native-muted tracking-wide uppercase">{group.label}</div>
                                   <For each={group.sessions}>
                                     {(session) => {
                                       const isActive = createMemo(() => {
