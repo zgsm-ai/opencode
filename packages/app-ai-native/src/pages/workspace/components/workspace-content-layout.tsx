@@ -1,5 +1,5 @@
 import { createMemo, createSignal, For, Match, onMount, Show, Switch, createEffect, on, onCleanup, untrack } from "solid-js"
-import { useSearchParams } from "@solidjs/router"
+import { useParams, useSearchParams } from "@solidjs/router"
 import { Toast } from "@opencode-ai/ui/toast"
 import { IconButton } from "@opencode-ai/ui/icon-button"
 import { Icon } from "@opencode-ai/ui/icon"
@@ -21,6 +21,7 @@ import { useDeviceLayout } from "./device-interface"
 import { FilePreviewTab } from "./file-preview-tab"
 import { DiffPreviewTab } from "./diff-preview-tab"
 import { workspaceKey } from "@/pages/layout/helpers"
+import { shouldRestore, activeSession } from "./workspace-content-layout-sync"
 import FileTree from "@/components/file-tree"
 import type { FileNode } from "@opencode-ai/sdk/v2"
 import type { DiffFileEntry } from "@/client/device-client"
@@ -554,33 +555,16 @@ function ContentSidebar(props: { directory: string }) {
   )
 }
 
-function ContentTabUrlSync(props: { onRestore: (sid: string, ws: ReturnType<typeof useDeviceWorkspace>) => void }) {
-  const [searchParams] = useSearchParams()
-  const tabStore = useContentTabs()
-  const ws = useDeviceWorkspace()
-  const [restored, setRestored] = createSignal(false)
-
-  createEffect(() => {
-    if (restored()) return
-    const sid = searchParams.session as string | undefined
-    if (!sid) {
-      setRestored(true)
-      return
-    }
-    if (ws.data.status !== "loading" && ws.data.session.length > 0) {
-      props.onRestore(sid, ws)
-      setRestored(true)
-    }
-  })
-
-  return null
-}
 
 export function WorkspaceContentLayout(props: { workspaceId: string; directory: string }) {
-  const [searchParams, setSearchParams] = useSearchParams()
+  const params = useParams()
+  const [searchParams, setSearchParams] = useSearchParams<{ session?: string }>()
   const language = useLanguage()
   const tabStore = useContentTabs()
   const dl = useDeviceLayout()
+  const ws = useDeviceWorkspace()
+  const active = createMemo(() => params.workspaceID === props.workspaceId)
+  const [done, setDone] = createSignal<string | undefined>()
 
   const ready = createMemo(() => !!props.workspaceId && !!props.directory)
   const directory = createMemo(() => {
@@ -588,46 +572,59 @@ export function WorkspaceContentLayout(props: { workspaceId: string; directory: 
     return workspaceKey(props.directory)
   })
 
-  const syncUrlFromTab = (activeId: string | undefined) => {
-    if (!activeId) {
-      setSearchParams({ session: undefined } as any, { replace: true })
+  const syncUrlFromTab = (id: string | undefined) => {
+    if (!id) {
+      setSearchParams({ session: undefined }, { replace: true })
       return
     }
-    const tab = tabStore.tabs().find((t) => t.id === activeId)
-    if (tab?.kind === "session" && tab.meta?.sessionID) {
-      setSearchParams({ session: tab.meta.sessionID } as any, { replace: true })
-    } else {
-      setSearchParams({ session: undefined } as any, { replace: true })
+    const sid = activeSession(tabStore.tabs(), id)
+    if (sid) {
+      setSearchParams({ session: sid }, { replace: true })
+      return
     }
+    setSearchParams({ session: undefined }, { replace: true })
   }
-
-  createEffect(() => {
-    const activeId = tabStore.activeId()
-    syncUrlFromTab(activeId)
-  })
 
   const restoreFromUrl = (sid: string, ws: ReturnType<typeof useDeviceWorkspace>) => {
     const existing = tabStore.tabs().find((t) => t.kind === "session" && t.meta?.sessionID === sid)
     if (existing) {
       tabStore.activate(existing.id)
-    } else {
-      const session = ws.data.session.find((s) => s.id === sid)
-      tabStore.open({
-        kind: "session",
-        key: sid,
-        title: session?.title || language.t("command.session.new"),
-        icon: "message",
-        meta: { sessionID: sid },
-      })
+      return
     }
+    const session = ws.data.session.find((s) => s.id === sid)
+    tabStore.open({
+      kind: "session",
+      key: sid,
+      title: session?.title || language.t("command.session.new"),
+      icon: "message",
+      meta: { sessionID: sid },
+    })
   }
+
+  createEffect(() => {
+    if (!active()) return
+    const sid = searchParams.session
+    if (!sid) {
+      setDone(undefined)
+      return
+    }
+    if (!shouldRestore(sid, done())) return
+    if (ws.data.status === "loading") return
+    restoreFromUrl(sid, ws)
+    setDone(sid)
+  })
+
+  createEffect(() => {
+    if (!active()) return
+    if (shouldRestore(searchParams.session, done())) return
+    syncUrlFromTab(tabStore.activeId())
+  })
 
   return (
     <Show
       when={ready() && directory()}
       fallback={<div class="size-full" />}
     >
-      <ContentTabUrlSync onRestore={restoreFromUrl} />
       <div class="flex h-full w-full min-h-0">
         <Show when={dl.fileTree.opened()}>
           <div
