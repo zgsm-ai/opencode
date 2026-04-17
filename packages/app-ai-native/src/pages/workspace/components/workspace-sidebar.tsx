@@ -283,15 +283,17 @@ export function WorkspaceSidebar(props: { hide?: () => void } = {}) {
     <aside class="flex h-full w-full flex-col bg-[linear-gradient(180deg,color-mix(in_oklab,var(--native-panel)_88%,var(--native-bg-subtle)),var(--native-panel))] text-sidebar-foreground">
       <div class="flex h-[41px] shrink-0 items-center gap-2 px-3">
         <span class="min-w-0 flex-1 font-[var(--native-font-display)] text-[1rem] font-semibold tracking-[-0.035em] text-sidebar-foreground">{t("workspace.page.title")}</span>
-        <Tooltip value={t("workspace.sidebar.collapse")} placement="bottom">
-          <IconButton
-            icon="chevron-left"
-            variant="ghost"
-            iconSize="small"
-            onClick={collapse}
-            aria-label={t("workspace.sidebar.collapse")}
-          />
-        </Tooltip>
+        <Show when={params.workspaceID}>
+          <Tooltip value={t("workspace.sidebar.collapse")} placement="bottom">
+            <IconButton
+              icon="chevron-left"
+              variant="ghost"
+              iconSize="small"
+              onClick={collapse}
+              aria-label={t("workspace.sidebar.collapse")}
+            />
+          </Tooltip>
+        </Show>
       </div>
 
       <div class="shrink-0 px-3 py-2.5">
