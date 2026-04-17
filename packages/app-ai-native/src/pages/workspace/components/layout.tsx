@@ -51,6 +51,7 @@ export default function WorkspaceLayout(props: ParentProps) {
   const [selectedWorkspaceId, setSelectedWorkspaceId] = createSignal<string | undefined>(undefined)
   const [enabledIds, setEnabledIds] = createSignal<string[]>([])
   const [visitedIds, setVisitedIds] = createSignal<string[]>([])
+  const [sidebarOpened, setSidebarOpened] = createSignal(true)
   const closed = new Set<string>()
   const auth = useAuth()
   const navigate = useNavigate()
@@ -251,6 +252,7 @@ export default function WorkspaceLayout(props: ParentProps) {
     enabledWorkspaceIds: enabledIds,
     closedWorkspaceIds: () => Array.from(closed),
     isLoading,
+    sidebarOpened,
     selectWorkspace: handleSelectWorkspace,
     enableWorkspace: handleEnableWorkspace,
     disableWorkspace: handleDisableWorkspace,
@@ -258,6 +260,9 @@ export default function WorkspaceLayout(props: ParentProps) {
     deleteWorkspace: handleDeleteWorkspace,
     renameWorkspace: handleRenameWorkspace,
     removeVisited: (id: string) => setVisitedIds((prev) => prev.filter((x) => x !== id)),
+    openSidebar: () => setSidebarOpened(true),
+    closeSidebar: () => setSidebarOpened(false),
+    toggleSidebar: () => setSidebarOpened((v) => !v),
   }
 
   return (
@@ -334,11 +339,15 @@ function WorkspaceActivation(props: ParentProps) {
 
 function WorkspaceShell(props: ParentProps) {
   const language = useLanguage()
+  const work = useWorkspace()
   createEffect(() => setNav(drawer.opened()))
   onCleanup(() => { drawer.hide(); setNav(false) })
   return (
     <div class="flex h-full w-full min-h-0 overflow-x-hidden">
-      <div class="hidden h-full shrink-0 md:block w-[var(--native-sidebar-width)]">
+      <div
+        class="hidden h-full shrink-0 overflow-hidden transition-[width] duration-200 md:block"
+        style={{ width: work.sidebarOpened() ? "var(--native-sidebar-width)" : "0px" }}
+      >
         <WorkspaceSidebar />
       </div>
       <div class="md:hidden">
@@ -364,7 +373,14 @@ function WorkspaceShell(props: ParentProps) {
           <WorkspaceSidebar hide={drawer.hide} />
         </aside>
       </div>
-      <div class="flex h-full min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-hidden bg-background-base md:rounded-l-[var(--native-radius-lg)] md:border-l md:border-l-[color:color-mix(in_oklab,var(--native-border)_24%,transparent)]">
+      <div
+        class="flex h-full min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-hidden bg-background-base"
+        classList={{
+          "md:rounded-l-[var(--native-radius-lg)]": work.sidebarOpened(),
+          "md:border-l": work.sidebarOpened(),
+          "md:border-l-[color:color-mix(in_oklab,var(--native-border)_24%,transparent)]": work.sidebarOpened(),
+        }}
+      >
         {props.children}
       </div>
     </div>

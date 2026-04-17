@@ -19,6 +19,14 @@ export function WorkspaceSidebar(props: { hide?: () => void } = {}) {
   const dialog = useDialog()
   const hide = () => props.hide?.()
   const active = useActiveWorkspace()!
+  const work = useWorkspace()
+  const collapse = () => {
+    if (props.hide) {
+      props.hide()
+      return
+    }
+    work.closeSidebar()
+  }
   const {
     workspaces,
     devices,
@@ -28,7 +36,7 @@ export function WorkspaceSidebar(props: { hide?: () => void } = {}) {
     createWorkspace,
     deleteWorkspace,
     renameWorkspace,
-  } = useWorkspace()
+  } = work
 
   const params = useParams()
   const { navigateToNewSession } = useWorkspaceNavigate()
@@ -273,10 +281,17 @@ export function WorkspaceSidebar(props: { hide?: () => void } = {}) {
 
   return (
     <aside class="flex h-full w-full flex-col bg-[linear-gradient(180deg,color-mix(in_oklab,var(--native-panel)_88%,var(--native-bg-subtle)),var(--native-panel))] text-sidebar-foreground">
-      <div class="flex h-[41px] shrink-0 items-center px-3">
-        <div class="flex items-center gap-2.5">
-          <span class="font-[var(--native-font-display)] text-[1rem] font-semibold tracking-[-0.035em] text-sidebar-foreground">{t("workspace.page.title")}</span>
-        </div>
+      <div class="flex h-[41px] shrink-0 items-center gap-2 px-3">
+        <span class="min-w-0 flex-1 font-[var(--native-font-display)] text-[1rem] font-semibold tracking-[-0.035em] text-sidebar-foreground">{t("workspace.page.title")}</span>
+        <Tooltip value={t("workspace.sidebar.collapse")} placement="bottom">
+          <IconButton
+            icon="chevron-left"
+            variant="ghost"
+            iconSize="small"
+            onClick={collapse}
+            aria-label={t("workspace.sidebar.collapse")}
+          />
+        </Tooltip>
       </div>
 
       <div class="shrink-0 px-3 py-2.5">

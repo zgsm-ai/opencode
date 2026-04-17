@@ -27,6 +27,7 @@ import type { FileNode } from "@opencode-ai/sdk/v2"
 import type { DiffFileEntry } from "@/client/device-client"
 import type { Session } from "@opencode-ai/sdk/v2/client"
 import { getDirectory, getFilename } from "@opencode-ai/util/path"
+import { useWorkspace } from "../context"
 
 let newSessionCounter = 0
 
@@ -177,6 +178,7 @@ function ContentSidebar(props: { directory: string }) {
   const terminal = useDeviceTerminal()
   const sdk = useDeviceSDK()
   const dw = useDeviceWorkspace()
+  const work = useWorkspace()
   const [expanded, setExpanded] = createSignal<Record<SidebarSection, boolean>>({
     sessions: true,
     files: false,
@@ -323,6 +325,17 @@ function ContentSidebar(props: { directory: string }) {
   return (
     <div class="flex flex-col h-full border-r">
       <div class="h-[41px] shrink-0 flex items-center gap-1 px-2 border-b">
+        <Show when={!work.sidebarOpened()}>
+          <Tooltip value={language.t("workspace.sidebar.expand")} placement="bottom">
+            <IconButton
+              icon="chevron-right"
+              variant="ghost"
+              iconSize="small"
+              onClick={work.openSidebar}
+              aria-label={language.t("workspace.sidebar.expand")}
+            />
+          </Tooltip>
+        </Show>
         <Tooltip value={language.t("workspace.content.newSession")} placement="bottom">
           <IconButton
             icon="plus-small"

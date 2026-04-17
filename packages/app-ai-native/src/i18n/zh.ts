@@ -1331,6 +1331,8 @@ export const dict = {
   "workspace.content.section.files": "文件",
   "workspace.content.section.changes": "更改",
   "workspace.content.newSession": "新建会话",
+  "workspace.sidebar.expand": "展开侧边栏",
+  "workspace.sidebar.collapse": "收起侧边栏",
   "workspace.content.comingSoon": "即将推出",
   "workspace.content.viewPreview": "预览",
   "workspace.content.viewSource": "源码",
