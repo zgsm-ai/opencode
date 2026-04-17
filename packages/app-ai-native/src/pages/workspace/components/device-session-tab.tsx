@@ -1,4 +1,5 @@
 import { Show, For, createMemo, createSignal, createEffect, on, onCleanup, batch } from "solid-js"
+import { createResizeObserver } from "@solid-primitives/resize-observer"
 import { createStore, produce, reconcile } from "solid-js/store"
 import { createAutoScroll } from "@opencode-ai/ui/hooks"
 import { DataProvider } from "@opencode-ai/ui/context"
@@ -116,6 +117,7 @@ export function DeviceSessionTab(props: { tabId: string }) {
   const [viewingStack, setViewingStack] = createSignal<{ id: string; name: string }[]>([])
   const [loadedMessages, setLoadedMessages] = createStore<Record<string, Message[]>>({})
   const [loadedParts, setLoadedParts] = createStore<Record<string, Part[]>>({})
+  const [phase, setPhase] = createStore<Record<string, "loading" | "ready" | "error">>({})
   const [loadedStatus, setLoadedStatus] = createSignal<SessionStatus | undefined>()
   const [loadedDiffs, setLoadedDiffs] = createStore<FileDiff[]>([])
   const [loadedTodos, setLoadedTodos] = createStore<Todo[]>([])
@@ -129,7 +131,16 @@ export function DeviceSessionTab(props: { tabId: string }) {
       const removed = prev.filter((id) => !currentIds.includes(id))
       batch(() => {
         for (const id of removed) {
-          setLoadedMessages(id, reconcile([] as Message[]))
+          const mids = loadedMessages[id]?.map((msg) => msg.id) ?? []
+          setLoadedMessages(produce((draft: Record<string, Message[]>) => {
+            delete draft[id]
+          }))
+          setLoadedParts(produce((draft: Record<string, Part[]>) => {
+            for (const mid of mids) delete draft[mid]
+          }))
+          setPhase(produce((draft: Record<string, "loading" | "ready" | "error">) => {
+            delete draft[id]
+          }))
         }
         setLoadedDiffs(reconcile([] as FileDiff[], { key: "file" }))
         setLoadedTodos(reconcile([] as Todo[], { key: "id" }))
@@ -217,25 +228,42 @@ export function DeviceSessionTab(props: { tabId: string }) {
   createEffect(on(currentSessionID, async (id) => {
     if (!id) return
     if (id === rootSessionID() && !viewingSessionID()) return
-    try {
-      const [sessionRes, messagesRes] = await Promise.all([
-        device.client.conversation.get(id).catch(() => undefined),
-        device.client.conversation.messages(id, { limit: 50 }).catch(() => undefined),
-      ])
-      const raw = Array.isArray(messagesRes) ? messagesRes : []
-      const msgs: Message[] = []
-      batch(() => {
-        for (const item of raw as any[]) {
-          if (!item?.info?.id) continue
-          msgs.push(item.info as Message)
-          if (item.parts && Array.isArray(item.parts)) {
-            setLoadedParts(item.info.id, reconcile(item.parts as Part[], { key: "id" }))
-          }
+    const mids = loadedMessages[id]?.map((msg) => msg.id) ?? []
+    batch(() => {
+      setLoadedMessages(produce((draft: Record<string, Message[]>) => {
+        delete draft[id]
+      }))
+      setLoadedParts(produce((draft: Record<string, Part[]>) => {
+        for (const mid of mids) delete draft[mid]
+      }))
+      setLoadedStatus(undefined)
+      setPhase(id, "loading")
+    })
+    const [sessionRes, messagesRes] = await Promise.allSettled([
+      device.client.conversation.get(id),
+      device.client.conversation.messages(id, { limit: 50 }),
+    ])
+    if (currentSessionID() !== id) return
+    if (messagesRes.status !== "fulfilled") {
+      setPhase(id, "error")
+      return
+    }
+    const raw = Array.isArray(messagesRes.value) ? messagesRes.value : []
+    const msgs: Message[] = []
+    batch(() => {
+      for (const item of raw as any[]) {
+        if (!item?.info?.id) continue
+        msgs.push(item.info as Message)
+        if (item.parts && Array.isArray(item.parts)) {
+          setLoadedParts(item.info.id, reconcile(item.parts as Part[], { key: "id" }))
         }
-        setLoadedMessages(id, reconcile(msgs, { key: "id" }))
-        if (sessionRes) setLoadedStatus({ type: "idle" } as SessionStatus)
-      })
-    } catch {}
+      }
+      setLoadedMessages(id, reconcile(msgs, { key: "id" }))
+      if (sessionRes.status === "fulfilled" && sessionRes.value) {
+        setLoadedStatus({ type: "idle" } as SessionStatus)
+      }
+      setPhase(id, "ready")
+    })
   }))
 
   const unsubscribe = workspace.subscribe((payload) => {
@@ -374,7 +402,10 @@ export function DeviceSessionTab(props: { tabId: string }) {
       }
     })
   })
-  onCleanup(() => unsubscribe())
+  onCleanup(() => {
+    unsubscribe()
+    if (snapFrame !== undefined) cancelAnimationFrame(snapFrame)
+  })
 
   // ── Adapt device providers to original context interfaces ──
 
@@ -605,8 +636,24 @@ export function DeviceSessionTab(props: { tabId: string }) {
 
   const composer = createDeviceSessionComposerState()
 
+  const [snap, setSnap] = createSignal(true)
+
+  const done = createMemo(() => {
+    const id = currentSessionID()
+    if (!id) return false
+    if (viewingSessionID()) return phase[id] === "ready" || phase[id] === "error"
+    return session.data.session?.id === id && !session.history.loading()
+  })
+
+  const ready = createMemo(() => {
+    const id = currentSessionID()
+    if (!id) return false
+    if (viewingSessionID()) return phase[id] === "ready"
+    return session.data.session?.id === id && !session.history.loading()
+  })
+
   const autoScroll = createAutoScroll({
-    working: () => effectiveStatus()?.type === "busy",
+    working: () => snap() || effectiveStatus()?.type === "busy",
     overflowAnchor: "dynamic",
   })
 
@@ -617,10 +664,25 @@ export function DeviceSessionTab(props: { tabId: string }) {
   let scroller: HTMLDivElement | undefined
   let content: HTMLDivElement | undefined
   let promptDock: HTMLDivElement | undefined
+  let snapFrame: number | undefined
   let dockHeight = 0
 
   const messages = createMemo(() => effectiveMessages())
   const messagesReady = createMemo(() => true)
+
+  createEffect(on(currentSessionID, () => setSnap(true), { defer: true }))
+
+  createEffect(() => {
+    if (!snap()) return
+    if (!scroller) return
+    if (!done()) return
+    if (snapFrame !== undefined) cancelAnimationFrame(snapFrame)
+    snapFrame = requestAnimationFrame(() => {
+      snapFrame = undefined
+      if (ready()) resumeScroll()
+      setSnap(false)
+    })
+  })
 
   const userMessages = createMemo(
     () => messages().filter((m) => m.role === "user") as any[],
@@ -636,6 +698,21 @@ export function DeviceSessionTab(props: { tabId: string }) {
   const resumeScroll = () => {
     autoScroll.forceScrollToBottom()
   }
+
+  createResizeObserver(
+    () => promptDock,
+    ({ height }) => {
+      const next = Math.ceil(height)
+      if (next === dockHeight) return
+      const el = scroller
+      const delta = next - dockHeight
+      const stick = el
+        ? snap() || !autoScroll.userScrolled() || el.scrollHeight - el.clientHeight - el.scrollTop < 10 + Math.max(0, delta)
+        : false
+      dockHeight = next
+      if (stick) autoScroll.forceScrollToBottom()
+    },
+  )
 
   const anchor = (id: string) => `message-${id}`
 
