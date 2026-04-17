@@ -42,6 +42,8 @@ import { SessionSidePanel } from "@/pages/session/session-side-panel"
 import { TerminalPanel } from "@/pages/session/terminal-panel"
 import { useSessionCommands } from "@/pages/session/use-session-commands"
 import { CloudTeamStatusBar } from "@/components/cloud-team"
+import { Icon } from "@opencode-ai/ui/icon"
+import { Button } from "@opencode-ai/ui/button"
 import { useSessionHashScroll } from "@/pages/session/use-session-hash-scroll"
 import { same } from "@/utils/same"
 
@@ -1279,6 +1281,23 @@ export default function Page() {
           <Show when={cloudTeam.active()}>
             <div class="shrink-0 w-full px-3 pb-1">
               <CloudTeamStatusBar />
+            </div>
+          </Show>
+          <Show when={cloudTeam.isAvailable() && !cloudTeam.active()}>
+            <div class="shrink-0 w-full px-3 pb-1">
+              <div class="flex items-center gap-2 rounded-md border border-dashed border-border-weak-base bg-background-base px-3 py-1.5">
+                <Icon name="cloud-upload" class="size-3.5 text-text-weak shrink-0" />
+                <span class="text-11-regular text-text-weak">Cloud Team</span>
+                <div class="flex-1" />
+                <Button
+                  variant="ghost"
+                  size="small"
+                  class="text-11-regular text-blue-600 hover:text-blue-700"
+                  onClick={() => cloudTeam.activate()}
+                >
+                  Activate
+                </Button>
+              </div>
             </div>
           </Show>
 

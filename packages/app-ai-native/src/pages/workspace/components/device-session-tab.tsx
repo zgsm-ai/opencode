@@ -31,6 +31,7 @@ import { SettingsContext } from "@/context/settings"
 import { DirectoryContext } from "@/context/directory"
 import { LayoutContext } from "@/context/layout"
 import { FileContext } from "@/context/file"
+import { CloudTeamProvider } from "@/context/cloud-team"
 import { NewSessionView } from "@/components/session/session-new-view"
 import { MessageTimeline } from "@/pages/session/message-timeline"
 import { SessionComposerRegion } from "@/pages/session/composer/session-composer-region"
@@ -618,6 +619,37 @@ export function DeviceSessionTab(props: { tabId: string }) {
     todo: { set: () => {} },
   }
 
+  // CloudTeamContext value — inactive stub for device sessions
+  const cloudTeamValue = {
+    isAvailable: () => false,
+    active: () => false,
+    decomposing: () => false,
+    session: () => undefined,
+    teammates: () => [],
+    tasks: () => [],
+    messages: () => [],
+    approvals: () => [],
+    progress: () => ({}),
+    wsConnected: () => false,
+    completedPercentage: () => 0,
+    activeTasks: () => [],
+    pendingApprovals: () => [],
+    teammateById: () => new Map(),
+    leader: () => undefined,
+    leaderScore: () => undefined,
+    agentName: "CloudTeam",
+    activate() {},
+    deactivate() {},
+    createSession: async () => ({ id: "", name: "", status: "active" as const, teammates: [] }),
+    joinSession: async () => {},
+    leaveSession: async () => {},
+    submitPrompt: async () => ({ tasks: [] }),
+    respondApproval: async () => {},
+    sendMessage: async () => {},
+    registerRepo: async () => {},
+    listRepos: async () => [],
+  }
+
   const dataProps = createMemo(() => ({
     ...syncStore(),
     provider: legacyProvider(workspace.data.provider),
@@ -625,6 +657,7 @@ export function DeviceSessionTab(props: { tabId: string }) {
 
   return (
     <ConversationAdapterContext.Provider value={adapter() as any}>
+    <CloudTeamProvider>
     <GlobalSyncContext.Provider value={globalSyncValue as any}>
     <SDKContext.Provider value={sdkValue as any}>
       <SyncContext.Provider value={syncValue as any}>
@@ -810,6 +843,7 @@ export function DeviceSessionTab(props: { tabId: string }) {
       </SyncContext.Provider>
     </SDKContext.Provider>
     </GlobalSyncContext.Provider>
+    </CloudTeamProvider>
     </ConversationAdapterContext.Provider>
   )
 }

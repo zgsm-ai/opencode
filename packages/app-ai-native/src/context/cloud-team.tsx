@@ -7,15 +7,18 @@ import { createCloudTeamWS } from "@/client/cloud-team-ws"
 import type {
   TeammateRegistration,
   Task,
+  SubTask,
   ApprovalRequest,
   CloudEvent,
   ProgressUpdate,
+  SessionProgress,
 } from "@/client/cloud-team-types"
 import { applyCloudEvent } from "./cloud-team/event-reducer"
 
 type CloudTeamStore = {
   active: boolean
   decomposing: boolean
+  pendingPlan?: Task[]   // Tasks returned by decompose, held for Leader review before submitting
   session?: {
     id: string
     title: string
@@ -28,6 +31,7 @@ type CloudTeamStore = {
   messages: CloudEvent[]
   approvals: ApprovalRequest[]
   progress: Record<string, ProgressUpdate>
+  sessionProgress?: SessionProgress
   wsConnected: boolean
   lastEventId?: string
   leader?: {
@@ -41,7 +45,7 @@ type CloudTeamStore = {
 
 const CLOUD_TEAM_AGENT_NAME = "CloudTeam"
 
-export const { use: useCloudTeam, provider: CloudTeamProvider } = createSimpleContext({
+export const { use: useCloudTeam, provider: CloudTeamProvider, context: CloudTeamContext } = createSimpleContext({
   name: "CloudTeam",
   gate: false,
   init() {
@@ -55,6 +59,7 @@ export const { use: useCloudTeam, provider: CloudTeamProvider } = createSimpleCo
       messages: [],
       approvals: [],
       progress: {},
+      sessionProgress: undefined,
       wsConnected: false,
     })
 
@@ -81,6 +86,7 @@ export const { use: useCloudTeam, provider: CloudTeamProvider } = createSimpleCo
 
     let wsClient: ReturnType<typeof createCloudTeamWS> | undefined
     let heartbeatInterval: ReturnType<typeof setInterval> | undefined
+    let progressPollInterval: ReturnType<typeof setInterval> | undefined
 
     function connectWS(sessionId: string) {
       disconnectWS()
@@ -110,12 +116,28 @@ export const { use: useCloudTeam, provider: CloudTeamProvider } = createSimpleCo
           cloudTeamApi.leader.heartbeat(sessionId, getMachineId()).catch(() => {})
         }
       }, 10_000)
+
+      // Poll session progress every 5 seconds
+      progressPollInterval = setInterval(() => {
+        cloudTeamApi.progress.get(sessionId).then((p) => {
+          setStore("sessionProgress", p)
+        }).catch(() => {})
+      }, 5_000)
+
+      // Initial fetch
+      cloudTeamApi.progress.get(sessionId).then((p) => {
+        setStore("sessionProgress", p)
+      }).catch(() => {})
     }
 
     function disconnectWS() {
       if (heartbeatInterval !== undefined) {
         clearInterval(heartbeatInterval)
         heartbeatInterval = undefined
+      }
+      if (progressPollInterval !== undefined) {
+        clearInterval(progressPollInterval)
+        progressPollInterval = undefined
       }
       if (wsClient) {
         wsClient.disconnect()
@@ -222,9 +244,11 @@ export const { use: useCloudTeam, provider: CloudTeamProvider } = createSimpleCo
         setStore("session", undefined)
         setStore("teammates", [])
         setStore("tasks", [])
+        setStore("pendingPlan", undefined)
         setStore("messages", [])
         setStore("approvals", [])
         setStore("progress", {})
+        setStore("sessionProgress", undefined)
       })
     }
 
@@ -236,6 +260,7 @@ export const { use: useCloudTeam, provider: CloudTeamProvider } = createSimpleCo
 
     function deactivate() {
       setStore("active", false)
+      setStore("pendingPlan", undefined)
       if (store.session) {
         void leaveSession()
       }
@@ -253,7 +278,8 @@ export const { use: useCloudTeam, provider: CloudTeamProvider } = createSimpleCo
       try {
         const result = await cloudTeamApi.prompt.decompose(sessionId, { prompt: text, context })
         batch(() => {
-          setStore("tasks", result.tasks)
+          // Store as pendingPlan for Leader review — do NOT write to tasks yet
+          setStore("pendingPlan", result.tasks)
           setStore("decomposing", false)
         })
         return result
@@ -261,6 +287,25 @@ export const { use: useCloudTeam, provider: CloudTeamProvider } = createSimpleCo
         setStore("decomposing", false)
         throw err
       }
+    }
+
+    // ── Plan confirmation ──────────────────────────────────
+
+    async function confirmPlan(editedTasks: SubTask[]) {
+      const sessionId = store.session?.id
+      if (!sessionId) return
+      const tasks = await cloudTeamApi.task.submitPlan(sessionId, {
+        tasks: editedTasks,
+        fencingToken: store.leader?.fencingToken,
+      })
+      batch(() => {
+        setStore("tasks", tasks)
+        setStore("pendingPlan", undefined)
+      })
+    }
+
+    function discardPlan() {
+      setStore("pendingPlan", undefined)
     }
 
     // ── Approval operations ────────────────────────────────
@@ -315,12 +360,14 @@ export const { use: useCloudTeam, provider: CloudTeamProvider } = createSimpleCo
       isAvailable,
       active: () => store.active,
       decomposing: () => store.decomposing,
+      pendingPlan: () => store.pendingPlan,
       session: () => store.session,
       teammates: () => store.teammates,
       tasks: () => store.tasks,
       messages: () => store.messages,
       approvals: () => store.approvals,
       progress: () => store.progress,
+      sessionProgress: () => store.sessionProgress,
       wsConnected: () => store.wsConnected,
       completedPercentage,
       activeTasks,
@@ -339,6 +386,8 @@ export const { use: useCloudTeam, provider: CloudTeamProvider } = createSimpleCo
       joinSession,
       leaveSession,
       submitPrompt,
+      confirmPlan,
+      discardPlan,
       respondApproval,
       sendMessage,
       registerRepo,

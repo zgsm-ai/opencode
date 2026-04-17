@@ -4,7 +4,52 @@ import { Icon } from "@opencode-ai/ui/icon"
 import { Spinner } from "@opencode-ai/ui/spinner"
 import { useCloudTeam } from "@/context/cloud-team"
 import { cloudTeamApi } from "@/client/cloud-team-api"
-import type { ExploreQuery, ExploreQueryType } from "@/client/cloud-team-types"
+import type { ExploreQuery, ExploreQueryType, ExploreResult, ExploreQueryResult } from "@/client/cloud-team-types"
+
+const queryTypeLabels: Record<ExploreQueryType, string> = {
+  file_tree: "File Tree",
+  symbol_search: "Symbol Search",
+  content_search: "Content Search",
+  git_log: "Git Log",
+  dependency_graph: "Dependency Graph",
+}
+
+/**
+ * Renders structured explore query results based on type.
+ */
+function QueryResultView(props: { result: ExploreQueryResult }) {
+  const lines = createMemo(() => props.result.output.split("\n"))
+
+  return (
+    <div class="space-y-0.5">
+      <div class="flex items-center gap-2 mb-1">
+        <span class="text-10-regular text-text-weak font-medium">{queryTypeLabels[props.result.type as ExploreQueryType] ?? props.result.type}</span>
+        <Show when={props.result.truncated}>
+          <span class="text-10-regular text-amber-600 bg-amber-50 px-1 rounded">truncated</span>
+        </Show>
+      </div>
+      <div class="max-h-36 overflow-y-auto rounded bg-background-base p-1.5">
+        <For each={lines()}>
+          {(line, i) => (
+            <Show
+              when={props.result.type === "git_log" && line.match(/^[a-f0-9]{7,}/)}
+              fallback={
+                <div class="text-11-regular text-text-base font-mono whitespace-pre-wrap break-all">
+                  {line}
+                </div>
+              }
+            >
+              <div class="text-11-regular text-text-base font-mono whitespace-pre-wrap break-all">
+                <span class="text-blue-500">{line.slice(0, 7)}</span>
+                {line.slice(7)}
+              </div>
+            </Show>
+          )}
+        </For>
+      </div>
+    </div>
+  )
+}
 
 /**
  * Explore UI panel for the Leader to send remote code exploration
@@ -17,11 +62,14 @@ export const CloudTeamExplore: Component = () => {
   const [queryType, setQueryType] = createSignal<ExploreQueryType>("file_tree")
   const [queryInput, setQueryInput] = createSignal("")
   const [loading, setLoading] = createSignal(false)
-  const [result, setResult] = createSignal<unknown>(null)
+  const [result, setResult] = createSignal<ExploreResult | null>(null)
   const [error, setError] = createSignal("")
 
-  const onlineTeammates = createMemo(() =>
-    cloudTeam.teammates().filter((t) => t.status === "online" && t.machineId !== cloudTeam.session()?.leaderId),
+  // Include both online and busy teammates — busy ones have repos and can handle read-only explore queries
+  const availableTeammates = createMemo(() =>
+    cloudTeam.teammates().filter(
+      (t) => (t.status === "online" || t.status === "busy") && t.machineId !== cloudTeam.session()?.leaderId,
+    ),
   )
 
   const handleExplore = async () => {
@@ -51,7 +99,7 @@ export const CloudTeamExplore: Component = () => {
         targetMachineId: machineId,
         queries,
       })
-      setResult(res.result)
+      setResult(res.result as ExploreResult)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Explore failed")
     } finally {
@@ -71,8 +119,12 @@ export const CloudTeamExplore: Component = () => {
           class="flex-1 min-w-0 text-12-regular bg-transparent border border-border-weak-base rounded px-2 py-1 outline-none focus:border-border-base"
         >
           <option value="">Select teammate...</option>
-          <For each={onlineTeammates()}>
-            {(t) => <option value={t.machineId}>{t.machineName || t.machineId}</option>}
+          <For each={availableTeammates()}>
+            {(t) => (
+              <option value={t.machineId}>
+                {t.machineName || t.machineId}{t.status === "busy" ? " (busy)" : ""}
+              </option>
+            )}
           </For>
         </select>
       </div>
@@ -84,11 +136,9 @@ export const CloudTeamExplore: Component = () => {
           onChange={(e) => setQueryType(e.currentTarget.value as ExploreQueryType)}
           class="text-12-regular bg-transparent border border-border-weak-base rounded px-2 py-1 outline-none focus:border-border-base"
         >
-          <option value="file_tree">File Tree</option>
-          <option value="symbol_search">Symbol Search</option>
-          <option value="content_search">Content Search</option>
-          <option value="git_log">Git Log</option>
-          <option value="dependency_graph">Dependency Graph</option>
+          <For each={Object.entries(queryTypeLabels)}>
+            {([value, label]) => <option value={value}>{label}</option>}
+          </For>
         </select>
         <input
           type="text"
@@ -126,11 +176,17 @@ export const CloudTeamExplore: Component = () => {
         <div class="text-11-regular text-red-500">{error()}</div>
       </Show>
       <Show when={result()}>
-        <div class="max-h-48 overflow-y-auto rounded border border-border-weak-base bg-background-stronger p-2">
-          <pre class="text-11-regular text-text-base whitespace-pre-wrap break-words">
-            {JSON.stringify(result(), null, 2)}
-          </pre>
-        </div>
+        {(r) => (
+          <div class="space-y-2 max-h-64 overflow-y-auto rounded border border-border-weak-base bg-background-stronger p-2">
+            <Show when={r().queryResults?.length} fallback={
+              <div class="text-11-regular text-text-weak">No results</div>
+            }>
+              <For each={r().queryResults}>
+                {(qr) => <QueryResultView result={qr} />}
+              </For>
+            </Show>
+          </div>
+        )}
       </Show>
     </div>
   )

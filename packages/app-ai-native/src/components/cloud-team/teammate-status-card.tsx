@@ -9,18 +9,40 @@ import { ApprovalItem } from "./approval-item"
 import { CloudTeamMessages } from "./cloud-team-messages"
 import { CloudTeamExplore } from "./cloud-team-explore"
 import { CloudTeamTaskPlanReview } from "./cloud-team-task-plan-review"
+import { CloudTeamPlanConfirmation } from "./cloud-team-plan-confirmation"
 import { CloudTeamSessionBrowser } from "./cloud-team-session-browser"
+import type { TeammateProgress } from "@/client/cloud-team-types"
+
+const sessionStatusConfig: Record<string, { label: string; color: string; bgColor: string }> = {
+  active: { label: "Active", color: "text-green-700", bgColor: "bg-green-50" },
+  paused: { label: "Paused", color: "text-amber-700", bgColor: "bg-amber-50" },
+  completed: { label: "Completed", color: "text-blue-700", bgColor: "bg-blue-50" },
+  failed: { label: "Failed", color: "text-red-700", bgColor: "bg-red-50" },
+}
 
 export const TeammateStatusCard: Component = () => {
   const cloudTeam = useCloudTeam()
   const [expanded, setExpanded] = createSignal(true)
 
   const completedCount = createMemo(() => cloudTeam.tasks().filter((t) => t.status === "completed").length)
+  const failedCount = createMemo(() => cloudTeam.tasks().filter((t) => t.status === "failed").length)
+  const runningCount = createMemo(() => cloudTeam.tasks().filter((t) => t.status === "running").length)
   const totalCount = createMemo(() => cloudTeam.tasks().length)
   const progressPercent = createMemo(() => {
     const total = totalCount()
     if (total === 0) return 0
     return Math.round((completedCount() / total) * 100)
+  })
+
+  // Build per-member progress from sessionProgress API data
+  const memberProgressMap = createMemo(() => {
+    const sp = cloudTeam.sessionProgress()
+    if (!sp) return new Map<string, TeammateProgress>()
+    const map = new Map<string, TeammateProgress>()
+    for (const tp of sp.teammates) {
+      map.set(tp.memberId, tp)
+    }
+    return map
   })
 
   const getTeammateName = (teammateId: string | undefined) => {
@@ -30,6 +52,22 @@ export const TeammateStatusCard: Component = () => {
 
   const getTaskProgress = (taskId: string) => {
     return cloudTeam.progress()[taskId]?.percentage
+  }
+
+  const getTaskProgressMessage = (taskId: string) => {
+    return cloudTeam.progress()[taskId]?.message
+  }
+
+  const isLeader = (teammateId: string) => {
+    const leader = cloudTeam.leader()
+    if (!leader?.elected) return false
+    const teammate = cloudTeam.teammateById().get(teammateId)
+    return teammate?.machineId === leader.leaderId
+  }
+
+  const sessionStatus = () => {
+    const status = cloudTeam.session()?.status ?? "active"
+    return sessionStatusConfig[status] ?? sessionStatusConfig.active
   }
 
   return (
@@ -49,6 +87,10 @@ export const TeammateStatusCard: Component = () => {
               · {cloudTeam.session()?.title}
             </span>
           </Show>
+          {/* Session status badge */}
+          <span class={`text-10-regular px-1.5 py-0.5 rounded ${sessionStatus().bgColor} ${sessionStatus().color}`}>
+            {sessionStatus().label}
+          </span>
         </div>
         <div class="flex items-center gap-2 shrink-0">
           <Show when={cloudTeam.pendingApprovals().length > 0}>
@@ -76,6 +118,13 @@ export const TeammateStatusCard: Component = () => {
             </div>
           </Show>
 
+          {/* Plan confirmation — shown first when pendingPlan exists */}
+          <Show when={cloudTeam.pendingPlan()}>
+            <div class="border-b border-border-weak-base">
+              <CloudTeamPlanConfirmation />
+            </div>
+          </Show>
+
           {/* Teammates */}
           <Show when={cloudTeam.teammates().length > 0}>
             <div class="px-3 py-2 border-b border-border-weak-base">
@@ -88,13 +137,31 @@ export const TeammateStatusCard: Component = () => {
                     const currentTask = createMemo(() =>
                       cloudTeam.tasks().find((t) => t.id === teammate.currentTaskId),
                     )
+                    const memberProg = createMemo(() => memberProgressMap().get(teammate.id))
                     return (
-                      <TeammateAvatar
-                        id={teammate.id}
-                        machineName={teammate.machineName}
-                        status={teammate.status}
-                        currentTaskName={currentTask()?.description}
-                      />
+                      <div class="flex flex-col items-center">
+                        <TeammateAvatar
+                          id={teammate.id}
+                          machineName={teammate.machineName}
+                          status={teammate.status}
+                          currentTaskName={currentTask()?.description}
+                          isLeader={isLeader(teammate.id)}
+                        />
+                        {/* Per-teammate task counts from SessionProgress */}
+                        <Show when={memberProg()}>
+                          {(mp) => (
+                            <div class="text-9-regular text-text-weaker mt-0.5 flex gap-1">
+                              <span class="text-green-600">{mp().completed}✓</span>
+                              <Show when={mp().running > 0}>
+                                <span class="text-amber-600">{mp().running}►</span>
+                              </Show>
+                              <Show when={mp().failed > 0}>
+                                <span class="text-red-600">{mp().failed}✗</span>
+                              </Show>
+                            </div>
+                          )}
+                        </Show>
+                      </div>
                     )
                   }}
                 </For>
@@ -114,14 +181,24 @@ export const TeammateStatusCard: Component = () => {
           <Show when={cloudTeam.tasks().length > 0}>
             <div class="px-3 py-2 border-b border-border-weak-base">
               <div class="flex items-center justify-between mb-1.5">
-                <div class="text-11-regular text-text-weak">
-                  Tasks ({completedCount()}/{totalCount()})
+                <div class="flex items-center gap-2 text-11-regular text-text-weak">
+                  <span>Tasks ({completedCount()}/{totalCount()})</span>
+                  <Show when={runningCount() > 0}>
+                    <span class="text-amber-600">{runningCount()} running</span>
+                  </Show>
+                  <Show when={failedCount() > 0}>
+                    <span class="text-red-600">{failedCount()} failed</span>
+                  </Show>
                 </div>
                 <Show when={totalCount() > 0}>
                   <div class="flex items-center gap-2">
-                    <div class="w-20 h-1.5 rounded-full bg-background-stronger overflow-hidden">
+                    <div class="w-24 h-1.5 rounded-full bg-background-stronger overflow-hidden">
                       <div
-                        class="h-full rounded-full bg-green-500 transition-all"
+                        class="h-full rounded-full transition-all"
+                        classList={{
+                          "bg-green-500": progressPercent() === 100,
+                          "bg-blue-500": progressPercent() > 0 && progressPercent() < 100,
+                        }}
                         style={{ width: `${progressPercent()}%` }}
                       />
                     </div>
@@ -129,7 +206,7 @@ export const TeammateStatusCard: Component = () => {
                   </div>
                 </Show>
               </div>
-              <div class="space-y-0.5 max-h-40 overflow-y-auto">
+              <div class="space-y-0.5 max-h-48 overflow-y-auto">
                 <For each={cloudTeam.tasks()}>
                   {(task) => (
                     <TaskItem
@@ -138,6 +215,10 @@ export const TeammateStatusCard: Component = () => {
                       status={task.status}
                       assigneeName={getTeammateName(task.assignedMemberId ?? undefined)}
                       progress={getTaskProgress(task.id)}
+                      progressMessage={getTaskProgressMessage(task.id)}
+                      result={task.result}
+                      errorMessage={task.errorMessage || undefined}
+                      retryCount={task.retryCount}
                     />
                   )}
                 </For>
@@ -170,8 +251,8 @@ export const TeammateStatusCard: Component = () => {
             </div>
           </Show>
 
-          {/* Task plan review (when there are pending tasks) */}
-          <Show when={cloudTeam.tasks().length > 0 && cloudTeam.leader()?.elected}>
+          {/* Task plan review (when tasks are running — not shown during initial confirmation) */}
+          <Show when={cloudTeam.tasks().length > 0 && cloudTeam.leader()?.elected && !cloudTeam.pendingPlan()}>
             <div class="border-b border-border-weak-base">
               <CloudTeamTaskPlanReview />
             </div>

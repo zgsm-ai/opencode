@@ -1,4 +1,5 @@
 import { batch } from "solid-js"
+import { showToast } from "@opencode-ai/ui/toast"
 import type {
   CloudEvent,
   TeamSession,
@@ -6,6 +7,7 @@ import type {
   TeammateStatus,
   Task,
   TaskStatus,
+  TaskResult,
   ApprovalRequest,
   ApprovalStatus,
   ProgressUpdate,
@@ -121,6 +123,12 @@ export function applyCloudEvent(store: CloudTeamStore, setStore: SetStore, event
           } else if (task) {
             s.tasks.push(task)
           }
+          // Sync teammate.currentTaskId
+          const assignedMemberId = task?.assignedMemberId ?? (p.assignedMemberId as string | undefined)
+          if (assignedMemberId) {
+            const ti = s.teammates.findIndex((t) => t.id === assignedMemberId)
+            if (ti >= 0) s.teammates[ti].currentTaskId = id
+          }
         })
       })
       break
@@ -133,6 +141,12 @@ export function applyCloudEvent(store: CloudTeamStore, setStore: SetStore, event
           const idx = s.tasks.findIndex((t) => t.id === taskId)
           if (idx >= 0) {
             s.tasks[idx].status = "claimed" as TaskStatus
+            // Mark assignee as busy when they claim a task
+            const assignedMemberId = s.tasks[idx].assignedMemberId
+            if (assignedMemberId) {
+              const ti = s.teammates.findIndex((t) => t.id === assignedMemberId)
+              if (ti >= 0) s.teammates[ti].status = "busy"
+            }
           }
         })
       })
@@ -144,6 +158,21 @@ export function applyCloudEvent(store: CloudTeamStore, setStore: SetStore, event
       batch(() => {
         setStore((s) => {
           s.progress[taskId] = p as unknown as ProgressUpdate
+          // Ensure task shows as "running" while progress updates arrive
+          const idx = s.tasks.findIndex((t) => t.id === taskId)
+          if (idx >= 0) {
+            const task = s.tasks[idx]
+            if (task.status === "assigned" || task.status === "claimed" || task.status === "pending") {
+              s.tasks[idx].status = "running" as TaskStatus
+            }
+            // Mark the assigned teammate as busy
+            if (task.assignedMemberId) {
+              const ti = s.teammates.findIndex((t) => t.id === task.assignedMemberId)
+              if (ti >= 0 && s.teammates[ti].status !== "busy") {
+                s.teammates[ti].status = "busy"
+              }
+            }
+          }
         })
       })
       break
@@ -151,26 +180,60 @@ export function applyCloudEvent(store: CloudTeamStore, setStore: SetStore, event
 
     case "task.complete": {
       const taskId = p.taskId as string
+      const description = p.description as string | undefined
+      const result = p.result as TaskResult | undefined
       batch(() => {
         setStore((s) => {
           const idx = s.tasks.findIndex((t) => t.id === taskId)
           if (idx >= 0) {
             s.tasks[idx].status = "completed" as TaskStatus
+            if (result) s.tasks[idx].result = result
+          }
+          // Clear currentTaskId and reset status if no other active tasks
+          const ti = s.teammates.findIndex((t) => t.currentTaskId === taskId)
+          if (ti >= 0) {
+            s.teammates[ti].currentTaskId = undefined
+            const hasOtherActiveTasks = s.tasks.some(
+              (t) => t.id !== taskId && t.assignedMemberId === s.teammates[ti].id
+                && (t.status === "running" || t.status === "claimed" || t.status === "assigned"),
+            )
+            if (!hasOtherActiveTasks) s.teammates[ti].status = "online"
           }
         })
       })
+      if (description) {
+        showToast({ title: "Task completed", description, variant: "success" })
+      }
       break
     }
 
     case "task.fail": {
       const taskId = p.taskId as string
+      const errorMessage = p.errorMessage as string | undefined
+      const description = p.description as string | undefined
       batch(() => {
         setStore((s) => {
           const idx = s.tasks.findIndex((t) => t.id === taskId)
           if (idx >= 0) {
             s.tasks[idx].status = "failed" as TaskStatus
+            if (errorMessage) s.tasks[idx].errorMessage = errorMessage
+          }
+          // Clear currentTaskId and reset status if no other active tasks
+          const ti = s.teammates.findIndex((t) => t.currentTaskId === taskId)
+          if (ti >= 0) {
+            s.teammates[ti].currentTaskId = undefined
+            const hasOtherActiveTasks = s.tasks.some(
+              (t) => t.id !== taskId && t.assignedMemberId === s.teammates[ti].id
+                && (t.status === "running" || t.status === "claimed" || t.status === "assigned"),
+            )
+            if (!hasOtherActiveTasks) s.teammates[ti].status = "online"
           }
         })
+      })
+      showToast({
+        title: "Task failed",
+        description: errorMessage ?? description ?? "Unknown error",
+        variant: "error",
       })
       break
     }
@@ -182,6 +245,15 @@ export function applyCloudEvent(store: CloudTeamStore, setStore: SetStore, event
           const idx = s.tasks.findIndex((t) => t.id === taskId)
           if (idx >= 0) {
             s.tasks[idx].status = "interrupted" as TaskStatus
+          }
+          const ti = s.teammates.findIndex((t) => t.currentTaskId === taskId)
+          if (ti >= 0) {
+            s.teammates[ti].currentTaskId = undefined
+            const hasOtherActiveTasks = s.tasks.some(
+              (t) => t.id !== taskId && t.assignedMemberId === s.teammates[ti].id
+                && (t.status === "running" || t.status === "claimed" || t.status === "assigned"),
+            )
+            if (!hasOtherActiveTasks) s.teammates[ti].status = "online"
           }
         })
       })
@@ -224,6 +296,12 @@ export function applyCloudEvent(store: CloudTeamStore, setStore: SetStore, event
             }
           })
         })
+        if (approval.status === "pending") {
+          showToast({
+            title: "Approval needed",
+            description: `${approval.toolName}: ${approval.description}`,
+          })
+        }
       }
       break
     }
@@ -278,6 +356,7 @@ export function applyCloudEvent(store: CloudTeamStore, setStore: SetStore, event
           }
         })
       })
+      showToast({ title: "Leader elected", description: `New leader selected for this session` })
       break
     }
 
@@ -295,9 +374,7 @@ export function applyCloudEvent(store: CloudTeamStore, setStore: SetStore, event
 
     case "repo.register":
     case "explore.request":
-    case "explore.result":
-    case "decompose.request":
-    case "decompose.result": {
+    case "explore.result": {
       // Informational or handled by request initiator — no store update needed
       break
     }

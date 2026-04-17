@@ -11,6 +11,7 @@ import type { SubTask, TaskStatus } from "@/client/cloud-team-types"
  *  - Edit descriptions
  *  - Adjust priorities
  *  - Assign tasks to specific teammates
+ *  - Edit dependencies
  *  - Approve (submit) or reject (discard) the plan
  */
 export const CloudTeamTaskPlanReview: Component = () => {
@@ -23,7 +24,6 @@ export const CloudTeamTaskPlanReview: Component = () => {
   const hasPendingTasks = createMemo(() => cloudTeam.tasks().some((t) => t.status === "pending"))
 
   const startEditing = () => {
-    // Snapshot current tasks into editable plan
     setPlanTasks(
       cloudTeam.tasks().map((t) => ({
         taskId: t.id,
@@ -32,6 +32,7 @@ export const CloudTeamTaskPlanReview: Component = () => {
         fileHints: t.fileHints,
         dependencies: t.dependencies,
         assignedMemberId: t.assignedMemberId,
+        priority: t.priority,
       })),
     )
     setEditing(true)
@@ -59,6 +60,7 @@ export const CloudTeamTaskPlanReview: Component = () => {
         repoAffinity: [],
         fileHints: [],
         dependencies: [],
+        priority: 5,
       },
     ])
   }
@@ -88,6 +90,11 @@ export const CloudTeamTaskPlanReview: Component = () => {
       setSubmitting(false)
     }
   }
+
+  const teammateOptions = createMemo(() => {
+    const teammates = cloudTeam.teammates()
+    return [{ id: "", name: "Auto" }, ...teammates.map((t) => ({ id: t.id, name: t.machineName }))]
+  })
 
   return (
     <div class="px-3 py-2 space-y-2">
@@ -122,9 +129,11 @@ export const CloudTeamTaskPlanReview: Component = () => {
                           ? "bg-red-500"
                           : task.status === "interrupted"
                             ? "bg-orange-500"
-                            : task.status === "assigned"
-                              ? "bg-blue-400"
-                              : "bg-gray-400"
+                            : task.status === "claimed"
+                              ? "bg-blue-600"
+                              : task.status === "assigned"
+                                ? "bg-blue-400"
+                                : "bg-gray-400"
                   }`}
                 />
                 <span class="flex-1 min-w-0 truncate text-text-base">{task.description}</span>
@@ -143,32 +152,66 @@ export const CloudTeamTaskPlanReview: Component = () => {
 
       <Show when={editing()}>
         {/* Editable task list */}
-        <div class="space-y-1.5">
+        <div class="space-y-2">
           <For each={planTasks()}>
             {(task, index) => (
-              <div class="flex items-start gap-1.5">
-                <input
-                  type="text"
-                  value={task.description}
-                  onInput={(e) => updateTask(index(), { description: e.currentTarget.value })}
-                  class="flex-1 min-w-0 text-12-regular bg-transparent border-b border-border-weak-base px-1 py-0.5 outline-none focus:border-border-base"
-                  placeholder="Task description..."
-                />
-                <input
-                  type="number"
-                  value={1}
-                  min={1}
-                  max={10}
-                  class="w-10 text-12-regular bg-transparent border-b border-border-weak-base px-1 py-0.5 outline-none focus:border-border-base text-center"
-                  placeholder="P"
-                  onChange={(e) => updateTask(index(), {} as SubTask)}
-                />
-                <button
-                  class="text-11-regular text-red-400 hover:text-red-600 shrink-0"
-                  onClick={() => removeTask(index())}
-                >
-                  x
-                </button>
+              <div class="space-y-1 rounded border border-border-weak-base p-1.5">
+                <div class="flex items-start gap-1.5">
+                  <input
+                    type="text"
+                    value={task.description}
+                    onInput={(e) => updateTask(index(), { description: e.currentTarget.value })}
+                    class="flex-1 min-w-0 text-12-regular bg-transparent border-b border-border-weak-base px-1 py-0.5 outline-none focus:border-border-base"
+                    placeholder="Task description..."
+                  />
+                  <button
+                    class="text-11-regular text-red-400 hover:text-red-600 shrink-0"
+                    onClick={() => removeTask(index())}
+                  >
+                    x
+                  </button>
+                </div>
+                <div class="flex items-center gap-2">
+                  {/* Priority */}
+                  <div class="flex items-center gap-1">
+                    <span class="text-10-regular text-text-weak">P</span>
+                    <input
+                      type="number"
+                      value={task.priority ?? 5}
+                      min={1}
+                      max={10}
+                      class="w-8 text-11-regular bg-transparent border-b border-border-weak-base px-0.5 py-0 outline-none focus:border-border-base text-center"
+                      onInput={(e) => updateTask(index(), { priority: parseInt(e.currentTarget.value) || 5 })}
+                    />
+                  </div>
+                  {/* Assignee */}
+                  <div class="flex items-center gap-1">
+                    <span class="text-10-regular text-text-weak">Assign:</span>
+                    <select
+                      class="text-11-regular bg-transparent border-b border-border-weak-base px-0.5 py-0 outline-none focus:border-border-base max-w-[100px]"
+                      value={task.assignedMemberId ?? ""}
+                      onChange={(e) => updateTask(index(), { assignedMemberId: e.currentTarget.value || undefined })}
+                    >
+                      <For each={teammateOptions()}>
+                        {(opt) => <option value={opt.id}>{opt.name}</option>}
+                      </For>
+                    </select>
+                  </div>
+                  {/* Dependencies */}
+                  <div class="flex items-center gap-1 flex-1 min-w-0">
+                    <span class="text-10-regular text-text-weak shrink-0">Deps:</span>
+                    <input
+                      type="text"
+                      value={task.dependencies?.join(", ") ?? ""}
+                      onInput={(e) => {
+                        const deps = e.currentTarget.value.split(",").map((s) => s.trim()).filter(Boolean)
+                        updateTask(index(), { dependencies: deps })
+                      }}
+                      class="flex-1 min-w-0 text-10-regular bg-transparent border-b border-border-weak-base px-0.5 py-0 outline-none focus:border-border-base"
+                      placeholder="task IDs..."
+                    />
+                  </div>
+                </div>
               </div>
             )}
           </For>
