@@ -519,7 +519,7 @@ export default function DashboardCapabilities() {
                                 variant="ghost"
                                 size="sm"
                                 type="button"
-                                class="text-[rgb(202,138,4)] hover:text-[rgb(161,98,7)]"
+                                class="text-[rgb(234,179,8)] hover:text-[rgb(234,179,8)] [&_[data-component=icon]]:text-[rgb(234,179,8)] [&_[data-slot=icon-svg]]:text-[rgb(234,179,8)]"
                                 aria-label={language.t("store.detail.unfavorite")}
                                 title={language.t("store.detail.unfavorite")}
                                 onClick={(e) => { e.stopPropagation(); void unfavoriteItem(item.id) }}

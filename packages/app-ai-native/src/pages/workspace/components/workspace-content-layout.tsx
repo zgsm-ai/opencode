@@ -438,7 +438,7 @@ function ContentSidebar(props: { directory: string }) {
                   </Show>
                 </button>
                 <Show when={isOpen()}>
-                  <div class="flex-1 min-h-0 overflow-y-auto">
+                  <div class="thin-scrollbar flex-1 min-h-0 overflow-y-auto">
                     <Show when={section.key === "sessions"}>
                       <Show when={dw.data.status === "loading"} fallback={
                         <Show when={sessionGroups().length > 0} fallback={
@@ -543,10 +543,10 @@ function ContentSidebar(props: { directory: string }) {
                                   <Show when={file.additions > 0 || file.deletions > 0}>
                                     <span class="shrink-0 text-11-regular tabular-nums flex items-center gap-0.5">
                                       <Show when={file.additions > 0}>
-                                        <span class="text-success">+{file.additions}</span>
+                                        <span class="text-[oklch(58.1%_0.129_160)] dark:text-[oklch(76.4%_0.146_161)]">+{file.additions}</span>
                                       </Show>
                                       <Show when={file.deletions > 0}>
-                                        <span class="text-danger">-{file.deletions}</span>
+                                        <span class="text-[oklch(60.8%_0.203_25)] dark:text-[oklch(78.4%_0.123_23)]">-{file.deletions}</span>
                                       </Show>
                                     </span>
                                   </Show>

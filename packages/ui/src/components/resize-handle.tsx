@@ -25,6 +25,8 @@ export function ResizeHandle(props: ResizeHandleProps) {
     "classList",
   ])
 
+  const clamp = (size: number) => Math.min(local.max, Math.max(local.min, size))
+
   const handleMouseDown = (e: MouseEvent) => {
     e.preventDefault()
     const edge = local.edge ?? (local.direction === "vertical" ? "start" : "end")
@@ -46,8 +48,7 @@ export function ResizeHandle(props: ResizeHandleProps) {
             ? start - pos
             : pos - start
       current = startSize + delta
-      const clamped = Math.min(local.max, Math.max(local.min, current))
-      local.onResize(clamped)
+      local.onResize(clamp(current))
     }
 
     const onMouseUp = () => {
@@ -57,7 +58,7 @@ export function ResizeHandle(props: ResizeHandleProps) {
       document.removeEventListener("mouseup", onMouseUp)
 
       const threshold = local.collapseThreshold ?? 0
-      if (local.onCollapse && threshold > 0 && current < threshold) {
+      if (local.onCollapse && threshold > 0 && clamp(current) < threshold) {
         local.onCollapse()
       }
     }

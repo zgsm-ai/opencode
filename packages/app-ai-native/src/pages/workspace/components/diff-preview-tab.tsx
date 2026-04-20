@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createSignal, Match, Show, Switch } from "solid-js"
+import { createEffect, createMemo, createSignal, Match, on, Show, Switch } from "solid-js"
 import { Dynamic } from "solid-js/web"
 import { applyPatch, parsePatch, reversePatch } from "diff"
 import { useFileComponent } from "@opencode-ai/ui/context/file"
@@ -39,6 +39,7 @@ export function DiffPreviewTab(props: { tab: ContentTab }) {
   const fileContent = createMemo(() => (state()?.content as { content?: string; diff?: string } | undefined))
 
   const [fetchedDiff, setFetchedDiff] = createSignal<string | undefined>()
+  const [diffTried, setDiffTried] = createSignal(false)
   const [fetchingDiff, setFetchingDiff] = createSignal(false)
 
   const after = createMemo(() => {
@@ -71,24 +72,35 @@ export function DiffPreviewTab(props: { tab: ContentTab }) {
     return !!state()?.loading || fetchingDiff()
   })
 
+  createEffect(on(path, () => {
+    setFetchedDiff(undefined)
+    setDiffTried(false)
+    setFetchingDiff(false)
+  }))
+
   createEffect(() => {
     const p = path()
     if (!p) return
+    if (status() === "deleted") return
+    void file.load(p)
+  })
 
-    if (status() !== "added" && !fileContent()?.diff && !fetchedDiff() && !fetchingDiff()) {
-      setFetchingDiff(true)
-      sdk.client.runtime.diff({ path: p }).then((result) => {
-        setFetchedDiff(result?.diff)
-      }).catch(() => {
-        setFetchedDiff(undefined)
-      }).finally(() => {
-        setFetchingDiff(false)
-      })
-    }
+  createEffect(() => {
+    const p = path()
+    if (!p) return
+    if (status() === "added") return
+    if (fileContent()?.diff) return
+    if (diffTried()) return
 
-    if (status() !== "deleted") {
-      void file.load(p)
-    }
+    setDiffTried(true)
+    setFetchingDiff(true)
+    sdk.client.runtime.diff({ path: p }).then((result) => {
+      setFetchedDiff(result?.diff)
+    }).catch(() => {
+      setFetchedDiff(undefined)
+    }).finally(() => {
+      setFetchingDiff(false)
+    })
   })
 
   return (
