@@ -925,7 +925,7 @@ export function DeviceSessionTab(props: { tabId: string }) {
                           <SessionComposerRegion
                             state={composer}
                             ready={true}
-                            centered={!isNew()}
+                            centered={true}
                             inputRef={() => {}}
                             newSessionWorktree="main"
                             onNewSessionWorktreeReset={() => {}}
