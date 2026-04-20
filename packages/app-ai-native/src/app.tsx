@@ -74,12 +74,8 @@ function FixedExperienceGuards(props: ParentProps) {
     }
 
     // TODO: 后续支持主题切换后，移除这里的强制覆盖，改回用户可配置。
-    if (theme.themeId() !== "oc-2") {
-      theme.setTheme("oc-2")
-    }
-
-    if (theme.colorScheme() !== "light") {
-      theme.setColorScheme("light")
+    if (theme.themeId() !== "vercel") {
+      theme.setTheme("vercel")
     }
   })
 
@@ -144,7 +140,7 @@ export function AppBaseProviders(props: ParentProps) {
   return (
     <MetaProvider>
       <Font />
-      <ThemeProvider>
+      <ThemeProvider defaultTheme="vercel">
         <LanguageProvider>
           <SettingsProvider>
             <FixedExperienceGuards>

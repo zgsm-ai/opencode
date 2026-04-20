@@ -86,7 +86,7 @@ export default function WorkspaceHome() {
   }
 
   return (
-    <div class="native-page custom-scrollbar overflow-y-auto">
+    <div class="native-page thin-scrollbar overflow-y-auto">
       <header class="native-page-header mx-auto w-full max-w-[1080px]">
         <h1 class="native-page-title">{t("workspace.home.title")}</h1>
         <p class="native-page-subtitle">{t("workspace.home.subtitle")}</p>

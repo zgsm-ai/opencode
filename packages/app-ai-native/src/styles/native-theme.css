@@ -328,38 +328,6 @@
   }
 }
 
-@utility custom-scrollbar {
-  & {
-    scrollbar-width: thin;
-    scrollbar-color: transparent transparent;
-  }
-
-  &:hover {
-    scrollbar-color: color-mix(in oklab, var(--native-border-strong) 42%, transparent) transparent;
-  }
-
-  &::-webkit-scrollbar {
-    width: 6px;
-  }
-
-  &::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  &::-webkit-scrollbar-thumb {
-    background: transparent;
-    border-radius: 3px;
-  }
-
-  &:hover::-webkit-scrollbar-thumb {
-    background: color-mix(in oklab, var(--native-border-strong) 42%, transparent);
-  }
-
-  &::-webkit-scrollbar-button {
-    display: none;
-  }
-}
-
 @utility native-toolbar {
   display: flex;
   align-items: flex-start;
