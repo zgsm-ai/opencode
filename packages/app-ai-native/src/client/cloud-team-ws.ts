@@ -12,8 +12,6 @@ type CloudTeamWSOptions = {
 
 const RECONNECT_BASE_MS = 1000
 const RECONNECT_MAX_MS = 30_000
-const HEARTBEAT_INTERVAL_MS = 15_000
-const HEARTBEAT_TIMEOUT_MS = 30_000
 
 /**
  * WebSocket client for Cloud Team real-time events.
@@ -28,8 +26,6 @@ export function createCloudTeamWS(options: CloudTeamWSOptions) {
   let lastEventId: string | undefined
   let reconnectAttempt = 0
   let reconnectTimer: ReturnType<typeof setTimeout> | undefined
-  let heartbeatTimer: ReturnType<typeof setInterval> | undefined
-  let heartbeatTimeoutTimer: ReturnType<typeof setTimeout> | undefined
   let destroyed = false
 
   function getWSUrl(): string {
@@ -49,12 +45,10 @@ export function createCloudTeamWS(options: CloudTeamWSOptions) {
 
     ws.onopen = () => {
       reconnectAttempt = 0
-      startHeartbeat()
       onConnect()
     }
 
     ws.onmessage = (event) => {
-      resetHeartbeatTimeout()
       try {
         const cloudEvent: CloudEvent = JSON.parse(event.data)
         if (cloudEvent.eventId) {
@@ -67,7 +61,6 @@ export function createCloudTeamWS(options: CloudTeamWSOptions) {
     }
 
     ws.onclose = (event) => {
-      stopHeartbeat()
       ws = undefined
       onDisconnect()
       if (!destroyed && !event.wasClean) {
@@ -83,7 +76,6 @@ export function createCloudTeamWS(options: CloudTeamWSOptions) {
   function disconnect() {
     destroyed = true
     clearReconnect()
-    stopHeartbeat()
     if (ws) {
       ws.onclose = null
       ws.onerror = null
@@ -124,46 +116,6 @@ export function createCloudTeamWS(options: CloudTeamWSOptions) {
     if (reconnectTimer !== undefined) {
       clearTimeout(reconnectTimer)
       reconnectTimer = undefined
-    }
-  }
-
-  function startHeartbeat() {
-    stopHeartbeat()
-    heartbeatTimer = setInterval(() => {
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: "ping" }))
-        startHeartbeatTimeout()
-      }
-    }, HEARTBEAT_INTERVAL_MS)
-  }
-
-  function stopHeartbeat() {
-    if (heartbeatTimer !== undefined) {
-      clearInterval(heartbeatTimer)
-      heartbeatTimer = undefined
-    }
-    clearHeartbeatTimeout()
-  }
-
-  function startHeartbeatTimeout() {
-    clearHeartbeatTimeout()
-    heartbeatTimeoutTimer = setTimeout(() => {
-      console.warn("[cloud-team-ws] Heartbeat timeout, reconnecting...")
-      if (ws) {
-        ws.close(4000, "Heartbeat timeout")
-      }
-    }, HEARTBEAT_TIMEOUT_MS)
-  }
-
-  function resetHeartbeatTimeout() {
-    clearHeartbeatTimeout()
-    // Next heartbeat will restart the timeout
-  }
-
-  function clearHeartbeatTimeout() {
-    if (heartbeatTimeoutTimer !== undefined) {
-      clearTimeout(heartbeatTimeoutTimer)
-      heartbeatTimeoutTimer = undefined
     }
   }
 

@@ -97,7 +97,7 @@ export const CloudTeamMessages: Component = () => {
           type="text"
           value={input()}
           onInput={(e) => setInput(e.currentTarget.value)}
-          placeholder="Send a message..."
+          placeholder="Team chat only (won't create tasks)"
           class="flex-1 min-w-0 bg-transparent text-12-regular text-text-base placeholder:text-text-weaker outline-none border-b border-border-weak-base focus:border-border-base py-1"
         />
         <button

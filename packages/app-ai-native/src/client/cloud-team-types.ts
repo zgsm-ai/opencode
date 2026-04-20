@@ -235,6 +235,7 @@ export type CloudEventType =
   | "leader.heartbeat"
   // Cloud → Client
   | "task.assigned"
+  | "task.terminate"
   | "task.interrupted"
   | "approval.push"
   | "approval.response"

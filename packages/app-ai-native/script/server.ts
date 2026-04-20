@@ -101,7 +101,7 @@ Bun.serve({
     const url = new URL(req.url)
     const path = url.pathname
 
-    if (path.startsWith(`${prefix}/cloud`)) {
+    if (path.startsWith(`${prefix}/cloud`) || path.startsWith(`${prefix}/ws`)) {
       const upgraded = server.upgrade(req, { data: { path } } as any)
       if (upgraded) return
       return proxyHttp(req)

@@ -32,12 +32,13 @@ import { SettingsContext } from "@/context/settings"
 import { DirectoryContext } from "@/context/directory"
 import { LayoutContext } from "@/context/layout"
 import { FileContext } from "@/context/file"
-import { CloudTeamProvider } from "@/context/cloud-team"
+import { CloudTeamProvider, useCloudTeam } from "@/context/cloud-team"
 import { NewSessionView } from "@/components/session/session-new-view"
 import { MessageTimeline } from "@/pages/session/message-timeline"
 import { SessionComposerRegion } from "@/pages/session/composer/session-composer-region"
 import { createDeviceSessionComposerState } from "@/pages/session/composer/device-session-composer-state"
 import { createScrollSpy } from "@/pages/session/scroll-spy"
+import { CloudTeamStatusBar } from "@/components/cloud-team"
 import { useContentTabs } from "@/context/content-tabs"
 import type { Message, Part, Session, SessionStatus, FileDiff, Todo, Command, Agent, VcsInfo, ProviderListResponse, PermissionRequest, QuestionRequest } from "@opencode-ai/sdk/v2/client"
 import type { Project, Path } from "@opencode-ai/sdk/v2/client"
@@ -759,41 +760,21 @@ export function DeviceSessionTab(props: { tabId: string }) {
     todo: { set: () => {} },
   }
 
-  // CloudTeamContext value — inactive stub for device sessions
-  const cloudTeamValue = {
-    isAvailable: () => false,
-    active: () => false,
-    decomposing: () => false,
-    session: () => undefined,
-    teammates: () => [],
-    tasks: () => [],
-    messages: () => [],
-    approvals: () => [],
-    progress: () => ({}),
-    wsConnected: () => false,
-    completedPercentage: () => 0,
-    activeTasks: () => [],
-    pendingApprovals: () => [],
-    teammateById: () => new Map(),
-    leader: () => undefined,
-    leaderScore: () => undefined,
-    agentName: "CloudTeam",
-    activate() {},
-    deactivate() {},
-    createSession: async () => ({ id: "", name: "", status: "active" as const, teammates: [] }),
-    joinSession: async () => {},
-    leaveSession: async () => {},
-    submitPrompt: async () => ({ tasks: [] }),
-    respondApproval: async () => {},
-    sendMessage: async () => {},
-    registerRepo: async () => {},
-    listRepos: async () => [],
-  }
-
   const dataProps = createMemo(() => ({
     ...syncStore(),
     provider: legacyProvider(workspace.data.provider),
   }))
+
+  const DeviceCloudTeamBar = () => {
+    const cloudTeam = useCloudTeam()
+    return (
+      <Show when={cloudTeam.active()}>
+        <div class="shrink-0 w-full px-3 pb-1">
+          <CloudTeamStatusBar />
+        </div>
+      </Show>
+    )
+  }
 
   return (
     <ConversationAdapterContext.Provider value={adapter() as any}>
@@ -955,6 +936,7 @@ export function DeviceSessionTab(props: { tabId: string }) {
                             </div>
                           }
                         >
+                          <DeviceCloudTeamBar />
                           <SessionComposerRegion
                             state={composer}
                             ready={true}

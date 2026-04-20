@@ -49,6 +49,11 @@ export default defineConfig(({ mode }) => {
           //   return path.replace(new RegExp(`^${prefix}`), "/cloud-api")
           // },
         },
+        [`${prefix}/ws`]: {
+          target: cloudTarget,
+          changeOrigin: true,
+          ws: true,
+        },
       },
     },
     build: {

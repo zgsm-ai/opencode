@@ -1,6 +1,5 @@
-import { type Component, For, Show, createMemo, createSignal } from "solid-js"
+import { type Component, For, Show, createMemo } from "solid-js"
 import { Button } from "@opencode-ai/ui/button"
-import { Icon } from "@opencode-ai/ui/icon"
 import { Spinner } from "@opencode-ai/ui/spinner"
 import { useCloudTeam } from "@/context/cloud-team"
 import { TeammateAvatar } from "./teammate-avatar"
@@ -11,18 +10,21 @@ import { CloudTeamExplore } from "./cloud-team-explore"
 import { CloudTeamTaskPlanReview } from "./cloud-team-task-plan-review"
 import { CloudTeamPlanConfirmation } from "./cloud-team-plan-confirmation"
 import { CloudTeamSessionBrowser } from "./cloud-team-session-browser"
+import { CloudTeamRuntimeRequests } from "./cloud-team-runtime-requests"
 import type { TeammateProgress } from "@/client/cloud-team-types"
 
-const sessionStatusConfig: Record<string, { label: string; color: string; bgColor: string }> = {
-  active: { label: "Active", color: "text-green-700", bgColor: "bg-green-50" },
-  paused: { label: "Paused", color: "text-amber-700", bgColor: "bg-amber-50" },
-  completed: { label: "Completed", color: "text-blue-700", bgColor: "bg-blue-50" },
-  failed: { label: "Failed", color: "text-red-700", bgColor: "bg-red-50" },
+const taskStatusBadge: Record<string, { color: string; bg: string }> = {
+  pending: { color: "text-gray-600", bg: "bg-gray-100" },
+  assigned: { color: "text-blue-700", bg: "bg-blue-50" },
+  claimed: { color: "text-cyan-700", bg: "bg-cyan-50" },
+  running: { color: "text-amber-700", bg: "bg-amber-50" },
+  completed: { color: "text-green-700", bg: "bg-green-50" },
+  failed: { color: "text-red-700", bg: "bg-red-50" },
+  interrupted: { color: "text-orange-700", bg: "bg-orange-50" },
 }
 
 export const TeammateStatusCard: Component = () => {
   const cloudTeam = useCloudTeam()
-  const [expanded, setExpanded] = createSignal(true)
 
   const completedCount = createMemo(() => cloudTeam.tasks().filter((t) => t.status === "completed").length)
   const failedCount = createMemo(() => cloudTeam.tasks().filter((t) => t.status === "failed").length)
@@ -33,13 +35,15 @@ export const TeammateStatusCard: Component = () => {
     if (total === 0) return 0
     return Math.round((completedCount() / total) * 100)
   })
+  const showChat = createMemo(() => cloudTeam.teammates().length > 1 || cloudTeam.messages().length > 0)
 
   // Build per-member progress from sessionProgress API data
   const memberProgressMap = createMemo(() => {
     const sp = cloudTeam.sessionProgress()
     if (!sp) return new Map<string, TeammateProgress>()
+    const teammates = Array.isArray((sp as any).teammates) ? (sp as any).teammates as TeammateProgress[] : []
     const map = new Map<string, TeammateProgress>()
-    for (const tp of sp.teammates) {
+    for (const tp of teammates) {
       map.set(tp.memberId, tp)
     }
     return map
@@ -65,52 +69,11 @@ export const TeammateStatusCard: Component = () => {
     return teammate?.machineId === leader.leaderId
   }
 
-  const sessionStatus = () => {
-    const status = cloudTeam.session()?.status ?? "active"
-    return sessionStatusConfig[status] ?? sessionStatusConfig.active
-  }
+  const canTerminate = createMemo(() => cloudTeam.isCurrentLeader())
 
   return (
     <div class="rounded-lg border border-border-weak-base bg-background-base overflow-hidden">
-      {/* Header */}
-      <div
-        class="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-background-stronger transition-colors"
-        onClick={() => setExpanded(!expanded())}
-      >
-        <div class="flex items-center gap-1.5 flex-1 min-w-0">
-          <Icon name="cloud-upload" class="size-4 text-text-weak shrink-0" />
-          <span class="text-13-medium text-text-base truncate">
-            Cloud Team
-          </span>
-          <Show when={cloudTeam.session()?.title}>
-            <span class="text-12-regular text-text-weak truncate">
-              · {cloudTeam.session()?.title}
-            </span>
-          </Show>
-          {/* Session status badge */}
-          <span class={`text-10-regular px-1.5 py-0.5 rounded ${sessionStatus().bgColor} ${sessionStatus().color}`}>
-            {sessionStatus().label}
-          </span>
-        </div>
-        <div class="flex items-center gap-2 shrink-0">
-          <Show when={cloudTeam.pendingApprovals().length > 0}>
-            <span class="text-11-regular text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">
-              {cloudTeam.pendingApprovals().length} pending
-            </span>
-          </Show>
-          <Show when={!cloudTeam.wsConnected()}>
-            <span class="text-11-regular text-red-500">Disconnected</span>
-          </Show>
-          <Icon
-            name="chevron-down"
-            class={`size-4 text-text-weak transition-transform ${expanded() ? "" : "-rotate-90"}`}
-          />
-        </div>
-      </div>
-
-      {/* Expanded content */}
-      <Show when={expanded()}>
-        <div class="border-t border-border-weak-base">
+      <div>
           {/* Session browser (when not in a session) */}
           <Show when={!cloudTeam.session()}>
             <div class="border-b border-border-weak-base">
@@ -138,8 +101,12 @@ export const TeammateStatusCard: Component = () => {
                       cloudTeam.tasks().find((t) => t.id === teammate.currentTaskId),
                     )
                     const memberProg = createMemo(() => memberProgressMap().get(teammate.id))
+                    const teammateTasks = createMemo(() => cloudTeam.tasks().filter((t) => t.assignedMemberId === teammate.id))
+                    const activeTeammateTasks = createMemo(() =>
+                      teammateTasks().filter((t) => t.status === "running" || t.status === "claimed" || t.status === "assigned"),
+                    )
                     return (
-                      <div class="flex flex-col items-center">
+                      <div class="flex flex-col items-center min-w-[180px] rounded-md border border-border-weak-base px-2 py-1.5">
                         <TeammateAvatar
                           id={teammate.id}
                           machineName={teammate.machineName}
@@ -160,6 +127,55 @@ export const TeammateStatusCard: Component = () => {
                               </Show>
                             </div>
                           )}
+                        </Show>
+                        <Show when={teammateTasks().length > 0}>
+                          <div class="mt-1 w-full">
+                            <div class="text-9-regular text-text-weaker text-center">
+                              {teammateTasks().length} tasks
+                            </div>
+                            <div class="mt-0.5 flex flex-wrap justify-center gap-1">
+                              <For each={teammateTasks()}>
+                                {(task) => {
+                                  const style = taskStatusBadge[task.status] ?? taskStatusBadge.pending
+                                  return (
+                                    <span class={`text-9-regular px-1 py-0.5 rounded ${style.bg} ${style.color}`}>
+                                      {task.status}
+                                    </span>
+                                  )
+                                }}
+                              </For>
+                            </div>
+                            <Show when={activeTeammateTasks().length > 0}>
+                              <div class="mt-1 space-y-1">
+                                <For each={activeTeammateTasks()}>
+                                  {(task) => (
+                                    <div class="w-full rounded border border-border-weak-base px-1.5 py-1">
+                                      <div class="text-10-regular text-text-base truncate">
+                                        {task.description}
+                                      </div>
+                                      <div class="flex items-center justify-between mt-0.5">
+                                        <span class={`text-9-regular px-1 py-0.5 rounded ${(taskStatusBadge[task.status] ?? taskStatusBadge.pending).bg} ${(taskStatusBadge[task.status] ?? taskStatusBadge.pending).color}`}>
+                                          {task.status}
+                                        </span>
+                                        <Show when={canTerminate()}>
+                                          <Button
+                                            variant="ghost"
+                                            size="small"
+                                            class="text-10-regular text-red-600"
+                                            onClick={() => {
+                                              void cloudTeam.terminateTask(task.id, "terminated by leader")
+                                            }}
+                                          >
+                                            Terminate
+                                          </Button>
+                                        </Show>
+                                      </div>
+                                    </div>
+                                  )}
+                                </For>
+                              </div>
+                            </Show>
+                          </div>
                         </Show>
                       </div>
                     )
@@ -251,6 +267,11 @@ export const TeammateStatusCard: Component = () => {
             </div>
           </Show>
 
+          {/* Local runtime permission/question requests for teammate execution */}
+          <Show when={cloudTeam.session()}>
+            <CloudTeamRuntimeRequests />
+          </Show>
+
           {/* Task plan review (when tasks are running — not shown during initial confirmation) */}
           <Show when={cloudTeam.tasks().length > 0 && cloudTeam.leader()?.elected && !cloudTeam.pendingPlan()}>
             <div class="border-b border-border-weak-base">
@@ -265,12 +286,16 @@ export const TeammateStatusCard: Component = () => {
             </div>
           </Show>
 
-          {/* Messages */}
-          <div class="px-1 py-2">
-            <CloudTeamMessages />
-          </div>
-        </div>
-      </Show>
+          {/* Team chat: only show when there are multiple teammates or existing messages */}
+          <Show when={showChat()}>
+            <div class="px-1 py-2 border-t border-border-weak-base">
+              <div class="px-2 pb-1 text-10-regular text-text-weaker">
+                Team Chat (does not create tasks)
+              </div>
+              <CloudTeamMessages />
+            </div>
+          </Show>
+      </div>
     </div>
   )
 }

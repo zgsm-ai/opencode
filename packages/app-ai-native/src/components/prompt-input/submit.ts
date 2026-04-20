@@ -143,19 +143,6 @@ export function createPromptSubmit(input: PromptSubmitInput) {
       return
     }
 
-    const currentModel = local.model.current()
-    const currentAgent = local.agent.current()
-    if (!currentModel || !currentAgent) {
-      showToast({
-        title: language.t("prompt.toast.modelAgentRequired.title"),
-        description: language.t("prompt.toast.modelAgentRequired.description"),
-      })
-      return
-    }
-
-    input.addToHistory(currentPrompt, mode)
-    input.resetHistoryNavigation()
-
     const clearInput = () => {
       prompt.reset()
       input.setMode("normal")
@@ -176,12 +163,19 @@ export function createPromptSubmit(input: PromptSubmitInput) {
     }
 
     // CloudTeam mode: route prompt through cloud team submission immediately.
-    // Do not create a normal local session before CloudTeam orchestration.
+    // Do not require local model/agent selection for CloudTeam orchestration.
     if (cloudTeam.active()) {
+      input.addToHistory(currentPrompt, mode)
+      input.resetHistoryNavigation()
       clearInput()
       input.onSubmit?.()
       try {
-        await cloudTeam.submitPrompt(text, { parts: [], context: prompt.context.items() })
+        const result = await cloudTeam.submitPrompt(text, { parts: [], context: prompt.context.items() })
+        const taskCount = Array.isArray((result as any)?.tasks) ? (result as any).tasks.length : 0
+        showToast({
+          title: taskCount > 0 ? `CloudTeam plan ready (${taskCount} tasks)` : "CloudTeam request sent",
+          description: "Open Details to review/execute task plan.",
+        })
       } catch (err) {
         showToast({
           title: language.t("prompt.toast.promptSendFailed.title"),
@@ -191,6 +185,19 @@ export function createPromptSubmit(input: PromptSubmitInput) {
       }
       return
     }
+
+    const currentModel = local.model.current()
+    const currentAgent = local.agent.current()
+    if (!currentModel || !currentAgent) {
+      showToast({
+        title: language.t("prompt.toast.modelAgentRequired.title"),
+        description: language.t("prompt.toast.modelAgentRequired.description"),
+      })
+      return
+    }
+
+    input.addToHistory(currentPrompt, mode)
+    input.resetHistoryNavigation()
 
     const projectDirectory = sdk.directory
     const existingSession = input.info() as Session | undefined

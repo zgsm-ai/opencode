@@ -1,6 +1,7 @@
 import { type Component, Show, createEffect, createMemo, createSignal } from "solid-js"
 import { Button } from "@opencode-ai/ui/button"
 import { Icon } from "@opencode-ai/ui/icon"
+import { RadioGroup } from "@opencode-ai/ui/radio-group"
 import { useCloudTeam } from "@/context/cloud-team"
 import { TeammateStatusCard } from "./teammate-status-card"
 
@@ -17,10 +18,7 @@ export const CloudTeamStatusBar: Component = () => {
   const runningCount = createMemo(() => cloudTeam.tasks().filter((t) => t.status === "running").length)
   const pendingPlanCount = createMemo(() => cloudTeam.pendingPlan()?.length ?? 0)
   const hasPendingPlan = createMemo(() => pendingPlanCount() > 0)
-  const isLeader = createMemo(() => {
-    const leader = cloudTeam.leader()
-    return leader?.elected && cloudTeam.session()?.leaderId
-  })
+  const hasSession = createMemo(() => Boolean(cloudTeam.session()))
   // First running task's progress message — shown inline in the bar
   const activeProgressMsg = createMemo(() => {
     const firstRunning = cloudTeam.tasks().find((t) => t.status === "running")
@@ -45,6 +43,9 @@ export const CloudTeamStatusBar: Component = () => {
               · {cloudTeam.session()?.title}
             </span>
           </Show>
+          <Show when={!hasSession()}>
+            <span class="text-10-regular text-text-weak ml-1">· No session</span>
+          </Show>
           <Show when={cloudTeam.session()?.status === "paused"}>
             <span class="text-10-regular text-amber-500 ml-1">· Paused</span>
           </Show>
@@ -54,7 +55,7 @@ export const CloudTeamStatusBar: Component = () => {
           <Show when={cloudTeam.session()?.status === "failed"}>
             <span class="text-10-regular text-red-500 ml-1">· Failed</span>
           </Show>
-          <Show when={!cloudTeam.wsConnected()}>
+          <Show when={hasSession() && !cloudTeam.wsConnected()}>
             <span class="text-10-regular text-red-500 ml-1">· Disconnected</span>
           </Show>
           {/* Pending plan warning — shown instead of progress message */}
@@ -124,6 +125,21 @@ export const CloudTeamStatusBar: Component = () => {
               </svg>
               Leader
             </span>
+          </Show>
+          <Show when={hasSession()}>
+            <RadioGroup
+              options={["auto", "manual"] as const}
+              current={cloudTeam.runtimeMode()}
+              value={(mode) => mode}
+              label={(mode) => (
+                <span class="text-10-regular leading-none">
+                  {mode === "auto" ? "Auto" : "Manual"}
+                </span>
+              )}
+              onSelect={(mode) => mode && cloudTeam.setRuntimeMode(mode)}
+              pad="none"
+              class="w-[112px]"
+            />
           </Show>
 
           <Button

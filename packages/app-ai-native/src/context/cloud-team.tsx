@@ -1,5 +1,5 @@
 import { createSimpleContext } from "@opencode-ai/ui/context"
-import { batch, createMemo, onCleanup } from "solid-js"
+import { batch, createEffect, createMemo, onCleanup } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useServer } from "@/context/server"
 import { cloudTeamApi } from "@/client/cloud-team-api"
@@ -41,9 +41,18 @@ type CloudTeamStore = {
     score?: import("@/client/cloud-team-types").LeaderScore
   }
   leaderScore?: import("@/client/cloud-team-types").LeaderScore
+  runtimeMode: "auto" | "manual"
 }
 
 const CLOUD_TEAM_AGENT_NAME = "CloudTeam"
+const CLOUD_TEAM_RUNTIME_MODE_KEY = "cloud-team-runtime-mode.v1"
+const MACHINE_ID_KEY = "cloud-team-machine-id"
+
+function loadRuntimeMode(): "auto" | "manual" {
+  if (typeof window === "undefined") return "auto"
+  const raw = window.localStorage.getItem(CLOUD_TEAM_RUNTIME_MODE_KEY)
+  return raw === "manual" ? "manual" : "auto"
+}
 
 export const { use: useCloudTeam, provider: CloudTeamProvider, context: CloudTeamContext } = createSimpleContext({
   name: "CloudTeam",
@@ -61,6 +70,12 @@ export const { use: useCloudTeam, provider: CloudTeamProvider, context: CloudTea
       progress: {},
       sessionProgress: undefined,
       wsConnected: false,
+      runtimeMode: loadRuntimeMode(),
+    })
+
+    createEffect(() => {
+      if (typeof window === "undefined") return
+      window.localStorage.setItem(CLOUD_TEAM_RUNTIME_MODE_KEY, store.runtimeMode)
     })
 
     // ── Reactive computations ──────────────────────────────
@@ -81,12 +96,52 @@ export const { use: useCloudTeam, provider: CloudTeamProvider, context: CloudTea
       for (const t of store.teammates) map.set(t.id, t)
       return map
     })
+    const isCurrentLeader = createMemo(() => {
+      const mid = getMachineId()
+      if (store.leader?.elected && store.leader.leaderId === mid) return true
+      return store.session?.leaderId === mid
+    })
 
     // ── WebSocket management ───────────────────────────────
 
     let wsClient: ReturnType<typeof createCloudTeamWS> | undefined
     let heartbeatInterval: ReturnType<typeof setInterval> | undefined
     let progressPollInterval: ReturnType<typeof setInterval> | undefined
+
+    const sameSessionProgress = (
+      a: SessionProgress | undefined,
+      b: SessionProgress | undefined,
+    ): boolean => {
+      if (!a && !b) return true
+      if (!a || !b) return false
+      if (
+        a.totalTasks !== b.totalTasks
+        || a.completedTasks !== b.completedTasks
+        || a.failedTasks !== b.failedTasks
+        || a.runningTasks !== b.runningTasks
+        || a.pendingTasks !== b.pendingTasks
+      ) {
+        return false
+      }
+      const at = Array.isArray(a.teammates) ? a.teammates : []
+      const bt = Array.isArray(b.teammates) ? b.teammates : []
+      if (at.length !== bt.length) return false
+      for (let i = 0; i < at.length; i += 1) {
+        const x = at[i]
+        const y = bt[i]
+        if (
+          x.memberId !== y.memberId
+          || x.machineName !== y.machineName
+          || x.currentTaskId !== y.currentTaskId
+          || x.completed !== y.completed
+          || x.failed !== y.failed
+          || x.running !== y.running
+        ) {
+          return false
+        }
+      }
+      return true
+    }
 
     function connectWS(sessionId: string) {
       disconnectWS()
@@ -103,6 +158,14 @@ export const { use: useCloudTeam, provider: CloudTeamProvider, context: CloudTea
         },
         onConnect: () => {
           setStore("wsConnected", true)
+          // Ensure this machine is registered as a session member once WS is ready.
+          // This is required for scheduler online-member filtering.
+          wsClient?.send({
+            type: "session.join",
+            payload: {
+              machineName: navigator.userAgent.split(" ").pop() ?? "Web Client",
+            },
+          })
         },
         onDisconnect: () => {
           setStore("wsConnected", false)
@@ -120,13 +183,17 @@ export const { use: useCloudTeam, provider: CloudTeamProvider, context: CloudTea
       // Poll session progress every 5 seconds
       progressPollInterval = setInterval(() => {
         cloudTeamApi.progress.get(sessionId).then((p) => {
-          setStore("sessionProgress", p)
+          if (!sameSessionProgress(store.sessionProgress, p)) {
+            setStore("sessionProgress", p)
+          }
         }).catch(() => {})
       }, 5_000)
 
       // Initial fetch
       cloudTeamApi.progress.get(sessionId).then((p) => {
-        setStore("sessionProgress", p)
+        if (!sameSessionProgress(store.sessionProgress, p)) {
+          setStore("sessionProgress", p)
+        }
       }).catch(() => {})
     }
 
@@ -147,8 +214,6 @@ export const { use: useCloudTeam, provider: CloudTeamProvider, context: CloudTea
     }
 
     // ── Machine ID ─────────────────────────────────────────
-
-    const MACHINE_ID_KEY = "cloud-team-machine-id"
 
     function getMachineId(): string {
       let id = localStorage.getItem(MACHINE_ID_KEY)
@@ -269,13 +334,13 @@ export const { use: useCloudTeam, provider: CloudTeamProvider, context: CloudTea
     // ── Prompt submission ──────────────────────────────────
 
     async function submitPrompt(text: string, context?: unknown) {
-      let sessionId = store.session?.id
-      if (!sessionId) {
-        const session = await createSession(text.slice(0, 100))
-        sessionId = session.id
-      }
       setStore("decomposing", true)
+      let sessionId = store.session?.id
       try {
+        if (!sessionId) {
+          const session = await createSession(text.slice(0, 100))
+          sessionId = session.id
+        }
         const result = await cloudTeamApi.prompt.decompose(sessionId, { prompt: text, context })
         batch(() => {
           // Store as pendingPlan for Leader review — do NOT write to tasks yet
@@ -349,6 +414,26 @@ export const { use: useCloudTeam, provider: CloudTeamProvider, context: CloudTea
       return cloudTeamApi.registry.listRepos(store.session.id, remoteUrl)
     }
 
+    // ── Runtime policy ─────────────────────────────────────
+
+    function setRuntimeMode(mode: "auto" | "manual") {
+      setStore("runtimeMode", mode)
+    }
+
+    // ── Task control ───────────────────────────────────────
+
+    async function terminateTask(taskId: string, reason?: string) {
+      if (!store.session?.id) return
+      const updated = await cloudTeamApi.task.terminate(store.session.id, taskId, {
+        reason,
+        fencingToken: store.leader?.fencingToken,
+      })
+      batch(() => {
+        setStore("tasks", (tasks) => tasks.map((t) => (t.id === updated.id ? updated : t)))
+      })
+      return updated
+    }
+
     // ── Cleanup ────────────────────────────────────────────
 
     onCleanup(() => {
@@ -375,6 +460,10 @@ export const { use: useCloudTeam, provider: CloudTeamProvider, context: CloudTea
       teammateById,
       leader: () => store.leader,
       leaderScore: () => store.leaderScore,
+      isCurrentLeader,
+      runtimeMode: () => store.runtimeMode,
+      autoApprovePermissions: () => store.runtimeMode === "auto",
+      autoAnswerFirstOption: () => store.runtimeMode === "auto",
 
       // Agent name constant
       agentName: CLOUD_TEAM_AGENT_NAME,
@@ -392,6 +481,8 @@ export const { use: useCloudTeam, provider: CloudTeamProvider, context: CloudTea
       sendMessage,
       registerRepo,
       listRepos,
+      setRuntimeMode,
+      terminateTask,
     }
   },
 })

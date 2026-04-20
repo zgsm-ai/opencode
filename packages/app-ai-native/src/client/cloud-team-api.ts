@@ -92,6 +92,11 @@ type UpdateTaskBody = {
   errorMessage?: string
 }
 
+type TerminateTaskBody = {
+  reason?: string
+  fencingToken?: number
+}
+
 const task = {
   submitPlan(sessionId: string, body: TaskPlanBody) {
     return apiFetch<{ tasks: Task[] }>(`/api/team/sessions/${sessionId}/tasks`, { method: "POST", body: JSON.stringify(body) }).then((r) => r.tasks)
@@ -106,6 +111,12 @@ const task = {
     return apiFetch<Task>(`/api/team/tasks/${taskId}`, {
       method: "PATCH",
       body: JSON.stringify(body),
+    })
+  },
+  terminate(sessionId: string, taskId: string, body?: TerminateTaskBody) {
+    return apiFetch<Task>(`/api/team/sessions/${sessionId}/tasks/${taskId}/terminate`, {
+      method: "POST",
+      body: JSON.stringify(body ?? {}),
     })
   },
 }

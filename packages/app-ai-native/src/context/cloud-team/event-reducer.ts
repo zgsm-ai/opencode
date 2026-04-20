@@ -260,6 +260,19 @@ export function applyCloudEvent(store: CloudTeamStore, setStore: SetStore, event
       break
     }
 
+    case "task.terminate": {
+      const taskId = p.taskId as string
+      batch(() => {
+        setStore((s) => {
+          const idx = s.tasks.findIndex((t) => t.id === taskId)
+          if (idx >= 0 && (s.tasks[idx].status === "running" || s.tasks[idx].status === "claimed" || s.tasks[idx].status === "assigned")) {
+            s.tasks[idx].status = "interrupted" as TaskStatus
+          }
+        })
+      })
+      break
+    }
+
     case "decompose.request": {
       batch(() => {
         setStore((s) => {
