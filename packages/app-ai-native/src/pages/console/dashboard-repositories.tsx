@@ -11,7 +11,6 @@ import { ConfirmDialog } from "@/pages/store/components/confirm-dialog"
 import { CreateRepoDialog } from "@/pages/store/components/create-repo-dialog"
 import { EditRepoDialog } from "@/pages/store/components/edit-repo-dialog"
 import { InviteDialog } from "@/pages/store/components/invite-dialog"
-import { RepoSyncTab } from "@/pages/store/components/repo-sync-tab"
 import { cn } from "@/lib/utils"
 import { sx, st } from "@/pages/store/lib/styles"
 import { Button } from "@/components/ui/button"
@@ -21,10 +20,10 @@ export default function DashboardRepositories() {
   const dialog = useDialog()
   const language = useLanguage()
   const { user, loading } = useAuth()
+  const icon = "h-6 w-6 rounded-none [&_[data-component=icon]]:h-4 [&_[data-component=icon]]:w-4 [&_[data-slot=icon-svg]]:h-4 [&_[data-slot=icon-svg]]:w-4"
   const [state, setState] = createStore({
     repos: [] as Repository[],
     loadingRepos: false,
-    expandedSyncRepo: null as string | null,
     syncingRepoId: null as string | null,
     syncStatuses: {} as Record<string, SyncStatus | undefined>,
   })
@@ -151,7 +150,13 @@ export default function DashboardRepositories() {
     return { bg: "rgba(156,163,175,0.12)", c: "var(--native-muted)" }
   }
 
+  const syncStatus = (status?: string) => {
+    if (status === "error") return "failed"
+    return status
+  }
+
   const syncStatusLabel = (status?: string) => {
+    status = syncStatus(status)
     if (!status || status === "idle") return language.t("store.sync.status.idle")
     if (status === "running" || status === "pending") return language.t("store.sync.status.running")
     if (status === "success") return language.t("store.sync.status.success")
@@ -160,6 +165,7 @@ export default function DashboardRepositories() {
   }
 
   const syncStatusColor = (status?: string) => {
+    status = syncStatus(status)
     if (!status || status === "idle") return "var(--native-muted)"
     if (status === "running" || status === "pending") return "#3b82f6"
     if (status === "success") return "#22c55e"
@@ -237,101 +243,68 @@ export default function DashboardRepositories() {
                         <div class={sx.dashSlug}>{repo.name}</div>
                         <p class={sx.dashDesc}>{repo.description || ""}</p>
 
-                        <Show when={repo.repoType === "sync"}>
-                          {(() => {
-                            const s = state.syncStatuses[repo.id]
-                            const status = s?.syncStatus
-                            const isRunning = status === "running" || status === "pending"
-                            return (
-                              <div
-                                class={sx.dashStatus}
-                                style={{ color: syncStatusColor(status) }}
-                              >
-                                <span
-                                  class={st.dot(isRunning)}
-                                  style={{ background: syncStatusColor(status) }}
-                                />
-                                {syncStatusLabel(status)}
-                                <Show when={s?.lastSyncedAt}>
-                                  <span style={{ color: "var(--native-muted)", "margin-left": "0.25rem" }}>
-                                    · {new Date(s!.lastSyncedAt!).toLocaleString()}
-                                  </span>
-                                </Show>
-                              </div>
-                            )
-                          })()}
-                        </Show>
-
-                        <div class={cn(sx.dashFoot, "gap-2")}>
+                        <div class={cn(sx.dashFoot, repo.repoType === "sync" && "justify-between", "gap-2")}>
                           <Show when={repo.repoType === "sync"}>
-                            <Button
-                              variant="outline"
-                              size="sm"
+                            {(() => {
+                              const status = syncStatus(state.syncStatuses[repo.id]?.syncStatus)
+                              const run = status === "running" || status === "pending"
+                              return (
+                                <div class={sx.dashStatus} style={{ color: syncStatusColor(status), margin: 0 }}>
+                                  <span
+                                    class={st.dot(run)}
+                                    style={{ background: syncStatusColor(status) }}
+                                  />
+                                  {syncStatusLabel(status)}
+                                </div>
+                              )
+                            })()}
+                          </Show>
+                          <div class="flex items-center gap-2">
+                          <Show when={repo.repoType === "sync"}>
+                            <button
                               type="button"
+                              class={cn(sx.action, icon)}
                               aria-label={language.t("store.sync.syncNow")}
                               title={language.t("store.sync.syncNow")}
                               disabled={state.syncingRepoId === repo.id}
                               onClick={() => void syncNow(repo.id)}
                             >
                               <Icon name="reset" size="small" />
-                            </Button>
-                            <Button
-                              variant={state.expandedSyncRepo === repo.id ? "secondary" : "outline"}
-                              size="sm"
-                              type="button"
-                              aria-label={
-                                state.expandedSyncRepo === repo.id
-                                  ? language.t("store.console.repositories.hideSync")
-                                  : language.t("store.console.repositories.syncSettings")
-                              }
-                              title={
-                                state.expandedSyncRepo === repo.id
-                                  ? language.t("store.console.repositories.hideSync")
-                                  : language.t("store.console.repositories.syncSettings")
-                              }
-                              onClick={() =>
-                                setState("expandedSyncRepo", state.expandedSyncRepo === repo.id ? null : repo.id)
-                              }
-                            >
-                              <Icon name="settings-gear" size="small" />
-                            </Button>
+                            </button>
                           </Show>
-                          <Button
-                            variant="ghost"
-                            size="sm"
+                          <button
                             type="button"
+                            class={cn(sx.action, icon)}
                             aria-label={language.t("store.console.repositories.invite")}
                             title={language.t("store.console.repositories.invite")}
                             onClick={() => openInvite(repo)}
                           >
                             <Icon name="plus-small" size="small" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
+                          </button>
+                          <button
                             type="button"
+                            class={cn(sx.action, icon)}
                             aria-label={language.t("store.console.repositories.edit")}
                             title={language.t("store.console.repositories.edit")}
                             onClick={() => openEditRepo(repo)}
                           >
                             <Icon name="edit" size="small" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
+                          </button>
+                          <button
                             type="button"
-                            class="text-destructive hover:text-destructive"
+                            class={cn(sx.action, icon, "text-destructive hover:text-destructive")}
                             aria-label={language.t("store.console.repositories.delete")}
                             title={language.t("store.console.repositories.delete")}
                             onClick={() => handleDeleteRepo(repo.id)}
                           >
                             <Icon name="trash" size="small" />
-                          </Button>
+                          </button>
+                          </div>
                         </div>
 
-                        <Show when={repo.repoType === "sync" && state.expandedSyncRepo === repo.id}>
-                          <div style={{ "margin-top": "0.75rem", "border-top": "1px solid color-mix(in srgb, var(--native-border) 8%, transparent)", "padding-top": "0.75rem" }}>
-                            <RepoSyncTab repoId={repo.id} />
+                        <Show when={repo.repoType === "sync" && state.syncStatuses[repo.id]?.lastSyncedAt}>
+                          <div class="pt-1 text-[11px] text-[var(--native-muted)]">
+                            {new Date(state.syncStatuses[repo.id]!.lastSyncedAt!).toLocaleString()}
                           </div>
                         </Show>
                       </div>
