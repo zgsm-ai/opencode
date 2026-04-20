@@ -191,20 +191,16 @@ if "%REQUESTED_VERSION:~0,1%"=="v" (
 
 :: Detect CPU architecture
 set "ARCH=x64"
+if /i "%PROCESSOR_ARCHITECTURE%"=="ARM64" set "ARCH=arm64"
+if /i "%PROCESSOR_ARCHITEW6432%"=="ARM64" set "ARCH=arm64"
 
-:: Detect AVX2 support using PowerShell
-:: Default to baseline for safety
-set "TARGET=costrict-cs-windows-!ARCH!-baseline"
+:: Keep download target in sync with packages/opencode/bin/cs resolution:
+:: - windows x64 always uses baseline
+:: - windows arm64 uses non-baseline
+set "TARGET=costrict-cs-windows-!ARCH!"
+if /i "!ARCH!"=="x64" set "TARGET=!TARGET!-baseline"
 
-echo Detecting CPU features...
-for /f "usebackq delims=" %%A in (`powershell -NoProfile -Command "try { Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class CPUID { [DllImport(\"kernel32.dll\")] public static extern IntPtr GetModuleHandle(string lpModuleName); [DllImport(\"kernel32.dll\")] public static extern IntPtr GetProcAddress(IntPtr hModule, string lpProcName); public static bool IsProcessorFeaturePresent(int feature) { IntPtr hKernel32 = GetModuleHandle(\"kernel32.dll\"); if (hKernel32 == IntPtr.Zero) return false; IntPtr pIsProcessorFeaturePresent = GetProcAddress(hKernel32, \"IsProcessorFeaturePresent\"); if (pIsProcessorFeaturePresent == IntPtr.Zero) return false; var func = (Func<int, bool>)Marshal.GetDelegateForFunctionPointer(pIsProcessorFeaturePresent, typeof(Func<int, bool>)); return func(feature); } }'; if ([CPUID]::IsProcessorFeaturePresent(40)) { Write-Output 'AVX2' } else { Write-Output 'BASELINE' } } catch { Write-Output 'BASELINE' }"`) do (
-    if "%%A"=="AVX2" (
-        set "TARGET=costrict-cs-windows-!ARCH!"
-        echo CPU supports AVX2, using optimized build
-    ) else (
-        echo CPU does not support AVX2 or detection failed, using baseline build
-    )
-)
+echo Detected architecture: !ARCH!
 
 set "ARCHIVE_EXT=.zip"
 set "DOWNLOAD_URL=!BASE_URL!/costrict-cli/pkg/!REQUESTED_VERSION!/!TARGET!!ARCHIVE_EXT!"

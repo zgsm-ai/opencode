@@ -93,6 +93,7 @@ test("loads JSON config file", async () => {
         $schema: "https://opencode.ai/config.json",
         model: "test/model",
         username: "testuser",
+        promptLanguage: "en",
       })
     },
   })
@@ -102,6 +103,7 @@ test("loads JSON config file", async () => {
       const config = await Config.get()
       expect(config.model).toBe("test/model")
       expect(config.username).toBe("testuser")
+      expect(config.promptLanguage).toBe("en")
     },
   })
 })

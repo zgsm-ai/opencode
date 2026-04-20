@@ -345,10 +345,11 @@ export const Terminal = (props: TerminalProps) => {
       const loaded = await loadGhostty()
       if (disposed) return
 
-      // Wait for terminal font to load before measuring metrics
+      // Wait for a Nerd Font glyph so icon commands render on first paint.
       if (typeof document !== "undefined" && document.fonts) {
         try {
-          await document.fonts.load('14px "FiraCode Nerd Font Mono"')
+          await document.fonts.ready
+          await document.fonts.load('14px "FiraCode Nerd Font Mono"', "\uE0B0")
         } catch {}
       }
 

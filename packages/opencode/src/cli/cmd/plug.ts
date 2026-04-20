@@ -11,6 +11,13 @@ import { Filesystem } from "../../util/filesystem"
 import { Process } from "../../util/process"
 import { UI } from "../ui"
 import { cmd } from "./cmd"
+import {
+  PluginAddCommand,
+  PluginListCommand,
+  PluginRemoveCommand,
+  PluginUpdateCommand,
+  PluginUploadCommand,
+} from "./plugin"
 
 type Spin = {
   start: (msg: string) => void
@@ -174,14 +181,19 @@ export function createPlugTask(input: PlugInput, dep: PlugDeps = defaultPlugDeps
 }
 
 export const PluginCommand = cmd({
-  command: "plugin <module>",
+  command: "plugin [module]",
   aliases: ["plug"],
-  describe: "install plugin and update config",
+  describe: "install npm plugins or manage registry extensions",
   builder: (yargs: Argv) => {
     return yargs
+      .command(PluginAddCommand)
+      .command(PluginRemoveCommand)
+      .command(PluginListCommand)
+      .command(PluginUpdateCommand)
+      .command(PluginUploadCommand)
       .positional("module", {
         type: "string",
-        describe: "npm module name",
+        describe: "npm module name or file path",
       })
       .option("global", {
         alias: ["g"],
@@ -199,7 +211,11 @@ export const PluginCommand = cmd({
   handler: async (args) => {
     const mod = String(args.module ?? "").trim()
     if (!mod) {
-      UI.error("module is required")
+      UI.empty()
+      UI.error("Missing module")
+      log.info("Usage: cs plugin [module]")
+      log.info("Subcommands: add, remove, list, update, upload")
+      log.info("Examples: cs plugin @scope/pkg, cs plugin add mcp public/mcp-time")
       process.exitCode = 1
       return
     }

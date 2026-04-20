@@ -1,4 +1,5 @@
 import { Show, For, createMemo, createSignal, createEffect, on, onCleanup, batch } from "solid-js"
+import { createResizeObserver } from "@solid-primitives/resize-observer"
 import { createStore, produce, reconcile } from "solid-js/store"
 import { createAutoScroll } from "@opencode-ai/ui/hooks"
 import { DataProvider } from "@opencode-ai/ui/context"
@@ -38,7 +39,7 @@ import { SessionComposerRegion } from "@/pages/session/composer/session-composer
 import { createDeviceSessionComposerState } from "@/pages/session/composer/device-session-composer-state"
 import { createScrollSpy } from "@/pages/session/scroll-spy"
 import { useContentTabs } from "@/context/content-tabs"
-import type { Message, Part, Session, SessionStatus, FileDiff, Todo, Command, Agent, VcsInfo, ProviderListResponse } from "@opencode-ai/sdk/v2/client"
+import type { Message, Part, Session, SessionStatus, FileDiff, Todo, Command, Agent, VcsInfo, ProviderListResponse, PermissionRequest, QuestionRequest } from "@opencode-ai/sdk/v2/client"
 import type { Project, Path } from "@opencode-ai/sdk/v2/client"
 import type { ProviderCapability, ProviderCapabilitiesResponse } from "@/context/global-sync/types"
 
@@ -117,9 +118,12 @@ export function DeviceSessionTab(props: { tabId: string }) {
   const [viewingStack, setViewingStack] = createSignal<{ id: string; name: string }[]>([])
   const [loadedMessages, setLoadedMessages] = createStore<Record<string, Message[]>>({})
   const [loadedParts, setLoadedParts] = createStore<Record<string, Part[]>>({})
+  const [phase, setPhase] = createStore<Record<string, "loading" | "ready" | "error">>({})
   const [loadedStatus, setLoadedStatus] = createSignal<SessionStatus | undefined>()
   const [loadedDiffs, setLoadedDiffs] = createStore<FileDiff[]>([])
   const [loadedTodos, setLoadedTodos] = createStore<Todo[]>([])
+  const [loadedPermissions, setLoadedPermissions] = createStore<Record<string, PermissionRequest[]>>({})
+  const [loadedQuestions, setLoadedQuestions] = createStore<Record<string, QuestionRequest[]>>({})
 
   createEffect((prev: string[]) => {
     const stack = viewingStack()
@@ -128,10 +132,21 @@ export function DeviceSessionTab(props: { tabId: string }) {
       const removed = prev.filter((id) => !currentIds.includes(id))
       batch(() => {
         for (const id of removed) {
-          setLoadedMessages(id, reconcile([] as Message[]))
+          const mids = loadedMessages[id]?.map((msg) => msg.id) ?? []
+          setLoadedMessages(produce((draft: Record<string, Message[]>) => {
+            delete draft[id]
+          }))
+          setLoadedParts(produce((draft: Record<string, Part[]>) => {
+            for (const mid of mids) delete draft[mid]
+          }))
+          setPhase(produce((draft: Record<string, "loading" | "ready" | "error">) => {
+            delete draft[id]
+          }))
         }
         setLoadedDiffs(reconcile([] as FileDiff[], { key: "file" }))
         setLoadedTodos(reconcile([] as Todo[], { key: "id" }))
+        setLoadedPermissions(reconcile({} as Record<string, PermissionRequest[]>))
+        setLoadedQuestions(reconcile({} as Record<string, QuestionRequest[]>))
         setLoadedStatus(undefined)
       })
     }
@@ -201,28 +216,55 @@ export function DeviceSessionTab(props: { tabId: string }) {
     return session.data.todos
   })
 
+  const effectivePermissions = createMemo(() => {
+    if (viewingSessionID()) return loadedPermissions as Record<string, PermissionRequest[]>
+    return session.data.permissions
+  })
+
+  const effectiveQuestions = createMemo(() => {
+    if (viewingSessionID()) return loadedQuestions as Record<string, QuestionRequest[]>
+    return session.data.questions
+  })
+
   createEffect(on(currentSessionID, async (id) => {
     if (!id) return
     if (id === rootSessionID() && !viewingSessionID()) return
-    try {
-      const [sessionRes, messagesRes] = await Promise.all([
-        device.client.conversation.get(id).catch(() => undefined),
-        device.client.conversation.messages(id, { limit: 50 }).catch(() => undefined),
-      ])
-      const raw = Array.isArray(messagesRes) ? messagesRes : []
-      const msgs: Message[] = []
-      batch(() => {
-        for (const item of raw as any[]) {
-          if (!item?.info?.id) continue
-          msgs.push(item.info as Message)
-          if (item.parts && Array.isArray(item.parts)) {
-            setLoadedParts(item.info.id, reconcile(item.parts as Part[], { key: "id" }))
-          }
+    const mids = loadedMessages[id]?.map((msg) => msg.id) ?? []
+    batch(() => {
+      setLoadedMessages(produce((draft: Record<string, Message[]>) => {
+        delete draft[id]
+      }))
+      setLoadedParts(produce((draft: Record<string, Part[]>) => {
+        for (const mid of mids) delete draft[mid]
+      }))
+      setLoadedStatus(undefined)
+      setPhase(id, "loading")
+    })
+    const [sessionRes, messagesRes] = await Promise.allSettled([
+      device.client.conversation.get(id),
+      device.client.conversation.messages(id, { limit: 50 }),
+    ])
+    if (currentSessionID() !== id) return
+    if (messagesRes.status !== "fulfilled") {
+      setPhase(id, "error")
+      return
+    }
+    const raw = Array.isArray(messagesRes.value) ? messagesRes.value : []
+    const msgs: Message[] = []
+    batch(() => {
+      for (const item of raw as any[]) {
+        if (!item?.info?.id) continue
+        msgs.push(item.info as Message)
+        if (item.parts && Array.isArray(item.parts)) {
+          setLoadedParts(item.info.id, reconcile(item.parts as Part[], { key: "id" }))
         }
-        setLoadedMessages(id, reconcile(msgs, { key: "id" }))
-        if (sessionRes) setLoadedStatus({ type: "idle" } as SessionStatus)
-      })
-    } catch {}
+      }
+      setLoadedMessages(id, reconcile(msgs, { key: "id" }))
+      if (sessionRes.status === "fulfilled" && sessionRes.value) {
+        setLoadedStatus({ type: "idle" } as SessionStatus)
+      }
+      setPhase(id, "ready")
+    })
   }))
 
   const unsubscribe = workspace.subscribe((payload) => {
@@ -309,10 +351,62 @@ export function DeviceSessionTab(props: { tabId: string }) {
           if (props.todos) setLoadedTodos(reconcile(props.todos, { key: "id" }))
           break
         }
+        case "permission.asked": {
+          const perm = payload.properties as PermissionRequest
+          if (perm?.id) {
+            const sid = perm.sessionID
+            setLoadedPermissions(sid, produce((draft: PermissionRequest[]) => {
+              if (!draft.some((p) => p.id === perm.id)) {
+                draft.push(perm)
+              }
+            }))
+          }
+          break
+        }
+        case "permission.replied": {
+          const props = payload.properties as { sessionID?: string; requestID?: string }
+          const sid = props?.sessionID
+          const rid = props?.requestID
+          if (sid && rid) {
+            setLoadedPermissions(sid, produce((draft: PermissionRequest[]) => {
+              const idx = draft.findIndex((p) => p.id === rid)
+              if (idx !== -1) draft.splice(idx, 1)
+            }))
+          }
+          break
+        }
+        case "question.asked": {
+          const q = payload.properties as QuestionRequest
+          if (q?.id) {
+            const sid = q.sessionID
+            setLoadedQuestions(sid, produce((draft: QuestionRequest[]) => {
+              if (!draft.some((r) => r.id === q.id)) {
+                draft.push(q)
+              }
+            }))
+          }
+          break
+        }
+        case "question.replied":
+        case "question.rejected": {
+          const props = payload.properties as { sessionID?: string; requestID?: string }
+          const sid = props?.sessionID
+          const rid = props?.requestID
+          if (sid && rid) {
+            setLoadedQuestions(sid, produce((draft: QuestionRequest[]) => {
+              const idx = draft.findIndex((r) => r.id === rid)
+              if (idx !== -1) draft.splice(idx, 1)
+            }))
+          }
+          break
+        }
       }
     })
   })
-  onCleanup(() => unsubscribe())
+  onCleanup(() => {
+    unsubscribe()
+    if (snapFrame !== undefined) cancelAnimationFrame(snapFrame)
+  })
 
   // ── Adapt device providers to original context interfaces ──
 
@@ -345,8 +439,8 @@ export function DeviceSessionTab(props: { tabId: string }) {
     session_status: { [currentSessionID() ?? ""]: effectiveStatus(), "": effectiveStatus(), undefined: effectiveStatus() } as Record<string, SessionStatus>,
     session_diff: { [currentSessionID() ?? ""]: effectiveDiffs() } as Record<string, FileDiff[]>,
     todo: { [currentSessionID() ?? ""]: effectiveTodos() } as Record<string, Todo[]>,
-    permission: {} as Record<string, any[]>,
-    question: {} as Record<string, any[]>,
+    permission: effectivePermissions(),
+    question: effectiveQuestions(),
     mcp: {} as Record<string, any>,
     lsp: [] as any[],
     vcs: workspace.data.vcs,
@@ -507,7 +601,7 @@ export function DeviceSessionTab(props: { tabId: string }) {
   const permissionValue = {
     ready: () => true,
     respond(input: any) { session.permission.respond(input) },
-    autoResponds() { return false },
+    autoResponds() { return session.permission.isAutoAccepting() },
     isAutoAccepting() { return session.permission.isAutoAccepting() },
     toggleAutoAccept() { session.permission.toggleAutoAccept() },
     enableAutoAccept() { session.permission.enableAutoAccept() },
@@ -543,8 +637,24 @@ export function DeviceSessionTab(props: { tabId: string }) {
 
   const composer = createDeviceSessionComposerState()
 
+  const [snap, setSnap] = createSignal(true)
+
+  const done = createMemo(() => {
+    const id = currentSessionID()
+    if (!id) return false
+    if (viewingSessionID()) return phase[id] === "ready" || phase[id] === "error"
+    return session.data.session?.id === id && !session.history.loading()
+  })
+
+  const ready = createMemo(() => {
+    const id = currentSessionID()
+    if (!id) return false
+    if (viewingSessionID()) return phase[id] === "ready"
+    return session.data.session?.id === id && !session.history.loading()
+  })
+
   const autoScroll = createAutoScroll({
-    working: () => effectiveStatus()?.type === "busy",
+    working: () => snap() || effectiveStatus()?.type === "busy",
     overflowAnchor: "dynamic",
   })
 
@@ -555,10 +665,25 @@ export function DeviceSessionTab(props: { tabId: string }) {
   let scroller: HTMLDivElement | undefined
   let content: HTMLDivElement | undefined
   let promptDock: HTMLDivElement | undefined
+  let snapFrame: number | undefined
   let dockHeight = 0
 
   const messages = createMemo(() => effectiveMessages())
   const messagesReady = createMemo(() => true)
+
+  createEffect(on(currentSessionID, () => setSnap(true), { defer: true }))
+
+  createEffect(() => {
+    if (!snap()) return
+    if (!scroller) return
+    if (!done()) return
+    if (snapFrame !== undefined) cancelAnimationFrame(snapFrame)
+    snapFrame = requestAnimationFrame(() => {
+      snapFrame = undefined
+      if (ready()) resumeScroll()
+      setSnap(false)
+    })
+  })
 
   const userMessages = createMemo(
     () => messages().filter((m) => m.role === "user") as any[],
@@ -574,6 +699,21 @@ export function DeviceSessionTab(props: { tabId: string }) {
   const resumeScroll = () => {
     autoScroll.forceScrollToBottom()
   }
+
+  createResizeObserver(
+    () => promptDock,
+    ({ height }) => {
+      const next = Math.ceil(height)
+      if (next === dockHeight) return
+      const el = scroller
+      const delta = next - dockHeight
+      const stick = el
+        ? snap() || !autoScroll.userScrolled() || el.scrollHeight - el.clientHeight - el.scrollTop < 10 + Math.max(0, delta)
+        : false
+      dockHeight = next
+      if (stick) autoScroll.forceScrollToBottom()
+    },
+  )
 
   const anchor = (id: string) => `message-${id}`
 
@@ -592,8 +732,8 @@ export function DeviceSessionTab(props: { tabId: string }) {
       session_status: {} as Record<string, SessionStatus>,
       session_diff: {} as Record<string, FileDiff[]>,
       todo: {} as Record<string, Todo[]>,
-      permission: {} as Record<string, any[]>,
-      question: {} as Record<string, any[]>,
+      permission: {} as Record<string, PermissionRequest[]>,
+      question: {} as Record<string, QuestionRequest[]>,
       mcp: {} as Record<string, any>,
       lsp: [] as any[],
       vcs: workspace.data.vcs,

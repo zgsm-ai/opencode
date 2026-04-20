@@ -1,5 +1,5 @@
 import { createMemo, createSignal, For, Match, onMount, Show, Switch, createEffect, on, onCleanup, untrack } from "solid-js"
-import { useSearchParams } from "@solidjs/router"
+import { useParams, useSearchParams } from "@solidjs/router"
 import { Toast } from "@opencode-ai/ui/toast"
 import { IconButton } from "@opencode-ai/ui/icon-button"
 import { Icon } from "@opencode-ai/ui/icon"
@@ -7,7 +7,6 @@ import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { ResizeHandle } from "@opencode-ai/ui/resize-handle"
 import { Tabs } from "@opencode-ai/ui/tabs"
 import { Collapsible } from "@opencode-ai/ui/collapsible"
-import { Spinner } from "@opencode-ai/ui/spinner"
 import { useLanguage } from "@/context/language"
 import { useFile } from "@/context/file"
 import { useDeviceProject } from "@/context/device-project"
@@ -22,11 +21,13 @@ import { useDeviceLayout } from "./device-interface"
 import { FilePreviewTab } from "./file-preview-tab"
 import { DiffPreviewTab } from "./diff-preview-tab"
 import { workspaceKey } from "@/pages/layout/helpers"
+import { shouldRestore, activeSession } from "./workspace-content-layout-sync"
 import FileTree from "@/components/file-tree"
 import type { FileNode } from "@opencode-ai/sdk/v2"
 import type { DiffFileEntry } from "@/client/device-client"
 import type { Session } from "@opencode-ai/sdk/v2/client"
 import { getDirectory, getFilename } from "@opencode-ai/util/path"
+import { useWorkspace } from "../context"
 
 let newSessionCounter = 0
 
@@ -86,28 +87,49 @@ function ContentTabPanel() {
           onChange={tabStore.activate}
           class="h-full flex flex-col"
         >
-          <Tabs.List class="h-[41px] shrink-0 border-b bg-background-base [&::after]:border-b-0 overflow-x-auto scrollbar-none" onWheel={(e) => { e.currentTarget.scrollLeft += e.deltaY }}>
-            <For each={tabStore.tabs()}>
-              {(tab) => (
-                <Tabs.Trigger
-                  value={tab.id}
-                  class="group h-full min-w-[100px] max-w-[180px] !bg-background-weak !border-b-0 has-[[data-selected]]:!bg-background-base has-[[data-selected]]:!border-b has-[[data-selected]]:before:absolute has-[[data-selected]]:before:top-0 has-[[data-selected]]:before:left-0 has-[[data-selected]]:before:right-0 has-[[data-selected]]:before:h-[2px] has-[[data-selected]]:before:bg-icon-strong-base [&>[data-slot=tabs-trigger]]:h-full [&>[data-slot=tabs-trigger]]:w-full [&>[data-slot=tabs-trigger]]:px-2 [&>[data-slot=tabs-trigger]]:gap-1.5 flex items-center gap-1.5 text-13-regular text-text-weak hover:text-text-base has-[[data-selected]]:text-text-base transition-colors relative"
-                >
-                  <TabIcon tab={tab} />
-                  <span class="truncate flex-1 min-w-0">{tab.title}</span>
-                  <button
-                    class="flex items-center justify-center h-full w-6 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      closeTab(tab.id)
-                    }}
+          <div class="h-[41px] shrink-0 flex items-center  border-b pr-2">
+            <Tabs.List class="flex-1 min-w-0 h-full [&::after]:border-b-0 overflow-x-auto scrollbar-none" onWheel={(e) => { e.currentTarget.scrollLeft += e.deltaY }}>
+              <For each={tabStore.tabs()}>
+                {(tab) => (
+                  <Tabs.Trigger
+                    value={tab.id}
+                    class="group h-full min-w-[100px] max-w-[180px] !bg-background-weak !border-b-0 has-[[data-selected]]:!bg-background-base has-[[data-selected]]:!border-b has-[[data-selected]]:before:absolute has-[[data-selected]]:before:top-0 has-[[data-selected]]:before:left-0 has-[[data-selected]]:before:right-0 has-[[data-selected]]:before:h-[2px] has-[[data-selected]]:before:bg-icon-strong-base [&>[data-slot=tabs-trigger]]:h-full [&>[data-slot=tabs-trigger]]:w-full [&>[data-slot=tabs-trigger]]:px-2 [&>[data-slot=tabs-trigger]]:gap-1.5 flex items-center gap-1.5 text-13-regular text-text-weak hover:text-text-base has-[[data-selected]]:text-text-base transition-colors relative"
                   >
-                    <Icon name={"close-small" as any} size="small" class="text-text-weak" />
-                  </button>
-                </Tabs.Trigger>
-              )}
-            </For>
-          </Tabs.List>
+                    <TabIcon tab={tab} />
+                    <span class="truncate flex-1 min-w-0">{tab.title}</span>
+                    <button
+                      class="flex items-center justify-center h-full w-6 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        closeTab(tab.id)
+                      }}
+                    >
+                      <Icon name={"close-small" as any} size="small" class="text-text-weak" />
+                    </button>
+                  </Tabs.Trigger>
+                )}
+              </For>
+            </Tabs.List>
+            <div class="shrink-0 flex items-center px-1">
+              <Tooltip value={language.t("workspace.content.closeAll")} placement="bottom">
+                <IconButton
+                  icon="trash"
+                  variant="ghost"
+                  iconSize="small"
+                  onClick={() => {
+                    for (const t of tabStore.tabs()) {
+                      if (t.kind === "terminal") {
+                        const sid = t.meta?.sessionId as string | undefined
+                        if (sid) terminal.close(sid)
+                      }
+                    }
+                    tabStore.closeAll()
+                  }}
+                  aria-label={language.t("workspace.content.closeAll")}
+                />
+              </Tooltip>
+            </div>
+          </div>
           <For each={tabStore.tabs()}>
             {(tab) => (
               <Show when={tabStore.activeId() === tab.id}>
@@ -156,6 +178,7 @@ function ContentSidebar(props: { directory: string }) {
   const terminal = useDeviceTerminal()
   const sdk = useDeviceSDK()
   const dw = useDeviceWorkspace()
+  const work = useWorkspace()
   const [expanded, setExpanded] = createSignal<Record<SidebarSection, boolean>>({
     sessions: true,
     files: false,
@@ -217,6 +240,16 @@ function ContentSidebar(props: { directory: string }) {
   const archiveSession = async (session: Session) => {
     await dw.session.archive(session.id)
   }
+
+  createEffect(() => {
+    if (dw.data.status !== "ready") return
+    const live = new Set(dw.data.session.map((s) => s.id))
+    const ids = tabStore.tabs()
+      .filter((tab) => tab.kind === "session" && tab.meta?.sessionID && !live.has(tab.meta.sessionID))
+      .map((tab) => tab.id)
+    if (ids.length === 0) return
+    ids.forEach(tabStore.close)
+  })
 
   createEffect(() => {
     const unsub = dw.subscribe((payload) => {
@@ -290,13 +323,24 @@ function ContentSidebar(props: { directory: string }) {
   ])
 
   return (
-    <div class="flex flex-col h-full bg-background-base border-r">
+    <div class="flex flex-col h-full border-r">
       <div class="h-[41px] shrink-0 flex items-center gap-1 px-2 border-b">
+        <Show when={!work.sidebarOpened()}>
+          <Tooltip value={language.t("workspace.sidebar.expand")} placement="bottom">
+            <IconButton
+              icon="chevron-right"
+              variant="ghost"
+              iconSize="small"
+              onClick={work.openSidebar}
+              aria-label={language.t("workspace.sidebar.expand")}
+            />
+          </Tooltip>
+        </Show>
         <Tooltip value={language.t("workspace.content.newSession")} placement="bottom">
           <IconButton
             icon="plus-small"
             variant="ghost"
-            iconSize="medium"
+            iconSize="small"
             onClick={() => {
               newSessionCounter++
               tabStore.open({
@@ -314,7 +358,7 @@ function ContentSidebar(props: { directory: string }) {
           <IconButton
             icon="terminal"
             variant="ghost"
-            iconSize="medium"
+            iconSize="small"
             onClick={() => {
               newTerminalCounter++
               const pendingKey = `pending-${newTerminalCounter}`
@@ -343,23 +387,6 @@ function ContentSidebar(props: { directory: string }) {
           />
         </Tooltip>
         <div class="flex-1" />
-        <Tooltip value={language.t("workspace.content.closeAll")} placement="bottom">
-          <IconButton
-            icon="trash"
-            variant="ghost"
-            iconSize="medium"
-            onClick={() => {
-              for (const t of tabStore.tabs()) {
-                if (t.kind === "terminal") {
-                  const sid = t.meta?.sessionId as string | undefined
-                  if (sid) terminal.close(sid)
-                }
-              }
-              tabStore.closeAll()
-            }}
-            aria-label={language.t("workspace.content.closeAll")}
-          />
-        </Tooltip>
       </div>
 
       <div class="flex-1 min-h-0 flex flex-col">
@@ -419,11 +446,11 @@ function ContentSidebar(props: { directory: string }) {
                             {language.t("workspace.emptySessions")}
                           </div>
                         }>
-                          <div class="px-2 py-1">
+                          <div class="px-1.5 py-1">
                             <For each={sessionGroups()}>
                               {(group) => (
                                 <>
-                                  <div class="px-1 py-1 text-11-regular text-text-weak">{group.label}</div>
+                                  <div class="px-1.5 pt-1.5 pb-0.5 text-[12px] font-[600] text-native-muted tracking-wide uppercase">{group.label}</div>
                                   <For each={group.sessions}>
                                     {(session) => {
                                       const isActive = createMemo(() => {
@@ -432,33 +459,36 @@ function ContentSidebar(props: { directory: string }) {
                                       })
                                       return (
                                         <div
-                                          class="group/s flex items-center gap-1.5 px-1 py-0.5 text-12-regular rounded-sm cursor-pointer"
+                                          class="group/s flex items-center gap-2 h-10 px-1.5 text-12-regular rounded-md cursor-pointer transition-colors duration-150"
                                           classList={{
-                                            "bg-surface-interactive-base text-text-strong": isActive(),
-                                            "hover:bg-background-stronger": !isActive(),
+                                            "bg-native-primary-soft text-native-foreground": isActive(),
+                                            "text-native-muted hover:bg-native-hover hover:text-native-foreground": !isActive(),
                                           }}
                                           onClick={() => openSession(session)}
                                         >
-                                        <Show
-                                          when={isWorking(session.id)}
-                                          fallback={
-                                            <Icon name="dash" size="small" class="shrink-0 text-text-weak" />
-                                          }
-                                        >
-                                          <Spinner class="size-3.5 shrink-0" />
-                                        </Show>
-                                        <span class="truncate flex-1 min-w-0">{session.title || language.t("command.session.new")}</span>
-                                        <button
-                                          class="shrink-0 opacity-0 group-hover/s:opacity-100 transition-opacity"
-                                          onClick={(e) => {
-                                            e.stopPropagation()
-                                            archiveSession(session)
-                                          }}
-                                        >
-                                          <Icon name="archive" size="small" class="text-text-weak hover:text-text-base" />
-                                        </button>
-                                      </div>
-                                    )
+                                          <Show
+                                            when={isWorking(session.id)}
+                                          >
+                                            <div
+                                              class="size-3 shrink-0 rounded-full border border-t-transparent animate-spin"
+                                              classList={{
+                                                "border-native-primary": isActive(),
+                                                "border-native-dim": !isActive(),
+                                              }}
+                                            />
+                                          </Show>
+                                          <span class="truncate flex-1 min-w-0">{session.title || language.t("command.session.new")}</span>
+                                          <button
+                                            class="shrink-0 size-5 flex items-center justify-center rounded opacity-0 group-hover/s:opacity-100 transition-opacity duration-150 hover:bg-native-active"
+                                            onClick={(e) => {
+                                              e.stopPropagation()
+                                              archiveSession(session)
+                                            }}
+                                          >
+                                            <Icon name="archive" size="small" class="text-native-dim" />
+                                          </button>
+                                        </div>
+                                      )
                                     }}
                                   </For>
                                 </>
@@ -497,7 +527,7 @@ function ContentSidebar(props: { directory: string }) {
                             </Show>
                             <For each={diffFiles()}>
                               {(file) => (
-                                <div class="flex items-center gap-1.5 px-1 py-0.5 text-12-regular hover:bg-background-stronger rounded-sm cursor-pointer group/diff"
+                                <div class="flex items-center gap-1.5 h-10 px-1.5 text-12-regular hover:bg-native-hover rounded-md cursor-pointer transition-colors duration-150 group/diff"
                                   onClick={() => {
                                     tabStore.open({
                                       kind: "diff",
@@ -538,33 +568,16 @@ function ContentSidebar(props: { directory: string }) {
   )
 }
 
-function ContentTabUrlSync(props: { onRestore: (sid: string, ws: ReturnType<typeof useDeviceWorkspace>) => void }) {
-  const [searchParams] = useSearchParams()
-  const tabStore = useContentTabs()
-  const ws = useDeviceWorkspace()
-  const [restored, setRestored] = createSignal(false)
-
-  createEffect(() => {
-    if (restored()) return
-    const sid = searchParams.session as string | undefined
-    if (!sid) {
-      setRestored(true)
-      return
-    }
-    if (ws.data.status !== "loading" && ws.data.session.length > 0) {
-      props.onRestore(sid, ws)
-      setRestored(true)
-    }
-  })
-
-  return null
-}
 
 export function WorkspaceContentLayout(props: { workspaceId: string; directory: string }) {
-  const [searchParams, setSearchParams] = useSearchParams()
+  const params = useParams()
+  const [searchParams, setSearchParams] = useSearchParams<{ session?: string }>()
   const language = useLanguage()
   const tabStore = useContentTabs()
   const dl = useDeviceLayout()
+  const ws = useDeviceWorkspace()
+  const active = createMemo(() => params.workspaceID === props.workspaceId)
+  const [done, setDone] = createSignal<string | undefined>()
 
   const ready = createMemo(() => !!props.workspaceId && !!props.directory)
   const directory = createMemo(() => {
@@ -572,46 +585,59 @@ export function WorkspaceContentLayout(props: { workspaceId: string; directory: 
     return workspaceKey(props.directory)
   })
 
-  const syncUrlFromTab = (activeId: string | undefined) => {
-    if (!activeId) {
-      setSearchParams({ session: undefined } as any, { replace: true })
+  const syncUrlFromTab = (id: string | undefined) => {
+    if (!id) {
+      setSearchParams({ session: undefined }, { replace: true })
       return
     }
-    const tab = tabStore.tabs().find((t) => t.id === activeId)
-    if (tab?.kind === "session" && tab.meta?.sessionID) {
-      setSearchParams({ session: tab.meta.sessionID } as any, { replace: true })
-    } else {
-      setSearchParams({ session: undefined } as any, { replace: true })
+    const sid = activeSession(tabStore.tabs(), id)
+    if (sid) {
+      setSearchParams({ session: sid }, { replace: true })
+      return
     }
+    setSearchParams({ session: undefined }, { replace: true })
   }
-
-  createEffect(() => {
-    const activeId = tabStore.activeId()
-    syncUrlFromTab(activeId)
-  })
 
   const restoreFromUrl = (sid: string, ws: ReturnType<typeof useDeviceWorkspace>) => {
     const existing = tabStore.tabs().find((t) => t.kind === "session" && t.meta?.sessionID === sid)
     if (existing) {
       tabStore.activate(existing.id)
-    } else {
-      const session = ws.data.session.find((s) => s.id === sid)
-      tabStore.open({
-        kind: "session",
-        key: sid,
-        title: session?.title || language.t("command.session.new"),
-        icon: "message",
-        meta: { sessionID: sid },
-      })
+      return
     }
+    const session = ws.data.session.find((s) => s.id === sid)
+    tabStore.open({
+      kind: "session",
+      key: sid,
+      title: session?.title || language.t("command.session.new"),
+      icon: "message",
+      meta: { sessionID: sid },
+    })
   }
+
+  createEffect(() => {
+    if (!active()) return
+    const sid = searchParams.session
+    if (!sid) {
+      setDone(undefined)
+      return
+    }
+    if (!shouldRestore(sid, done())) return
+    if (ws.data.status === "loading") return
+    restoreFromUrl(sid, ws)
+    setDone(sid)
+  })
+
+  createEffect(() => {
+    if (!active()) return
+    if (shouldRestore(searchParams.session, done())) return
+    syncUrlFromTab(tabStore.activeId())
+  })
 
   return (
     <Show
       when={ready() && directory()}
       fallback={<div class="size-full" />}
     >
-      <ContentTabUrlSync onRestore={restoreFromUrl} />
       <div class="flex h-full w-full min-h-0">
         <Show when={dl.fileTree.opened()}>
           <div

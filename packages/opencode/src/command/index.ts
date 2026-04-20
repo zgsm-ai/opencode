@@ -109,7 +109,7 @@ export namespace Command {
           hints: hints(PROMPT_REVIEW),
         }
 
-        const lang = "zh-CN"
+        const lang = cfg.promptLanguage ?? "zh-CN"
         commands[Default.PROJECT_WIKI] = {
           name: Default.PROJECT_WIKI,
           description: "generate comprehensive project wiki documentation",

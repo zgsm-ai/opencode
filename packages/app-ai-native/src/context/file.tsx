@@ -194,11 +194,18 @@ export const { use: useFile, provider: FileProvider, context: FileContext } = cr
       return promise
     }
 
+    let searchTimer: ReturnType<typeof setTimeout> | undefined
     const search = (query: string, dirs: "true" | "false") =>
-      sdk.client.runtime.findFiles(query, dirs, sdk.directory).then(
-        (x) => ((x as string[] | undefined) ?? []).map(path.normalize),
-        () => [],
-      )
+      new Promise<string[]>((resolve) => {
+        if (searchTimer) clearTimeout(searchTimer)
+        searchTimer = setTimeout(() => {
+          searchTimer = undefined
+          sdk.client.runtime.findFiles(query, dirs, sdk.directory).then(
+            (x) => resolve(((x as string[] | undefined) ?? []).map(path.normalize)),
+            () => resolve([]),
+          )
+        }, 300)
+      })
 
     const stop = sdk.event.listen((e) => {
       invalidateFromWatcher(e.details, {

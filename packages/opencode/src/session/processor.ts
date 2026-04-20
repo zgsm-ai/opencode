@@ -52,10 +52,15 @@ export namespace SessionProcessor {
     shouldBreak: boolean
     snapshot: string | undefined
     blocked: boolean
-    needsCompaction: boolean
     currentText: MessageV2.TextPart | undefined
     reasoningMap: Record<string, MessageV2.ReasoningPart>
     continuationMessages: import("ai").ModelMessage[] | undefined
+  }
+
+  class CompactSignal extends Error {
+    constructor() {
+      super("compact")
+    }
   }
 
   type StreamEvent = Event
@@ -96,7 +101,6 @@ export namespace SessionProcessor {
           shouldBreak: false,
           snapshot: undefined,
           blocked: false,
-          needsCompaction: false,
           currentText: undefined,
           reasoningMap: {},
           continuationMessages: undefined,
@@ -113,10 +117,10 @@ export namespace SessionProcessor {
           switch (value.type) {
             case "start":
               yield* status.set(ctx.sessionID, { type: "busy" })
-              return
+              return "continue" as const
 
             case "reasoning-start":
-              if (value.id in ctx.reasoningMap) return
+              if (value.id in ctx.reasoningMap) return "continue" as const
               ctx.reasoningMap[value.id] = {
                 id: PartID.ascending(),
                 messageID: ctx.assistantMessage.id,
@@ -127,10 +131,10 @@ export namespace SessionProcessor {
                 metadata: value.providerMetadata,
               }
               yield* session.updatePart(ctx.reasoningMap[value.id])
-              return
+              return "continue" as const
 
             case "reasoning-delta":
-              if (!(value.id in ctx.reasoningMap)) return
+              if (!(value.id in ctx.reasoningMap)) return "continue" as const
               ctx.reasoningMap[value.id].text += value.text
               if (value.providerMetadata) ctx.reasoningMap[value.id].metadata = value.providerMetadata
               yield* session.updatePartDelta({
@@ -140,16 +144,16 @@ export namespace SessionProcessor {
                 field: "text",
                 delta: value.text,
               })
-              return
+              return "continue" as const
 
             case "reasoning-end":
-              if (!(value.id in ctx.reasoningMap)) return
+              if (!(value.id in ctx.reasoningMap)) return "continue" as const
               ctx.reasoningMap[value.id].text = ctx.reasoningMap[value.id].text.trimEnd()
               ctx.reasoningMap[value.id].time = { ...ctx.reasoningMap[value.id].time, end: Date.now() }
               if (value.providerMetadata) ctx.reasoningMap[value.id].metadata = value.providerMetadata
               yield* session.updatePart(ctx.reasoningMap[value.id])
               delete ctx.reasoningMap[value.id]
-              return
+              return "continue" as const
 
             case "tool-input-start":
               if (ctx.assistantMessage.summary) {
@@ -164,20 +168,20 @@ export namespace SessionProcessor {
                 callID: value.id,
                 state: { status: "pending", input: {}, raw: "" },
               } satisfies MessageV2.ToolPart)
-              return
+              return "continue" as const
 
             case "tool-input-delta":
-              return
+              return "continue" as const
 
             case "tool-input-end":
-              return
+              return "continue" as const
 
             case "tool-call": {
               if (ctx.assistantMessage.summary) {
                 throw new Error(`Tool call not allowed while generating summary: ${value.toolName}`)
               }
               const match = ctx.toolcalls[value.toolCallId]
-              if (!match) return
+              if (!match) return "continue" as const
               ctx.toolcalls[value.toolCallId] = yield* session.updatePart({
                 ...match,
                 tool: value.toolName,
@@ -198,7 +202,7 @@ export namespace SessionProcessor {
                     JSON.stringify(part.state.input) === JSON.stringify(value.input),
                 )
               ) {
-                return
+                return "continue" as const
               }
 
               const agent = yield* agents.get(ctx.assistantMessage.agent)
@@ -210,12 +214,12 @@ export namespace SessionProcessor {
                 always: [value.toolName],
                 ruleset: agent.permission,
               })
-              return
+              return "continue" as const
             }
 
             case "tool-result": {
               const match = ctx.toolcalls[value.toolCallId]
-              if (!match || match.state.status !== "running") return
+              if (!match || match.state.status !== "running") return "continue" as const
               yield* session.updatePart({
                 ...match,
                 state: {
@@ -229,12 +233,12 @@ export namespace SessionProcessor {
                 },
               })
               delete ctx.toolcalls[value.toolCallId]
-              return
+              return "continue" as const
             }
 
             case "tool-error": {
               const match = ctx.toolcalls[value.toolCallId]
-              if (!match || match.state.status !== "running") return
+              if (!match || match.state.status !== "running") return "continue" as const
               yield* session.updatePart({
                 ...match,
                 state: {
@@ -248,7 +252,7 @@ export namespace SessionProcessor {
                 ctx.blocked = ctx.shouldBreak
               }
               delete ctx.toolcalls[value.toolCallId]
-              return
+              return "continue" as const
             }
 
             case "error":
@@ -263,7 +267,7 @@ export namespace SessionProcessor {
                 snapshot: ctx.snapshot,
                 type: "step-start",
               })
-              return
+              return "continue" as const
 
             case "finish-step": {
               const usage = Session.getUsage({
@@ -307,9 +311,9 @@ export namespace SessionProcessor {
                 !ctx.assistantMessage.summary &&
                 isOverflow({ cfg: yield* config.get(), tokens: usage.tokens, model: ctx.model })
               ) {
-                ctx.needsCompaction = true
+                return "compact" as const
               }
-              return
+              return "continue" as const
             }
 
             case "text-start":
@@ -323,10 +327,10 @@ export namespace SessionProcessor {
                 metadata: value.providerMetadata,
               }
               yield* session.updatePart(ctx.currentText)
-              return
+              return "continue" as const
 
             case "text-delta":
-              if (!ctx.currentText) return
+              if (!ctx.currentText) return "continue" as const
               ctx.currentText.text += value.text
               if (value.providerMetadata) ctx.currentText.metadata = value.providerMetadata
               yield* session.updatePartDelta({
@@ -336,10 +340,10 @@ export namespace SessionProcessor {
                 field: "text",
                 delta: value.text,
               })
-              return
+              return "continue" as const
 
             case "text-end":
-              if (!ctx.currentText) return
+              if (!ctx.currentText) return "continue" as const
               ctx.currentText.text = ctx.currentText.text.trimEnd()
               // For CoStrict provider: extract inline <think>...</think> tags into reasoning parts
               // so the UI renders them with thinking style, instead of discarding them.
@@ -378,14 +382,14 @@ export namespace SessionProcessor {
               if (value.providerMetadata) ctx.currentText.metadata = value.providerMetadata
               yield* session.updatePart(ctx.currentText)
               ctx.currentText = undefined
-              return
+              return "continue" as const
 
             case "finish":
-              return
+              return "continue" as const
 
             default:
               log.info("unhandled", { ...value })
-              return
+              return "continue" as const
           }
         })
 
@@ -442,9 +446,8 @@ export namespace SessionProcessor {
           log.error("process", { error: e, stack: e instanceof Error ? e.stack : undefined })
           const error = parse(e)
           if (MessageV2.ContextOverflowError.isInstance(error)) {
-            ctx.needsCompaction = true
             yield* bus.publish(Session.Event.Error, { sessionID: ctx.sessionID, error })
-            return
+            return "compact" as const
           }
           ctx.assistantMessage.error = error
           yield* bus.publish(Session.Event.Error, {
@@ -452,10 +455,12 @@ export namespace SessionProcessor {
             error: ctx.assistantMessage.error,
           })
           yield* status.set(ctx.sessionID, { type: "idle" })
+          return "stop" as const
         })
 
         const abort = Effect.fn("SessionProcessor.abort")(() =>
           Effect.gen(function* () {
+            aborted = true
             if (!ctx.assistantMessage.error) {
               yield* halt(new DOMException("Aborted", "AbortError"))
             }
@@ -469,13 +474,12 @@ export namespace SessionProcessor {
 
         const process = Effect.fn("SessionProcessor.process")(function* (streamInput: LLM.StreamInput) {
           log.info("process")
-          ctx.needsCompaction = false
           ctx.shouldBreak = (yield* config.get()).experimental?.continue_loop_on_deny !== true
           ctx.assistantMessage.requestID = crypto.randomUUID()
           yield* session.updateMessage(ctx.assistantMessage)
 
-          return yield* Effect.gen(function* () {
-            yield* Effect.gen(function* () {
+          const flow = yield* Effect.gen(function* () {
+            return yield* Effect.gen(function* () {
               ctx.currentText = undefined
               ctx.reasoningMap = {}
               // Use continuation messages from previous output length retry if available
@@ -488,11 +492,24 @@ export namespace SessionProcessor {
                 requestID: ctx.assistantMessage.requestID,
               })
 
-              yield* stream.pipe(
-                Stream.tap((event) => handleEvent(event)),
-                Stream.takeUntil(() => ctx.needsCompaction),
-                Stream.runDrain,
+              const streamResult = yield* stream.pipe(
+                Stream.runForEach((event) =>
+                  Effect.gen(function* () {
+                    const next = yield* handleEvent(event)
+                    if (next === "compact") {
+                      return yield* Effect.fail(new CompactSignal())
+                    }
+                  }),
+                ),
+                Effect.as("continue" as const),
+                Effect.catchIf(
+                  (err) => err instanceof CompactSignal,
+                  () => Effect.succeed("compact" as const),
+                ),
               )
+
+              if (streamResult === "compact") return "compact" as const
+
               // For costrict provider, handle output length exceeded by constructing continuation messages
               if (ctx.model.providerID === "costrict") {
                 const next = yield* Effect.promise(() =>
@@ -508,8 +525,9 @@ export namespace SessionProcessor {
                   return yield* Effect.fail(next.error)
                 }
               }
+
+              return "continue" as const
             }).pipe(
-              Effect.onInterrupt(() => Effect.sync(() => void (aborted = true))),
               Effect.catchCauseIf(
                 (cause) => !Cause.hasInterruptsOnly(cause),
                 (cause) => Effect.fail(Cause.squash(cause)),
@@ -530,14 +548,12 @@ export namespace SessionProcessor {
               Effect.catch(halt),
               Effect.ensuring(cleanup()),
             )
+          })
 
-            if (aborted && !ctx.assistantMessage.error) {
-              yield* abort()
-            }
-            if (ctx.needsCompaction) return "compact"
-            if (ctx.blocked || ctx.assistantMessage.error || aborted) return "stop"
-            return "continue"
-          }).pipe(Effect.onInterrupt(() => abort().pipe(Effect.asVoid)))
+          if (flow === "compact") return "compact"
+          if (aborted && !ctx.assistantMessage.error) return "stop"
+          if (ctx.blocked || ctx.assistantMessage.error || aborted || flow === "stop") return "stop"
+          return "continue"
         })
 
         return {

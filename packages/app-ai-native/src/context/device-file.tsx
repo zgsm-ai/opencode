@@ -178,11 +178,18 @@ export function DeviceFileProvider(props: ParentProps) {
     return promise
   }
 
+  let searchTimer: ReturnType<typeof setTimeout> | undefined
   const search = (query: string, dirs: "true" | "false") =>
-    device.client.runtime.findFiles(query, dirs).then(
-      (x) => ((x as string[] | undefined) ?? []).map(path.normalize),
-      () => [],
-    )
+    new Promise<string[]>((resolve) => {
+      if (searchTimer) clearTimeout(searchTimer)
+      searchTimer = setTimeout(() => {
+        searchTimer = undefined
+        device.client.runtime.findFiles(query, dirs).then(
+          (x) => resolve(((x as string[] | undefined) ?? []).map(path.normalize)),
+          () => resolve([]),
+        )
+      }, 300)
+    })
 
   const get = (input: string) => {
     const file = path.normalize(input)

@@ -323,6 +323,9 @@ it.live("session.processor effect tests stop after token overflow requests compa
         const test = yield* TestLLM
         const processors = yield* SessionProcessor.Service
         const session = yield* Session.Service
+        const bus = yield* Bus.Service
+
+        const errs: string[] = []
 
         yield* test.reply(
           start(),
@@ -342,6 +345,11 @@ it.live("session.processor effect tests stop after token overflow requests compa
         const chat = yield* session.create({})
         const parent = yield* user(chat.id, "compact")
         const msg = yield* assistant(chat.id, parent.id, path.resolve(dir))
+        const off = yield* bus.subscribeCallback(Session.Event.Error, (evt) => {
+          if (evt.properties.sessionID !== chat.id) return
+          if (!evt.properties.error) return
+          errs.push(evt.properties.error.name)
+        })
         const mdl = model(20)
         const handle = yield* processors.create({
           assistantMessage: msg,
@@ -367,8 +375,16 @@ it.live("session.processor effect tests stop after token overflow requests compa
         })
 
         const parts = yield* Effect.promise(() => MessageV2.parts(msg.id))
+        const stored = yield* Effect.promise(() => MessageV2.get({ sessionID: chat.id, messageID: msg.id }))
+        off()
 
         expect(value).toBe("compact")
+        expect(handle.message.error).toBeUndefined()
+        expect(stored.info.role).toBe("assistant")
+        if (stored.info.role === "assistant") {
+          expect(stored.info.error).toBeUndefined()
+        }
+        expect(errs).not.toContain("MessageAbortedError")
         expect(parts.some((part) => part.type === "text")).toBe(false)
         expect(parts.some((part) => part.type === "step-finish")).toBe(true)
       }),
@@ -807,14 +823,13 @@ it.live("session.processor effect tests record aborted errors and idle state", (
   )
 })
 
-it.live("session.processor effect tests mark interruptions aborted without manual abort", () => {
+it.live("session.processor effect tests do not mark interruptions aborted without manual abort", () => {
   return provideTmpdirInstance(
     (dir) =>
       Effect.gen(function* () {
         const ready = defer<void>()
         const processors = yield* SessionProcessor.Service
         const session = yield* Session.Service
-        const status = yield* SessionStatus.Service
         const test = yield* TestLLM
 
         yield* test.push((input) =>
@@ -857,15 +872,13 @@ it.live("session.processor effect tests mark interruptions aborted without manua
 
         const exit = yield* Fiber.await(run)
         const stored = yield* Effect.promise(() => MessageV2.get({ sessionID: chat.id, messageID: msg.id }))
-        const state = yield* status.get(chat.id)
 
         expect(Exit.isFailure(exit)).toBe(true)
-        expect(handle.message.error?.name).toBe("MessageAbortedError")
+        expect(handle.message.error).toBeUndefined()
         expect(stored.info.role).toBe("assistant")
         if (stored.info.role === "assistant") {
-          expect(stored.info.error?.name).toBe("MessageAbortedError")
+          expect(stored.info.error).toBeUndefined()
         }
-        expect(state).toMatchObject({ type: "idle" })
       }),
     { git: true },
   )

@@ -31,6 +31,15 @@ jobs:
 
       - uses: ./.github/actions/setup-bun
 
+      - name: Restore bundled skills cache
+        id: skills-cache
+        uses: actions/cache@v4
+        with:
+          path: packages/opencode/bundled-skills
+          key: bundled-skills-${{ runner.os }}-v1
+          restore-keys: |
+            bundled-skills-${{ runner.os }}-
+
       - name: Setup npm
         uses: actions/setup-node@v4
         with:

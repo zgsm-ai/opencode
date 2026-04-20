@@ -4,11 +4,33 @@ import { cmd } from "./cmd"
 import * as prompts from "@clack/prompts"
 import { UI } from "../ui"
 import { Instance } from "../../project/instance"
-import { fetchIndex, resolveToken, invalidateAccessCache, createRegistry, createItem, uploadArtifact } from "../../costrict/registry/client"
+import {
+  fetchIndex,
+  resolveToken,
+  invalidateAccessCache,
+  createRegistry,
+  createItem,
+  uploadArtifact,
+} from "../../costrict/registry/client"
 import { install, uninstall } from "../../costrict/registry/install"
 import * as Record from "../../costrict/registry/record"
-import { AlreadyInstalledError, ForbiddenError, NotLoggedInError, UnauthorizedError, PackValidationError, SkillNotFoundError, PackError } from "../../costrict/registry/types"
-import type { InstallScope, RegistryItem, CreateRegistryResponse, CreateItemResponse, UploadArtifactResponse, RegistryItemType } from "../../costrict/registry/types"
+import {
+  AlreadyInstalledError,
+  ForbiddenError,
+  NotLoggedInError,
+  UnauthorizedError,
+  PackValidationError,
+  SkillNotFoundError,
+  PackError,
+} from "../../costrict/registry/types"
+import type {
+  InstallScope,
+  RegistryItem,
+  CreateRegistryResponse,
+  CreateItemResponse,
+  UploadArtifactResponse,
+  RegistryItemType,
+} from "../../costrict/registry/types"
 import { getCoStrictBaseURL } from "../../costrict/provider/auth"
 import { getCloudApiUrl } from "../../costrict/device/client"
 import { validatePlugin, packPlugin, readSkillMarkdown, getPluginMetadata } from "../../costrict/registry/pack"
@@ -177,7 +199,10 @@ async function promptForMissingOptions(options: Partial<UploadOptions>, interact
   return resolved
 }
 
-async function resolveRegistryId(name: string | undefined, interactive: boolean): Promise<{ registryId: string; baseUrl: string }> {
+async function resolveRegistryId(
+  name: string | undefined,
+  interactive: boolean,
+): Promise<{ registryId: string; baseUrl: string }> {
   const baseUrl = registryBase()
   const registryName = name || DEFAULT_ORG
   const url = baseUrl + `/api/registries`
@@ -203,7 +228,11 @@ async function resolveRegistryId(name: string | undefined, interactive: boolean)
   }
 }
 
-function formatUploadResult(registry: CreateRegistryResponse, item: CreateItemResponse, artifact: UploadArtifactResponse): string {
+function formatUploadResult(
+  registry: CreateRegistryResponse,
+  item: CreateItemResponse,
+  artifact: UploadArtifactResponse,
+): string {
   const lines = [
     `✓ Upload successful!`,
     ``,
@@ -232,7 +261,7 @@ async function resolveScope(interactive: boolean): Promise<InstallScope> {
   return result
 }
 
-const PluginAddCommand = cmd({
+export const PluginAddCommand = cmd({
   command: "add [itemType] [slug]",
   describe: "install an extension from the registry",
   builder: (yargs) =>
@@ -319,12 +348,11 @@ const PluginAddCommand = cmd({
   },
 })
 
-const PluginRemoveCommand = cmd({
+export const PluginRemoveCommand = cmd({
   command: "remove <slug>",
   aliases: ["rm"],
   describe: "remove an installed extension",
-  builder: (yargs) =>
-    yargs.positional("slug", { type: "string", describe: "extension slug", demandOption: true }),
+  builder: (yargs) => yargs.positional("slug", { type: "string", describe: "extension slug", demandOption: true }),
   async handler(args) {
     await Instance.provide({
       directory: process.cwd(),
@@ -357,7 +385,7 @@ const PluginRemoveCommand = cmd({
   },
 })
 
-const PluginListCommand = cmd({
+export const PluginListCommand = cmd({
   command: "list",
   aliases: ["ls"],
   describe: "list installed extensions",
@@ -373,20 +401,17 @@ const PluginListCommand = cmd({
     }
 
     for (const item of items) {
-      prompts.log.info(
-        `${item.name} ${UI.Style.TEXT_DIM}${item.type} · ${item.scope} · ${item.registry}`,
-      )
+      prompts.log.info(`${item.name} ${UI.Style.TEXT_DIM}${item.type} · ${item.scope} · ${item.registry}`)
     }
 
     prompts.outro(`${items.length} extension(s)`)
   },
 })
 
-const PluginUpdateCommand = cmd({
+export const PluginUpdateCommand = cmd({
   command: "update [slug]",
   describe: "re-fetch and update an installed extension",
-  builder: (yargs) =>
-    yargs.positional("slug", { type: "string", describe: "extension slug (omit to update all)" }),
+  builder: (yargs) => yargs.positional("slug", { type: "string", describe: "extension slug (omit to update all)" }),
   async handler(args) {
     await Instance.provide({
       directory: process.cwd(),
@@ -431,7 +456,7 @@ const PluginUpdateCommand = cmd({
   },
 })
 
-const PluginUploadCommand = cmd({
+export const PluginUploadCommand = cmd({
   command: "upload [itemType] [path]",
   describe: "upload a plugin to the registry",
   builder: (yargs) =>
@@ -440,9 +465,9 @@ const PluginUploadCommand = cmd({
         type: "string",
         describe: "plugin type (skill|subagent|command|mcp)",
         demandOption: true,
-        choices: ["skill", "subagent", "command", "mcp"]
+        choices: ["skill", "subagent", "command", "mcp"],
       })
-      .positional("path", { type: "string", describe: "plugin directory path"})
+      .positional("path", { type: "string", describe: "plugin directory path" })
       .option("registry", { type: "string", describe: "target registry name" })
       .option("slug", { type: "string", describe: "plugin slug identifier" })
       .option("name", { type: "string", describe: "plugin display name" })
@@ -456,8 +481,6 @@ const PluginUploadCommand = cmd({
       async fn() {
         UI.empty()
         prompts.intro("Upload extension")
-
-
 
         // 使用 TTYCheck 更准确地判断交互式环境
         const isInteractive = TTYCheck.canUseTUI()
@@ -525,7 +548,7 @@ const PluginUploadCommand = cmd({
         try {
           const tempDir = path.join(Global.Path.cache, "plugin-uploads")
           packResult = await packPlugin(options.path, tempDir)
-          
+
           // Save packed file to local for verification
           const localPackDir = path.join(Global.Path.data, "packed-plugins")
           await mkdir(localPackDir, { recursive: true })
@@ -560,7 +583,15 @@ const PluginUploadCommand = cmd({
         let baseUrl: string
         try {
           const result = await resolveRegistryId(options.registry, true)
-          registry = { id: result.registryId, name: options.registry || DEFAULT_ORG, description: "", sourceType: "local", visibility: "public", ownerId: "", createdAt: new Date().toISOString() }
+          registry = {
+            id: result.registryId,
+            name: options.registry || DEFAULT_ORG,
+            description: "",
+            sourceType: "local",
+            visibility: "public",
+            ownerId: "",
+            createdAt: new Date().toISOString(),
+          }
           baseUrl = result.baseUrl
           registrySpinner.stop(`Registry resolved: ${registry.name}`)
           logSpinnerStop(`Registry resolved: ${registry.name}`, isInteractive)
@@ -607,16 +638,10 @@ const PluginUploadCommand = cmd({
         let artifact: UploadArtifactResponse
         try {
           const archivePath = packResult.archivePath
-          artifact = await uploadArtifact(
-            baseUrl,
-            item.id,
-            archivePath,
-            options.version,
-            (loaded, total) => {
-              const percent = Math.round((loaded / total) * 100)
-              uploadSpinner.message(`Uploading artifact... ${percent}% (${formatBytes(loaded)} / ${formatBytes(total)})`)
-            }
-          )
+          artifact = await uploadArtifact(baseUrl, item.id, archivePath, options.version, (loaded, total) => {
+            const percent = Math.round((loaded / total) * 100)
+            uploadSpinner.message(`Uploading artifact... ${percent}% (${formatBytes(loaded)} / ${formatBytes(total)})`)
+          })
           uploadSpinner.stop("Artifact uploaded")
           logSpinnerStop("Artifact uploaded", isInteractive)
         } catch (err) {
@@ -639,7 +664,7 @@ const PluginUploadCommand = cmd({
   },
 })
 
-export const PluginCommand = cmd({
+export const PluginRegistryCommand = cmd({
   command: "plugin",
   describe: "manage extensions (skills, agents, commands, mcp)",
   builder: (yargs) =>
@@ -652,3 +677,5 @@ export const PluginCommand = cmd({
       .demandCommand(),
   async handler() {},
 })
+
+export const PluginCommand = PluginRegistryCommand

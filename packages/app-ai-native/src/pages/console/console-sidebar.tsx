@@ -8,12 +8,20 @@ import { deviceManagementService } from "./lib/device-management-service"
 import { notificationChannelService } from "./lib/notification-channel-service"
 
 type Count = "devices" | "channels"
+type Nav = {
+  href: string
+  labelKey: string
+  icon?: IconProps["name"]
+  localIcon?: LocalIconName
+  badge?: Count
+  exact?: boolean
+}
 
-const NAV = [
-  { href: "/console", labelKey: "store.dashboard.nav.repositories", localIcon: "repo" as LocalIconName, exact: true },
+const NAV: readonly Nav[] = [
+  // { href: "/console", labelKey: "store.dashboard.nav.repositories", localIcon: "repo" as LocalIconName, exact: true },
   { href: "/console/capabilities", labelKey: "store.dashboard.nav.capabilities", icon: "sparkles" as IconProps["name"] },
   { href: "/console/devices", labelKey: "store.dashboard.nav.devices", icon: "server" as IconProps["name"], badge: "devices" as Count },
-  { href: "/console/notifications", labelKey: "store.dashboard.nav.notifications", localIcon: "bell" as LocalIconName, badge: "channels" as Count },
+  // { href: "/console/notifications", labelKey: "store.dashboard.nav.notifications", localIcon: "bell" as LocalIconName, badge: "channels" as Count },
 ] as const
 
 export default function ConsoleSidebar() {
@@ -50,7 +58,7 @@ export default function ConsoleSidebar() {
           <div class="flex flex-col gap-px">
             <For each={NAV}>
               {(item) => {
-                const on = () => active(item.href, "exact" in item ? item.exact : false)
+                const on = () => active(item.href, item.exact)
                 return (
                   <A
                     href={item.href}
@@ -69,12 +77,12 @@ export default function ConsoleSidebar() {
                           : "text-[var(--native-muted)]",
                       ].join(" ")}
                     >
-                      {"localIcon" in item
+                      {item.localIcon
                         ? <LocalIcon name={item.localIcon} size="small" />
-                        : <Icon name={item.icon} size="small" />}
+                        : <Icon name={item.icon!} size="small" />}
                     </span>
                     <span class="font-medium">{language.t(item.labelKey)}</span>
-                    <Show when={"badge" in item ? item.badge : null}>
+                    <Show when={item.badge}>
                       {(badge) => (
                         <Show when={done(badge())}>
                           <span class="ml-auto rounded-[var(--native-radius-full)] bg-[color:color-mix(in_oklab,var(--native-surface)_64%,var(--native-panel))] px-[0.5rem] text-[11px] font-medium leading-[1.65] text-[var(--native-muted)]">

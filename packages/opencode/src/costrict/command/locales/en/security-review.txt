@@ -7,3 +7,5 @@ The skill is responsible for:
 - Identifying security vulnerabilities such as SQL injection, XSS, command injection, etc.
 - Analyzing context security of sensitive operations
 - Generating detailed audit reports and remediation recommendations
+
+Please respond and write all files in English throughout the entire process.

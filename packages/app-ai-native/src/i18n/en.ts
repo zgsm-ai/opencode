@@ -1560,6 +1560,8 @@ export const dict = {
   "workspace.content.section.files": "Files",
   "workspace.content.section.changes": "Changes",
   "workspace.content.newSession": "New session",
+  "workspace.sidebar.expand": "Expand sidebar",
+  "workspace.sidebar.collapse": "Collapse sidebar",
   "workspace.content.comingSoon": "Coming soon",
   "workspace.content.viewPreview": "Preview",
   "workspace.content.viewSource": "Source",

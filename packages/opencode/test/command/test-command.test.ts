@@ -139,4 +139,32 @@ describe("command system", () => {
       },
     })
   })
+
+  test("project-wiki uses zh-CN prompt by default", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const cmd = await Command.get("project-wiki")
+        const template = await Promise.resolve(cmd!.template)
+        expect(template).toContain("# 项目技术文档智能生成")
+      },
+    })
+  })
+
+  test("project-wiki uses en prompt when promptLanguage is en", async () => {
+    await using tmp = await tmpdir({
+      config: {
+        promptLanguage: "en",
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const cmd = await Command.get("project-wiki")
+        const template = await Promise.resolve(cmd!.template)
+        expect(template).toContain("# Intelligent Project Technical Documentation Generation")
+      },
+    })
+  })
 })

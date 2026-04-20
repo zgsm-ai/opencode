@@ -20,7 +20,6 @@ import { SessionRoutes } from "./routes/session"
 import { PtyRoutes } from "./routes/pty"
 import { McpRoutes } from "./routes/mcp"
 import { FileRoutes } from "./routes/file"
-import { CloudFileRoutes } from "./routes/cloud-file"
 import { ConfigRoutes } from "./routes/config"
 import { ExperimentalRoutes } from "./routes/experimental"
 import { ProviderRoutes } from "./routes/provider"
@@ -49,7 +48,6 @@ export const InstanceRoutes = (app?: Hono) =>
     .route("/question", QuestionRoutes())
     .route("/provider", ProviderRoutes())
     .route("/", FileRoutes())
-    .route("/", CloudFileRoutes())
     .route("/", EventRoutes())
     .route("/mcp", McpRoutes())
     .route("/tui", TuiRoutes())

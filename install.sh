@@ -267,17 +267,12 @@ fi
 
 target="costrict-cs-$os-$arch"
 
+# Keep download target in sync with packages/opencode/bin/cs resolution:
+# - linux x64 always uses baseline
+# - windows always uses baseline (handled by install.bat)
+# - darwin x64 uses non-baseline
 if [ "$os" = "linux" ] && [ "$arch" = "x64" ]; then
-  if ! grep -qi avx2 /proc/cpuinfo 2>/dev/null; then
-    target="$target-baseline"
-  fi
-fi
-
-if [ "$os" = "darwin" ] && [ "$arch" = "x64" ]; then
-  avx2=$(sysctl -n hw.optional.avx2_0 2>/dev/null || echo 0)
-  if [ "$avx2" != "1" ]; then
-    target="$target-baseline"
-  fi
+  target="$target-baseline"
 fi
 
 # Detect musl libc (use flag to avoid double-appending)

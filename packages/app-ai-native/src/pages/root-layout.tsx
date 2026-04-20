@@ -145,7 +145,7 @@ export default function RootLayout(props: ParentProps) {
             icon="configuration"
             label={language.t("sidebar.console")}
             active={isConsole()}
-            onClick={() => navigate("/console")}
+            onClick={() => navigate("/console/capabilities")}
           />
           {/* TODO: 未来恢复设置入口后，再重新展示设置按钮，并放开语言/主题切换能力。 */}
           <Tooltip placement="right" value={language.t("sidebar.help")}>

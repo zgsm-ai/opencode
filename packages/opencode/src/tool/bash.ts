@@ -1,397 +1,54 @@
 import z from "zod"
-import os from "os"
+import { spawn } from "child_process"
 import { Tool } from "./tool"
 import path from "path"
 import DESCRIPTION from "./bash.txt"
 import { Log } from "../util/log"
 import { Instance } from "../project/instance"
 import { lazy } from "@/util/lazy"
-import type { Node } from "web-tree-sitter"
+import { Language } from "web-tree-sitter"
+import fs from "fs/promises"
 
 import { Filesystem } from "@/util/filesystem"
-import { Process } from "@/util/process"
+import { fileURLToPath } from "url"
 import { Flag } from "@/flag/flag"
 import { Shell } from "@/shell/shell"
 
 import { BashArity } from "@/permission/arity"
 import { Truncate } from "./truncate"
 import { Plugin } from "@/plugin"
-import { ShellToolInvocation } from "@/plugin/tdd/tools/shell"
 
 const MAX_METADATA_LENGTH = 30_000
-const DEFAULT_TIMEOUT = Flag.OPENCODE_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS || 2 * 60 * 1000
-const PS = new Set(["powershell", "pwsh"])
-const CWD = new Set(["cd", "push-location", "set-location"])
-const FILES = new Set([
-  ...CWD,
-  "rm",
-  "cp",
-  "mv",
-  "mkdir",
-  "touch",
-  "chmod",
-  "chown",
-  "cat",
-  // Leave PowerShell aliases out for now. Common ones like cat/cp/mv/rm/mkdir
-  // already hit the entries above, and alias normalization should happen in one
-  // place later so we do not risk double-prompting.
-  "get-content",
-  "set-content",
-  "add-content",
-  "copy-item",
-  "move-item",
-  "remove-item",
-  "new-item",
-  "rename-item",
-])
-const FLAGS = new Set(["-destination", "-literalpath", "-path"])
-const SWITCHES = new Set(["-confirm", "-debug", "-force", "-nonewline", "-recurse", "-verbose", "-whatif"])
-
-type Part = {
-  type: string
-  text: string
-}
-
-type Scan = {
-  dirs: Set<string>
-  patterns: Set<string>
-  always: Set<string>
-}
+const DEFAULT_TIMEOUT = Flag.COSTRICT_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS || 5 * 60 * 1000
 
 export const log = Log.create({ service: "bash-tool" })
 
-function tokens(text: string) {
-  return text.match(/"(?:\\.|[^"])*"|'(?:\\.|[^'])*'|\S+/g) ?? []
-}
-
-function part(text: string): Part["type"] {
-  if (text.startsWith("-")) return "command_parameter"
-  if (text.startsWith('"')) return "string"
-  if (text.startsWith("'")) return "raw_string"
-  return "word"
-}
-
-function parts(node: Node) {
-  const out: Part[] = []
-  for (let i = 0; i < node.childCount; i++) {
-    const child = node.child(i)
-    if (!child) continue
-    if (child.type === "command_elements") {
-      for (let j = 0; j < child.childCount; j++) {
-        const item = child.child(j)
-        if (!item || item.type === "command_argument_sep" || item.type === "redirection") continue
-        out.push({ type: item.type, text: item.text })
-      }
-      continue
-    }
-    if (
-      child.type !== "command_name" &&
-      child.type !== "command_name_expr" &&
-      child.type !== "word" &&
-      child.type !== "string" &&
-      child.type !== "raw_string" &&
-      child.type !== "concatenation"
-    ) {
-      continue
-    }
-    out.push({ type: child.type, text: child.text })
-  }
-  return out
-}
-
-function source(node: Node) {
-  return (node.parent?.type === "redirected_statement" ? node.parent.text : node.text).trim()
-}
-
-function commands(node: Node) {
-  return node.descendantsOfType("command").filter((child): child is Node => Boolean(child))
-}
-
-function unquote(text: string) {
-  if (text.length < 2) return text
-  const first = text[0]
-  const last = text[text.length - 1]
-  if ((first === '"' || first === "'") && first === last) return text.slice(1, -1)
-  return text
-}
-
-function home(text: string) {
-  if (text === "~") return os.homedir()
-  if (text.startsWith("~/") || text.startsWith("~\\")) return path.join(os.homedir(), text.slice(2))
-  return text
-}
-
-function envValue(key: string) {
-  if (process.platform !== "win32") return process.env[key]
-  const name = Object.keys(process.env).find((item) => item.toLowerCase() === key.toLowerCase())
-  return name ? process.env[name] : undefined
-}
-
-function auto(key: string, cwd: string, shell: string) {
-  const name = key.toUpperCase()
-  if (name === "HOME") return os.homedir()
-  if (name === "PWD") return cwd
-  if (name === "PSHOME") return path.dirname(shell)
-}
-
-function expand(text: string, cwd: string, shell: string) {
-  const out = unquote(text)
-    .replace(/\$\{env:([^}]+)\}/gi, (_, key: string) => envValue(key) || "")
-    .replace(/\$env:([A-Za-z_][A-Za-z0-9_]*)/gi, (_, key: string) => envValue(key) || "")
-    .replace(/\$(HOME|PWD|PSHOME)(?=$|[\\/])/gi, (_, key: string) => auto(key, cwd, shell) || "")
-  return home(out)
-}
-
-function provider(text: string) {
-  const match = text.match(/^([A-Za-z]+)::(.*)$/)
-  if (match) {
-    if (match[1].toLowerCase() !== "filesystem") return
-    return match[2]
-  }
-  const prefix = text.match(/^([A-Za-z]+):(.*)$/)
-  if (!prefix) return text
-  if (prefix[1].length === 1) return text
-  return
-}
-
-function dynamic(text: string, ps: boolean) {
-  if (text.startsWith("(") || text.startsWith("@(")) return true
-  if (text.includes("$(") || text.includes("${") || text.includes("`")) return true
-  if (ps) return /\$(?!env:)/i.test(text)
-  return text.includes("$")
-}
-
-function prefix(text: string) {
-  const match = /[?*\[]/.exec(text)
-  if (!match) return text
-  if (match.index === 0) return
-  return text.slice(0, match.index)
-}
-
-async function cygpath(shell: string, text: string) {
-  const out = await Process.text([shell, "-lc", 'cygpath -w -- "$1"', "_", text], { nothrow: true })
-  if (out.code !== 0) return
-  const file = out.text.trim()
-  if (!file) return
-  return Filesystem.normalizePath(file)
-}
-
-async function resolvePath(text: string, root: string, shell: string) {
-  if (process.platform === "win32") {
-    if (Shell.posix(shell) && text.startsWith("/") && Filesystem.windowsPath(text) === text) {
-      const file = await cygpath(shell, text)
-      if (file) return file
-    }
-    return Filesystem.normalizePath(path.resolve(root, Filesystem.windowsPath(text)))
-  }
-  return path.resolve(root, text)
-}
-
-async function argPath(arg: string, cwd: string, ps: boolean, shell: string) {
-  const text = ps ? expand(arg, cwd, shell) : home(unquote(arg))
-  const file = text && prefix(text)
-  if (!file || dynamic(file, ps)) return
-  const next = ps ? provider(file) : file
-  if (!next) return
-  return resolvePath(next, cwd, shell)
-}
-
-function pathArgs(list: Part[], ps: boolean) {
-  if (!ps) {
-    return list
-      .slice(1)
-      .filter((item) => !item.text.startsWith("-") && !(list[0]?.text === "chmod" && item.text.startsWith("+")))
-      .map((item) => item.text)
-  }
-
-  const out: string[] = []
-  let want = false
-  for (const item of list.slice(1)) {
-    if (want) {
-      out.push(item.text)
-      want = false
-      continue
-    }
-    if (item.type === "command_parameter") {
-      const flag = item.text.toLowerCase()
-      if (SWITCHES.has(flag)) continue
-      want = FLAGS.has(flag)
-      continue
-    }
-    out.push(item.text)
-  }
-  return out
-}
-
-async function collect(root: Node, cwd: string, ps: boolean, shell: string): Promise<Scan> {
-  const scan: Scan = {
-    dirs: new Set<string>(),
-    patterns: new Set<string>(),
-    always: new Set<string>(),
-  }
-
-  for (const node of commands(root)) {
-    const command = parts(node)
-    const tokens = command.map((item) => item.text)
-    const cmd = ps ? tokens[0]?.toLowerCase() : tokens[0]
-
-    if (cmd && FILES.has(cmd)) {
-      for (const arg of pathArgs(command, ps)) {
-        const resolved = await argPath(arg, cwd, ps, shell)
-        log.info("resolved path", { arg, resolved })
-        if (!resolved || Instance.containsPath(resolved)) continue
-        const dir = (await Filesystem.isDir(resolved)) ? resolved : path.dirname(resolved)
-        scan.dirs.add(dir)
-      }
-    }
-
-    if (tokens.length && (!cmd || !CWD.has(cmd))) {
-      scan.patterns.add(source(node))
-      scan.always.add(BashArity.prefix(tokens).join(" ") + " *")
-    }
-  }
-
-  return scan
-}
-
-async function collectPs(command: string, cwd: string, shell: string): Promise<Scan> {
-  const scan: Scan = {
-    dirs: new Set<string>(),
-    patterns: new Set<string>(),
-    always: new Set<string>(),
-  }
-
-  const list = tokens(command).map((text) => ({ text, type: part(text) }))
-  const cmd = list[0]?.text.toLowerCase()
-
-  if (cmd && FILES.has(cmd)) {
-    for (const arg of pathArgs(list, true)) {
-      const resolved = await argPath(arg, cwd, true, shell)
-      log.info("resolved path", { arg, resolved })
-      if (!resolved || Instance.containsPath(resolved)) continue
-      const dir = (await Filesystem.isDir(resolved)) ? resolved : path.dirname(resolved)
-      scan.dirs.add(dir)
-    }
-  }
-
-  if (list.length && (!cmd || !CWD.has(cmd))) {
-    scan.patterns.add(command.trim())
-    scan.always.add(BashArity.prefix(list.map((item) => item.text)).join(" ") + " *")
-  }
-
-  return scan
-}
-
-function preview(text: string) {
-  if (text.length <= MAX_METADATA_LENGTH) return text
-  return text.slice(0, MAX_METADATA_LENGTH) + "\n\n..."
-}
-
-async function parse(command: string) {
-  const tree = await parser().then((p) => p.bash.parse(command))
-  if (!tree) throw new Error("Failed to parse command")
-  return tree.rootNode
-}
-
-async function ask(ctx: Tool.Context, scan: Scan) {
-  if (scan.dirs.size > 0) {
-    const globs = Array.from(scan.dirs).map((dir) => {
-      if (process.platform === "win32") return Filesystem.normalizePathPattern(path.join(dir, "*"))
-      return path.join(dir, "*")
-    })
-    await ctx.ask({
-      permission: "external_directory",
-      patterns: globs,
-      always: globs,
-      metadata: {},
-    })
-  }
-
-  if (scan.patterns.size === 0) return
-  await ctx.ask({
-    permission: "bash",
-    patterns: Array.from(scan.patterns),
-    always: Array.from(scan.always),
-    metadata: {},
-  })
-}
-
-async function shellEnv(ctx: Tool.Context, cwd: string) {
-  const extra = await Plugin.trigger("shell.env", { cwd, sessionID: ctx.sessionID, callID: ctx.callID }, { env: {} })
-  return {
-    ...process.env,
-    ...extra.env,
-  }
-}
-
-async function run(
-  input: {
-    command: string
-    cwd: string
-    env: NodeJS.ProcessEnv
-    timeout: number
-    description: string
-  },
-  ctx: Tool.Context,
-) {
-  let output = ""
-
-  ctx.metadata({
-    metadata: {
-      output: "",
-      description: input.description,
-    },
-  })
-
-  const append = (chunk: string) => {
-    output += chunk
-    ctx.metadata({
-      metadata: {
-        output: preview(output),
-        description: input.description,
-      },
-    })
-  }
-  const tool = new ShellToolInvocation(
-    {
-      command: input.command,
-      timeout: input.timeout,
-      env: input.env,
-    },
-    input.cwd,
-  )
-  const result = await tool.execute(ctx.abort, append)
-
-  output = result.output
-
-  return {
-    title: input.description,
-    metadata: {
-      output: preview(output),
-      exit: result.exitCode,
-      description: input.description,
-    },
-    output,
-  }
+const resolveWasm = (asset: string) => {
+  if (asset.startsWith("file://")) return fileURLToPath(asset)
+  if (asset.startsWith("/") || /^[a-z]:/i.test(asset)) return asset
+  const url = new URL(asset, import.meta.url)
+  return fileURLToPath(url)
 }
 
 const parser = lazy(async () => {
-  const { Parser, Language } = await import("web-tree-sitter")
+  const { Parser } = await import("web-tree-sitter")
   const { default: treeWasm } = await import("web-tree-sitter/tree-sitter.wasm" as string, {
     with: { type: "wasm" },
   })
+  const treePath = resolveWasm(treeWasm)
   await Parser.init({
     locateFile() {
-      return treeWasm
+      return treePath
     },
   })
   const { default: bashWasm } = await import("tree-sitter-bash/tree-sitter-bash.wasm" as string, {
     with: { type: "wasm" },
   })
-  const bashLanguage = await Language.load(bashWasm)
-  const bash = new Parser()
-  bash.setLanguage(bashLanguage)
-  return { bash }
+  const bashPath = resolveWasm(bashWasm)
+  const bashLanguage = await Language.load(bashPath)
+  const p = new Parser()
+  p.setLanguage(bashLanguage)
+  return p
 })
 
 // TODO: we may wanna rename this tool so it works better on other shells
@@ -427,26 +84,201 @@ export const BashTool = Tool.define("bash", async () => {
         ),
     }),
     async execute(params, ctx) {
-      const cwd = params.workdir ? await resolvePath(params.workdir, Instance.directory, shell) : Instance.directory
+      const cwd = params.workdir ? path.resolve(Instance.directory, params.workdir) : Instance.directory
       if (params.timeout !== undefined && params.timeout < 0) {
-        throw new Error(`Invalid timeout value: ${params.timeout}. Timeout must be a positive number.`)
+        throw new Error(
+          `Invalid timeout value: ${params.timeout}. Timeout must be a non-negative number (0 for no timeout).`,
+        )
       }
       const timeout = params.timeout ?? DEFAULT_TIMEOUT
-      const ps = PS.has(name)
-      const scan = ps ? await collectPs(params.command, cwd, shell) : await parse(params.command).then((root) => collect(root, cwd, false, shell))
-      if (!Instance.containsPath(cwd)) scan.dirs.add(cwd)
-      await ask(ctx, scan)
+      const tree = await parser().then((p) => p.parse(params.command))
+      if (!tree) {
+        throw new Error("Failed to parse command")
+      }
+      const directories = new Set<string>()
+      if (!Instance.containsPath(cwd)) directories.add(cwd)
+      const patterns = new Set<string>()
+      const always = new Set<string>()
 
-      return run(
-        {
-          command: params.command,
-          cwd,
-          env: await shellEnv(ctx, cwd),
-          timeout,
+      for (const node of tree.rootNode.descendantsOfType("command")) {
+        if (!node) continue
+
+        // Get full command text including redirects if present
+        let commandText = node.parent?.type === "redirected_statement" ? node.parent.text : node.text
+
+        const command = []
+        for (let i = 0; i < node.childCount; i++) {
+          const child = node.child(i)
+          if (!child) continue
+          if (
+            child.type !== "command_name" &&
+            child.type !== "word" &&
+            child.type !== "string" &&
+            child.type !== "raw_string" &&
+            child.type !== "concatenation"
+          ) {
+            continue
+          }
+          command.push(child.text)
+        }
+
+        // not an exhaustive list, but covers most common cases
+        if (["cd", "rm", "cp", "mv", "mkdir", "touch", "chmod", "chown"].includes(command[0])) {
+          for (const arg of command.slice(1)) {
+            if (arg.startsWith("-") || (command[0] === "chmod" && arg.startsWith("+"))) continue
+            const candidate = path.resolve(cwd, arg)
+            const resolved = await fs.realpath(candidate).catch(() => candidate)
+            log.info("resolved path", { arg, resolved })
+            if (resolved) {
+              const normalized =
+                process.platform === "win32" ? Filesystem.windowsPath(resolved).replace(/\//g, "\\") : resolved
+              if (!Instance.containsPath(normalized)) {
+                const dir = (await Filesystem.isDir(normalized)) ? normalized : path.dirname(normalized)
+                directories.add(dir)
+              }
+            }
+          }
+        }
+
+        // cd covered by above check
+        if (command.length && command[0] !== "cd") {
+          patterns.add(commandText)
+          always.add(BashArity.prefix(command).join(" ") + " *")
+        }
+      }
+
+      if (directories.size > 0) {
+        const globs = Array.from(directories).map((dir) => {
+          // Preserve POSIX-looking paths with /s, even on Windows
+          if (dir.startsWith("/")) return `${dir.replace(/[\\/]+$/, "")}/*`
+          return path.join(dir, "*")
+        })
+        await ctx.ask({
+          permission: "external_directory",
+          patterns: globs,
+          always: globs,
+          metadata: {},
+        })
+      }
+
+      if (patterns.size > 0) {
+        await ctx.ask({
+          permission: "bash",
+          patterns: Array.from(patterns),
+          always: Array.from(always),
+          metadata: {},
+        })
+      }
+
+      const shellEnv = await Plugin.trigger(
+        "shell.env",
+        { cwd, sessionID: ctx.sessionID, callID: ctx.callID },
+        { env: {} },
+      )
+      const proc = spawn(params.command, {
+        shell,
+        cwd,
+        env: {
+          ...process.env,
+          ...shellEnv.env,
+        },
+        stdio: ["ignore", "pipe", "pipe"],
+        detached: process.platform !== "win32",
+        windowsHide: process.platform === "win32",
+      })
+
+      let output = ""
+
+      // Initialize metadata with empty output
+      ctx.metadata({
+        metadata: {
+          output: "",
           description: params.description,
         },
-        ctx,
-      )
+      })
+
+      const append = (chunk: Buffer) => {
+        output += chunk.toString()
+        ctx.metadata({
+          metadata: {
+            // truncate the metadata to avoid GIANT blobs of data (has nothing to do w/ what agent can access)
+            output: output.length > MAX_METADATA_LENGTH ? output.slice(0, MAX_METADATA_LENGTH) + "\n\n..." : output,
+            description: params.description,
+          },
+        })
+      }
+
+      proc.stdout?.on("data", append)
+      proc.stderr?.on("data", append)
+
+      let timedOut = false
+      let aborted = false
+      let exited = false
+
+      const kill = () => Shell.killTree(proc, { exited: () => exited })
+
+      if (ctx.abort.aborted) {
+        aborted = true
+        await kill()
+      }
+
+      const abortHandler = () => {
+        aborted = true
+        void kill()
+      }
+
+      ctx.abort.addEventListener("abort", abortHandler, { once: true })
+
+      const timeoutTimer =
+        timeout > 0
+          ? setTimeout(() => {
+              timedOut = true
+              void kill()
+            }, timeout + 100)
+          : null
+
+      await new Promise<void>((resolve, reject) => {
+        const cleanup = () => {
+          if (timeoutTimer) clearTimeout(timeoutTimer)
+          ctx.abort.removeEventListener("abort", abortHandler)
+        }
+
+        proc.once("exit", () => {
+          exited = true
+          cleanup()
+          resolve()
+        })
+
+        proc.once("error", (error) => {
+          exited = true
+          cleanup()
+          reject(error)
+        })
+      })
+
+      const resultMetadata: string[] = []
+
+      if (timedOut) {
+        resultMetadata.push(`bash tool terminated command after exceeding timeout ${timeout} ms`)
+      }
+
+      if (aborted) {
+        resultMetadata.push("User aborted the command")
+      }
+
+      if (resultMetadata.length > 0) {
+        output += "\n\n<bash_metadata>\n" + resultMetadata.join("\n") + "\n</bash_metadata>"
+      }
+
+      return {
+        title: params.description,
+        metadata: {
+          output: output.length > MAX_METADATA_LENGTH ? output.slice(0, MAX_METADATA_LENGTH) + "\n\n..." : output,
+          exit: proc.exitCode,
+          description: params.description,
+        },
+        output,
+      }
     },
   }
 })

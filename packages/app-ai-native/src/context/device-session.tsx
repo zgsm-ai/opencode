@@ -3,7 +3,8 @@ import { batch, createEffect, createMemo, onCleanup } from "solid-js"
 import { createStore, produce, reconcile } from "solid-js/store"
 import { useDeviceSDK } from "./device-sdk"
 import { useDeviceWorkspace } from "./device-workspace"
-import type { Message, Part, Session, SessionStatus, FileDiff, Todo, PermissionRequest } from "@opencode-ai/sdk/v2/client"
+import type { Message, Part, Session, SessionStatus, FileDiff, Todo, PermissionRequest, QuestionRequest } from "@opencode-ai/sdk/v2/client"
+import { sessionTreeIDs } from "@/pages/session/composer/session-request-tree"
 
 type SessionData = {
   session: Session | undefined
@@ -12,6 +13,8 @@ type SessionData = {
   status: SessionStatus | undefined
   diffs: FileDiff[]
   todos: Todo[]
+  permissions: Record<string, PermissionRequest[]>
+  questions: Record<string, QuestionRequest[]>
 }
 
 type DeviceSessionValue = {
@@ -58,6 +61,40 @@ export { DeviceSessionContext }
 
 const MESSAGE_PAGE_SIZE = 50
 
+export function group<T extends { id: string; sessionID: string }>(input: T[]) {
+  return input.reduce<Record<string, T[]>>((acc, item) => {
+    const list = acc[item.sessionID]
+    if (list) list.push(item)
+    if (!list) acc[item.sessionID] = [item]
+    return acc
+  }, {})
+}
+
+export function treeItems<T extends { id?: string; sessionID?: string }>(input: T[], ids: Set<string>) {
+  return group(
+    input.filter((item): item is T & { id: string; sessionID: string } => {
+      return !!item?.id && !!item.sessionID && ids.has(item.sessionID)
+    }),
+  )
+}
+
+export function treeEvent(input: {
+  root?: string
+  eventSID?: string
+  type: string
+  tree: Set<string>
+}) {
+  if (!input.root || !input.eventSID) return true
+  const request =
+    input.type === "permission.asked" ||
+    input.type === "permission.replied" ||
+    input.type === "question.asked" ||
+    input.type === "question.replied" ||
+    input.type === "question.rejected"
+  if (request) return input.tree.has(input.eventSID)
+  return input.eventSID === input.root
+}
+
 export function DeviceSessionProvider(props: ParentProps<{ sessionID?: string }>) {
   const device = useDeviceSDK()
   const workspace = useDeviceWorkspace()
@@ -69,6 +106,8 @@ export function DeviceSessionProvider(props: ParentProps<{ sessionID?: string }>
     status: undefined,
     diffs: [],
     todos: [],
+    permissions: {},
+    questions: {},
   })
 
   const [permissionStore, setPermissionStore] = createStore<{
@@ -89,8 +128,15 @@ export function DeviceSessionProvider(props: ParentProps<{ sessionID?: string }>
 
   const sid = createMemo(() => props.sessionID)
 
+  const tree = createMemo(() => new Set(sessionTreeIDs(workspace.data.session, sid())))
+
   createEffect(() => {
     if (sid()) void syncSession()
+  })
+
+  createEffect(() => {
+    tree()
+    if (sid()) void loadRequests()
   })
 
   const loadMessages = async (limit: number) => {
@@ -116,13 +162,33 @@ export function DeviceSessionProvider(props: ParentProps<{ sessionID?: string }>
     })
   }
 
+  const loadRequests = async () => {
+    const id = sid()
+    if (!id || !workspace.agentAvailable()) return
+    return runInflight("requests", async () => {
+      try {
+        const ids = tree()
+        const [perms, questions] = await Promise.all([
+          device.client.permission.list(),
+          device.client.question.list(),
+        ])
+        const perm = Array.isArray(perms) ? perms : []
+        const question = Array.isArray(questions) ? questions : []
+        batch(() => {
+          setStore("permissions", reconcile(treeItems(perm, ids)))
+          setStore("questions", reconcile(treeItems(question, ids)))
+        })
+      } catch {}
+    })
+  }
+
   const syncSession = async () => {
     const id = sid()
     if (!id || !workspace.agentAvailable()) return
     try {
       const result = await device.client.conversation.get(id)
       if (result) setStore("session", result as Session)
-      await loadMessages(MESSAGE_PAGE_SIZE)
+      await Promise.all([loadMessages(MESSAGE_PAGE_SIZE), loadRequests()])
     } catch {}
   }
 
@@ -186,7 +252,8 @@ export function DeviceSessionProvider(props: ParentProps<{ sessionID?: string }>
 
   const unsubscribe = workspace.subscribe((payload) => {
     const eventSID = payload.sessionID ?? (payload.properties as any)?.sessionID ?? ((payload.properties as any)?.part as any)?.sessionID ?? ((payload.properties as any)?.info as any)?.sessionID ?? ((payload.properties as any)?.status as any)?.sessionID ?? ((payload.properties as any)?.diff as any[])?.[0]?.sessionID ?? ((payload.properties as any)?.todos as any[])?.[0]?.sessionID
-    if (sid() && eventSID && eventSID !== sid()) return
+    if (!treeEvent({ root: sid(), eventSID, type: payload.type, tree: tree() })) return
+
 
     batch(() => {
       switch (payload.type) {
@@ -248,12 +315,61 @@ export function DeviceSessionProvider(props: ParentProps<{ sessionID?: string }>
         }
         case "permission.asked": {
           const perm = payload.properties as PermissionRequest
-          if (perm?.id && permissionStore.autoAccept) {
-            device.client.permission.respond(perm.id, {
-              sessionID: perm.sessionID,
-              permissionID: perm.id,
-              response: "once",
-            }).catch(() => {})
+          if (perm?.id) {
+            const sid = perm.sessionID
+            setStore("permissions", produce((draft: Record<string, PermissionRequest[]>) => {
+              const list = draft[sid] ?? []
+              if (!list.some((p) => p.id === perm.id)) {
+                draft[sid] = [...list, perm]
+              }
+            }))
+            if (permissionStore.autoAccept) {
+              device.client.permission.respond(perm.id, {
+                decision: "once",
+              }).catch(() => {})
+            }
+          }
+          break
+        }
+        case "permission.replied": {
+          const props = payload.properties as { sessionID?: string; requestID?: string }
+          const sid = props?.sessionID
+          const rid = props?.requestID
+          if (sid && rid) {
+            setStore("permissions", produce((draft: Record<string, PermissionRequest[]>) => {
+              const list = draft[sid]
+              if (list) {
+                draft[sid] = list.filter((p) => p.id !== rid)
+              }
+            }))
+          }
+          break
+        }
+        case "question.asked": {
+          const q = payload.properties as QuestionRequest
+          if (q?.id) {
+            const sid = q.sessionID
+            setStore("questions", produce((draft: Record<string, QuestionRequest[]>) => {
+              const list = draft[sid] ?? []
+              if (!list.some((r) => r.id === q.id)) {
+                draft[sid] = [...list, q]
+              }
+            }))
+          }
+          break
+        }
+        case "question.replied":
+        case "question.rejected": {
+          const props = payload.properties as { sessionID?: string; requestID?: string }
+          const sid = props?.sessionID
+          const rid = props?.requestID
+          if (sid && rid) {
+            setStore("questions", produce((draft: Record<string, QuestionRequest[]>) => {
+              const list = draft[sid]
+              if (list) {
+                draft[sid] = list.filter((r) => r.id !== rid)
+              }
+            }))
           }
           break
         }
@@ -264,11 +380,8 @@ export function DeviceSessionProvider(props: ParentProps<{ sessionID?: string }>
 
   const permissionRespond = (input: { permissionID: string; response: "once" | "always" | "reject" }) => {
     if (!workspace.agentAvailable()) return
-    const id = sid()
     device.client.permission.respond(input.permissionID, {
-      sessionID: id ?? "",
-      permissionID: input.permissionID,
-      response: input.response,
+      decision: input.response,
     }).catch(() => {})
   }
 

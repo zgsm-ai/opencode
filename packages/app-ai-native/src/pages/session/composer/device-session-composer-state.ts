@@ -6,6 +6,7 @@ import { useDeviceSDK } from "@/context/device-sdk"
 import { useDeviceWorkspace } from "@/context/device-workspace"
 import { useDeviceSession } from "@/context/device-session"
 import { useLanguage } from "@/context/language"
+import { sessionPermissionRequest, sessionQuestionRequest } from "./session-request-tree"
 
 export function createDeviceSessionComposerState(options?: { closeMs?: number | (() => number) }) {
   const device = useDeviceSDK()
@@ -15,12 +16,55 @@ export function createDeviceSessionComposerState(options?: { closeMs?: number | 
 
   const todos = createMemo((): Todo[] => session.data.todos)
 
+  const questionRequest = createMemo((): QuestionRequest | undefined => {
+    const sid = session.sessionID()
+    return sessionQuestionRequest(workspace.data.session, session.data.questions, sid)
+  })
+
+  const permissionRequest = createMemo((): PermissionRequest | undefined => {
+    const sid = session.sessionID()
+    return sessionPermissionRequest(workspace.data.session, session.data.permissions, sid, (item) => {
+      return !session.permission.isAutoAccepting()
+    })
+  })
+
+  const blocked = createMemo(() => {
+    const sid = session.sessionID()
+    if (!sid) return false
+    return !!permissionRequest() || !!questionRequest()
+  })
+
   const [store, setStore] = createStore({
     responding: undefined as string | undefined,
     dock: todos().length > 0,
     closing: false,
     opening: false,
   })
+
+  const permissionResponding = createMemo(() => {
+    const perm = permissionRequest()
+    if (!perm) return false
+    return store.responding === perm.id
+  })
+
+  const decide = (response: "once" | "always" | "reject") => {
+    const perm = permissionRequest()
+    if (!perm) return
+    if (store.responding === perm.id) return
+
+    setStore("responding", perm.id)
+    device.client.permission
+      .respond(perm.id, {
+        decision: response,
+      })
+      .catch((err: unknown) => {
+        const description = err instanceof Error ? err.message : String(err)
+        showToast({ title: language.t("common.requestFailed"), description })
+      })
+      .finally(() => {
+        setStore("responding", (id) => (id === perm.id ? undefined : id))
+      })
+  }
 
   const done = createMemo(
     () => todos().length > 0 && todos().every((todo) => todo.status === "completed" || todo.status === "cancelled"),
@@ -97,11 +141,11 @@ export function createDeviceSessionComposerState(options?: { closeMs?: number | 
   })
 
   return {
-    blocked: () => false,
-    questionRequest: () => undefined,
-    permissionRequest: () => undefined,
-    permissionResponding: () => false,
-    decide: (_response: "once" | "always" | "reject") => {},
+    blocked,
+    questionRequest,
+    permissionRequest,
+    permissionResponding,
+    decide,
     todos,
     dock: () => store.dock,
     closing: () => store.closing,
