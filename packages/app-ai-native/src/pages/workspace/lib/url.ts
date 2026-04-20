@@ -1,3 +1,6 @@
+import { env } from "@/lib/env"
+
 export function getProxyUrl(deviceId: string) {
-    return `/cloud/device/${deviceId}/proxy`
+  const prefix = (env.API_PREFIX || "").replace(/\/+$/, "")
+  return `${prefix}/cloud/device/${deviceId}/proxy`
 }
