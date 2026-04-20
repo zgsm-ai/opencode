@@ -86,6 +86,7 @@ export interface SubTask {
   fileHints: string[]
   dependencies: string[]
   assignedMemberId?: string | null
+  priority?: number
 }
 
 // ─── Message ──────────────────────────────────────────────
