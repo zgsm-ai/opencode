@@ -156,6 +156,42 @@ export function createPromptSubmit(input: PromptSubmitInput) {
     input.addToHistory(currentPrompt, mode)
     input.resetHistoryNavigation()
 
+    const clearInput = () => {
+      prompt.reset()
+      input.setMode("normal")
+      input.setPopover(null)
+    }
+
+    const restoreInput = () => {
+      prompt.set(currentPrompt, input.promptLength(currentPrompt))
+      input.setMode(mode)
+      input.setPopover(null)
+      requestAnimationFrame(() => {
+        const editor = input.editor()
+        if (!editor) return
+        editor.focus()
+        setCursorPosition(editor, input.promptLength(currentPrompt))
+        input.queueScroll()
+      })
+    }
+
+    // CloudTeam mode: route prompt through cloud team submission immediately.
+    // Do not create a normal local session before CloudTeam orchestration.
+    if (cloudTeam.active()) {
+      clearInput()
+      input.onSubmit?.()
+      try {
+        await cloudTeam.submitPrompt(text, { parts: [], context: prompt.context.items() })
+      } catch (err) {
+        showToast({
+          title: language.t("prompt.toast.promptSendFailed.title"),
+          description: errorMessage(err),
+        })
+        restoreInput()
+      }
+      return
+    }
+
     const projectDirectory = sdk.directory
     const existingSession = input.info() as Session | undefined
     const deviceCurrentSession = layout.deviceMode && !params.id && (sync as any).currentSessionID?.()
@@ -245,38 +281,6 @@ export function createPromptSubmit(input: PromptSubmitInput) {
     }
     const agent = currentAgent.name
     const variant = local.model.variant.current()
-
-    // CloudTeam mode: route prompt through cloud team submission
-    if (agent === cloudTeam.agentName) {
-      const clearInput = () => {
-        prompt.reset()
-        input.setMode("normal")
-        input.setPopover(null)
-      }
-      clearInput()
-      input.onSubmit?.()
-      await cloudTeam.submitPrompt(text, { parts: [], context: prompt.context.items() })
-      return
-    }
-
-    const clearInput = () => {
-      prompt.reset()
-      input.setMode("normal")
-      input.setPopover(null)
-    }
-
-    const restoreInput = () => {
-      prompt.set(currentPrompt, input.promptLength(currentPrompt))
-      input.setMode(mode)
-      input.setPopover(null)
-      requestAnimationFrame(() => {
-        const editor = input.editor()
-        if (!editor) return
-        editor.focus()
-        setCursorPosition(editor, input.promptLength(currentPrompt))
-        input.queueScroll()
-      })
-    }
 
     if (mode === "shell") {
       clearInput()
