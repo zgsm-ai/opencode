@@ -560,7 +560,7 @@ export default function DashboardCapabilities() {
                 <Suspense fallback={<div class="flex justify-center py-16 text-muted-foreground">{language.t("store.loading")}</div>}>
                   <ItemDetailContent
                     itemId={itemId()}
-                    class={cn(sx.sheetBody, "custom-scrollbar")}
+                    class={cn(sx.sheetBody, "thin-scrollbar")}
                     onItemLoaded={setDetailItem}
                     favorited={favorited()}
                     favoriteCount={favoriteCount()}

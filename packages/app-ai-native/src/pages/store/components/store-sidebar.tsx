@@ -59,7 +59,7 @@ export default function StoreSidebar() {
         </div>
       </div>
 
-      <nav class="custom-scrollbar flex flex-1 flex-col gap-5 overflow-y-auto px-2 py-2.5">
+      <nav class="thin-scrollbar flex flex-1 flex-col gap-5 overflow-y-auto px-2 py-2.5">
         <div>
           {/* <div class="mb-1 px-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--native-dim)]">{language.t("store.sidebar.browse")}</div> */}
           <div class="flex flex-col gap-px">

@@ -86,19 +86,19 @@ export default function WorkspaceHome() {
   }
 
   return (
-    <div class="native-page custom-scrollbar overflow-y-auto">
+    <div class="thin-scrollbar flex min-h-full min-w-0 flex-col gap-6 overflow-y-auto overflow-x-clip p-[clamp(1rem,2vw,2rem)]">
       <header class="native-page-header mx-auto w-full max-w-[1080px]">
-        <h1 class="native-page-title">{t("workspace.home.title")}</h1>
-        <p class="native-page-subtitle">{t("workspace.home.subtitle")}</p>
+        <h1 class="m-0 max-w-[18ch] font-[var(--native-font-display)] text-[1.875rem] leading-[1.02] font-semibold tracking-[-0.05em] text-[var(--native-foreground)]">{t("workspace.home.title")}</h1>
+        <p class="mt-3 max-w-[66ch] text-[0.9375rem] leading-[1.7] text-[var(--native-muted)]">{t("workspace.home.subtitle")}</p>
       </header>
 
-      <div class="native-page-main mx-auto w-full max-w-[1080px]">
+      <div class="mx-auto flex min-h-0 min-w-0 max-w-[1080px] flex-1 flex-col gap-5 w-full">
         <section class="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(18.5rem,0.9fr)]">
           <div class="grid gap-4 sm:grid-cols-2">
             <For each={steps.slice(0, 2)}>
               {(step) => (
                 <article
-                  class="native-panel relative flex min-h-[17rem] flex-col overflow-hidden p-5 transition-[transform,box-shadow,border-color] motion-reduce:transform-none motion-reduce:transition-none hover:-translate-y-px hover:shadow-[var(--native-shadow-md)]"
+                  class="relative flex min-h-[17rem] flex-col overflow-hidden rounded-[var(--native-radius-lg)] border border-[color:color-mix(in_oklab,var(--native-border)_30%,transparent)] bg-[color:color-mix(in_oklab,var(--native-panel)_86%,var(--native-bg-subtle))] p-5 shadow-[var(--native-shadow-sm)] transition-[transform,box-shadow,border-color] motion-reduce:transform-none motion-reduce:transition-none hover:-translate-y-px hover:shadow-[var(--native-shadow-md)]"
                   style={{ "--step-tone": step.tone, "--step-soft": step.soft }}
                 >
                   <div class="mb-5">
@@ -116,7 +116,7 @@ export default function WorkspaceHome() {
 
                   <div class="mt-auto pt-5">
                     <Show when={step.kind === "cmd"}>
-                      <div class="native-code-chip w-full justify-between gap-3">
+                      <div class="inline-flex w-full items-center justify-between gap-3 rounded-[var(--native-radius-md)] border border-[color:color-mix(in_oklab,var(--native-border)_32%,transparent)] bg-[color:color-mix(in_oklab,var(--native-surface)_82%,var(--native-panel))] px-3.5 py-3 font-[var(--native-font-mono)] text-[0.8125rem] text-[var(--native-foreground)] shadow-[var(--native-shadow-sm)]">
                         <span class="truncate">{cmd}</span>
                         <button
                           type="button"
@@ -137,7 +137,7 @@ export default function WorkspaceHome() {
             </For>
 
             <article
-              class="native-panel relative flex min-h-[16.5rem] flex-col overflow-hidden p-5 sm:col-span-2 transition-[transform,box-shadow,border-color] motion-reduce:transform-none motion-reduce:transition-none hover:-translate-y-px hover:shadow-[var(--native-shadow-md)]"
+              class="relative flex min-h-[16.5rem] flex-col overflow-hidden rounded-[var(--native-radius-lg)] border border-[color:color-mix(in_oklab,var(--native-border)_30%,transparent)] bg-[color:color-mix(in_oklab,var(--native-panel)_86%,var(--native-bg-subtle))] p-5 shadow-[var(--native-shadow-sm)] sm:col-span-2 transition-[transform,box-shadow,border-color] motion-reduce:transform-none motion-reduce:transition-none hover:-translate-y-px hover:shadow-[var(--native-shadow-md)]"
               style={{ "--step-tone": steps[2].tone, "--step-soft": steps[2].soft }}
             >
               <div class="mb-5">
@@ -175,7 +175,7 @@ export default function WorkspaceHome() {
           </div>
 
           <div class="grid gap-4">
-            <div class="native-panel p-5">
+            <div class="rounded-[var(--native-radius-lg)] border border-[color:color-mix(in_oklab,var(--native-border)_30%,transparent)] bg-[color:color-mix(in_oklab,var(--native-panel)_86%,var(--native-bg-subtle))] p-5 shadow-[var(--native-shadow-sm)]">
               <div class="mb-4">
                 <p class="m-0 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--native-dim)]">
                   {t("workspace.home.quickActions")}
@@ -204,7 +204,7 @@ export default function WorkspaceHome() {
               </div>
             </div>
 
-            <div class="native-panel-soft relative overflow-hidden p-5">
+            <div class="relative overflow-hidden rounded-[var(--native-radius-lg)] border border-[color:color-mix(in_oklab,var(--native-border)_24%,transparent)] bg-[color:color-mix(in_oklab,var(--native-surface)_72%,var(--native-panel))] p-5">
               <div class="absolute right-[-2.25rem] top-[-2.25rem] h-24 w-24 rounded-full bg-[color:color-mix(in_oklab,var(--native-primary)_10%,transparent)] blur-2xl" />
               <div class="relative flex gap-3">
                 <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--native-radius-md)] bg-[var(--native-primary-soft)] text-[var(--native-primary)]">

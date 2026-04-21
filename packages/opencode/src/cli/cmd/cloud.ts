@@ -94,10 +94,14 @@ async function extractFromTarGz(archive: string, outDir: string): Promise<string
 async function extractFromZip(archive: string, outDir: string): Promise<string> {
   const bin = path.join(outDir, BIN_NAME)
   if (process.platform === "win32") {
+    const zipPath = archive.endsWith(".zip") ? archive : archive + ".zip"
+    if (zipPath !== archive) await fsp.rename(archive, zipPath)
     await new Promise<void>((resolve, reject) => {
-      execFile("powershell", ["-NoProfile", "-Command", `Expand-Archive -LiteralPath '${archive}' -DestinationPath '${outDir}' -Force`], (err) =>
+      execFile("powershell", ["-NoProfile", "-Command", `Expand-Archive -LiteralPath '${zipPath}' -DestinationPath '${outDir}' -Force`], (err) =>
         err ? reject(err) : resolve(),
       )
+    }).finally(() => {
+      if (zipPath !== archive) fsp.rename(zipPath, archive).catch(() => {})
     })
     const extracted = path.join(outDir, "cs-cloud.exe")
     if (fs.existsSync(extracted)) {

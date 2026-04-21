@@ -318,7 +318,7 @@ export function WorkspaceSidebar(props: { hide?: () => void } = {}) {
         </div>
       </div>
 
-      <div class="custom-scrollbar flex-[3] min-h-0 overflow-y-auto py-1 pr-1">
+      <div class="thin-scrollbar flex-[3] min-h-0 overflow-y-auto py-1 pr-1">
         <Show when={runningIds().length > 0}>
           <div class="mb-3 px-2">
             <div class="mb-1 flex items-center gap-1.5 px-2.5 py-1.5">
@@ -339,7 +339,7 @@ export function WorkspaceSidebar(props: { hide?: () => void } = {}) {
           <div class="flex flex-col gap-1.5">
             <For each={idleIds()}>{(id) => <WorkspaceCard id={id} isRunning={false} />}</For>
             <Show when={filteredWorkspaces().length === 0}>
-              <div class="native-panel-soft flex flex-col items-center justify-center py-8 text-sidebar-foreground/50">
+              <div class="flex flex-col items-center justify-center rounded-[var(--native-radius-lg)] border border-[color:color-mix(in_oklab,var(--native-border)_24%,transparent)] bg-[color:color-mix(in_oklab,var(--native-surface)_72%,var(--native-panel))] py-8 text-sidebar-foreground/50">
                 <Icon name="folder" class="mb-2 size-8 opacity-30" />
                 <span class="text-xs font-medium text-sidebar-foreground/65">{t("workspace.empty")}</span>
                 <span class="mt-1 text-[11px] leading-[1.5] text-sidebar-foreground/40">{t("workspace.emptyHint")}</span>
@@ -349,7 +349,7 @@ export function WorkspaceSidebar(props: { hide?: () => void } = {}) {
         </div>
       </div>
 
-      <div class="custom-scrollbar flex-[2] min-h-0 overflow-y-auto pt-1">
+      <div class="thin-scrollbar flex-[2] min-h-0 overflow-y-auto pt-1">
         <DeviceList
           devices={devices}
           onCreateWorkspace={handleCreateWorkspace}

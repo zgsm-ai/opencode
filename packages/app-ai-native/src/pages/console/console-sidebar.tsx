@@ -53,7 +53,7 @@ export default function ConsoleSidebar() {
         </div>
       </div>
 
-      <nav class="custom-scrollbar flex flex-1 flex-col gap-5 overflow-y-auto px-2 py-2.5">
+      <nav class="thin-scrollbar flex flex-1 flex-col gap-5 overflow-y-auto px-2 py-2.5">
         <div>
           <div class="flex flex-col gap-px">
             <For each={NAV}>
