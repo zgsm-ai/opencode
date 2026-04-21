@@ -31,7 +31,7 @@ export const CloudTeamTaskPlanReview: Component = () => {
         repoAffinity: t.repoAffinity,
         fileHints: t.fileHints,
         dependencies: t.dependencies,
-        assignedMemberId: t.assignedMemberId,
+        assignedMemberId: t.assignedMemberId ?? "",
         priority: t.priority,
       })),
     )
@@ -61,6 +61,7 @@ export const CloudTeamTaskPlanReview: Component = () => {
         fileHints: [],
         dependencies: [],
         priority: 5,
+        assignedMemberId: "",
       },
     ])
   }
@@ -72,7 +73,12 @@ export const CloudTeamTaskPlanReview: Component = () => {
     const leader = cloudTeam.leader()
     if (!leader?.elected) return
 
-    const tasks = planTasks().filter((t) => t.description.trim() !== "")
+    const tasks = planTasks()
+      .filter((t) => t.description.trim() !== "")
+      .map((t) => ({
+        ...t,
+        assignedMemberId: t.assignedMemberId ? t.assignedMemberId : undefined,
+      }))
     if (tasks.length === 0) return
 
     setSubmitting(true)
@@ -93,7 +99,7 @@ export const CloudTeamTaskPlanReview: Component = () => {
 
   const teammateOptions = createMemo(() => {
     const teammates = cloudTeam.teammates()
-    return [{ id: "", name: "Auto" }, ...teammates.map((t) => ({ id: t.id, name: t.machineName }))]
+    return [{ id: "", name: "Auto-assign" }, ...teammates.map((t) => ({ id: t.id, name: t.machineName }))]
   })
 
   return (
@@ -190,7 +196,7 @@ export const CloudTeamTaskPlanReview: Component = () => {
                     <select
                       class="text-11-regular bg-transparent border-b border-border-weak-base px-0.5 py-0 outline-none focus:border-border-base max-w-[100px]"
                       value={task.assignedMemberId ?? ""}
-                      onChange={(e) => updateTask(index(), { assignedMemberId: e.currentTarget.value || undefined })}
+                      onChange={(e) => updateTask(index(), { assignedMemberId: e.currentTarget.value })}
                     >
                       <For each={teammateOptions()}>
                         {(opt) => <option value={opt.id}>{opt.name}</option>}

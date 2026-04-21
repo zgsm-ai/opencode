@@ -29,7 +29,7 @@ export const CloudTeamPlanConfirmation: Component = () => {
           repoAffinity: t.repoAffinity ?? [],
           fileHints: t.fileHints ?? [],
           dependencies: t.dependencies ?? [],
-          assignedMemberId: t.assignedMemberId ?? undefined,
+          assignedMemberId: t.assignedMemberId ?? "",
           priority: t.priority ?? 5,
         })),
       )
@@ -61,6 +61,7 @@ export const CloudTeamPlanConfirmation: Component = () => {
         fileHints: [],
         dependencies: [],
         priority: 5,
+        assignedMemberId: "",
       },
     ])
   }
@@ -75,7 +76,10 @@ export const CloudTeamPlanConfirmation: Component = () => {
     setSubmitting(true)
     try {
       // Strip internal _key before submitting
-      const tasks: SubTask[] = valid.map(({ _key: _, ...t }) => t)
+      const tasks: SubTask[] = valid.map(({ _key: _, ...t }) => ({
+        ...t,
+        assignedMemberId: t.assignedMemberId ? t.assignedMemberId : undefined,
+      }))
       await cloudTeam.confirmPlan(tasks)
     } catch (err) {
       setConfirmError(err instanceof Error ? err.message : "Failed to submit plan")
@@ -136,7 +140,7 @@ export const CloudTeamPlanConfirmation: Component = () => {
                     class="text-11-regular bg-transparent border-b border-border-weak-base px-0.5 py-0 outline-none focus:border-border-base max-w-[120px] cursor-pointer"
                     value={task.assignedMemberId ?? ""}
                     onChange={(e) =>
-                      updateTask(task._key, { assignedMemberId: e.currentTarget.value || undefined })
+                      updateTask(task._key, { assignedMemberId: e.currentTarget.value })
                     }
                   >
                     <For each={teammateOptions()}>

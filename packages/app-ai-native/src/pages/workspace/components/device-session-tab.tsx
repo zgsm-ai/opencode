@@ -765,12 +765,19 @@ export function DeviceSessionTab(props: { tabId: string }) {
     provider: legacyProvider(workspace.data.provider),
   }))
 
-  const DeviceCloudTeamBar = () => {
+  const DeviceCloudTeamBar = (props: { centered: boolean }) => {
     const cloudTeam = useCloudTeam()
     return (
       <Show when={cloudTeam.active()}>
-        <div class="shrink-0 w-full px-3 pb-1">
-          <CloudTeamStatusBar />
+        <div class="shrink-0 w-full pb-1">
+          <div
+            classList={{
+              "w-full px-3": true,
+              "md:max-w-200 md:mx-auto 2xl:max-w-[1000px]": props.centered,
+            }}
+          >
+            <CloudTeamStatusBar />
+          </div>
         </div>
       </Show>
     )
@@ -936,7 +943,7 @@ export function DeviceSessionTab(props: { tabId: string }) {
                             </div>
                           }
                         >
-                          <DeviceCloudTeamBar />
+                          <DeviceCloudTeamBar centered={!isNew()} />
                           <SessionComposerRegion
                             state={composer}
                             ready={true}

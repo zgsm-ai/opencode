@@ -30,7 +30,10 @@ type LocalQuestionRequest = {
   questions?: LocalQuestionInfo[]
 }
 
-const POLL_INTERVAL = 1500
+const POLL_FAST_MS = 2500
+const POLL_AUTO_IDLE_MS = 8000
+const POLL_MANUAL_IDLE_MS = 12000
+const POLL_HIDDEN_MS = 20000
 
 function asPermissionList(input: unknown): LocalPermissionRequest[] {
   if (!Array.isArray(input)) return []
@@ -231,11 +234,53 @@ export const CloudTeamRuntimeRequests: Component = () => {
   }
 
   onMount(() => {
-    void loadPending(true, false)
-    const timer = window.setInterval(() => {
-      void loadPending(true, true)
-    }, POLL_INTERVAL)
-    onCleanup(() => window.clearInterval(timer))
+    let timer: number | undefined
+    let closed = false
+    let inFlight = false
+
+    const schedule = (delayMs: number) => {
+      if (closed) return
+      if (timer) window.clearTimeout(timer)
+      timer = window.setTimeout(() => {
+        void tick(true)
+      }, delayMs)
+    }
+
+    const nextDelay = () => {
+      if (document.visibilityState !== "visible") return POLL_HIDDEN_MS
+      const pendingCount = permissions().length + questions().length
+      if (pendingCount > 0) return POLL_FAST_MS
+      return cloudTeam.runtimeMode() === "manual" ? POLL_MANUAL_IDLE_MS : POLL_AUTO_IDLE_MS
+    }
+
+    const tick = async (silent: boolean) => {
+      if (closed || inFlight) return
+      inFlight = true
+      try {
+        await loadPending(true, silent)
+      } finally {
+        inFlight = false
+      }
+      schedule(nextDelay())
+    }
+
+    const onVisibilityChange = () => {
+      // Tab 回到前台时立即同步一次，后台则切到低频。
+      if (document.visibilityState === "visible") {
+        void tick(true)
+      } else {
+        schedule(POLL_HIDDEN_MS)
+      }
+    }
+
+    document.addEventListener("visibilitychange", onVisibilityChange)
+    void tick(false)
+
+    onCleanup(() => {
+      closed = true
+      if (timer) window.clearTimeout(timer)
+      document.removeEventListener("visibilitychange", onVisibilityChange)
+    })
   })
 
   return (
