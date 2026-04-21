@@ -101,6 +101,10 @@ export const CloudTeamTaskPlanReview: Component = () => {
     const teammates = cloudTeam.teammates()
     return [{ id: "", name: "Auto-assign" }, ...teammates.map((t) => ({ id: t.id, name: t.machineName }))]
   })
+  const resolveAssigneeValue = (raw?: string | null) => {
+    const value = raw ?? ""
+    return teammateOptions().some((opt) => opt.id === value) ? value : ""
+  }
 
   return (
     <div class="px-3 py-2 space-y-2">
@@ -195,7 +199,7 @@ export const CloudTeamTaskPlanReview: Component = () => {
                     <span class="text-10-regular text-text-weak">Assign:</span>
                     <select
                       class="text-11-regular bg-transparent border-b border-border-weak-base px-0.5 py-0 outline-none focus:border-border-base max-w-[100px]"
-                      value={task.assignedMemberId ?? ""}
+                      value={resolveAssigneeValue(task.assignedMemberId)}
                       onChange={(e) => updateTask(index(), { assignedMemberId: e.currentTarget.value })}
                     >
                       <For each={teammateOptions()}>

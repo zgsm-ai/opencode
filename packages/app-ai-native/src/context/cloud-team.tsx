@@ -87,6 +87,9 @@ export const { use: useCloudTeam, provider: CloudTeamProvider, context: CloudTea
     const pendingApprovals = createMemo(() => store.approvals.filter((a) => a.status === "pending"))
 
     const completedPercentage = createMemo(() => {
+      if (store.sessionProgress?.totalTasks && store.sessionProgress.totalTasks > 0) {
+        return Math.round((store.sessionProgress.completedTasks / store.sessionProgress.totalTasks) * 100)
+      }
       if (store.tasks.length === 0) return 0
       return Math.round((store.tasks.filter((t) => t.status === "completed").length / store.tasks.length) * 100)
     })
@@ -107,6 +110,8 @@ export const { use: useCloudTeam, provider: CloudTeamProvider, context: CloudTea
     let wsClient: ReturnType<typeof createCloudTeamWS> | undefined
     let heartbeatInterval: ReturnType<typeof setInterval> | undefined
     let progressPollInterval: ReturnType<typeof setInterval> | undefined
+    let syncingTasksFromProgress = false
+    let lastProgressTaskSyncAt = 0
 
     const sameSessionProgress = (
       a: SessionProgress | undefined,
@@ -141,6 +146,54 @@ export const { use: useCloudTeam, provider: CloudTeamProvider, context: CloudTea
         }
       }
       return true
+    }
+
+    const summarizeLocalTasks = () => {
+      const tasks = store.tasks
+      let completed = 0
+      let failed = 0
+      let running = 0
+      let pending = 0
+      for (const t of tasks) {
+        if (t.status === "completed") completed += 1
+        else if (t.status === "failed") failed += 1
+        else if (t.status === "running") running += 1
+        else if (t.status === "pending" || t.status === "assigned" || t.status === "claimed") pending += 1
+      }
+      return {
+        totalTasks: tasks.length,
+        completedTasks: completed,
+        failedTasks: failed,
+        runningTasks: running,
+        pendingTasks: pending,
+      }
+    }
+
+    const shouldSyncTasksFromProgress = (p: SessionProgress): boolean => {
+      const local = summarizeLocalTasks()
+      return (
+        local.totalTasks !== p.totalTasks
+        || local.completedTasks !== p.completedTasks
+        || local.failedTasks !== p.failedTasks
+        || local.runningTasks !== p.runningTasks
+        || local.pendingTasks !== p.pendingTasks
+      )
+    }
+
+    function syncTasksFromProgress(sessionId: string, p: SessionProgress) {
+      if (!shouldSyncTasksFromProgress(p)) return
+      const now = Date.now()
+      if (syncingTasksFromProgress) return
+      if (now - lastProgressTaskSyncAt < 1200) return
+      syncingTasksFromProgress = true
+      lastProgressTaskSyncAt = now
+      cloudTeamApi.task.list(sessionId).then((tasks) => {
+        setStore("tasks", tasks)
+      }).catch(() => {
+        // Best effort sync
+      }).finally(() => {
+        syncingTasksFromProgress = false
+      })
     }
 
     function connectWS(sessionId: string) {
@@ -186,6 +239,7 @@ export const { use: useCloudTeam, provider: CloudTeamProvider, context: CloudTea
           if (!sameSessionProgress(store.sessionProgress, p)) {
             setStore("sessionProgress", p)
           }
+          syncTasksFromProgress(sessionId, p)
         }).catch(() => {})
       }, 5_000)
 
@@ -194,6 +248,7 @@ export const { use: useCloudTeam, provider: CloudTeamProvider, context: CloudTea
         if (!sameSessionProgress(store.sessionProgress, p)) {
           setStore("sessionProgress", p)
         }
+        syncTasksFromProgress(sessionId, p)
       }).catch(() => {})
     }
 

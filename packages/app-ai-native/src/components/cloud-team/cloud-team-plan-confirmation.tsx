@@ -41,6 +41,10 @@ export const CloudTeamPlanConfirmation: Component = () => {
     { id: "", name: "Auto-assign" },
     ...cloudTeam.teammates().map((t) => ({ id: t.id, name: t.machineName })),
   ])
+  const resolveAssigneeValue = (raw?: string | null) => {
+    const value = raw ?? ""
+    return teammateOptions().some((opt) => opt.id === value) ? value : ""
+  }
 
   const updateTask = (key: string, updates: Partial<EditableTask>) => {
     setEditableTasks((prev) => prev.map((t) => (t._key === key ? { ...t, ...updates } : t)))
@@ -138,7 +142,7 @@ export const CloudTeamPlanConfirmation: Component = () => {
                   <span class="text-10-regular text-text-weaker shrink-0">Assign</span>
                   <select
                     class="text-11-regular bg-transparent border-b border-border-weak-base px-0.5 py-0 outline-none focus:border-border-base max-w-[120px] cursor-pointer"
-                    value={task.assignedMemberId ?? ""}
+                    value={resolveAssigneeValue(task.assignedMemberId)}
                     onChange={(e) =>
                       updateTask(task._key, { assignedMemberId: e.currentTarget.value })
                     }

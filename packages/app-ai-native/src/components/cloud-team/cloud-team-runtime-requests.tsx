@@ -30,10 +30,11 @@ type LocalQuestionRequest = {
   questions?: LocalQuestionInfo[]
 }
 
-const POLL_FAST_MS = 2500
-const POLL_AUTO_IDLE_MS = 8000
-const POLL_MANUAL_IDLE_MS = 12000
-const POLL_HIDDEN_MS = 20000
+const POLL_FALLBACK_AUTO_VISIBLE_MS = 30000
+const POLL_FALLBACK_MANUAL_VISIBLE_MS = 45000
+const POLL_FALLBACK_HIDDEN_MS = 60000
+const SSE_REFRESH_DEBOUNCE_MS = 300
+const SSE_RECONNECT_MS = 2500
 
 function asPermissionList(input: unknown): LocalPermissionRequest[] {
   if (!Array.isArray(input)) return []
@@ -77,6 +78,28 @@ function sameQuestionList(a: LocalQuestionRequest[], b: LocalQuestionRequest[]):
     if (key(a[i]) !== key(b[i])) return false
   }
   return true
+}
+
+function extractEventType(input: unknown): string {
+  if (!input || typeof input !== "object") return ""
+  const payload = input as Record<string, unknown>
+  const direct = payload.type
+  if (typeof direct === "string") return direct
+  const nested = payload.payload
+  if (nested && typeof nested === "object" && typeof (nested as Record<string, unknown>).type === "string") {
+    return String((nested as Record<string, unknown>).type)
+  }
+  const event = payload.event
+  if (event && typeof event === "object" && typeof (event as Record<string, unknown>).type === "string") {
+    return String((event as Record<string, unknown>).type)
+  }
+  return ""
+}
+
+function shouldRefreshForRuntimeRequests(input: unknown): boolean {
+  const text = JSON.stringify(input ?? {}).toLowerCase()
+  if (!text) return false
+  return text.includes("permission") || text.includes("question") || text.includes("intervention")
 }
 
 export const CloudTeamRuntimeRequests: Component = () => {
@@ -234,23 +257,26 @@ export const CloudTeamRuntimeRequests: Component = () => {
   }
 
   onMount(() => {
-    let timer: number | undefined
+    let fallbackTimer: number | undefined
+    let debounceTimer: number | undefined
+    let reconnectTimer: number | undefined
     let closed = false
     let inFlight = false
+    let sseController: AbortController | undefined
 
-    const schedule = (delayMs: number) => {
+    const scheduleFallback = (delayMs: number) => {
       if (closed) return
-      if (timer) window.clearTimeout(timer)
-      timer = window.setTimeout(() => {
+      if (fallbackTimer) window.clearTimeout(fallbackTimer)
+      fallbackTimer = window.setTimeout(() => {
         void tick(true)
       }, delayMs)
     }
 
-    const nextDelay = () => {
-      if (document.visibilityState !== "visible") return POLL_HIDDEN_MS
-      const pendingCount = permissions().length + questions().length
-      if (pendingCount > 0) return POLL_FAST_MS
-      return cloudTeam.runtimeMode() === "manual" ? POLL_MANUAL_IDLE_MS : POLL_AUTO_IDLE_MS
+    const nextFallbackDelay = () => {
+      if (document.visibilityState !== "visible") return POLL_FALLBACK_HIDDEN_MS
+      return cloudTeam.runtimeMode() === "manual"
+        ? POLL_FALLBACK_MANUAL_VISIBLE_MS
+        : POLL_FALLBACK_AUTO_VISIBLE_MS
     }
 
     const tick = async (silent: boolean) => {
@@ -261,24 +287,82 @@ export const CloudTeamRuntimeRequests: Component = () => {
       } finally {
         inFlight = false
       }
-      schedule(nextDelay())
+      scheduleFallback(nextFallbackDelay())
+    }
+
+    const queueRefresh = () => {
+      if (closed) return
+      if (debounceTimer) window.clearTimeout(debounceTimer)
+      debounceTimer = window.setTimeout(() => {
+        void tick(true)
+      }, SSE_REFRESH_DEBOUNCE_MS)
+    }
+
+    const scheduleReconnect = () => {
+      if (closed) return
+      if (reconnectTimer) window.clearTimeout(reconnectTimer)
+      reconnectTimer = window.setTimeout(() => {
+        void connectSSE()
+      }, SSE_RECONNECT_MS)
+    }
+
+    const connectSSE = async () => {
+      if (closed || sseController) return
+      const controller = new AbortController()
+      sseController = controller
+      try {
+        const { stream } = await device.client.event.stream({
+          signal: controller.signal,
+          onSseError: () => {
+            if (!controller.signal.aborted) {
+              scheduleReconnect()
+            }
+          },
+        })
+        for await (const evt of stream) {
+          if (closed || controller.signal.aborted) break
+          const payload = (evt as { payload?: unknown })?.payload ?? evt
+          const eventType = extractEventType(payload).toLowerCase()
+          if (
+            eventType.includes("permission") ||
+            eventType.includes("question") ||
+            eventType.includes("intervention") ||
+            shouldRefreshForRuntimeRequests(payload)
+          ) {
+            queueRefresh()
+          }
+        }
+      } catch {
+        // Ignore transient SSE failures; fallback polling keeps data eventually consistent.
+      } finally {
+        if (sseController === controller) {
+          sseController = undefined
+        }
+        if (!closed && !controller.signal.aborted) {
+          scheduleReconnect()
+        }
+      }
     }
 
     const onVisibilityChange = () => {
-      // Tab 回到前台时立即同步一次，后台则切到低频。
+      // Tab 回到前台时立即同步一次，后台保持低频兜底。
       if (document.visibilityState === "visible") {
-        void tick(true)
+        queueRefresh()
       } else {
-        schedule(POLL_HIDDEN_MS)
+        scheduleFallback(POLL_FALLBACK_HIDDEN_MS)
       }
     }
 
     document.addEventListener("visibilitychange", onVisibilityChange)
     void tick(false)
+    void connectSSE()
 
     onCleanup(() => {
       closed = true
-      if (timer) window.clearTimeout(timer)
+      if (fallbackTimer) window.clearTimeout(fallbackTimer)
+      if (debounceTimer) window.clearTimeout(debounceTimer)
+      if (reconnectTimer) window.clearTimeout(reconnectTimer)
+      if (sseController) sseController.abort()
       document.removeEventListener("visibilitychange", onVisibilityChange)
     })
   })
