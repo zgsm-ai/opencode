@@ -10,6 +10,7 @@ import type {
   LeaderStatus,
   SubTask,
   TaskAssignmentInfo,
+  OrchestrateResponse,
 } from "./cloud-team-types"
 
 const PREFIX = env.API_PREFIX
@@ -74,8 +75,8 @@ const member = {
       body: JSON.stringify(body),
     })
   },
-  leave(memberId: string) {
-    return apiFetch<void>(`/api/team/sessions/${memberId}/members/${memberId}`, { method: "DELETE" })
+  leave(sessionId: string, memberId: string) {
+    return apiFetch<void>(`/api/team/sessions/${sessionId}/members/${memberId}`, { method: "DELETE" })
   },
 }
 
@@ -212,6 +213,7 @@ const leader = {
 type DecomposeBody = {
   prompt: string
   context?: unknown
+  dryRun?: boolean
 }
 
 type DecomposeResponse = {
@@ -222,6 +224,12 @@ type DecomposeResponse = {
 const prompt = {
   decompose(sessionId: string, body: DecomposeBody) {
     return apiFetch<DecomposeResponse>(`/api/team/sessions/${sessionId}/decompose`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    })
+  },
+  orchestrate(sessionId: string, body: { prompt: string; fencingToken?: number }) {
+    return apiFetch<OrchestrateResponse>(`/api/team/sessions/${sessionId}/orchestrate`, {
       method: "POST",
       body: JSON.stringify(body),
     })

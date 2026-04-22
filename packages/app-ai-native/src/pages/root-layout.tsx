@@ -107,6 +107,7 @@ export default function RootLayout(props: ParentProps) {
     return path === "/store" || path.startsWith("/store/")
   }
   const isProjects = () => location.pathname.startsWith("/projects")
+  const isCloudTeam = () => location.pathname.startsWith("/cloud-team")
 
   const isConsole = () => {
     const path = appPathname()
@@ -137,6 +138,12 @@ export default function RootLayout(props: ParentProps) {
             label={language.t("sidebar.workspace")}
             active={isWorkspace()}
             onClick={() => navigate("/workspace")}
+          />
+          <NavButton
+            icon="bubble-5"
+            label="Cloud Team"
+            active={isCloudTeam()}
+            onClick={() => navigate("/cloud-team")}
           />
         </nav>
         <div class="mt-auto flex flex-col gap-2">

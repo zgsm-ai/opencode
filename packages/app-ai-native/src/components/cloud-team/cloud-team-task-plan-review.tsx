@@ -75,10 +75,14 @@ export const CloudTeamTaskPlanReview: Component = () => {
 
     const tasks = planTasks()
       .filter((t) => t.description.trim() !== "")
-      .map((t) => ({
-        ...t,
-        assignedMemberId: t.assignedMemberId ? t.assignedMemberId : undefined,
-      }))
+      .map((t) => {
+        const { taskId, ...rest } = t
+        return {
+          ...rest,
+          id: taskId || undefined,
+          assignedMemberId: rest.assignedMemberId ? rest.assignedMemberId : undefined,
+        }
+      })
     if (tasks.length === 0) return
 
     setSubmitting(true)

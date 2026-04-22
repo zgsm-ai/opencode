@@ -150,7 +150,7 @@ export const CloudTeamSessionBrowser: Component = () => {
       </Show>
 
       <Show when={showBrowser() && sessions().length > 0}>
-        <div class="space-y-1 max-h-48 overflow-y-auto">
+        <div class="space-y-1 max-h-48 overflow-y-auto no-scrollbar">
           <For each={sessions()}>
             {(session) => (
               <div class="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-background-stronger transition-colors">

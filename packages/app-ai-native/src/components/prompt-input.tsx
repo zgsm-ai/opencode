@@ -5,7 +5,6 @@ import { createStore } from "solid-js/store"
 import { createFocusSignal } from "@solid-primitives/active-element"
 import { useLocal } from "@/context/local"
 import { useServer } from "@/context/server"
-import { useCloudTeam } from "@/context/cloud-team"
 import { selectionFromLines, type SelectedLineRange, useFile } from "@/context/file"
 import {
   ContentPart,
@@ -101,7 +100,6 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   const sync = useSync()
   const local = useLocal()
   const server = useServer()
-  const cloudTeam = useCloudTeam()
   const files = useFile()
   const prompt = usePrompt()
   const layout = useLayout()
@@ -509,7 +507,6 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   )
   const agentNames = createMemo(() => {
     const names = local.agent.list().map((agent) => agent.name)
-    if (!server.isLocal()) names.push(cloudTeam.agentName)
     return names
   })
 
@@ -1401,15 +1398,10 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                   <Select
                     size="normal"
                     options={agentNames()}
-                    current={cloudTeam.active() ? cloudTeam.agentName : (local.agent.current()?.name ?? "")}
+                    current={local.agent.current()?.name ?? ""}
                     onSelect={(name: string | undefined) => {
                       if (!name) return
-                      if (name === cloudTeam.agentName) {
-                        cloudTeam.activate()
-                      } else {
-                        if (cloudTeam.active()) cloudTeam.deactivate()
-                        local.agent.set(name)
-                      }
+                      local.agent.set(name)
                     }}
                     class="capitalize max-w-[160px]"
                     valueClass="truncate text-13-regular"

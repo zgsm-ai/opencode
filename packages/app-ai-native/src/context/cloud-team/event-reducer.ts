@@ -13,6 +13,7 @@ import type {
   ProgressUpdate,
   LeaderStatus,
   LeaderScore,
+  OrchestratePhase,
 } from "../../client/cloud-team-types"
 
 type CloudTeamStore = {
@@ -34,6 +35,8 @@ type CloudTeamStore = {
   lastEventId?: string
   leader?: LeaderStatus
   leaderScore?: LeaderScore
+  orchestrating: boolean
+  orchestratePhase?: OrchestratePhase
 }
 
 type SetStore = (fn: (state: CloudTeamStore) => void) => void
@@ -380,6 +383,28 @@ export function applyCloudEvent(store: CloudTeamStore, setStore: SetStore, event
             s.session.leaderId = undefined
           }
           s.leader = undefined
+        })
+      })
+      break
+    }
+
+    case "leader.snapshot": {
+      batch(() => {
+        setStore((s) => {
+          if (Array.isArray(p.tasks)) s.tasks = p.tasks as Task[]
+          if (Array.isArray(p.approvals)) s.approvals = p.approvals as ApprovalRequest[]
+          if (Array.isArray(p.teammates)) s.teammates = p.teammates as TeammateRegistration[]
+        })
+      })
+      break
+    }
+
+    case "orchestrate.progress": {
+      const phase = p.phase as OrchestratePhase | undefined
+      batch(() => {
+        setStore((s) => {
+          s.orchestrating = phase !== "ready_for_review"
+          s.orchestratePhase = phase
         })
       })
       break

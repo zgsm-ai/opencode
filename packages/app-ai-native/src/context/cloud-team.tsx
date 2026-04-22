@@ -1,5 +1,5 @@
 import { createSimpleContext } from "@opencode-ai/ui/context"
-import { batch, createEffect, createMemo, onCleanup } from "solid-js"
+import { batch, createEffect, createMemo, onCleanup, onMount } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useServer } from "@/context/server"
 import { cloudTeamApi } from "@/client/cloud-team-api"
@@ -12,11 +12,13 @@ import type {
   CloudEvent,
   ProgressUpdate,
   SessionProgress,
+  OrchestratePhase,
 } from "@/client/cloud-team-types"
 import { applyCloudEvent } from "./cloud-team/event-reducer"
 
 type CloudTeamStore = {
   active: boolean
+  mode: "local" | "cloud"
   decomposing: boolean
   pendingPlan?: Task[]   // Tasks returned by decompose, held for Leader review before submitting
   session?: {
@@ -26,6 +28,7 @@ type CloudTeamStore = {
     repoUrl?: string
     leaderId?: string
   }
+  sessions: { id: string; title: string; status: string; updatedAt: string }[]
   teammates: TeammateRegistration[]
   tasks: Task[]
   messages: CloudEvent[]
@@ -42,10 +45,13 @@ type CloudTeamStore = {
   }
   leaderScore?: import("@/client/cloud-team-types").LeaderScore
   runtimeMode: "auto" | "manual"
+  orchestrating: boolean
+  orchestratePhase?: OrchestratePhase
 }
 
 const CLOUD_TEAM_AGENT_NAME = "CloudTeam"
 const CLOUD_TEAM_RUNTIME_MODE_KEY = "cloud-team-runtime-mode.v1"
+const CLOUD_TEAM_MODE_KEY = "cloud-team-mode.v1"
 const MACHINE_ID_KEY = "cloud-team-machine-id"
 
 function loadRuntimeMode(): "auto" | "manual" {
@@ -54,14 +60,22 @@ function loadRuntimeMode(): "auto" | "manual" {
   return raw === "manual" ? "manual" : "auto"
 }
 
+function loadMode(): "local" | "cloud" {
+  if (typeof window === "undefined") return "local"
+  const raw = window.localStorage.getItem(CLOUD_TEAM_MODE_KEY)
+  return raw === "cloud" ? "cloud" : "local"
+}
+
 export const { use: useCloudTeam, provider: CloudTeamProvider, context: CloudTeamContext } = createSimpleContext({
   name: "CloudTeam",
   gate: false,
   init() {
     const server = useServer()
 
+    const initialMode = loadMode()
     const [store, setStore] = createStore<CloudTeamStore>({
-      active: false,
+      active: initialMode === "cloud",
+      mode: initialMode,
       decomposing: false,
       teammates: [],
       tasks: [],
@@ -71,11 +85,35 @@ export const { use: useCloudTeam, provider: CloudTeamProvider, context: CloudTea
       sessionProgress: undefined,
       wsConnected: false,
       runtimeMode: loadRuntimeMode(),
+      orchestrating: false,
+      sessions: [],
     })
 
     createEffect(() => {
       if (typeof window === "undefined") return
       window.localStorage.setItem(CLOUD_TEAM_RUNTIME_MODE_KEY, store.runtimeMode)
+    })
+    createEffect(() => {
+      if (typeof window === "undefined") return
+      window.localStorage.setItem(CLOUD_TEAM_MODE_KEY, store.mode)
+    })
+
+    // ── Auto-restore last active session on mount ──────────
+    onMount(async () => {
+      if (server.isLocal()) return
+      try {
+        const sessions = await cloudTeamApi.session.list()
+        setStore("sessions", sessions.map((s) => ({ id: s.id, title: s.name, status: s.status, updatedAt: s.updatedAt })).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)))
+        // Find the most recent active session
+        const active = sessions
+          .filter((s) => s.status === "active")
+          .sort((a, b) => (b.updatedAt ?? b.createdAt ?? "").localeCompare(a.updatedAt ?? a.createdAt ?? ""))[0]
+        if (active) {
+          await joinSession(active.id)
+        }
+      } catch {
+        // Silently fail — user can create a new session
+      }
     })
 
     // ── Reactive computations ──────────────────────────────
@@ -208,6 +246,22 @@ export const { use: useCloudTeam, provider: CloudTeamProvider, context: CloudTea
           applyCloudEvent(store, (fn) => {
             batch(() => fn(store))
           }, event)
+          // Auto re-elect on leader.expired (Feature 3)
+          if (event.type === "leader.expired" && store.session?.id) {
+            cloudTeamApi.leader.elect(store.session.id, { machineId: getMachineId() })
+              .then((result) => {
+                if (result.elected) {
+                  batch(() => {
+                    setStore("session", "leaderId", getMachineId())
+                    setStore("leader", result)
+                    if (result.score) {
+                      setStore("leaderScore", result.score)
+                    }
+                  })
+                }
+              })
+              .catch(() => { /* best effort */ })
+          }
         },
         onConnect: () => {
           setStore("wsConnected", true)
@@ -284,7 +338,10 @@ export const { use: useCloudTeam, provider: CloudTeamProvider, context: CloudTea
     async function createSession(title: string, repoUrl?: string) {
       const result = await cloudTeamApi.session.create({ name: title, repoUrl })
       const machineId = getMachineId()
+      const machineName = "Web Client"
       batch(() => {
+        setStore("mode", "cloud")
+        setStore("active", true)
         setStore("session", {
           id: result.id,
           title: result.name,
@@ -292,8 +349,28 @@ export const { use: useCloudTeam, provider: CloudTeamProvider, context: CloudTea
           repoUrl,
           leaderId: result.leaderMachineId,
         })
-        setStore("teammates", result.teammates ?? [])
+        // Include self as a teammate so the sidebar tree has a node to render under
+        const existing = (result.teammates ?? [])
+        const selfAlready = existing.some((t) => t.machineId === machineId)
+        if (!selfAlready) {
+          existing.push({
+            id: `local-${machineId}`,
+            sessionId: result.id,
+            userId: "",
+            machineId,
+            machineName,
+            role: "leader",
+            status: "online",
+            repos: [],
+            connectedAt: new Date().toISOString(),
+            lastHeartbeat: new Date().toISOString(),
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          })
+        }
+        setStore("teammates", existing)
       })
+      setStore("sessions", (prev) => [{ id: result.id, title: result.name, status: result.status, updatedAt: result.updatedAt }, ...prev.filter((s) => s.id !== result.id)])
       connectWS(result.id)
       // Attempt leader election as the session creator
       try {
@@ -326,6 +403,8 @@ export const { use: useCloudTeam, provider: CloudTeamProvider, context: CloudTea
       })
       const result = await cloudTeamApi.session.get(sessionId)
       batch(() => {
+        setStore("mode", "cloud")
+        setStore("active", true)
         setStore("session", {
           id: result.id,
           title: result.name,
@@ -353,7 +432,7 @@ export const { use: useCloudTeam, provider: CloudTeamProvider, context: CloudTea
         const myMember = store.teammates.find((t) => t.machineId === getMachineId())
         if (myMember) {
           try {
-            await cloudTeamApi.member.leave(myMember.id)
+            await cloudTeamApi.member.leave(store.session!.id, myMember.id)
           } catch {
             // Best effort leave
           }
@@ -361,6 +440,8 @@ export const { use: useCloudTeam, provider: CloudTeamProvider, context: CloudTea
       }
       disconnectWS()
       batch(() => {
+        setStore("mode", "local")
+        setStore("active", false)
         setStore("session", undefined)
         setStore("teammates", [])
         setStore("tasks", [])
@@ -374,16 +455,36 @@ export const { use: useCloudTeam, provider: CloudTeamProvider, context: CloudTea
 
     // ── Mode activation ────────────────────────────────────
 
+    function setMode(mode: "local" | "cloud") {
+      batch(() => {
+        setStore("mode", mode)
+        setStore("active", mode === "cloud")
+      })
+    }
+
+    function enterLocalMode() {
+      setMode("local")
+    }
+
+    async function enterCloudMode(sessionId?: string) {
+      if (sessionId) {
+        if (store.session?.id === sessionId) {
+          setMode("cloud")
+          return
+        }
+        await joinSession(sessionId)
+        return
+      }
+      setMode("cloud")
+    }
+
     function activate() {
-      setStore("active", true)
+      setMode("cloud")
     }
 
     function deactivate() {
-      setStore("active", false)
       setStore("pendingPlan", undefined)
-      if (store.session) {
-        void leaveSession()
-      }
+      setMode("local")
     }
 
     // ── Prompt submission ──────────────────────────────────
@@ -396,7 +497,7 @@ export const { use: useCloudTeam, provider: CloudTeamProvider, context: CloudTea
           const session = await createSession(text.slice(0, 100))
           sessionId = session.id
         }
-        const result = await cloudTeamApi.prompt.decompose(sessionId, { prompt: text, context })
+        const result = await cloudTeamApi.prompt.decompose(sessionId, { prompt: text, context, dryRun: true })
         batch(() => {
           // Store as pendingPlan for Leader review — do NOT write to tasks yet
           setStore("pendingPlan", result.tasks)
@@ -409,19 +510,58 @@ export const { use: useCloudTeam, provider: CloudTeamProvider, context: CloudTea
       }
     }
 
+    // ── Orchestrate (Explore → Decompose → Schedule in one call) ──
+
+    async function orchestratePrompt(text: string) {
+      batch(() => {
+        setStore("orchestrating", true)
+        setStore("orchestratePhase", "exploring")
+      })
+      let sessionId = store.session?.id
+      try {
+        if (!sessionId) {
+          const session = await createSession(text.slice(0, 100))
+          sessionId = session.id
+          console.log("[cloud-team] orchestrate: created session", sessionId, "teammates:", store.teammates.length)
+        }
+        const result = await cloudTeamApi.prompt.orchestrate(sessionId, {
+          prompt: text,
+          fencingToken: store.leader?.fencingToken,
+        })
+        console.log("[cloud-team] orchestrate: got", result.tasks.length, "tasks, store.tasks before set:", store.tasks.length)
+        batch(() => {
+          setStore("pendingPlan", result.tasks)
+          setStore("orchestrating", false)
+          setStore("orchestratePhase", "ready_for_review")
+        })
+        return result
+      } catch (err) {
+        batch(() => {
+          setStore("orchestrating", false)
+          setStore("orchestratePhase", undefined)
+        })
+        throw err
+      }
+    }
+
     // ── Plan confirmation ──────────────────────────────────
 
     async function confirmPlan(editedTasks: SubTask[]) {
       const sessionId = store.session?.id
-      if (!sessionId) return
+      if (!sessionId) {
+        throw new Error("No active session — cannot submit plan")
+      }
+      console.log("[cloud-team] confirmPlan: submitting", editedTasks.length, "tasks to session", sessionId, "fencingToken:", store.leader?.fencingToken)
       const tasks = await cloudTeamApi.task.submitPlan(sessionId, {
         tasks: editedTasks,
         fencingToken: store.leader?.fencingToken,
       })
+      console.log("[cloud-team] confirmPlan: got", tasks.length, "tasks back")
       batch(() => {
         setStore("tasks", tasks)
         setStore("pendingPlan", undefined)
       })
+      return tasks
     }
 
     function discardPlan() {
@@ -498,10 +638,13 @@ export const { use: useCloudTeam, provider: CloudTeamProvider, context: CloudTea
     return {
       // State accessors
       isAvailable,
-      active: () => store.active,
+      active: () => store.mode === "cloud",
+      mode: () => store.mode,
+      isCloudMode: () => store.mode === "cloud",
       decomposing: () => store.decomposing,
       pendingPlan: () => store.pendingPlan,
       session: () => store.session,
+      sessions: () => store.sessions,
       teammates: () => store.teammates,
       tasks: () => store.tasks,
       messages: () => store.messages,
@@ -519,17 +662,23 @@ export const { use: useCloudTeam, provider: CloudTeamProvider, context: CloudTea
       runtimeMode: () => store.runtimeMode,
       autoApprovePermissions: () => store.runtimeMode === "auto",
       autoAnswerFirstOption: () => store.runtimeMode === "auto",
+      orchestrating: () => store.orchestrating,
+      orchestratePhase: () => store.orchestratePhase,
 
       // Agent name constant
       agentName: CLOUD_TEAM_AGENT_NAME,
 
       // Actions
+      setMode,
+      enterLocalMode,
+      enterCloudMode,
       activate,
       deactivate,
       createSession,
       joinSession,
       leaveSession,
       submitPrompt,
+      orchestratePrompt,
       confirmPlan,
       discardPlan,
       respondApproval,

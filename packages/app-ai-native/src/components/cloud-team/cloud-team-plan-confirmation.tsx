@@ -1,6 +1,7 @@
 import { type Component, For, Show, createEffect, createMemo, createSignal } from "solid-js"
 import { Button } from "@opencode-ai/ui/button"
 import { Spinner } from "@opencode-ai/ui/spinner"
+import { showToast } from "@opencode-ai/ui/toast"
 import { useCloudTeam } from "@/context/cloud-team"
 import type { SubTask } from "@/client/cloud-team-types"
 
@@ -79,12 +80,20 @@ export const CloudTeamPlanConfirmation: Component = () => {
     }
     setSubmitting(true)
     try {
-      // Strip internal _key before submitting
-      const tasks: SubTask[] = valid.map(({ _key: _, ...t }) => ({
+      // Strip internal _key, map taskId → id for server compatibility
+      // Server TeamTask uses json:"id", but SubTask type uses taskId
+      const tasks: SubTask[] = valid.map(({ _key: _, taskId, ...t }) => ({
         ...t,
+        id: taskId || undefined,
         assignedMemberId: t.assignedMemberId ? t.assignedMemberId : undefined,
-      }))
-      await cloudTeam.confirmPlan(tasks)
+      })) as SubTask[]
+      console.log("[plan-confirmation] confirming", tasks.length, "tasks:", JSON.stringify(tasks[0]))
+      const result = await cloudTeam.confirmPlan(tasks)
+      console.log("[plan-confirmation] confirmPlan succeeded, store.tasks:", cloudTeam.tasks().length)
+      showToast({
+        title: `${tasks.length} tasks submitted`,
+        description: `Plan is now executing — ${result.length} tasks created.`,
+      })
     } catch (err) {
       setConfirmError(err instanceof Error ? err.message : "Failed to submit plan")
     } finally {
@@ -98,6 +107,18 @@ export const CloudTeamPlanConfirmation: Component = () => {
 
   return (
     <div class="px-3 py-2 space-y-2">
+      {/* Orchestrate progress indicator */}
+      <Show when={cloudTeam.orchestrating()}>
+        <div class="flex items-center gap-2 py-1 text-12-regular text-text-base">
+          <Spinner class="size-3" />
+          <span>
+            {cloudTeam.orchestratePhase() === "exploring" && "Exploring codebases..."}
+            {cloudTeam.orchestratePhase() === "decomposing" && "Decomposing into tasks..."}
+            {!cloudTeam.orchestratePhase() && "Processing..."}
+          </span>
+        </div>
+      </Show>
+
       {/* Header */}
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-2">

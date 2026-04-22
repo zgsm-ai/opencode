@@ -32,13 +32,11 @@ import { SettingsContext } from "@/context/settings"
 import { DirectoryContext } from "@/context/directory"
 import { LayoutContext } from "@/context/layout"
 import { FileContext } from "@/context/file"
-import { CloudTeamProvider, useCloudTeam } from "@/context/cloud-team"
 import { NewSessionView } from "@/components/session/session-new-view"
 import { MessageTimeline } from "@/pages/session/message-timeline"
 import { SessionComposerRegion } from "@/pages/session/composer/session-composer-region"
 import { createDeviceSessionComposerState } from "@/pages/session/composer/device-session-composer-state"
 import { createScrollSpy } from "@/pages/session/scroll-spy"
-import { CloudTeamStatusBar } from "@/components/cloud-team"
 import { useContentTabs } from "@/context/content-tabs"
 import type { Message, Part, Session, SessionStatus, FileDiff, Todo, Command, Agent, VcsInfo, ProviderListResponse, PermissionRequest, QuestionRequest } from "@opencode-ai/sdk/v2/client"
 import type { Project, Path } from "@opencode-ai/sdk/v2/client"
@@ -765,27 +763,8 @@ export function DeviceSessionTab(props: { tabId: string }) {
     provider: legacyProvider(workspace.data.provider),
   }))
 
-  const DeviceCloudTeamBar = (props: { centered: boolean }) => {
-    const cloudTeam = useCloudTeam()
-    return (
-      <Show when={cloudTeam.active()}>
-        <div class="shrink-0 w-full pb-1">
-          <div
-            classList={{
-              "w-full px-3": true,
-              "md:max-w-200 md:mx-auto 2xl:max-w-[1000px]": props.centered,
-            }}
-          >
-            <CloudTeamStatusBar />
-          </div>
-        </div>
-      </Show>
-    )
-  }
-
   return (
     <ConversationAdapterContext.Provider value={adapter() as any}>
-    <CloudTeamProvider>
     <GlobalSyncContext.Provider value={globalSyncValue as any}>
     <SDKContext.Provider value={sdkValue as any}>
       <SyncContext.Provider value={syncValue as any}>
@@ -943,7 +922,6 @@ export function DeviceSessionTab(props: { tabId: string }) {
                             </div>
                           }
                         >
-                          <DeviceCloudTeamBar centered={!isNew()} />
                           <SessionComposerRegion
                             state={composer}
                             ready={true}
@@ -972,7 +950,6 @@ export function DeviceSessionTab(props: { tabId: string }) {
       </SyncContext.Provider>
     </SDKContext.Provider>
     </GlobalSyncContext.Provider>
-    </CloudTeamProvider>
     </ConversationAdapterContext.Provider>
   )
 }

@@ -80,7 +80,8 @@ export interface Task {
 }
 
 export interface SubTask {
-  taskId: string
+  id?: string
+  taskId?: string
   description: string
   repoAffinity: string[]
   fileHints: string[]
@@ -244,6 +245,8 @@ export type CloudEventType =
   | "teammate.status"
   | "leader.elected"
   | "leader.expired"
+  | "leader.snapshot"
+  | "orchestrate.progress"
   | "error"
 
 export interface CloudEvent {
@@ -288,4 +291,21 @@ export interface TaskAssignmentInfo {
   assignedMemberId: string
   priorityTier: number
   assignmentReason: string
+}
+
+// ─── Orchestrate ──────────────────────────────────────────
+
+export type OrchestratePhase = "exploring" | "decomposing" | "ready_for_review"
+
+export interface OrchestrateProgress {
+  phase: OrchestratePhase
+  message?: string
+}
+
+export interface OrchestrateResponse {
+  tasks: Task[]
+  dryRun: boolean
+  context?: Record<string, unknown>
+  degraded?: boolean
+  reason?: string
 }

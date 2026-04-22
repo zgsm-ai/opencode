@@ -9,7 +9,6 @@ import { useGlobalSync } from "@/context/global-sync"
 import { useLanguage } from "@/context/language"
 import { useLayout } from "@/context/layout"
 import { useLocal } from "@/context/local"
-import { useCloudTeam } from "@/context/cloud-team"
 import { usePermission } from "@/context/permission"
 import { type ImageAttachmentPart, type Prompt, usePrompt } from "@/context/prompt"
 import { useSDK } from "@/context/sdk"
@@ -64,7 +63,6 @@ export function createPromptSubmit(input: PromptSubmitInput) {
   const sync = useSync()
   const globalSync = useGlobalSync()
   const local = useLocal()
-  const cloudTeam = useCloudTeam()
   const permission = usePermission()
   const prompt = usePrompt()
   const layout = useLayout()
@@ -83,12 +81,6 @@ export function createPromptSubmit(input: PromptSubmitInput) {
   const abort = async () => {
     const sessionID = params.id || (layout.deviceMode && (sync as any).currentSessionID?.())
     if (!sessionID) return Promise.resolve()
-
-    // If CloudTeam mode is active, handle abort differently
-    if (cloudTeam.active()) {
-      await cloudTeam.leaveSession()
-      return
-    }
 
     if (!layout.deviceMode) {
       globalSync.todo.set(sessionID, [])
@@ -160,30 +152,6 @@ export function createPromptSubmit(input: PromptSubmitInput) {
         setCursorPosition(editor, input.promptLength(currentPrompt))
         input.queueScroll()
       })
-    }
-
-    // CloudTeam mode: route prompt through cloud team submission immediately.
-    // Do not require local model/agent selection for CloudTeam orchestration.
-    if (cloudTeam.active()) {
-      input.addToHistory(currentPrompt, mode)
-      input.resetHistoryNavigation()
-      clearInput()
-      input.onSubmit?.()
-      try {
-        const result = await cloudTeam.submitPrompt(text, { parts: [], context: prompt.context.items() })
-        const taskCount = Array.isArray((result as any)?.tasks) ? (result as any).tasks.length : 0
-        showToast({
-          title: taskCount > 0 ? `CloudTeam plan ready (${taskCount} tasks)` : "CloudTeam request sent",
-          description: "Open Details to review/execute task plan.",
-        })
-      } catch (err) {
-        showToast({
-          title: language.t("prompt.toast.promptSendFailed.title"),
-          description: errorMessage(err),
-        })
-        restoreInput()
-      }
-      return
     }
 
     const currentModel = local.model.current()

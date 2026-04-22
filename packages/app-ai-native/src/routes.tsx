@@ -13,6 +13,8 @@ const ProjectsHome = lazy(() => import("@/pages/projects").then((m) => ({ defaul
 const ProjectDetail = lazy(() => import("@/pages/projects").then((m) => ({ default: m.ProjectDetail })))
 const WorkspaceLayout = lazy(() => import("@/pages/workspace").then((m) => ({ default: m.WorkspaceLayout })))
 const WorkspaceHome = lazy(() => import("@/pages/workspace").then((m) => ({ default: m.WorkspaceHome })))
+const CloudTeamLayout = lazy(() => import("@/pages/cloud-team/index").then((m) => ({ default: m.CloudTeamLayout })))
+const CloudTeamHomePage = lazy(() => import("@/pages/cloud-team/home").then((m) => ({ default: m.CloudTeamHomePage })))
 const DirectoryLayout = lazy(() => import("@/pages/directory-layout"))
 const consoleImport = import("@/pages/console")
 const ConsoleLayout = lazy(() => consoleImport.then((m) => ({ default: m.ConsoleLayout })))
@@ -76,6 +78,14 @@ export const routeConfig: RouteConfig[] = [
           { path: "/:id", component: SessionRoute },
         ],
       },
+    ],
+  },
+  {
+    path: "/cloud-team",
+    component: CloudTeamLayout,
+    auth: true,
+    children: [
+      { path: "/", component: CloudTeamHomePage },
     ],
   },
   {

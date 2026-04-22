@@ -155,7 +155,7 @@ export const CloudTeamStatusBar: Component = () => {
             variant="ghost"
             size="small"
             class="text-11-regular text-red-500 hover:text-red-600"
-            onClick={() => cloudTeam.deactivate()}
+            onClick={() => void cloudTeam.leaveSession()}
           >
             Leave
           </Button>
