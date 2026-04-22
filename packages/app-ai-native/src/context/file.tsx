@@ -25,6 +25,8 @@ import { createFileTreeStore } from "./file/tree-store"
 import { invalidateFromWatcher } from "./file/watcher"
 import {
   selectionFromLines,
+  type FileContentChunk,
+  type FileMeta,
   type FileState,
   type FileSelection,
   type FileViewState,
@@ -127,7 +129,7 @@ export const { use: useFile, provider: FileProvider, context: FileContext } = cr
       )
     }
 
-    const setLoaded = (file: string, content: FileState["content"]) => {
+    const setLoaded = (file: string, content: FileState["content"], chunk?: FileContentChunk) => {
       setStore(
         "file",
         file,
@@ -135,6 +137,17 @@ export const { use: useFile, provider: FileProvider, context: FileContext } = cr
           draft.loaded = true
           draft.loading = false
           draft.content = content
+          draft.chunk = chunk
+        }),
+      )
+    }
+
+    const setMeta = (file: string, meta: FileMeta) => {
+      setStore(
+        "file",
+        file,
+        produce((draft) => {
+          draft.meta = meta
         }),
       )
     }
@@ -155,28 +168,53 @@ export const { use: useFile, provider: FileProvider, context: FileContext } = cr
       })
     }
 
-    const load = (input: string, options?: { force?: boolean }) => {
+    const load = (input: string, options?: { force?: boolean; offset?: number; limit?: number }) => {
       const file = path.normalize(input)
       if (!file) return Promise.resolve()
 
       const directory = scope()
-      const key = `${directory}\n${file}`
+      const offset = options?.offset ?? 1
+      const limit = options?.limit
+      const key = `${directory}\n${file}\n${offset}\n${limit ?? "full"}`
       ensure(file)
 
       const current = store.file[file]
-      if (!options?.force && current?.loaded) return Promise.resolve()
+      if (!options?.force && current?.loaded && offset === 1 && limit == null) return Promise.resolve()
 
       const pending = inflight.get(key)
       if (pending) return pending
 
       setLoading(file)
 
+      const metaPromise = current?.meta
+        ? Promise.resolve(current.meta)
+        : sdk.client.runtime.fileMeta(file).then((meta) => {
+          if (scope() !== directory) return meta
+          setMeta(file, meta)
+          return meta
+        }).catch(() => undefined)
+
       const promise = sdk.client.runtime
-        .fileRead(file)
-        .then((x) => {
+        .fileRead(file, { ...(offset ? { offset } : {}), ...(limit ? { limit } : {}) })
+        .then(async (x) => {
           if (scope() !== directory) return
-          const content = x as FileState["content"]
-          setLoaded(file, content)
+          await metaPromise.catch(() => undefined)
+
+          const previousContent = current?.content?.content ?? ""
+          const nextContent = offset > 1 && previousContent
+            ? `${previousContent}${x.content ?? ""}`
+            : (x.content ?? "")
+
+          const content = {
+            type: x.type,
+            content: nextContent,
+          } as FileState["content"]
+
+          setLoaded(file, content, {
+            offset: x.offset,
+            lines: x.lines,
+            totalLines: x.totalLines,
+          })
 
           if (!content) return
           touchFileContent(file, approxBytes(content))

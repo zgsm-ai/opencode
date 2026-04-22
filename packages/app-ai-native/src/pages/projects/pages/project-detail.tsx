@@ -1,9 +1,9 @@
 import { A, useParams } from "@solidjs/router"
-import { Avatar } from "@opencode-ai/ui/avatar"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { Icon } from "@opencode-ai/ui/icon"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
 import type { JSX } from "solid-js"
+import AvatarDisplay from "@/components/avatar-display"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useAuth } from "@/context/auth"
@@ -304,9 +304,9 @@ export default function ProjectDetail() {
                                           {(activity) => (
                                             <Tooltip value={userName(activity.userId)} placement="top">
                                               <div class="project-detail-activity-user-avatar-wrap">
-                                                <Avatar
-                                                  fallback={userName(activity.userId)}
-                                                  src={userAvatar(activity.userId)}
+                                                <AvatarDisplay
+                                                  avatarUrl={userAvatar(activity.userId)}
+                                                  username={userName(activity.userId)}
                                                   class="project-detail-activity-user-avatar"
                                                 />
                                               </div>
@@ -428,7 +428,7 @@ function DetailTable(props: { headers: string[]; rows: JSX.Element[][]; emptyMes
 function UserIdentityCell(props: { name: string; avatarUrl?: string }) {
   return (
     <div class="flex min-w-0 items-center gap-2">
-      <Avatar src={props.avatarUrl} fallback={props.name} class="size-7 shrink-0" />
+      <AvatarDisplay avatarUrl={props.avatarUrl} username={props.name} class="size-7 shrink-0" />
       <span class="truncate">{props.name}</span>
     </div>
   )

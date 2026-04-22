@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "@solidjs/router"
 import { Icon } from "@opencode-ai/ui/icon"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { DropdownMenu } from "@opencode-ai/ui/dropdown-menu"
+import AvatarDisplay from "@/components/avatar-display"
 import { usePlatform } from "@/context/platform"
 import { useLanguage } from "@/context/language"
 import { useAuth } from "@/context/auth"
@@ -41,6 +42,8 @@ function NavButton(props: {
 function UserButton() {
   const { user, logout } = useAuth()
   const language = useLanguage()
+  const displayName = () => user()?.name || user()?.preferred_username || user()?.email || ""
+  const username = () => user()?.preferred_username || user()?.email || user()?.name || ""
 
   return (
     <Show
@@ -65,19 +68,17 @@ function UserButton() {
           class={item(false)}
           aria-label={language.t("sidebar.user.menu")}
         >
-          <Show when={user()?.picture} fallback={<Icon name="eye" size="normal" />}>
-            <img src={user()?.picture} alt="" class="size-6 rounded-full" />
-          </Show>
+          <AvatarDisplay avatarUrl={user()?.picture} username={displayName()} class="size-6" />
         </DropdownMenu.Trigger>
         <DropdownMenu.Portal>
           <DropdownMenu.Content>
             <div class="px-3 py-2 border-b border-border-weak-base">
-              <p class="text-13-medium text-text-strong truncate">
-                {user()?.preferred_username || user()?.name || user()?.email}
+              <p class="text-13-medium text-text-strong">
+                {displayName()}
               </p>
-              <Show when={user()?.email}>
-                <p class="text-11-regular text-text-weak truncate">{user()?.email}</p>
-              </Show>
+              <p class="text-11-regular text-text-weak mt-0.5">
+                @{username()}
+              </p>
             </div>
             <DropdownMenu.Item onSelect={logout}>
               <DropdownMenu.ItemLabel>{language.t("sidebar.user.signOut")}</DropdownMenu.ItemLabel>

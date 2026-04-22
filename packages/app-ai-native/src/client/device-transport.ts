@@ -17,7 +17,7 @@ function query(path: string, input?: Query) {
   const params = new URLSearchParams()
   for (const [key, value] of Object.entries(input)) {
     if (value === undefined) continue
-    params.set(key, key === "path" ? encodeURIComponent(String(value)) : String(value))
+    params.set(key, String(value))
   }
   const text = params.toString()
   if (!text) return path

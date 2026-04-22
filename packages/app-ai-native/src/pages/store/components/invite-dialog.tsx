@@ -1,5 +1,6 @@
 import { Icon } from "@opencode-ai/ui/icon"
 import { showToast } from "@opencode-ai/ui/toast"
+import AvatarDisplay from "@/components/avatar-display"
 import { useLanguage } from "@/context/language"
 import { For, Show } from "solid-js"
 import { createStore } from "solid-js/store"
@@ -110,39 +111,12 @@ export function InviteDialog(props: Props) {
                   style={{ display: "flex", "align-items": "center", "justify-content": "space-between", gap: "0.75rem" }}
                 >
                   <div style={{ display: "flex", "align-items": "center", gap: "0.75rem", "min-width": "0" }}>
-                    <Show
-                      when={user.picture}
-                      fallback={
-                        <div
-                          style={{
-                            display: "flex",
-                            width: "2rem",
-                            height: "2rem",
-                            "flex-shrink": "0",
-                            "align-items": "center",
-                            "justify-content": "center",
-                            "border-radius": "9999px",
-                            background: "var(--native-bg-subtle)",
-                            "font-size": "0.8125rem",
-                            color: "var(--native-foreground)",
-                          }}
-                        >
-                          {(user.name || user.preferred_username || "?")[0].toUpperCase()}
-                        </div>
-                      }
-                    >
-                      <img
-                        src={user.picture}
-                        alt={user.name}
-                        style={{
-                          width: "2rem",
-                          height: "2rem",
-                          "flex-shrink": "0",
-                          "border-radius": "9999px",
-                          "object-fit": "cover",
-                        }}
-                      />
-                    </Show>
+                    <AvatarDisplay
+                      avatarUrl={user.picture}
+                      username={user.name || user.preferred_username || user.email}
+                      size="2rem"
+                      class="shrink-0"
+                    />
                     <div style={{ "min-width": "0" }}>
                       <div
                         style={{

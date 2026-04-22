@@ -1,26 +1,12 @@
 import { createEffect, createMemo, createSignal, Match, Show, Switch } from "solid-js"
 import { Dynamic } from "solid-js/web"
-import { applyPatch, parsePatch, reversePatch } from "diff"
 import { useFileComponent } from "@opencode-ai/ui/context/file"
 import { useFile } from "@/context/file"
 import { useLanguage } from "@/context/language"
 import { useLayout } from "@/context/layout"
 import { useDeviceSDK } from "@/context/device-sdk"
 import type { ContentTab } from "@/context/content-tabs"
-
-function computeBefore(after: string, diff: string): string {
-  if (!diff) return after
-  try {
-    const parsed = parsePatch(diff)
-    if (!parsed.length) return after
-    const reversed = reversePatch(parsed[0])
-    const result = applyPatch(after, reversed)
-    if (result === false) return after
-    return result
-  } catch {
-    return after
-  }
-}
+import type { DiffContentData } from "@/client/device-client"
 
 export function DiffPreviewTab(props: { tab: ContentTab }) {
   const file = useFile()
@@ -31,63 +17,57 @@ export function DiffPreviewTab(props: { tab: ContentTab }) {
 
   const path = createMemo(() => props.tab.meta.path as string | undefined)
   const status = createMemo(() => props.tab.meta.status as string | undefined)
+  const staged = createMemo(() => props.tab.meta.staged as boolean | undefined)
   const state = createMemo(() => {
     const p = path()
     if (!p) return
     return file.get(p)
   })
-  const fileContent = createMemo(() => (state()?.content as { content?: string; diff?: string } | undefined))
+  const fileContent = createMemo(() => (state()?.content as { content?: string } | undefined))
 
-  const [fetchedDiff, setFetchedDiff] = createSignal<string | undefined>()
+  const [diffResult, setDiffResult] = createSignal<DiffContentData | undefined>()
   const [fetchingDiff, setFetchingDiff] = createSignal(false)
-
-  const after = createMemo(() => {
-    if (status() === "deleted") return ""
-    return fileContent()?.content ?? ""
-  })
-
-  const diffSource = createMemo(() => fileContent()?.diff ?? fetchedDiff())
 
   const before = createMemo(() => {
     const s = status()
     if (s === "added") return ""
-    const d = diffSource()
-    if (!d) return after()
-    return computeBefore(after(), d)
+    const result = diffResult()
+    if (result?.before !== undefined) return result.before
+    return fileContent()?.content ?? ""
+  })
+
+  const after = createMemo(() => {
+    if (status() === "deleted") return ""
+    const result = diffResult()
+    if (result?.after !== undefined) return result.after
+    return fileContent()?.content ?? ""
   })
 
   const diffStyle = createMemo(() => layout.review.diffStyle())
 
   const loaded = createMemo(() => {
-    if (status() === "deleted") return !!fetchedDiff()
-    const fileLoaded = !!state()?.loaded
-    const needDiff = status() !== "added"
-    if (needDiff) return fileLoaded && !!diffSource()
-    return fileLoaded
+    if (status() === "deleted") return !!diffResult()
+    if (status() === "added") return !!diffResult()
+    return !!diffResult()
   })
 
   const loading = createMemo(() => {
-    if (status() === "deleted") return fetchingDiff()
-    return !!state()?.loading || fetchingDiff()
+    return fetchingDiff()
   })
 
   createEffect(() => {
     const p = path()
     if (!p) return
 
-    if (status() !== "added" && !fileContent()?.diff && !fetchedDiff() && !fetchingDiff()) {
+    if (!diffResult() && !fetchingDiff()) {
       setFetchingDiff(true)
-      sdk.client.runtime.diff({ path: p }).then((result) => {
-        setFetchedDiff(result?.diff)
+      sdk.client.runtime.diffContent({ path: p, staged: staged() ?? false }).then((result) => {
+        setDiffResult(result)
       }).catch(() => {
-        setFetchedDiff(undefined)
+        setDiffResult(undefined)
       }).finally(() => {
         setFetchingDiff(false)
       })
-    }
-
-    if (status() !== "deleted") {
-      void file.load(p)
     }
   })
 

@@ -6,7 +6,7 @@ import { useLanguage } from "@/context/language"
 import { itemApi, repoApi, registryApi2, type CapabilityItem, type Repository } from "../lib/api"
 import type { ContentMode } from "../lib/content"
 import { canArchive, contentValue, usableMode } from "../lib/content"
-import { CATEGORIES, TYPE_PREFIX, TYPE_CONTENT_PLACEHOLDER, typeKey, categoryKey } from "../lib/constants"
+import { CATEGORIES, TYPE_CONTENT_PLACEHOLDER, typeKey, categoryKey } from "../lib/constants"
 import { ContentField } from "./content-field"
 import { Modal } from "@/components/modal"
 
@@ -50,7 +50,6 @@ export function CreateCapabilityDialog(props: CreateCapabilityDialogProps) {
   })
 
   const typeLabel = createMemo(() => language.t(typeKey(store.itemType)))
-  const slugPrefix = createMemo(() => TYPE_PREFIX[store.itemType] ?? "")
 
   const archive = createMemo(() => canArchive(store.itemType))
   const mode = createMemo(() => usableMode(archive(), store.contentMode))
@@ -97,12 +96,12 @@ export function CreateCapabilityDialog(props: CreateCapabilityDialogProps) {
   function setItemType(value: "skill" | "subagent" | "command" | "mcp") {
     setStore("itemType", value)
     setStore("content", TYPE_CONTENT_PLACEHOLDER[value] ?? "")
-    if (!store.slugManual) setStore("slug", `${TYPE_PREFIX[value] ?? ""}${slugify(store.name)}`)
+    if (!store.slugManual) setStore("slug", slugify(store.name))
   }
 
   function handleNameInput(value: string) {
     setStore("name", value)
-    if (!store.slugManual) setStore("slug", `${slugPrefix()}${slugify(value)}`)
+    if (!store.slugManual) setStore("slug", slugify(value))
   }
 
   async function resolveRegistryId() {
@@ -224,7 +223,7 @@ export function CreateCapabilityDialog(props: CreateCapabilityDialogProps) {
                   setStore("slug", e.currentTarget.value)
                   setStore("slugManual", true)
                 }}
-                placeholder={`${slugPrefix()}my-${store.itemType}`}
+                placeholder={`my-${store.itemType}`}
                 class="modal-input"
                 style={{ flex: "1.2", "font-family": "'SF Mono', 'Fira Code', monospace" }}
                 required
@@ -232,7 +231,7 @@ export function CreateCapabilityDialog(props: CreateCapabilityDialogProps) {
             </div>
             <div class="modal-hint">
               {selectedNamespace()?.sublabel} ·{" "}
-              {(selectedNamespace()?.label ?? "public") + "/" + (store.slug || `${slugPrefix()}my-${store.itemType}`)}
+              {(selectedNamespace()?.label ?? "public") + "/" + (store.slug || `my-${store.itemType}`)}
             </div>
           </div>
         </div>

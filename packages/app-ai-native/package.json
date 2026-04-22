@@ -39,6 +39,12 @@
     "vite-plugin-solid": "catalog:"
   },
   "dependencies": {
+    "@codemirror/commands": "6.10.3",
+    "@codemirror/lang-markdown": "6.5.0",
+    "@codemirror/language": "6.12.3",
+    "@codemirror/language-data": "6.5.2",
+    "@codemirror/state": "6.6.0",
+    "@codemirror/view": "6.41.1",
     "@corvu/drawer": "0.2.4",
     "@kobalte/core": "catalog:",
     "@opencode-ai/sdk": "workspace:*",
@@ -60,6 +66,7 @@
     "@thisbeyond/solid-dnd": "0.7.5",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
+    "codemirror": "6.0.2",
     "diff": "catalog:",
     "fuzzysort": "catalog:",
     "ghostty-web": "0.3.0",

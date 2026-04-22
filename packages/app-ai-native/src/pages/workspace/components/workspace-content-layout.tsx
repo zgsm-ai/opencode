@@ -28,6 +28,7 @@ import type { DiffFileEntry } from "@/client/device-client"
 import type { Session } from "@opencode-ai/sdk/v2/client"
 import { getDirectory, getFilename } from "@opencode-ai/util/path"
 import { useWorkspace } from "../context"
+import { filePreviewConfig } from "../lib/file-preview-config"
 
 let newSessionCounter = 0
 
@@ -160,7 +161,7 @@ function FileTreeWithTabs(props: { path: string }) {
       icon: "file-tree",
       meta: { path },
     })
-    void file.load(path)
+    void file.load(path, { limit: filePreviewConfig.initialPreviewLines })
   }
 
   return <FileTree path={props.path} onFileClick={handleFileClick} />
@@ -189,10 +190,12 @@ function ContentSidebar(props: { directory: string }) {
     files: 300,
     diffs: SECTION_MIN_HEIGHT,
   })
-  const [diffFiles, setDiffFiles] = createSignal<DiffFileEntry[]>([])
+  const [stagedFiles, setStagedFiles] = createSignal<DiffFileEntry[]>([])
+  const [unstagedFiles, setUnstagedFiles] = createSignal<DiffFileEntry[]>([])
   const [diffBranch, setDiffBranch] = createSignal<string>("")
   const [diffLoading, setDiffLoading] = createSignal(false)
   const [statusMap, setStatusMap] = createSignal<Record<string, { type: string }>>({})
+  const [diffGroupsCollapsed, setDiffGroupsCollapsed] = createSignal<Record<string, boolean>>({})
 
   const sortedSessions = createMemo(() => {
     const sessions = dw.data.session
@@ -274,13 +277,15 @@ function ContentSidebar(props: { directory: string }) {
     if (diffLoading()) return
     setDiffLoading(true)
     try {
-      const result = await sdk.client.runtime.diff({ stat: true })
+      const result = await sdk.client.runtime.diff()
       if (result) {
-        setDiffFiles(result.files ?? [])
+        setStagedFiles(result.stagedFiles ?? [])
+        setUnstagedFiles(result.unstagedFiles ?? [])
         setDiffBranch(result.branch ?? "")
       }
     } catch {
-      setDiffFiles([])
+      setStagedFiles([])
+      setUnstagedFiles([])
     } finally {
       setDiffLoading(false)
     }
@@ -513,7 +518,7 @@ function ContentSidebar(props: { directory: string }) {
                           {language.t("common.loading")}{language.t("common.loading.ellipsis")}
                         </div>
                       }>
-                        <Show when={diffFiles().length > 0} fallback={
+                        <Show when={stagedFiles().length > 0 || unstagedFiles().length > 0} fallback={
                           <div class="px-3 py-2 text-12-regular text-text-weak">
                             {language.t("session.review.noChanges")}
                           </div>
@@ -525,34 +530,86 @@ function ContentSidebar(props: { directory: string }) {
                                 <span class="truncate">{diffBranch()}</span>
                               </div>
                             </Show>
-                            <For each={diffFiles()}>
-                              {(file) => (
-                                <div class="flex items-center gap-1.5 h-10 px-1.5 text-12-regular hover:bg-native-hover rounded-md cursor-pointer transition-colors duration-150 group/diff"
-                                  onClick={() => {
-                                    tabStore.open({
-                                      kind: "diff",
-                                      key: file.path,
-                                      title: getFilename(file.path),
-                                      icon: statusIcon(file.status) as string,
-                                      meta: { path: file.path, status: file.status },
-                                    })
-                                  }}
-                                >
-                                  <Icon name={statusIcon(file.status) as any} size="small" class={`shrink-0 ${statusColor(file.status)}`} />
-                                  <span class="truncate flex-1 min-w-0">{file.path}</span>
-                                  <Show when={file.additions > 0 || file.deletions > 0}>
-                                    <span class="shrink-0 text-11-regular tabular-nums flex items-center gap-0.5">
-                                      <Show when={file.additions > 0}>
-                                        <span class="text-success">+{file.additions}</span>
+                            <Show when={stagedFiles().length > 0}>
+                              <div
+                                class="px-1.5 pt-1.5 pb-0.5 flex items-center gap-1 text-[11px] font-[600] text-native-muted tracking-wide uppercase cursor-pointer hover:text-native-foreground transition-colors"
+                                onClick={() => setDiffGroupsCollapsed((prev) => ({ ...prev, staged: !prev.staged }))}
+                              >
+                                <Icon name={diffGroupsCollapsed().staged ? "chevron-right" : "chevron-down"} size="small" class="shrink-0" />
+                                {language.t("workspace.content.diff.staged")}
+                                <span class="ml-auto text-11-regular tabular-nums">{stagedFiles().length}</span>
+                              </div>
+                              <Show when={!diffGroupsCollapsed().staged}>
+                                <For each={stagedFiles()}>
+                                  {(file) => (
+                                    <div class="flex items-center gap-1.5 h-10 px-1.5 text-12-regular hover:bg-native-hover rounded-md cursor-pointer transition-colors duration-150 group/diff"
+                                      onClick={() => {
+                                        tabStore.open({
+                                          kind: "diff",
+                                          key: `staged:${file.path}`,
+                                          title: getFilename(file.path),
+                                          icon: statusIcon(file.status) as string,
+                                          meta: { path: file.path, status: file.status, staged: true },
+                                        })
+                                      }}
+                                    >
+                                      <Icon name={statusIcon(file.status) as any} size="small" class={`shrink-0 ${statusColor(file.status)}`} />
+                                      <span class="truncate flex-1 min-w-0">{file.path}</span>
+                                      <Show when={file.additions > 0 || file.deletions > 0}>
+                                        <span class="shrink-0 text-11-regular tabular-nums flex items-center gap-0.5">
+                                          <Show when={file.additions > 0}>
+                                            <span class="text-success">+{file.additions}</span>
+                                          </Show>
+                                          <Show when={file.deletions > 0}>
+                                            <span class="text-danger">-{file.deletions}</span>
+                                          </Show>
+                                        </span>
                                       </Show>
-                                      <Show when={file.deletions > 0}>
-                                        <span class="text-danger">-{file.deletions}</span>
+                                    </div>
+                                  )}
+                                </For>
+                              </Show>
+                            </Show>
+                            <Show when={unstagedFiles().length > 0}>
+                              <div
+                                class="px-1.5 pt-1.5 pb-0.5 flex items-center gap-1 text-[11px] font-[600] text-native-muted tracking-wide uppercase cursor-pointer hover:text-native-foreground transition-colors"
+                                onClick={() => setDiffGroupsCollapsed((prev) => ({ ...prev, unstaged: !prev.unstaged }))}
+                              >
+                                <Icon name={diffGroupsCollapsed().unstaged ? "chevron-right" : "chevron-down"} size="small" class="shrink-0" />
+                                {language.t("workspace.content.diff.unstaged")}
+                                <span class="ml-auto text-11-regular tabular-nums">{unstagedFiles().length}</span>
+                              </div>
+                              <Show when={!diffGroupsCollapsed().unstaged}>
+                                <For each={unstagedFiles()}>
+                                  {(file) => (
+                                    <div class="flex items-center gap-1.5 h-10 px-1.5 text-12-regular hover:bg-native-hover rounded-md cursor-pointer transition-colors duration-150 group/diff"
+                                      onClick={() => {
+                                        tabStore.open({
+                                          kind: "diff",
+                                          key: `unstaged:${file.path}`,
+                                          title: getFilename(file.path),
+                                          icon: statusIcon(file.status) as string,
+                                          meta: { path: file.path, status: file.status, staged: false },
+                                        })
+                                      }}
+                                    >
+                                      <Icon name={statusIcon(file.status) as any} size="small" class={`shrink-0 ${statusColor(file.status)}`} />
+                                      <span class="truncate flex-1 min-w-0">{file.path}</span>
+                                      <Show when={file.additions > 0 || file.deletions > 0}>
+                                        <span class="shrink-0 text-11-regular tabular-nums flex items-center gap-0.5">
+                                          <Show when={file.additions > 0}>
+                                            <span class="text-success">+{file.additions}</span>
+                                          </Show>
+                                          <Show when={file.deletions > 0}>
+                                            <span class="text-danger">-{file.deletions}</span>
+                                          </Show>
+                                        </span>
                                       </Show>
-                                    </span>
-                                  </Show>
-                                </div>
-                              )}
-                            </For>
+                                    </div>
+                                  )}
+                                </For>
+                              </Show>
+                            </Show>
                           </div>
                         </Show>
                       </Show>

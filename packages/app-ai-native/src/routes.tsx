@@ -15,11 +15,13 @@ const WorkspaceLayout = lazy(() => import("@/pages/workspace").then((m) => ({ de
 const WorkspaceHome = lazy(() => import("@/pages/workspace").then((m) => ({ default: m.WorkspaceHome })))
 const CloudTeamLayout = lazy(() => import("@/pages/cloud-team/index").then((m) => ({ default: m.CloudTeamLayout })))
 const CloudTeamHomePage = lazy(() => import("@/pages/cloud-team/home").then((m) => ({ default: m.CloudTeamHomePage })))
+const CapabilityEditorLayout = lazy(() => import("@/pages/capability-editor-layout"))
 const DirectoryLayout = lazy(() => import("@/pages/directory-layout"))
 const consoleImport = import("@/pages/console")
 const ConsoleLayout = lazy(() => consoleImport.then((m) => ({ default: m.ConsoleLayout })))
 const ConsoleRepositories = lazy(() => consoleImport.then((m) => ({ default: m.DashboardRepositories })))
 const ConsoleCapabilities = lazy(() => consoleImport.then((m) => ({ default: m.DashboardCapabilities })))
+const CapabilityEditorPage = lazy(() => consoleImport.then((m) => ({ default: m.CapabilityEditorPage })))
 const ConsoleDevices = lazy(() => consoleImport.then((m) => ({ default: m.DevicesPage })))
 const ConsoleNotifications = lazy(() => consoleImport.then((m) => ({ default: m.NotificationsPage })))
 
@@ -95,6 +97,15 @@ export const routeConfig: RouteConfig[] = [
     children: [
       { path: "/", component: ProjectsHome },
       { path: "/:projectId", component: ProjectDetail },
+    ],
+  },
+  {
+    path: "/capabilities",
+    component: CapabilityEditorLayout,
+    auth: true,
+    children: [
+      { path: "/new", component: CapabilityEditorPage },
+      { path: "/:itemId/edit", component: CapabilityEditorPage },
     ],
   },
   {

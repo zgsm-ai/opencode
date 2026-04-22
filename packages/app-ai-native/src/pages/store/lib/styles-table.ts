@@ -9,6 +9,8 @@ export const table = {
   row: "cursor-pointer transition-[background-color] hover:bg-[color:color-mix(in_oklab,var(--native-primary)_4%,transparent)]",
   item: "font-semibold text-[var(--native-foreground)]",
   mut: "text-[var(--native-muted)] [font-variant-numeric:tabular-nums]",
+  colTitle: "w-[22%]",
+  colDescription: "w-[28%]",
   colCategory: "w-[9.5rem] min-w-[9.5rem]",
   colUpdated: "w-32 min-w-32",
   colAction: "w-[4.5rem] min-w-[4.5rem]",

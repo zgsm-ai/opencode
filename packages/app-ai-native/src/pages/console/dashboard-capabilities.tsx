@@ -11,22 +11,14 @@ import { getLoginUrl } from "@/pages/store/lib/auth"
 import ItemDetailContent from "@/pages/store/components/item-detail-content"
 import { behaviorApi, itemApi, repoApi, type CapabilityItem, type Repository } from "@/pages/store/lib/api"
 import { ConfirmDialog } from "@/pages/store/components/confirm-dialog"
-import { CreateCapabilityDialog } from "@/pages/store/components/create-capability-dialog"
-import { EditCapabilityDialog } from "@/pages/store/components/edit-capability-dialog"
 import { MoveCapabilityDialog } from "@/pages/store/components/move-capability-dialog"
-import { typeKey } from "@/pages/store/lib/constants"
+import { TYPE_COLORS, typeKey } from "@/pages/store/lib/constants"
 import { cn } from "@/lib/utils"
 import { st, sx } from "@/pages/store/lib/styles"
 import { Button } from "@/components/ui/button"
+import { useNavigate } from "@solidjs/router"
 
 const PAGE_SIZE = 10
-
-const TYPE_COLORS: Record<string, string> = {
-  skill: "#F59E0B",
-  subagent: "#3b82f6",
-  command: "#10B981",
-  mcp: "#8B5CF6",
-}
 
 const SUB = {
   "font-size": "0.8125rem",
@@ -38,6 +30,7 @@ const SUB = {
 export default function DashboardCapabilities() {
   const dialog = useDialog()
   const language = useLanguage()
+  const navigate = useNavigate()
   const { user, loading } = useAuth()
   const [selectedItemId, setSelectedItemId] = createSignal<string | null>(null)
   const [detailItem, setDetailItem] = createSignal<CapabilityItem | null>(null)
@@ -132,18 +125,11 @@ export default function DashboardCapabilities() {
 
   const openCreateCapability = () => {
     if (!userId()) return
-    dialog.show(() => (
-      <CreateCapabilityDialog
-        userId={userId()}
-        username={username()}
-        repositories={state.repos}
-        onCreated={() => void loadItems()}
-      />
-    ))
+    navigate("/capabilities/new")
   }
 
   const openEditCapability = (item: CapabilityItem) => {
-    dialog.show(() => <EditCapabilityDialog item={item} onSaved={() => void loadItems()} />)
+    navigate(`/capabilities/${item.id}/edit`)
   }
 
   const openMoveCapability = (item: CapabilityItem) => {
@@ -301,10 +287,10 @@ export default function DashboardCapabilities() {
               <Button
                 type="button"
                 size="sm"
-                onClick={() => { window.location.href = getLoginUrl("/store/dashboard/capabilities") }}
-              >
-                {language.t("store.console.login")}
-              </Button>
+                  onClick={() => { window.location.href = getLoginUrl("/console/capabilities") }}
+                >
+                  {language.t("store.console.login")}
+                </Button>
             </div>
           </div>
         }

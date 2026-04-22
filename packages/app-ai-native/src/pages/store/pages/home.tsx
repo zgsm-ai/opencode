@@ -1,6 +1,6 @@
 import { createEffect, createMemo, createResource, createSignal, For, Show, Suspense } from "solid-js"
 import { createStore } from "solid-js/store"
-import { useSearchParams } from "@solidjs/router"
+import { useNavigate, useSearchParams } from "@solidjs/router"
 import { useLanguage } from "@/context/language"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -17,7 +17,6 @@ import { behaviorApi, categoryApi, itemApi, type Category, type CapabilityItem, 
 import { typeKey } from "../lib/constants"
 import ItemDetailContent, { getInstallCommand } from "../components/item-detail-content"
 import SecurityTag from "../components/security-tag"
-import BestPracticeCarousel from "../components/best-practice-carousel"
 import { Icon, type IconProps } from "@opencode-ai/ui/icon"
 import { LocalIcon } from "@/components/local-icon"
 import { useAuth } from "../hooks/use-auth"
@@ -25,10 +24,10 @@ import { cn } from "@/lib/utils"
 import { st, sx } from "../lib/styles"
 
 const STORE_TYPES = [
-  { value: "skill", labelKey: "store.sidebar.nav.skills", descKey: "store.home.type.skill.description", icon: "sparkles" as IconProps["name"], color: "#F59E0B", bg: "#FEF3C7" },
-  { value: "subagent", labelKey: "store.sidebar.nav.subagents", descKey: "store.home.type.subagent.description", icon: "brain" as IconProps["name"], color: "#3b82f6", bg: "#DBEAFE" },
-  { value: "command", labelKey: "store.sidebar.nav.commands", descKey: "store.home.type.command.description", icon: "console" as IconProps["name"], color: "#10B981", bg: "#D1FAE5" },
-  { value: "mcp", labelKey: "store.sidebar.nav.mcpServers", descKey: "store.home.type.mcp.description", icon: "mcp" as IconProps["name"], color: "#8B5CF6", bg: "#EDE9FE" },
+  { value: "skill", labelKey: "store.sidebar.nav.skills", descKey: "store.home.type.skill.description", icon: "sparkles" as IconProps["name"], color: "#ffa000", bg: "#FEF3C7" },
+  { value: "subagent", labelKey: "store.sidebar.nav.subagents", descKey: "store.home.type.subagent.description", icon: "brain" as IconProps["name"], color: "#1670ff", bg: "#DBEAFE" },
+  { value: "command", labelKey: "store.sidebar.nav.commands", descKey: "store.home.type.command.description", icon: "console" as IconProps["name"], color: "#09b179", bg: "#D1FAE5" },
+  { value: "mcp", labelKey: "store.sidebar.nav.mcpServers", descKey: "store.home.type.mcp.description", icon: "mcp" as IconProps["name"], color: "#7338f9", bg: "#EDE9FE" },
 ] as const
 
 type StoreType = (typeof STORE_TYPES)[number]["value"]
@@ -37,7 +36,6 @@ type ListData = Awaited<ReturnType<typeof itemApi.list>>
 const PAGE_SIZE = 10
 const SORTS = [
   ["favoriteCount", "store.home.table.favoriteCount"],
-  ["installCount", "store.home.table.installCount"],
   ["previewCount", "store.home.table.previewCount"],
 ] as const satisfies readonly [ItemSort, string][]
 
@@ -61,6 +59,7 @@ function rangePages(page: number, totalPages: number) {
 export default function Home() {
   const language = useLanguage()
   const auth = useAuth()
+  const navigate = useNavigate()
   const [searchParams] = useSearchParams()
 
   const initialType = () => {
@@ -69,6 +68,7 @@ export default function Home() {
   }
 
   const [activeType, setActiveType] = createSignal<StoreType>(initialType())
+  const [hoveredType, setHoveredType] = createSignal<StoreType | null>(null)
   const [activeCategory, setActiveCategory] = createSignal("all")
   const [page, setPage] = createSignal(1)
   const [selectedItemId, setSelectedItemId] = createSignal<string | null>(null)
@@ -313,61 +313,64 @@ export default function Home() {
   })
 
   return (
-    <div class="mx-auto grid min-h-full w-full max-w-[1100px] gap-6 px-7 pt-6 pb-12 max-[1280px]:gap-5 max-[768px]:px-4 max-[768px]:pb-10">
+    <div class="flex h-full min-h-0 w-full flex-1 flex-col gap-6 max-[1280px]:gap-5">
       <Show
         when={isTypeListMode()}
         fallback={
           <>
             {/* ═══ HOME MODE ═══ */}
-            <header class="relative overflow-hidden rounded-[var(--native-radius-lg)] border border-[color:color-mix(in_srgb,var(--native-border)_12%,transparent)] bg-[linear-gradient(135deg,var(--native-panel),color-mix(in_srgb,var(--native-primary)_4%,var(--native-panel)))] p-7 before:pointer-events-none before:absolute before:right-[-10%] before:top-[-60%] before:h-[340px] before:w-[340px] before:rounded-full before:bg-[radial-gradient(circle,color-mix(in_srgb,var(--native-primary)_6%,transparent),transparent_70%)] before:content-['']">
-              <div>
-                <h1 class="relative m-0 text-[1.625rem] leading-[1.15] font-extrabold tracking-[-0.035em] text-[var(--native-foreground)]">{language.t("store.home.hero.title")}</h1>
-                <p class="relative mt-2 max-w-[38rem] text-[0.8125rem] leading-6 text-[var(--native-muted)]">{language.t("store.home.hero.description")}</p>
-              </div>
-            </header>
-
-            <div class="grid min-w-0 gap-6 max-[1280px]:gap-5">
-              <section class={sx.section}>
-                <div class={sx.statGrid}>
-                  <For each={statCards()}>
-                    {(entry) => (
-                      <article class={sx.statCard} style={{ "--stat-accent": entry.color, "--stat-bg": entry.bg }}>
-                        <div class={sx.statIcon}>
-                          <Icon name={entry.icon} />
-                        </div>
-                        <div>
-                          <div class={sx.statLabel}>{language.t(entry.labelKey)}</div>
-                          <p class={sx.statValue}>
-                            <Show when={entry.total !== null} fallback="—">
-                              {entry.total?.toLocaleString()}
-                            </Show>
-                          </p>
-                        </div>
-                      </article>
-                    )}
-                  </For>
+            <header class="relative overflow-hidden bg-[linear-gradient(135deg,color-mix(in_srgb,var(--native-primary)_2%,white),color-mix(in_srgb,var(--native-primary)_10%,var(--native-panel))_62%,color-mix(in_srgb,var(--native-primary)_14%,var(--native-panel)))] before:pointer-events-none before:absolute before:right-[-10%] before:top-[-60%] before:h-[340px] before:w-[340px] before:rounded-full before:bg-[radial-gradient(circle,color-mix(in_srgb,var(--native-primary)_8%,transparent),transparent_70%)] before:content-['']">
+              <div class="relative flex flex-row items-center justify-between gap-4 px-5 py-3 lg:gap-6">
+                <div class="min-w-0 flex flex-1 items-center gap-4">
+                  <h1 class="relative m-0 shrink-0 text-[1.625rem] leading-[1.15] font-extrabold tracking-[-0.035em] text-[var(--native-foreground)]">{language.t("store.home.hero.title")}</h1>
+                  <p class="relative m-0 min-w-0 max-w-[38rem] text-[0.8125rem] leading-6 text-[var(--native-muted)]">{language.t("store.home.hero.description")}</p>
                 </div>
-              </section>
 
-              <BestPracticeCarousel activeType={activeType} onSelectItem={setSelectedItemId} />
-
-              <section class={sx.section}>
-                <div class={sx.tabs} role="tablist" aria-label={language.t("store.home.mainTabsLabel")}>
-                  <For each={STORE_TYPES}>
+                <div class="flex shrink-0 flex-nowrap items-stretch justify-end gap-2 overflow-x-auto">
+                  <For each={statCards()}>
                     {(entry) => (
                       <button
                         type="button"
-                        role="tab"
-                        aria-selected={entry.value === activeType()}
-                        class={st.tab(entry.value === activeType())}
+                        class={cn(
+                          "group flex shrink-0 items-center gap-1.5 rounded-[0.375rem] border border-transparent bg-transparent px-3 py-0.5 text-left cursor-pointer transition-[background-color,border-color,color,transform,box-shadow]",
+                          entry.value === activeType() && "border-transparent bg-[var(--stat-accent)] text-white",
+                          hoveredType() === entry.value && entry.value !== activeType() && "bg-[color:color-mix(in_oklab,var(--stat-accent)_70%,white)] text-white",
+                        )}
+                        style={{ "--stat-accent": entry.color, "--stat-bg": entry.bg }}
                         onClick={() => handleTypeChange(entry.value)}
+                        onMouseEnter={() => setHoveredType(entry.value)}
+                        onMouseLeave={() => setHoveredType((current) => (current === entry.value ? null : current))}
+                        aria-pressed={entry.value === activeType()}
                       >
-                        {language.t(entry.labelKey)}
+                        <div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-none bg-transparent">
+                          <Icon
+                            name={entry.icon}
+                            class={cn(
+                              "type-icon transition-colors",
+                              entry.value === activeType() && "!text-white",
+                            )}
+                            style={{ color: entry.value === activeType() || hoveredType() === entry.value ? "#ffffff" : entry.color }}
+                          />
+                        </div>
+                        <div class="min-w-0">
+                          <div class={cn(
+                            "type-label text-[12px] uppercase tracking-[0.05em] text-[var(--native-foreground)]",
+                            entry.value === activeType() ? "font-bold !text-white" : "font-medium",
+                          )}
+                          style={entry.value === activeType() || hoveredType() === entry.value ? { color: "#ffffff", "font-weight": entry.value === activeType() ? 700 : 500 } : undefined}
+                        >
+                            {language.t(entry.labelKey)}
+                          </div>
+                        </div>
                       </button>
                     )}
                   </For>
                 </div>
-              </section>
+              </div>
+            </header>
+
+            <div class="flex min-h-0 min-w-0 flex-1 flex-col gap-6 max-[1280px]:gap-5">
+              <SearchControls />
 
               {/* Home mode content shell */}
               <ContentShell />
@@ -376,7 +379,7 @@ export default function Home() {
         }
       >
         {/* ═══ TYPE LIST MODE ═══ */}
-        <div class="grid min-w-0 gap-6 max-[1280px]:gap-5">
+        <div class="flex min-h-0 min-w-0 flex-1 flex-col gap-6 max-[1280px]:gap-5">
           {/* Type Hero Header */}
           <header class="relative flex flex-col gap-5 overflow-hidden rounded-[1.25rem] border border-[color:color-mix(in_srgb,var(--native-border)_12%,transparent)] bg-[linear-gradient(135deg,var(--native-panel),color-mix(in_srgb,var(--tp-accent)_5%,var(--native-panel)))] px-7 py-6 before:pointer-events-none before:absolute before:right-[-5%] before:top-[-40%] before:h-[280px] before:w-[280px] before:rounded-full before:bg-[radial-gradient(circle,color-mix(in_srgb,var(--tp-accent)_8%,transparent),transparent_70%)] before:content-[''] lg:flex-row lg:items-center lg:justify-between" style={{ "--tp-accent": typeMeta().color }}>
             <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-[var(--native-radius-lg)] bg-[color-mix(in_srgb,var(--tp-accent)_10%,transparent)]">
@@ -432,6 +435,8 @@ export default function Home() {
             </div>
           </section>
 
+          <SearchControls />
+
           {/* Type list content shell */}
           <ContentShell />
         </div>
@@ -467,6 +472,101 @@ export default function Home() {
   )
 
   // Shared content shell: table, search, category filter, pagination
+  function SearchControls() {
+    return (
+      <section class={sx.section}>
+        <div class="mx-auto mt-4 flex w-full max-w-[64rem] items-center gap-3 max-[640px]:gap-2">
+          <div class="relative min-w-0 flex-1 rounded-full transition-shadow hover:shadow-[0_6px_16px_-10px_color-mix(in_srgb,var(--native-primary)_14%,rgba(15,23,42,0.18))] focus-within:shadow-[0_6px_16px_-10px_color-mix(in_srgb,var(--native-primary)_14%,rgba(15,23,42,0.18))]">
+            <div class="pointer-events-none absolute inset-y-0 left-0 z-10 flex items-center pl-4 text-[color:color-mix(in_srgb,var(--native-muted)_82%,white)]">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="size-4"
+              >
+                <circle cx="11" cy="11" r="7" />
+                <path d="m20 20 -3.5 -3.5" />
+              </svg>
+            </div>
+            <TextField class="min-w-0 flex-1 rounded-full">
+              <TextFieldInput
+                type="search"
+                placeholder={language.t(searchPlaceholderKey())}
+                value={searchText()}
+                onInput={(e: InputEvent) => handleSearchInput((e.currentTarget as HTMLInputElement).value)}
+                class="h-12 rounded-full border-[color:color-mix(in_srgb,var(--native-border)_30%,transparent)] bg-[var(--native-panel)] pr-5 pl-11 text-base text-[var(--native-foreground)] caret-[var(--native-primary)] placeholder:text-[color:color-mix(in_srgb,var(--native-muted)_72%,white)] shadow-[var(--native-shadow-sm)] focus-visible:border-2 focus-visible:border-[color:color-mix(in_srgb,var(--native-primary)_52%,var(--native-border))] focus-visible:text-[var(--native-foreground)] focus-visible:placeholder:text-[color:color-mix(in_srgb,var(--native-muted)_36%,white)] focus-visible:ring-0 focus-visible:ring-offset-0"
+              />
+            </TextField>
+          </div>
+          <DropdownMenu placement="bottom-end">
+            <DropdownMenuTrigger as={Button<"button">} variant="outline" size="sm" class="h-12 shrink-0 rounded-full px-4 whitespace-nowrap">
+              {activeCategory() === "all"
+                ? language.t("store.console.capabilities.category")
+                : categories().find((c) => c.slug === activeCategory())
+                  ? categoryName(categories().find((c) => c.slug === activeCategory())!)
+                  : activeCategory()}
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="size-4"
+              >
+                <path d="M6 9l6 6l6 -6" />
+              </svg>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent class="max-h-72 overflow-y-auto">
+              <DropdownMenuCheckboxItem
+                checked={activeCategory() === "all"}
+                onChange={() => handleCategoryChange("all")}
+              >
+                {language.t("store.console.filters.all")}
+              </DropdownMenuCheckboxItem>
+              <For each={categories()}>
+                {(cat) => (
+                  <DropdownMenuCheckboxItem
+                    checked={cat.slug === activeCategory()}
+                    onChange={() => handleCategoryChange(cat.slug)}
+                  >
+                    {categoryName(cat)}
+                  </DropdownMenuCheckboxItem>
+                )}
+              </For>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <button
+            type="button"
+            class="flex h-12 w-12 shrink-0 cursor-pointer items-center justify-center rounded-full bg-[color:color-mix(in_oklab,var(--native-primary)_70%,white)] text-white shadow-[var(--native-shadow-sm)] transition-[background-color,filter,transform] hover:cursor-pointer hover:bg-[var(--native-primary)]"
+            aria-label="Add"
+            onClick={() => navigate("/capabilities/new")}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class="size-5"
+              style={{ color: "#ffffff" }}
+            >
+              <path d="M12 5v14" />
+              <path d="M5 12h14" />
+            </svg>
+          </button>
+        </div>
+      </section>
+    )
+  }
+
   function ContentShell() {
     const tableTitle = () =>
       isTypeListMode()
@@ -479,65 +579,15 @@ export default function Home() {
         : language.t(typeMeta().descKey)
 
     return (
-      <section class={cn(sx.section, sx.shell)}>
+      <section class={cn(sx.section, "flex min-h-0 flex-1 flex-col p-3 sm:p-4")}>
         <div class={sx.head}>
           <div>
             <h2 class={sx.title}>{tableTitle()}</h2>
             <p class={sx.sub}>{tableSub()}</p>
           </div>
-          <div class="flex items-center gap-2">
-            <TextField class="w-48">
-              <TextFieldInput
-                type="search"
-                placeholder={language.t(searchPlaceholderKey())}
-                value={searchText()}
-                onInput={(e: InputEvent) => handleSearchInput((e.currentTarget as HTMLInputElement).value)}
-                class="h-8 text-sm focus-visible:ring-0 focus-visible:ring-offset-0"
-              />
-            </TextField>
-            <DropdownMenu placement="bottom-end">
-              <DropdownMenuTrigger as={Button<"button">} variant="outline" size="sm">
-                {activeCategory() === "all"
-                  ? language.t("store.console.capabilities.category")
-                  : categories().find((c) => c.slug === activeCategory())
-                    ? categoryName(categories().find((c) => c.slug === activeCategory())!)
-                    : activeCategory()}
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  class="size-4"
-                >
-                  <path d="M6 9l6 6l6 -6" />
-                </svg>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent class="max-h-72 overflow-y-auto">
-                <DropdownMenuCheckboxItem
-                  checked={activeCategory() === "all"}
-                  onChange={() => handleCategoryChange("all")}
-                >
-                  {language.t("store.console.filters.all")}
-                </DropdownMenuCheckboxItem>
-                <For each={categories()}>
-                  {(cat) => (
-                    <DropdownMenuCheckboxItem
-                      checked={cat.slug === activeCategory()}
-                      onChange={() => handleCategoryChange(cat.slug)}
-                    >
-                      {categoryName(cat)}
-                    </DropdownMenuCheckboxItem>
-                  )}
-                </For>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
         </div>
 
-        <div class={sx.tableShell}>
+        <div class={cn(sx.tableShell, "flex min-h-0 flex-1 flex-col")}>
           <Show
             when={!showError()}
             fallback={
@@ -555,10 +605,11 @@ export default function Home() {
                   <div class={sx.spinner} />
                 </div>
               </Show>
-              <Table class="text-[0.8125rem]">
+              <Table class="table-fixed text-[0.8125rem]">
                 <TableHeader class={sx.thead}>
                   <TableRow>
-                    <TableHead class={sx.th}>{language.t("store.console.capabilities.name")}</TableHead>
+                    <TableHead class={cn(sx.th, sx.colTitle)}>{language.t("store.home.table.title")}</TableHead>
+                    <TableHead class={cn(sx.th, sx.colDescription)}>{language.t("store.home.table.description")}</TableHead>
                     <For each={SORTS}>
                       {([by, label]) => (
                         <TableHead class={sx.th} aria-sort={sortState(by)}>
@@ -587,19 +638,23 @@ export default function Home() {
                 <TableBody>
                   <Show
                     when={rows().length > 0}
-                    fallback={<TableEmptyState colSpan={8} message={language.t("store.home.emptyCategory")} />}
+                      fallback={<TableEmptyState colSpan={8} message={language.t("store.home.emptyCategory")} />}
                   >
                     <For each={rows()}>
                       {(item) => (
                         <TableRow class={sx.row} onClick={() => setSelectedItemId(item.id)}>
-                          <TableCell class={sx.td}>
-                            <span class={sx.item}>{item.name}</span>
+                          <TableCell class={cn(sx.td, sx.colTitle)}>
+                            <span class={cn(sx.item, "block truncate")} title={item.name}>
+                              {item.name}
+                            </span>
+                          </TableCell>
+                          <TableCell class={cn(sx.td, sx.colDescription, sx.mut)}>
+                            <span class="block truncate" title={item.description || "—"}>
+                              {item.description || "—"}
+                            </span>
                           </TableCell>
                           <TableCell class={cn(sx.td, sx.mut)}>
                             {item.favoriteCount?.toLocaleString() ?? "0"}
-                          </TableCell>
-                          <TableCell class={cn(sx.td, sx.mut)}>
-                            {item.installCount?.toLocaleString() ?? "0"}
                           </TableCell>
                           <TableCell class={cn(sx.td, sx.mut)}>
                             {item.previewCount?.toLocaleString() ?? "0"}
@@ -641,7 +696,7 @@ export default function Home() {
                                 </svg>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent>
-                                <DropdownMenuItem class="justify-center" onClick={() => copyInstall(item)}>
+                                <DropdownMenuItem class="justify-center cursor-pointer" onClick={() => copyInstall(item)}>
                                   {copiedItemId() === item.id
                                     ? language.t("store.itemCard.copied")
                                     : language.t("store.home.table.copyInstall")}

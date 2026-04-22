@@ -21,8 +21,14 @@ export type DiffFileEntry = {
 export type DiffData = {
   directory: string
   branch: string
-  files: DiffFileEntry[]
-  diff?: string
+  stagedFiles: DiffFileEntry[]
+  unstagedFiles: DiffFileEntry[]
+}
+
+export type DiffContentData = {
+  diff: string
+  before?: string
+  after?: string
 }
 
 export type RuntimeConfig = {
@@ -31,6 +37,21 @@ export type RuntimeConfig = {
   allowed_operations: string[]
   blacklist_count: number
   whitelist_enabled: boolean
+}
+
+export type FileMetaData = {
+  path: string
+  size: number
+  modified?: string
+  type: "file" | "directory"
+}
+
+export type FileReadData = {
+  type: "text"
+  content: string
+  offset: number
+  lines: number
+  totalLines: number
 }
 
 export type DeviceClient = {
@@ -49,9 +70,11 @@ export type DeviceClient = {
     path: () => Promise<unknown>
     vcs: () => Promise<unknown>
     fileList: (path: string) => Promise<Array<{ name: string; path: string; absolute: string; type: "directory" | "file"; ignored: boolean }>>
-    fileRead: (path: string) => Promise<{ type: "text"; content: string }>
+    fileMeta: (path: string) => Promise<FileMetaData>
+    fileRead: (path: string, input?: { offset?: number; limit?: number }) => Promise<FileReadData>
     findFiles: (query: string, dirs: "true" | "false") => Promise<unknown>
     diff: (input?: { staged?: boolean; stat?: boolean; path?: string }) => Promise<DiffData | undefined>
+    diffContent: (input?: { staged?: boolean; path?: string }) => Promise<DiffContentData | undefined>
     dispose: () => Promise<unknown>
   }
   agent: {
@@ -149,16 +172,24 @@ export function createDeviceClient(opts: ClientOpts): DeviceClient {
           ignored: false,
         }))
       }),
-      fileRead: (path: string) => http.get<{ content?: string; lines?: number; diff?: string; patch?: { oldStart: number; oldLines: number; newStart: number; newLines: number; lines: string[] }[] }>("/api/v1/runtime/files/content", { path }).then((res) => ({
+      fileMeta: (path: string) => http.get<FileMetaData>("/api/v1/runtime/files/meta", { path }),
+      fileRead: (path: string, input?: { offset?: number; limit?: number }) => http.get<{ content?: string; lines?: number; offset?: number; total_lines?: number }>("/api/v1/runtime/files/content", {
+        path,
+        ...(input?.offset ? { offset: input.offset } : {}),
+        ...(input?.limit ? { limit: input.limit } : {}),
+      }).then((res) => ({
         type: "text" as const,
         content: res?.content ?? "",
-        diff: res?.diff,
-        patch: res?.patch,
+        offset: res?.offset ?? input?.offset ?? 1,
+        lines: res?.lines ?? 0,
+        totalLines: res?.total_lines ?? 0,
       })),
       findFiles: (query: string, dirs: "true" | "false") =>
         http.get("/api/v1/runtime/find/file", { query, dirs }),
-      diff: (input?: { staged?: boolean; stat?: boolean; path?: string }) =>
-        http.get<DiffData>("/api/v1/runtime/diff", input as Record<string, string | number | boolean | undefined>),
+    diff: (input?: { staged?: boolean; stat?: boolean; path?: string }) =>
+      http.get<DiffData>("/api/v1/runtime/diff", input as Record<string, string | number | boolean | undefined>),
+    diffContent: (input?: { staged?: boolean; path?: string }) =>
+      http.get<DiffContentData>("/api/v1/runtime/diff/content", input as Record<string, string | number | boolean | undefined>),
       dispose: () => http.post("/api/v1/runtime/dispose"),
     },
     agent: {

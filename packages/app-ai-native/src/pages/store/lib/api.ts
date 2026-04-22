@@ -182,10 +182,28 @@ export interface ScanResult {
 export interface CapabilityVersion {
   id: string
   itemId: string
-  version: string
+  revision: number
+  name?: string
+  description?: string
+  category?: string
+  version?: string
+  versionLabel?: string
+  content?: string
+  contentMd5?: string
+  metadata?: Record<string, unknown>
+  sourcePath?: string
+  assets?: CapabilityItemAsset[]
   commitMsg: string
   createdBy: string
   createdAt: string
+}
+
+export interface CapabilityItemAsset {
+  relPath: string
+  textContent?: string
+  mimeType?: string
+  fileSize?: number
+  contentSha?: string
 }
 
 export type SecurityStatus =
@@ -214,6 +232,8 @@ export interface CapabilityItem {
   visibility: string
   repoVisibility?: string
   status: string
+  currentRevision?: number
+  sourcePath?: string
   sourceType?: string
   previewCount?: number
   installCount?: number
@@ -228,6 +248,7 @@ export interface CapabilityItem {
   registry?: CapabilityRegistry
   versions?: CapabilityVersion[]
   artifacts?: CapabilityArtifact[]
+  assets?: CapabilityItemAsset[]
 }
 
 export type ItemSort = "favoriteCount" | "installCount" | "previewCount"
@@ -706,6 +727,8 @@ export const itemApi = {
     visibility?: string
     registryId?: string
     slug?: string
+    sourcePath?: string
+    assets?: CapabilityItemAsset[]
     createdBy?: string
     file?: File | null
   }) => {
@@ -763,6 +786,10 @@ export const itemApi = {
   delete: (id: string) => apiFetch<{ message: string }>(`/api/items/${id}`, { method: "DELETE" }),
 
   get: (id: string) => apiFetch<CapabilityItem>(`/api/items/${id}`, { credentials: "include" }),
+
+  listVersions: (id: string) => apiFetch<{ versions: CapabilityVersion[] }>(`/api/items/${id}/versions`, { credentials: "include" }).then((res) => res.versions ?? []),
+
+  getVersion: (id: string, revision: number) => apiFetch<CapabilityVersion>(`/api/items/${id}/versions/${revision}`, { credentials: "include" }),
 
   transfer: (id: string, targetRepoId: string) =>
     apiFetch<CapabilityItem>(`/api/items/${id}/transfer`, {

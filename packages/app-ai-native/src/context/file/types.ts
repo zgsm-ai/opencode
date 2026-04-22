@@ -1,5 +1,18 @@
 import type { FileContent } from "@opencode-ai/sdk/v2"
 
+export type FileMeta = {
+  path: string
+  size: number
+  modified?: string
+  type: "file" | "directory"
+}
+
+export type FileContentChunk = {
+  offset: number
+  lines: number
+  totalLines: number
+}
+
 export type FileSelection = {
   startLine: number
   startChar: number
@@ -26,7 +39,9 @@ export type FileState = {
   loaded?: boolean
   loading?: boolean
   error?: string
+  meta?: FileMeta
   content?: FileContent
+  chunk?: FileContentChunk
 }
 
 export function selectionFromLines(range: SelectedLineRange): FileSelection {

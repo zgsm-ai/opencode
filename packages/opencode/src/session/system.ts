@@ -47,6 +47,7 @@ export namespace SystemPrompt {
         `  Platform: ${process.platform}`,
         `  Today's date: ${new Date().toDateString()}`,
         `</env>`,
+        editorContext(),
         `<directories>`,
         `  ${
           project.vcs === "git" && false
@@ -62,7 +63,7 @@ export namespace SystemPrompt {
   }
 
   export function editorContext() {
-    return EditorContext.formatForPrompt()
+    return EditorContext.formatForPrompt() || ""
   }
 
   export async function skills(agent: Agent.Info) {

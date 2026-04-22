@@ -24,11 +24,18 @@ export const TYPE_PREFIX: Record<string, string> = {
   mcp: "mcp-",
 }
 
+export const TYPE_COLORS: Record<string, string> = {
+  skill: "#F59E0B",
+  subagent: "#3B82F6",
+  command: "#10B981",
+  mcp: "#8B5CF6",
+}
+
 export const TYPE_CONTENT_PLACEHOLDER: Record<string, string> = {
-  skill: "# Skill Instructions\n\nDescribe what this skill does...",
+  skill: "# SKILL\n\nDescribe what this skill does...",
   subagent: "# Subagent\n\nDescribe the subagent behavior...",
   command: "# Command\n\nDescribe the command behavior...",
-  mcp: "# MCP Server\n\nDescribe the MCP server...",
+  mcp: "{\n  \"mcpServers\": {\n      \n  }\n}",
 }
 
 // "developer-tools" → "developerTools"
