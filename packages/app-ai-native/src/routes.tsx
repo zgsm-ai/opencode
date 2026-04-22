@@ -81,7 +81,7 @@ export const routeConfig: RouteConfig[] = [
     ],
   },
   {
-    path: "/cloud-team",
+    path: "/team",
     component: CloudTeamLayout,
     auth: true,
     children: [

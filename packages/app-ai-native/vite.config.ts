@@ -19,6 +19,7 @@ export default defineConfig(({ mode }) => {
       host: "0.0.0.0",
       allowedHosts: true,
       port: appPort,
+      historyApiFallback: true,
       proxy: {
         // "/cloud/device": {
         //   target: cloudTarget,

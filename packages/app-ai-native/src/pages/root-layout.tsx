@@ -19,7 +19,7 @@ function item(on: boolean) {
 }
 
 function NavButton(props: {
-  icon: "bubble-5" | "store" | "folder" | "folder-add-left" | "configuration" | "inbox"
+  icon: "bubble-5" | "store" | "folder" | "folder-add-left" | "configuration" | "inbox" | "team"
   label: string
   active: boolean
   onClick: () => void
@@ -107,7 +107,7 @@ export default function RootLayout(props: ParentProps) {
     return path === "/store" || path.startsWith("/store/")
   }
   const isProjects = () => location.pathname.startsWith("/projects")
-  const isCloudTeam = () => location.pathname.startsWith("/cloud-team")
+  const isCloudTeam = () => location.pathname.startsWith("/team")
 
   const isConsole = () => {
     const path = appPathname()
@@ -140,10 +140,10 @@ export default function RootLayout(props: ParentProps) {
             onClick={() => navigate("/workspace")}
           />
           <NavButton
-            icon="bubble-5"
-            label="Cloud Team"
+            icon="team"
+            label="Team"
             active={isCloudTeam()}
-            onClick={() => navigate("/cloud-team")}
+            onClick={() => navigate("/team")}
           />
         </nav>
         <div class="mt-auto flex flex-col gap-2">

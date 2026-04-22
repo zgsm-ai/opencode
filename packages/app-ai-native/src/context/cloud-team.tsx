@@ -1,8 +1,9 @@
 import { createSimpleContext } from "@opencode-ai/ui/context"
-import { batch, createEffect, createMemo, onCleanup, onMount } from "solid-js"
+import { batch, createEffect, createMemo, createSignal, onCleanup, onMount } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useServer } from "@/context/server"
 import { cloudTeamApi } from "@/client/cloud-team-api"
+import { env } from "@/lib/env"
 import { createCloudTeamWS } from "@/client/cloud-team-ws"
 import type {
   TeammateRegistration,
@@ -47,6 +48,11 @@ type CloudTeamStore = {
   runtimeMode: "auto" | "manual"
   orchestrating: boolean
   orchestratePhase?: OrchestratePhase
+  selectedModel?: {
+    providerID: string
+    modelID: string
+    name: string
+  }
 }
 
 const CLOUD_TEAM_AGENT_NAME = "CloudTeam"
@@ -100,6 +106,7 @@ export const { use: useCloudTeam, provider: CloudTeamProvider, context: CloudTea
 
     // ── Auto-restore last active session on mount ──────────
     onMount(async () => {
+      void loadModels()
       if (server.isLocal()) return
       try {
         const sessions = await cloudTeamApi.session.list()
@@ -119,6 +126,48 @@ export const { use: useCloudTeam, provider: CloudTeamProvider, context: CloudTea
     // ── Reactive computations ──────────────────────────────
 
     const isAvailable = createMemo(() => !server.isLocal())
+
+    // ── Model management ────────────────────────────────────
+
+    type ModelOption = { providerID: string; modelID: string; name: string; providerName: string }
+    const [modelList, setModelList] = createSignal<ModelOption[]>([])
+
+    // Fetch models from the opencode server's provider capabilities API
+    const loadModels = async () => {
+      try {
+        const prefix = env.API_PREFIX || ""
+        const base = env.API_URL || prefix || window.location.origin
+        const res = await fetch(`${base}/api/provider/capabilities`, { credentials: "include" })
+        if (!res.ok) return
+        const data = await res.json()
+        const providers: { id: string; name: string; models: Record<string, { name: string; status: string }> }[] = data?.connected ?? []
+        const result: ModelOption[] = []
+        for (const p of providers) {
+          for (const [id, m] of Object.entries(p.models)) {
+            if (m.status === "deprecated") continue
+            result.push({ providerID: p.id, modelID: id, name: m.name || id, providerName: p.name })
+          }
+        }
+        setModelList(result)
+        // Auto-select first model if none selected
+        if (!store.selectedModel && result.length > 0) {
+          setStore("selectedModel", { providerID: result[0].providerID, modelID: result[0].modelID, name: result[0].name })
+        }
+      } catch {
+        // Silently fail — models will be empty
+      }
+    }
+
+    const setSelectedModel = (key?: { providerID: string; modelID: string }) => {
+      if (!key) {
+        setStore("selectedModel", undefined)
+        return
+      }
+      const model = modelList().find((m) => m.providerID === key.providerID && m.modelID === key.modelID)
+      if (model) {
+        setStore("selectedModel", { providerID: model.providerID, modelID: model.modelID, name: model.name })
+      }
+    }
 
     const activeTasks = createMemo(() => store.tasks.filter((t) => t.status === "running"))
 
@@ -497,7 +546,7 @@ export const { use: useCloudTeam, provider: CloudTeamProvider, context: CloudTea
           const session = await createSession(text.slice(0, 100))
           sessionId = session.id
         }
-        const result = await cloudTeamApi.prompt.decompose(sessionId, { prompt: text, context, dryRun: true })
+        const result = await cloudTeamApi.prompt.decompose(sessionId, { prompt: text, context, dryRun: true, model: store.selectedModel ? { providerID: store.selectedModel.providerID, modelID: store.selectedModel.modelID } : undefined })
         batch(() => {
           // Store as pendingPlan for Leader review — do NOT write to tasks yet
           setStore("pendingPlan", result.tasks)
@@ -527,6 +576,7 @@ export const { use: useCloudTeam, provider: CloudTeamProvider, context: CloudTea
         const result = await cloudTeamApi.prompt.orchestrate(sessionId, {
           prompt: text,
           fencingToken: store.leader?.fencingToken,
+          model: store.selectedModel ? { providerID: store.selectedModel.providerID, modelID: store.selectedModel.modelID } : undefined,
         })
         console.log("[cloud-team] orchestrate: got", result.tasks.length, "tasks, store.tasks before set:", store.tasks.length)
         batch(() => {
@@ -664,6 +714,9 @@ export const { use: useCloudTeam, provider: CloudTeamProvider, context: CloudTea
       autoAnswerFirstOption: () => store.runtimeMode === "auto",
       orchestrating: () => store.orchestrating,
       orchestratePhase: () => store.orchestratePhase,
+      models: modelList,
+      selectedModel: () => store.selectedModel,
+      setSelectedModel,
 
       // Agent name constant
       agentName: CLOUD_TEAM_AGENT_NAME,

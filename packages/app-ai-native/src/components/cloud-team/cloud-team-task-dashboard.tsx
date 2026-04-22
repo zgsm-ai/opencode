@@ -1,4 +1,5 @@
 import { type Component, For, Show, createMemo, createSignal } from "solid-js"
+import { Popover as Kobalte } from "@kobalte/core/popover"
 import { Spinner } from "@opencode-ai/ui/spinner"
 import { Icon } from "@opencode-ai/ui/icon"
 import { showToast } from "@opencode-ai/ui/toast"
@@ -104,6 +105,20 @@ export const CloudTeamTaskDashboard: Component = () => {
       })
     }
   }
+
+  // ── Model selector ──
+  const [modelPopoverOpen, setModelPopoverOpen] = createSignal(false)
+
+  const modelsGrouped = createMemo(() => {
+    const models = cloudTeam.models()
+    const groups = new Map<string, { providerID: string; modelID: string; name: string }[]>()
+    for (const m of models) {
+      let list = groups.get(m.providerName)
+      if (!list) { list = []; groups.set(m.providerName, list) }
+      list.push({ providerID: m.providerID, modelID: m.modelID, name: m.name })
+    }
+    return [...groups.entries()]
+  })
 
   const handleLeaveSession = async () => {
     try {
@@ -348,6 +363,61 @@ export const CloudTeamTaskDashboard: Component = () => {
               <Show when={onlineCount() > 0}>
                 <span class="text-10-regular text-text-weaker">{onlineCount()} teammate{onlineCount() !== 1 ? "s" : ""} online</span>
               </Show>
+
+              {/* Model selector */}
+              <Kobalte
+                  open={modelPopoverOpen()}
+                  onOpenChange={setModelPopoverOpen}
+                  modal={false}
+                  placement="top-start"
+                  gutter={4}
+                >
+                  <Kobalte.Trigger as="button" type="button" class="text-10-regular text-text-weaker flex items-center gap-1 hover:text-text-base transition-colors">
+                    <span class="truncate max-w-[120px]">{cloudTeam.selectedModel()?.name ?? "选择模型"}</span>
+                    <Icon name="chevron-down" size="small" class="shrink-0" />
+                  </Kobalte.Trigger>
+                  <Kobalte.Portal>
+                    <Kobalte.Content
+                      class="w-64 max-h-72 flex flex-col p-2 rounded-md border border-border-base bg-surface-raised-stronger-non-alpha shadow-md z-50 outline-none overflow-hidden"
+                      onPointerDownOutside={() => setModelPopoverOpen(false)}
+                    >
+                      <div class="flex-1 min-h-0 overflow-y-auto scrollbar-none">
+                        <For each={modelsGrouped()}>
+                          {([provider, models]) => (
+                            <div class="mb-2">
+                              <div class="text-10-medium text-text-weaker px-2 py-1">{provider}</div>
+                              <For each={models}>
+                                {(m) => {
+                                  const isActive = () => cloudTeam.selectedModel()?.modelID === m.modelID && cloudTeam.selectedModel()?.providerID === m.providerID
+                                  return (
+                                    <button
+                                      type="button"
+                                      class="w-full text-left px-2 py-1.5 rounded-md text-12-regular transition-colors flex items-center gap-2"
+                                      classList={{
+                                        "bg-background-base text-text-base": isActive(),
+                                        "text-text-weak hover:bg-background-base": !isActive(),
+                                      }}
+                                      onClick={() => {
+                                        cloudTeam.setSelectedModel({ providerID: m.providerID, modelID: m.modelID })
+                                        setModelPopoverOpen(false)
+                                      }}
+                                    >
+                                      <span class="truncate flex-1">{m.name}</span>
+                                      <Show when={isActive()}>
+                                        <Icon name="check" size="small" class="shrink-0 text-text-base" />
+                                      </Show>
+                                    </button>
+                                  )
+                                }}
+                              </For>
+                            </div>
+                          )}
+                        </For>
+                      </div>
+                    </Kobalte.Content>
+                  </Kobalte.Portal>
+                </Kobalte>
+
               <Show when={cloudTeam.session()?.id}>
                 <span class="text-10-regular text-text-weaker ml-auto">
                   {cloudTeam.runtimeMode()} mode

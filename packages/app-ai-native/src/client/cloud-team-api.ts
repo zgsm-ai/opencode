@@ -214,6 +214,7 @@ type DecomposeBody = {
   prompt: string
   context?: unknown
   dryRun?: boolean
+  model?: { providerID: string; modelID: string }
 }
 
 type DecomposeResponse = {
@@ -228,7 +229,7 @@ const prompt = {
       body: JSON.stringify(body),
     })
   },
-  orchestrate(sessionId: string, body: { prompt: string; fencingToken?: number }) {
+  orchestrate(sessionId: string, body: { prompt: string; fencingToken?: number; model?: { providerID: string; modelID: string } }) {
     return apiFetch<OrchestrateResponse>(`/api/team/sessions/${sessionId}/orchestrate`, {
       method: "POST",
       body: JSON.stringify(body),
