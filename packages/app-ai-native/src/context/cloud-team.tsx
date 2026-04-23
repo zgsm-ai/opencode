@@ -3,8 +3,9 @@ import { batch, createEffect, createMemo, createSignal, onCleanup, onMount } fro
 import { createStore } from "solid-js/store"
 import { useServer } from "@/context/server"
 import { cloudTeamApi } from "@/client/cloud-team-api"
-import { env } from "@/lib/env"
 import { createCloudTeamWS } from "@/client/cloud-team-ws"
+import { getProxyUrl } from "@/pages/workspace/lib/url"
+import { env } from "@/lib/env"
 import type {
   TeammateRegistration,
   Task,
@@ -15,6 +16,7 @@ import type {
   SessionProgress,
   OrchestratePhase,
 } from "@/client/cloud-team-types"
+import type { Device } from "@/pages/workspace/types"
 import { applyCloudEvent } from "./cloud-team/event-reducer"
 
 type CloudTeamStore = {
@@ -131,30 +133,66 @@ export const { use: useCloudTeam, provider: CloudTeamProvider, context: CloudTea
 
     type ModelOption = { providerID: string; modelID: string; name: string; providerName: string }
     const [modelList, setModelList] = createSignal<ModelOption[]>([])
+    const [deviceList, setDeviceList] = createSignal<Device[]>([])
 
-    // Fetch models from the opencode server's provider capabilities API
+    const API_BASE = env.API_URL || env.API_PREFIX || ""
+
+    // Fetch models via a device proxy (same path workspace uses)
     const loadModels = async () => {
       try {
-        const prefix = env.API_PREFIX || ""
-        const base = env.API_URL || prefix || window.location.origin
-        const res = await fetch(`${base}/api/provider/capabilities`, { credentials: "include" })
-        if (!res.ok) return
-        const data = await res.json()
-        const providers: { id: string; name: string; models: Record<string, { name: string; status: string }> }[] = data?.connected ?? []
-        const result: ModelOption[] = []
-        for (const p of providers) {
-          for (const [id, m] of Object.entries(p.models)) {
-            if (m.status === "deprecated") continue
-            result.push({ providerID: p.id, modelID: id, name: m.name || id, providerName: p.name })
+        // 1. List available devices
+        const deviceRes = await fetch(`${API_BASE}/api/devices`, { credentials: "include" })
+        if (!deviceRes.ok) {
+          console.warn("[cloud-team] loadModels: failed to list devices", deviceRes.status)
+          return
+        }
+        const deviceData = await deviceRes.json()
+        const devices = (deviceData?.devices ?? []) as Device[]
+        setDeviceList(devices)
+        if (devices.length === 0) {
+          console.warn("[cloud-team] loadModels: no devices available")
+          return
+        }
+
+        // 2. Try online devices first, then fall back to all devices
+        const candidates = [
+          ...devices.filter((d) => d.status === "online"),
+          ...devices.filter((d) => d.status !== "online"),
+        ]
+
+        let lastErr: unknown
+        for (const device of candidates) {
+          try {
+            const proxyUrl = getProxyUrl(device.deviceId)
+            const res = await fetch(`${proxyUrl}/api/v1/agents/models`, { credentials: "include" })
+            if (!res.ok) {
+              console.warn("[cloud-team] loadModels: models fetch failed for device", device.deviceId, res.status)
+              lastErr = res.status
+              continue
+            }
+            const data = await res.json()
+            const providers: { id: string; name: string; models: Record<string, { name: string; status: string }> }[] = data?.connected ?? []
+            const result: ModelOption[] = []
+            for (const p of providers) {
+              for (const [id, m] of Object.entries(p.models)) {
+                if (m.status === "deprecated") continue
+                result.push({ providerID: p.id, modelID: id, name: m.name || id, providerName: p.name })
+              }
+            }
+            console.log("[cloud-team] loadModels:", result.length, "models via device", device.deviceId)
+            setModelList(result)
+            if (!store.selectedModel && result.length > 0) {
+              setStore("selectedModel", { providerID: result[0].providerID, modelID: result[0].modelID, name: result[0].name })
+            }
+            return
+          } catch (err) {
+            console.warn("[cloud-team] loadModels: error fetching from device", device.deviceId, err)
+            lastErr = err
           }
         }
-        setModelList(result)
-        // Auto-select first model if none selected
-        if (!store.selectedModel && result.length > 0) {
-          setStore("selectedModel", { providerID: result[0].providerID, modelID: result[0].modelID, name: result[0].name })
-        }
-      } catch {
-        // Silently fail — models will be empty
+        console.warn("[cloud-team] loadModels: all devices failed", lastErr)
+      } catch (err) {
+        console.warn("[cloud-team] loadModels error:", err)
       }
     }
 
@@ -186,6 +224,16 @@ export const { use: useCloudTeam, provider: CloudTeamProvider, context: CloudTea
       for (const t of store.teammates) map.set(t.id, t)
       return map
     })
+
+    const deviceById = createMemo(() => {
+      const map = new Map<string, Device>()
+      for (const d of deviceList()) {
+        map.set(d.deviceId, d)
+        map.set(d.id, d)
+      }
+      return map
+    })
+
     const isCurrentLeader = createMemo(() => {
       const mid = getMachineId()
       if (store.leader?.elected && store.leader.leaderId === mid) return true
@@ -319,7 +367,7 @@ export const { use: useCloudTeam, provider: CloudTeamProvider, context: CloudTea
           wsClient?.send({
             type: "session.join",
             payload: {
-              machineName: navigator.userAgent.split(" ").pop() ?? "Web Client",
+              machineName: getMachineName(),
             },
           })
         },
@@ -382,12 +430,26 @@ export const { use: useCloudTeam, provider: CloudTeamProvider, context: CloudTea
       return id
     }
 
+    function getMachineName(): string {
+      const mid = getMachineId()
+      const device = deviceById().get(mid)
+      if (device) return device.displayName
+      return navigator.platform || "Web Client"
+    }
+
+    function getMachineVersion(): string {
+      const mid = getMachineId()
+      const device = deviceById().get(mid)
+      if (device) return `${device.platform} · ${device.version}`
+      return ""
+    }
+
     // ── Session lifecycle ──────────────────────────────────
 
     async function createSession(title: string, repoUrl?: string) {
       const result = await cloudTeamApi.session.create({ name: title, repoUrl })
       const machineId = getMachineId()
-      const machineName = "Web Client"
+      const machineName = getMachineName()
       batch(() => {
         setStore("mode", "cloud")
         setStore("active", true)
@@ -446,11 +508,31 @@ export const { use: useCloudTeam, provider: CloudTeamProvider, context: CloudTea
 
     async function joinSession(sessionId: string) {
       const machineId = getMachineId()
+      const machineName = getMachineName()
       await cloudTeamApi.member.join(sessionId, {
         machineId,
-        machineName: navigator.userAgent.split(" ").pop() ?? "Web Client",
+        machineName,
       })
       const result = await cloudTeamApi.session.get(sessionId)
+      // Ensure self is present in the local teammate list
+      const teammates = result.teammates ?? []
+      const selfAlready = teammates.some((t) => t.machineId === machineId)
+      if (!selfAlready) {
+        teammates.push({
+          id: `local-${machineId}`,
+          sessionId,
+          userId: "",
+          machineId,
+          machineName,
+          role: "member",
+          status: "online",
+          repos: [],
+          connectedAt: new Date().toISOString(),
+          lastHeartbeat: new Date().toISOString(),
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        })
+      }
       batch(() => {
         setStore("mode", "cloud")
         setStore("active", true)
@@ -461,7 +543,7 @@ export const { use: useCloudTeam, provider: CloudTeamProvider, context: CloudTea
           repoUrl: undefined,
           leaderId: result.leaderMachineId,
         })
-        setStore("teammates", result.teammates ?? [])
+        setStore("teammates", teammates)
       })
       // Fetch existing tasks and approvals
       const [tasks, approvals] = await Promise.all([
@@ -717,6 +799,13 @@ export const { use: useCloudTeam, provider: CloudTeamProvider, context: CloudTea
       models: modelList,
       selectedModel: () => store.selectedModel,
       setSelectedModel,
+      devices: deviceList,
+      deviceById,
+
+      // Identity
+      machineId: getMachineId,
+      machineName: getMachineName,
+      machineVersion: getMachineVersion,
 
       // Agent name constant
       agentName: CLOUD_TEAM_AGENT_NAME,

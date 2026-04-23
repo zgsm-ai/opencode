@@ -55,6 +55,10 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           ws: true,
         },
+        "/provider/capabilities": {
+          target: cloudTarget,
+          changeOrigin: true,
+        },
       },
     },
     build: {

@@ -1,7 +1,9 @@
 import { type Component, For, Show, createMemo, createSignal } from "solid-js"
+import { createStore } from "solid-js/store"
 import { Popover as Kobalte } from "@kobalte/core/popover"
 import { Spinner } from "@opencode-ai/ui/spinner"
 import { Icon } from "@opencode-ai/ui/icon"
+import { List } from "@opencode-ai/ui/list"
 import { showToast } from "@opencode-ai/ui/toast"
 import { useCloudTeam } from "@/context/cloud-team"
 import { TaskItem } from "./task-item"
@@ -56,12 +58,21 @@ export const CloudTeamTaskDashboard: Component = () => {
   const onlineCount = createMemo(() => cloudTeam.teammates().filter((t) => t.status === "online" || t.status === "busy").length)
   const totalTeammates = createMemo(() => cloudTeam.teammates().length)
 
-  const memberNameMap = createMemo(() => {
-    const map = new Map<string, string>()
-    for (const t of cloudTeam.teammates()) {
-      map.set(t.id, t.machineName)
+  const latestError = createMemo(() => {
+    const tasks = cloudTeam.tasks()
+    for (let i = tasks.length - 1; i >= 0; i--) {
+      const t = tasks[i]
+      if ((t.status === "failed" || t.status === "interrupted") && t.errorMessage) {
+        return t.errorMessage
+      }
     }
-    return map
+    return undefined
+  })
+
+  const activeSessionUpdatedAt = createMemo(() => {
+    const sid = cloudTeam.session()?.id
+    if (!sid) return undefined
+    return cloudTeam.sessions().find((s) => s.id === sid)?.updatedAt
   })
 
   const handleSend = async () => {
@@ -106,18 +117,28 @@ export const CloudTeamTaskDashboard: Component = () => {
     }
   }
 
-  // ── Model selector ──
-  const [modelPopoverOpen, setModelPopoverOpen] = createSignal(false)
+  function formatDate(input: string | undefined): string {
+    if (!input) return ""
+    const t = Date.parse(input)
+    if (Number.isNaN(t)) return input
+    return new Date(t).toLocaleString(undefined, { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
+  }
 
-  const modelsGrouped = createMemo(() => {
-    const models = cloudTeam.models()
-    const groups = new Map<string, { providerID: string; modelID: string; name: string }[]>()
-    for (const m of models) {
-      let list = groups.get(m.providerName)
-      if (!list) { list = []; groups.set(m.providerName, list) }
-      list.push({ providerID: m.providerID, modelID: m.modelID, name: m.name })
-    }
-    return [...groups.entries()]
+  // ── Model selector ──
+  const [popoverStore, setPopoverStore] = createStore<{
+    open: boolean
+    dismiss: "escape" | "outside" | null
+  }>({
+    open: false,
+    dismiss: null,
+  })
+
+  const currentModelItem = createMemo(() => {
+    const selected = cloudTeam.selectedModel()
+    if (!selected) return undefined
+    return cloudTeam.models().find(
+      (m) => m.providerID === selected.providerID && m.modelID === selected.modelID,
+    )
   })
 
   const handleLeaveSession = async () => {
@@ -131,10 +152,118 @@ export const CloudTeamTaskDashboard: Component = () => {
     }
   }
 
+  const memberInfoMap = createMemo(() => {
+    const map = new Map<string, { machineName: string; repos: import("@/client/cloud-team-types").RepoInfo[] }>()
+    for (const t of cloudTeam.teammates()) {
+      map.set(t.id, { machineName: t.machineName, repos: t.repos })
+    }
+    return map
+  })
+
+  const getTeammateDisplayName = (teammateId?: string) => {
+    if (!teammateId) return undefined
+    const tm = cloudTeam.teammates().find((t) => t.id === teammateId)
+    if (!tm) return teammateId.slice(0, 8)
+    const device = cloudTeam.deviceById().get(tm.machineId)
+    return device?.displayName || tm.machineName
+  }
+
   return (
     <div class="relative bg-background-base size-full overflow-hidden flex">
-      {/* ── Left Column: Teammates ── */}
+      {/* ── Left Column: Session History ── */}
       <div class="w-56 shrink-0 border-r border-border-weak-base bg-background-base flex flex-col">
+        <div class="px-4 py-3 border-b border-border-weak-base flex items-center justify-between">
+          <div class="text-13-medium text-text-base">Team Sessions</div>
+          <Show when={hasSession()}>
+            <button
+              type="button"
+              onClick={handleLeaveSession}
+              class="text-10-regular text-text-weaker hover:text-text-base transition-colors px-2 py-0.5 rounded hover:bg-background-stronger"
+            >
+              Leave
+            </button>
+          </Show>
+        </div>
+        <div class="flex-1 min-h-0 overflow-y-auto scrollbar-none">
+          {/* Active session */}
+          <Show when={hasSession()}>
+            <div class="px-3 py-2">
+              <div class="rounded-lg border border-border-base bg-background-stronger px-3 py-2.5">
+                <div class="flex items-center gap-2">
+                  <span class="text-13-medium text-text-base truncate flex-1">{cloudTeam.session()?.title ?? "Untitled"}</span>
+                  <span class="text-10-regular px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 shrink-0">active</span>
+                </div>
+                <Show when={activeSessionUpdatedAt()}>
+                  <div class="mt-0.5 text-[10px] text-text-weaker">{formatDate(activeSessionUpdatedAt())}</div>
+                </Show>
+                <Show when={stats().total > 0}>
+                  <div class="mt-2 flex items-center gap-2 text-10-regular text-text-weak">
+                    <span>{stats().completed}/{stats().total}</span>
+                    <div class="flex-1 h-1 rounded-full bg-background-base overflow-hidden">
+                      <div class="h-full rounded-full bg-green-500 transition-all duration-500" style={{ width: `${progressPercent()}%` }} />
+                    </div>
+                    <span class="tabular-nums">{progressPercent()}%</span>
+                  </div>
+                </Show>
+                <div class="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-10-regular text-text-weaker">
+                  <span>{totalTeammates()} teammate{totalTeammates() !== 1 ? "s" : ""}</span>
+                  <Show when={stats().running > 0}>
+                    <span class="text-amber-600">{stats().running} running</span>
+                  </Show>
+                  <Show when={stats().failed > 0}>
+                    <span class="text-red-600">{stats().failed} failed</span>
+                  </Show>
+                  <Show when={stats().pending > 0}>
+                    <span>{stats().pending} pending</span>
+                  </Show>
+                </div>
+                <Show when={latestError()}>
+                  <div class="mt-1 text-10-regular text-red-500 line-clamp-2">
+                    {latestError()}
+                  </div>
+                </Show>
+              </div>
+            </div>
+          </Show>
+
+          {/* Session list */}
+          <Show when={cloudTeam.sessions().length > 0}>
+            <div class="px-3 py-1">
+              <div class="text-10-regular text-text-weaker px-1 mb-1">History</div>
+              <div class="flex flex-col gap-0.5">
+                <For each={cloudTeam.sessions().filter((s) => s.id !== cloudTeam.session()?.id)}>
+                  {(s) => (
+                    <button
+                      type="button"
+                      onClick={() => handleJoinSession(s.id)}
+                      class="flex flex-col gap-0.5 rounded-md px-2 py-2 hover:bg-background-stronger transition-colors text-left w-full"
+                    >
+                      <div class="flex items-center gap-2 w-full">
+                        <span class="text-12-regular text-text-base truncate flex-1">{s.title || s.id.slice(0, 8)}</span>
+                        <span class={`text-10-regular px-1.5 py-0.5 rounded shrink-0 ${statusLabel[s.status] ?? "bg-background-base text-text-weaker"}`}>
+                          {s.status}
+                        </span>
+                      </div>
+                      <div class="text-[10px] text-text-weaker">
+                        {formatDate(s.updatedAt)}
+                      </div>
+                    </button>
+                  )}
+                </For>
+              </div>
+            </div>
+          </Show>
+
+          <Show when={cloudTeam.sessions().length === 0 && !hasSession()}>
+            <div class="px-4 py-8 text-11-regular text-text-weaker text-center">
+              No sessions yet
+            </div>
+          </Show>
+        </div>
+      </div>
+
+      {/* ── Middle Column: Teammates ── */}
+      <div class="w-72 shrink-0 border-r border-border-weak-base bg-background-stronger flex flex-col">
         <div class="px-4 py-3 border-b border-border-weak-base">
           <div class="text-13-medium text-text-base">Teammates</div>
           <Show when={totalTeammates() > 0}>
@@ -145,15 +274,61 @@ export const CloudTeamTaskDashboard: Component = () => {
           <Show when={totalTeammates() > 0}>
             <div class="py-2 px-2 flex flex-col gap-0.5">
               <For each={cloudTeam.teammates()}>
-                {(tm) => (
-                  <div class="flex items-center gap-2.5 rounded-md px-2 py-2 hover:bg-background-stronger transition-colors">
-                    <span class={`size-2 rounded-full shrink-0 ${statusDot[tm.status] ?? "bg-text-weaker"}`} />
-                    <div class="min-w-0">
-                      <div class="text-12-regular text-text-base truncate">{tm.machineName}</div>
-                      <div class="text-10-regular text-text-weaker">{tm.role ?? "member"}</div>
+                {(tm) => {
+                  const info = memberInfoMap().get(tm.id)
+                  const device = () => cloudTeam.deviceById().get(tm.machineId)
+                  const currentTask = () => cloudTeam.tasks().find((t) => t.assignedMemberId === tm.id && (t.status === "running" || t.status === "claimed" || t.status === "assigned"))
+                  const workingDir = () => info?.repos[0]?.localPath
+                  return (
+                    <div
+                      class="group/teammate flex flex-col gap-1 rounded-md border border-transparent px-2.5 py-2 transition-all hover:border-border-weak-base hover:bg-background-base"
+                      classList={{
+                        "opacity-60": tm.status === "offline",
+                      }}
+                    >
+                      {/* Main row: icon + name + details */}
+                      <div class="flex items-center gap-2.5">
+                        {/* Device icon with status dot */}
+                        <span class="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--native-radius-sm)] bg-[color:color-mix(in_oklab,var(--native-panel)_76%,var(--native-bg-subtle))] text-sidebar-foreground/70 shadow-[var(--native-shadow-sm)]">
+                          <span
+                            class="absolute right-1 top-1 h-1.5 w-1.5 rounded-full"
+                            classList={{
+                              "bg-[var(--native-success)]": tm.status === "online",
+                              "bg-amber-500": tm.status === "busy",
+                              "bg-red-400": tm.status === "offline",
+                            }}
+                          />
+                          <Icon name="server" size="small" />
+                        </span>
+
+                        {/* Name + detail — match workspace device list format */}
+                        <div class="min-w-0 flex-1">
+                          <span class="block truncate text-[0.8125rem] font-medium text-sidebar-foreground">
+                            {device()?.displayName || tm.machineName}
+                          </span>
+                          <span class="block truncate text-[11px] text-sidebar-foreground/45">
+                            {device()
+                              ? `${device()!.platform} · ${device()!.version}`
+                              : (tm.role ?? "member")}
+                            <Show when={workingDir()}>
+                              <span> · </span>
+                              <span class="font-mono">{workingDir()}</span>
+                            </Show>
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Current task (if busy) */}
+                      <Show when={currentTask()}>
+                        <div class="pl-10.5 text-10-regular text-text-weaker truncate">
+                          <span class="text-amber-600">{currentTask()!.status}</span>
+                          <span class="text-text-weaker">: </span>
+                          {currentTask()!.description}
+                        </div>
+                      </Show>
                     </div>
-                  </div>
-                )}
+                  )
+                }}
               </For>
             </div>
           </Show>
@@ -171,73 +346,6 @@ export const CloudTeamTaskDashboard: Component = () => {
             </span>
           </div>
         </Show>
-      </div>
-
-      {/* ── Middle Column: Session History ── */}
-      <div class="w-72 shrink-0 border-r border-border-weak-base bg-background-stronger flex flex-col">
-        <div class="px-4 py-3 border-b border-border-weak-base flex items-center justify-between">
-          <div class="text-13-medium text-text-base">Sessions</div>
-          <Show when={hasSession()}>
-            <button
-              type="button"
-              onClick={handleLeaveSession}
-              class="text-10-regular text-text-weaker hover:text-text-base transition-colors px-2 py-0.5 rounded hover:bg-background-base"
-            >
-              Leave
-            </button>
-          </Show>
-        </div>
-        <div class="flex-1 min-h-0 overflow-y-auto scrollbar-none">
-          {/* Active session */}
-          <Show when={hasSession()}>
-            <div class="px-3 py-2">
-              <div class="rounded-lg border border-border-base bg-background-base px-3 py-2.5">
-                <div class="flex items-center gap-2">
-                  <span class="text-13-medium text-text-base truncate flex-1">{cloudTeam.session()?.title ?? "Untitled"}</span>
-                  <span class="text-10-regular px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 shrink-0">active</span>
-                </div>
-                <Show when={stats().total > 0}>
-                  <div class="mt-2 flex items-center gap-2 text-10-regular text-text-weak">
-                    <span>{stats().completed}/{stats().total}</span>
-                    <div class="flex-1 h-1 rounded-full bg-background-stronger overflow-hidden">
-                      <div class="h-full rounded-full bg-green-500 transition-all duration-500" style={{ width: `${progressPercent()}%` }} />
-                    </div>
-                    <span class="tabular-nums">{progressPercent()}%</span>
-                  </div>
-                </Show>
-              </div>
-            </div>
-          </Show>
-
-          {/* Session list */}
-          <Show when={cloudTeam.sessions().length > 0}>
-            <div class="px-3 py-1">
-              <div class="text-10-regular text-text-weaker px-1 mb-1">History</div>
-              <div class="flex flex-col gap-0.5">
-                <For each={cloudTeam.sessions().filter((s) => s.id !== cloudTeam.session()?.id)}>
-                  {(s) => (
-                    <button
-                      type="button"
-                      onClick={() => handleJoinSession(s.id)}
-                      class="flex items-center gap-2 rounded-md px-2 py-2 hover:bg-background-base transition-colors text-left w-full"
-                    >
-                      <span class="text-12-regular text-text-base truncate flex-1">{s.title || s.id.slice(0, 8)}</span>
-                      <span class={`text-10-regular px-1.5 py-0.5 rounded shrink-0 ${statusLabel[s.status] ?? "bg-background-base text-text-weaker"}`}>
-                        {s.status}
-                      </span>
-                    </button>
-                  )}
-                </For>
-              </div>
-            </div>
-          </Show>
-
-          <Show when={cloudTeam.sessions().length === 0 && !hasSession()}>
-            <div class="px-4 py-8 text-11-regular text-text-weaker text-center">
-              No sessions yet
-            </div>
-          </Show>
-        </div>
       </div>
 
       {/* ── Right Column: Main workspace ── */}
@@ -295,7 +403,12 @@ export const CloudTeamTaskDashboard: Component = () => {
                             status={task.status}
                             assigneeName={
                               task.assignedMemberId
-                                ? memberNameMap().get(task.assignedMemberId) ?? task.assignedMemberId.slice(0, 8)
+                                ? getTeammateDisplayName(task.assignedMemberId)
+                                : undefined
+                            }
+                            assigneeRepos={
+                              task.assignedMemberId
+                                ? memberInfoMap().get(task.assignedMemberId)?.repos
                                 : undefined
                             }
                             progress={cloudTeam.progress()[task.id]?.percentage}
@@ -366,57 +479,73 @@ export const CloudTeamTaskDashboard: Component = () => {
 
               {/* Model selector */}
               <Kobalte
-                  open={modelPopoverOpen()}
-                  onOpenChange={setModelPopoverOpen}
-                  modal={false}
-                  placement="top-start"
-                  gutter={4}
-                >
-                  <Kobalte.Trigger as="button" type="button" class="text-10-regular text-text-weaker flex items-center gap-1 hover:text-text-base transition-colors">
-                    <span class="truncate max-w-[120px]">{cloudTeam.selectedModel()?.name ?? "选择模型"}</span>
-                    <Icon name="chevron-down" size="small" class="shrink-0" />
-                  </Kobalte.Trigger>
-                  <Kobalte.Portal>
-                    <Kobalte.Content
-                      class="w-64 max-h-72 flex flex-col p-2 rounded-md border border-border-base bg-surface-raised-stronger-non-alpha shadow-md z-50 outline-none overflow-hidden"
-                      onPointerDownOutside={() => setModelPopoverOpen(false)}
+                open={popoverStore.open}
+                onOpenChange={(next) => {
+                  if (next) setPopoverStore("dismiss", null)
+                  setPopoverStore("open", next)
+                }}
+                modal={false}
+                placement="top-start"
+                gutter={4}
+              >
+                <Kobalte.Trigger as="div" class="text-10-regular text-text-weaker flex items-center gap-1 hover:text-text-base transition-colors cursor-pointer">
+                  <span class="truncate max-w-[120px]">{cloudTeam.selectedModel()?.name ?? "选择模型"}</span>
+                  <Icon name="chevron-down" size="small" class="shrink-0" />
+                </Kobalte.Trigger>
+                <Kobalte.Portal>
+                  <Kobalte.Content
+                    class="w-72 h-80 flex flex-col p-2 rounded-md border border-border-base bg-surface-raised-stronger-non-alpha shadow-md z-50 outline-none overflow-hidden"
+                    onEscapeKeyDown={(event) => {
+                      setPopoverStore("dismiss", "escape")
+                      setPopoverStore("open", false)
+                      event.preventDefault()
+                      event.stopPropagation()
+                    }}
+                    onPointerDownOutside={() => {
+                      setPopoverStore("dismiss", "outside")
+                      setPopoverStore("open", false)
+                    }}
+                    onFocusOutside={() => {
+                      setPopoverStore("dismiss", "outside")
+                      setPopoverStore("open", false)
+                    }}
+                    onCloseAutoFocus={(event) => {
+                      if (popoverStore.dismiss === "outside") event.preventDefault()
+                      setPopoverStore("dismiss", null)
+                    }}
+                  >
+                    <Kobalte.Title class="sr-only">选择模型</Kobalte.Title>
+                    <List
+                      class="flex-1 min-h-0 [&_[data-slot=list-scroll]]:flex-1 [&_[data-slot=list-scroll]]:min-h-0 p-1"
+                      search={{ placeholder: "搜索模型", autofocus: true }}
+                      emptyMessage="暂无模型"
+                      key={(x) => `${x.providerID}:${x.modelID}`}
+                      items={cloudTeam.models}
+                      current={currentModelItem()}
+                      filterKeys={["providerName", "name"]}
+                      sortBy={(a, b) => a.name.localeCompare(b.name)}
+                      groupBy={(x) => x.providerName}
+                      sortGroupsBy={(a, b) => {
+                        const aProvider = a.items[0].providerID
+                        const bProvider = b.items[0].providerID
+                        if (aProvider === "costrict" && bProvider !== "costrict") return -1
+                        if (bProvider === "costrict" && aProvider !== "costrict") return 1
+                        return a.category.localeCompare(b.category)
+                      }}
+                      onSelect={(x) => {
+                        cloudTeam.setSelectedModel(x ? { providerID: x.providerID, modelID: x.modelID } : undefined)
+                        setPopoverStore("open", false)
+                      }}
                     >
-                      <div class="flex-1 min-h-0 overflow-y-auto scrollbar-none">
-                        <For each={modelsGrouped()}>
-                          {([provider, models]) => (
-                            <div class="mb-2">
-                              <div class="text-10-medium text-text-weaker px-2 py-1">{provider}</div>
-                              <For each={models}>
-                                {(m) => {
-                                  const isActive = () => cloudTeam.selectedModel()?.modelID === m.modelID && cloudTeam.selectedModel()?.providerID === m.providerID
-                                  return (
-                                    <button
-                                      type="button"
-                                      class="w-full text-left px-2 py-1.5 rounded-md text-12-regular transition-colors flex items-center gap-2"
-                                      classList={{
-                                        "bg-background-base text-text-base": isActive(),
-                                        "text-text-weak hover:bg-background-base": !isActive(),
-                                      }}
-                                      onClick={() => {
-                                        cloudTeam.setSelectedModel({ providerID: m.providerID, modelID: m.modelID })
-                                        setModelPopoverOpen(false)
-                                      }}
-                                    >
-                                      <span class="truncate flex-1">{m.name}</span>
-                                      <Show when={isActive()}>
-                                        <Icon name="check" size="small" class="shrink-0 text-text-base" />
-                                      </Show>
-                                    </button>
-                                  )
-                                }}
-                              </For>
-                            </div>
-                          )}
-                        </For>
-                      </div>
-                    </Kobalte.Content>
-                  </Kobalte.Portal>
-                </Kobalte>
+                      {(i) => (
+                        <div class="w-full flex items-center gap-x-2 text-13-regular">
+                          <span class="truncate">{i.name}</span>
+                        </div>
+                      )}
+                    </List>
+                  </Kobalte.Content>
+                </Kobalte.Portal>
+              </Kobalte>
 
               <Show when={cloudTeam.session()?.id}>
                 <span class="text-10-regular text-text-weaker ml-auto">

@@ -7,7 +7,7 @@
   "private": true,
   "scripts": {
     "prepare": "effect-language-service patch || true",
-    "typecheck": "tsgo --noEmit",
+    "typecheck": "bun run build:builtin && tsgo --noEmit",
     "test": "bun test --timeout 30000",
     "build:builtin-agents": "bun run script/generate-agents.ts",
     "build:builtin-skills": "bun run script/generate-skills.ts",
