@@ -200,10 +200,10 @@ export default function KanbanOrgList() {
     }
   })
 
-  const filtered = createMemo(() => applyClientFilters(data()?.rows ?? [], columns(), table.filters))
+  const filtered = createMemo(() => applyClientFilters(data.latest?.rows ?? [], columns(), table.filters))
   const paged = createMemo(() => filtered().slice((state.page - 1) * state.pageSize, state.page * state.pageSize))
-  const periods = createMemo(() => data()?.periods ?? [])
-  const series = createMemo(() => data()?.series ?? [])
+  const periods = createMemo(() => data.latest?.periods ?? [])
+  const series = createMemo(() => data.latest?.series ?? [])
 
   const memberOption = createMemo<EChartsOption | undefined>(() => periods().length ? chart("成员数", periods(), series().map((item) => ({ name: item.org_name || "-", data: values(item, "user_count") })), { type: "line" }) : undefined)
   const countOption = createMemo<EChartsOption | undefined>(() => periods().length ? chart("Task / Commit 数", periods(), series().flatMap((item) => ([{ name: `${item.org_name || "-"} / Task`, data: values(item, "task_count") }, { name: `${item.org_name || "-"} / Commit`, data: values(item, "commit_count") }])), { type: "line" }) : undefined)
@@ -252,7 +252,7 @@ export default function KanbanOrgList() {
           class="rounded-none"
           columns={columns()}
           rows={paged()}
-          rawRows={data()?.rows ?? []}
+          rawRows={data.latest?.rows ?? []}
           controller={table}
           loading={data.loading}
           total={filtered().length}

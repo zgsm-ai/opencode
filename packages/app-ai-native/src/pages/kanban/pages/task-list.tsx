@@ -204,16 +204,16 @@ export default function KanbanTaskList() {
     },
   )
 
-  const rows = createMemo(() => applyClientFilters(data()?.rows ?? [], columns(), table.filters))
+  const rows = createMemo(() => applyClientFilters(data.latest?.rows ?? [], columns(), table.filters))
   const selectedRows = createMemo(() => {
     const picked = new Set(state.selectedIds)
-    return (data()?.rows ?? []).filter((item) => item.task_id?.trim() && picked.has(item.task_id.trim()))
+    return (data.latest?.rows ?? []).filter((item) => item.task_id?.trim() && picked.has(item.task_id.trim()))
   })
   const visibleIds = createMemo(() => rows().map((item) => item.task_id?.trim() ?? "").filter(Boolean))
-  const missingEstimateCount = createMemo(() => (data()?.rows ?? []).filter((item) => item.task_ancient_minutes == null && item.task_ancient_minutes_manual == null).length)
+  const missingEstimateCount = createMemo(() => (data.latest?.rows ?? []).filter((item) => item.task_ancient_minutes == null && item.task_ancient_minutes_manual == null).length)
 
   createEffect(() => {
-    const pool = new Set((data()?.rows ?? []).map((item) => item.task_id?.trim() ?? "").filter(Boolean))
+    const pool = new Set((data.latest?.rows ?? []).map((item) => item.task_id?.trim() ?? "").filter(Boolean))
     const next = state.selectedIds.filter((id) => pool.has(id))
     if (next.length === state.selectedIds.length) return
     setState("selectedIds", next)
@@ -282,10 +282,10 @@ export default function KanbanTaskList() {
         <FilterTable
           columns={columns()}
           rows={rows()}
-          rawRows={data()?.rows ?? []}
+          rawRows={data.latest?.rows ?? []}
           controller={table}
           loading={data.loading}
-          total={data()?.total ?? 0}
+          total={data.latest?.total ?? 0}
           page={state.page}
           pageSize={state.pageSize}
           pageSizeOptions={[100, 250, 500]}

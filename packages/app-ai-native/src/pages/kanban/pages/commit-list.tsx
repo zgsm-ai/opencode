@@ -152,7 +152,7 @@ export default function KanbanCommitList() {
     },
   )
 
-  const rows = createMemo(() => applyClientFilters(data()?.rows ?? [], columns(), table.filters))
+  const rows = createMemo(() => applyClientFilters(data.latest?.rows ?? [], columns(), table.filters))
 
   return (
     <div class="flex min-h-full min-w-0 flex-col gap-4 overflow-y-auto overflow-x-clip p-[clamp(1rem,2vw,2rem)]">
@@ -177,10 +177,10 @@ export default function KanbanCommitList() {
           class="rounded-none"
           columns={columns()}
           rows={rows()}
-          rawRows={data()?.rows ?? []}
+          rawRows={data.latest?.rows ?? []}
           controller={table}
           loading={data.loading}
-          total={data()?.total ?? 0}
+          total={data.latest?.total ?? 0}
           page={state.page}
           pageSize={state.pageSize}
           pageSizeOptions={[100, 250, 500]}

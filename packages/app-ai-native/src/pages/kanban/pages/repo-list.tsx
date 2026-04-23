@@ -179,7 +179,7 @@ export default function KanbanRepoList() {
     },
   )
 
-  const filteredRows = createMemo(() => applyClientFilters(repoRows()?.rows ?? [], columns(), controller.filters))
+  const filteredRows = createMemo(() => applyClientFilters(repoRows.latest?.rows ?? [], columns(), controller.filters))
 
   return (
     <div class="flex min-h-full min-w-0 flex-col gap-4 overflow-y-auto overflow-x-clip p-[clamp(1rem,2vw,2rem)]">
@@ -193,10 +193,10 @@ export default function KanbanRepoList() {
           class="rounded-none"
           columns={columns()}
           rows={filteredRows()}
-          rawRows={repoRows()?.rows ?? []}
+          rawRows={repoRows.latest?.rows ?? []}
           controller={controller}
           loading={repoRows.loading}
-          total={repoRows()?.total ?? 0}
+          total={repoRows.latest?.total ?? 0}
           page={state.page}
           pageSize={state.pageSize}
           pageSizeOptions={[250, 500, 1000]}

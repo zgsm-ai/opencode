@@ -230,14 +230,14 @@ export default function KanbanUserList() {
     },
   )
 
-  const rows = createMemo(() => applyClientFilters(data()?.rows ?? [], columns(), table.filters))
+  const rows = createMemo(() => applyClientFilters(data.latest?.rows ?? [], columns(), table.filters))
   const series = createMemo(() => {
     const names = new Set(rows().map((row) => (row.user_name?.trim() || row.user_id?.trim() || "")).filter(Boolean))
-    const all = data()?.series ?? []
+    const all = data.latest?.series ?? []
     if (!names.size || names.size === all.length) return all
     return all.filter((item) => names.has(item.user_name?.trim() || item.user_id?.trim() || ""))
   })
-  const periods = createMemo(() => data()?.periods ?? [])
+  const periods = createMemo(() => data.latest?.periods ?? [])
 
   const countOption = createMemo<EChartsOption | undefined>(() => {
     if (!periods().length || !series().length) return undefined
@@ -341,10 +341,10 @@ export default function KanbanUserList() {
           class="rounded-none"
           columns={columns()}
           rows={rows()}
-          rawRows={data()?.rows ?? []}
+          rawRows={data.latest?.rows ?? []}
           controller={table}
           loading={data.loading}
-          total={data()?.total ?? 0}
+          total={data.latest?.total ?? 0}
           page={state.page}
           pageSize={state.pageSize}
           pageSizeOptions={[50, 100, 250]}
