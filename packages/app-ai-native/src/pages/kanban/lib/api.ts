@@ -83,7 +83,7 @@ import type {
   GlobalConfig,
 } from "./types"
 
-const PREFIX = env.API_PREFIX
+const PREFIX = env.DASHBOARD_PREFIX
 const BASE = env.API_URL || PREFIX
 const LONG = 600000
 const API = "/api"

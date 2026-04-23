@@ -67,6 +67,9 @@ export const env = {
   get API_PREFIX() {
     return getEnv("VITE_API_PREFIX", "")
   },
+  get DASHBOARD_PREFIX() {
+    return getEnv("VITE_DASHBOARD_PREFIX", "")
+  },
   get APP_URL() {
     return getEnv("VITE_APP_URL", "http://127.0.0.1:3000")
   },
