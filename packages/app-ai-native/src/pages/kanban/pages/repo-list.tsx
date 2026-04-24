@@ -15,7 +15,7 @@ import type { DateRangeValue, KanbanColumn, RepoAggregateRow } from "../lib/type
 
 export default function KanbanRepoList() {
   const navigate = useNavigate()
-  const [search, setSearch] = useSearchParams<{ startDate?: string; endDate?: string; mock?: string }>()
+  const [search, setSearch] = useSearchParams<{ startDate?: string; endDate?: string }>()
   const [state, setState] = createStore({
     page: 1,
     pageSize: 250,
@@ -27,7 +27,6 @@ export default function KanbanRepoList() {
     return searchQuery([
       ["startDate", next.startDate],
       ["endDate", next.endDate],
-      ["mock", search.mock],
     ]).toString()
   })
 
@@ -124,10 +123,7 @@ export default function KanbanRepoList() {
   createEffect(() => {
     const next = normalizeDateRange(controller.filters.start_time as DateRangeValue)
     if (!next) {
-      if (search.startDate || search.endDate) {
-        const mock = search.mock?.trim()
-        setSearch(mock ? { mock } : {})
-      }
+      if (search.startDate || search.endDate) setSearch({})
       return
     }
 
@@ -139,12 +135,10 @@ export default function KanbanRepoList() {
     const mirror = searchQuery([
       ["startDate", query.startDate],
       ["endDate", query.endDate],
-      ["mock", search.mock],
     ])
     const current = searchQuery([
       ["startDate", search.startDate],
       ["endDate", search.endDate],
-      ["mock", search.mock],
     ])
     if (mirror.toString() !== current.toString()) setSearch(Object.fromEntries(mirror.entries()))
   })

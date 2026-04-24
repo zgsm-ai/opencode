@@ -57,7 +57,7 @@ function fmtTokens(up?: number, down?: number) {
   return String(total)
 }
 
-function queryOf(range: [string, string], granularity: Granularity, org?: OrgCascadeValue, mock?: string) {
+function queryOf(range: [string, string], granularity: Granularity, org?: OrgCascadeValue) {
   const next = rangeQuery(range)
   return searchQuery([
     ["startDate", next.startDate],
@@ -67,21 +67,20 @@ function queryOf(range: [string, string], granularity: Granularity, org?: OrgCas
     ["org2", org?.org2],
     ["org3", org?.org3],
     ["org4", org?.org4],
-    ["mock", mock],
   ])
 }
 
 export default function KanbanOrgDetail() {
   const params = useParams()
   const navigate = useNavigate()
-  const [search, setSearch] = useSearchParams<{ startDate?: string; endDate?: string; granularity?: string; mock?: string }>()
+  const [search, setSearch] = useSearchParams<{ startDate?: string; endDate?: string; granularity?: string }>()
 
   const org = createMemo(() => parsePath(params.orgPath ?? ""))
   const dateRange = createMemo(() => parseQueryRange(search.startDate, search.endDate))
   const granularity = createMemo(() => parseGranularity(search.granularity))
   const listHref = createMemo(() => {
     const scope = parentOrg(org())
-    const q = queryOf(dateRange(), granularity(), scope, search.mock)
+    const q = queryOf(dateRange(), granularity(), scope)
     return `/kanban/org?${q.toString()}`
   })
 
@@ -130,10 +129,10 @@ export default function KanbanOrgDetail() {
           showOrg
           onDateRangeChange={(value) => {
             const next = value ?? defaultWideRange()
-            setSearch(Object.fromEntries(queryOf(next, granularity(), org(), search.mock).entries()))
+            setSearch(Object.fromEntries(queryOf(next, granularity(), org()).entries()))
           }}
           onOrgChange={(value) => {
-            navigate(`/kanban/org/${encodeURIComponent(orgPath(value))}?${queryOf(dateRange(), granularity(), value, search.mock).toString()}`)
+            navigate(`/kanban/org/${encodeURIComponent(orgPath(value))}?${queryOf(dateRange(), granularity(), value).toString()}`)
           }}
           actions={
             <>
@@ -144,7 +143,7 @@ export default function KanbanOrgDetail() {
                   value={granularity()}
                   onChange={(e) => {
                     const next = e.currentTarget.value as Granularity
-                    setSearch(Object.fromEntries(queryOf(dateRange(), next, org(), search.mock).entries()))
+                    setSearch(Object.fromEntries(queryOf(dateRange(), next, org()).entries()))
                   }}
                 >
                   <option value="day">天</option>
@@ -190,7 +189,7 @@ export default function KanbanOrgDetail() {
                     <TableRow class="cursor-pointer" onClick={() => {
                       const txt = row.user_id?.trim()
                       if (!txt) return
-                      navigate(`/kanban/user/${encodeURIComponent(txt)}?${queryOf(dateRange(), granularity(), org(), search.mock).toString()}`)
+                      navigate(`/kanban/user/${encodeURIComponent(txt)}?${queryOf(dateRange(), granularity(), org()).toString()}`)
                     }}>
                       <TableCell>{row.user_name || row.user_id || "-"}</TableCell>
                       <TableCell class="text-right tabular-nums">{row.commit_diff_lines ?? 0}</TableCell>

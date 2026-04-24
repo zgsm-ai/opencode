@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import Back from "../components/back"
 import { MetricCard } from "../components/metric-card"
 import { RatioPill } from "../components/ratio-pill"
+import { searchQuery } from "../lib/date-range"
 import { getCommitDetail, updateCommitManual } from "../lib/api"
 import { formatDuration, formatLocalTime } from "../lib/formatters"
 import type { CommitManualPayload, CommitRow } from "../lib/types"
@@ -17,15 +18,6 @@ import type { CommitManualPayload, CommitRow } from "../lib/types"
 function fmtCost(value?: number | null) {
   if (value == null || value === 0) return "-"
   return `¥${value.toLocaleString("zh-CN", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
-}
-
-function queryString(search: Record<string, string | undefined>) {
-  const next = new URLSearchParams()
-  for (const [key, value] of Object.entries(search)) {
-    const txt = value?.trim()
-    if (txt) next.set(key, txt)
-  }
-  return next.toString()
 }
 
 function text(value?: string | null) {
@@ -132,11 +124,19 @@ export default function KanbanCommitDetail() {
   const params = useParams()
   const navigate = useNavigate()
   const dialog = useDialog()
-  const [search] = useSearchParams<{ startDate?: string; endDate?: string; userName?: string; org1?: string; org2?: string; org3?: string; org4?: string; mock?: string }>()
+  const [search] = useSearchParams<{ startDate?: string; endDate?: string; userName?: string; org1?: string; org2?: string; org3?: string; org4?: string }>()
 
   const commitId = createMemo(() => decodeURIComponent(params.commitId ?? "").trim())
   const listHref = createMemo(() => {
-    const txt = queryString(search as Record<string, string | undefined>)
+    const txt = searchQuery([
+      ["startDate", search.startDate],
+      ["endDate", search.endDate],
+      ["userName", search.userName],
+      ["org1", search.org1],
+      ["org2", search.org2],
+      ["org3", search.org3],
+      ["org4", search.org4],
+    ]).toString()
     return txt ? `/kanban/commit?${txt}` : "/kanban/commit"
   })
 

@@ -67,7 +67,7 @@ export default function KanbanRepoDetail() {
   const params = useParams()
   const navigate = useNavigate()
   const dialog = useDialog()
-  const [search, setSearch] = useSearchParams<{ startDate?: string; endDate?: string; mock?: string }>()
+  const [search, setSearch] = useSearchParams<{ startDate?: string; endDate?: string }>()
 
   const repoAddr = createMemo(() => decodeURIComponent(params.repoAddr ?? "").trim())
   const repoBranch = createMemo(() => decodeURIComponent(params.repoBranch ?? "").trim())
@@ -76,7 +76,6 @@ export default function KanbanRepoDetail() {
     const q = searchQuery([
       ["startDate", search.startDate],
       ["endDate", search.endDate],
-      ["mock", search.mock],
     ])
     const txt = q.toString()
     return txt ? `/kanban/repo?${txt}` : "/kanban/repo"
@@ -87,7 +86,6 @@ export default function KanbanRepoDetail() {
     const q = searchQuery([
       ["startDate", next.startDate],
       ["endDate", next.endDate],
-      ["mock", search.mock],
     ])
     const txt = q.toString()
     return branch
@@ -196,7 +194,6 @@ export default function KanbanRepoDetail() {
               setSearch(Object.fromEntries(searchQuery([
                 ["startDate", rangeQuery(next).startDate],
                 ["endDate", rangeQuery(next).endDate],
-                ["mock", search.mock],
               ]).entries()))
             }}
             placeholder="选择日期范围"

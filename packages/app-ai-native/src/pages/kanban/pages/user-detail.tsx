@@ -64,31 +64,30 @@ function periodRange(row: UserDetailPeriodRow, granularity: Granularity) {
   return { start: `${key}0101`, end: `${key}1231` }
 }
 
-function queryOf(range: [string, string], granularity: Granularity, mock?: string) {
+function queryOf(range: [string, string], granularity: Granularity) {
   const next = rangeQuery(range)
   return searchQuery([
     ["startDate", next.startDate],
     ["endDate", next.endDate],
     ["granularity", granularity],
-    ["mock", mock],
   ])
 }
 
 export default function KanbanUserDetail() {
   const params = useParams()
   const navigate = useNavigate()
-  const [search, setSearch] = useSearchParams<{ startDate?: string; endDate?: string; granularity?: string; mock?: string }>()
+  const [search, setSearch] = useSearchParams<{ startDate?: string; endDate?: string; granularity?: string }>()
 
   const userId = createMemo(() => decodeURIComponent(params.userId ?? "").trim())
   const dateRange = createMemo(() => parseQueryRange(search.startDate, search.endDate))
   const granularity = createMemo(() => parseGranularity(search.granularity))
   const listHref = createMemo(() => {
-    const q = queryOf(dateRange(), granularity(), search.mock)
+    const q = queryOf(dateRange(), granularity())
     return `/kanban/user?${q.toString()}`
   })
 
   const detailHref = (id: string) => {
-    const q = queryOf(dateRange(), granularity(), search.mock)
+    const q = queryOf(dateRange(), granularity())
     return `/kanban/user/${encodeURIComponent(id)}?${q.toString()}`
   }
 
@@ -208,7 +207,7 @@ export default function KanbanUserDetail() {
                   value={dateRange()}
                   onChange={(value) => {
                     const next = value ?? defaultWideRange()
-                    setSearch(Object.fromEntries(queryOf(next, granularity(), search.mock).entries()))
+                    setSearch(Object.fromEntries(queryOf(next, granularity()).entries()))
                   }}
                   clearable={false}
                   placeholder="选择日期范围"
@@ -221,7 +220,7 @@ export default function KanbanUserDetail() {
                   value={granularity()}
                   onChange={(e) => {
                     const next = e.currentTarget.value as Granularity
-                    setSearch(Object.fromEntries(queryOf(dateRange(), next, search.mock).entries()))
+                    setSearch(Object.fromEntries(queryOf(dateRange(), next).entries()))
                   }}
                 >
                   <option value="day">天</option>

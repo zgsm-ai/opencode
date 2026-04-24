@@ -184,7 +184,7 @@ function TopMenu(props: { title: string; items: Array<{ title: string; href: str
 }
 
 export default function KanbanHome() {
-  const [search, setSearch] = useSearchParams<{ startDate?: string; endDate?: string; mock?: string }>()
+  const [search, setSearch] = useSearchParams<{ startDate?: string; endDate?: string }>()
   const [state, setState] = createStore({
     dateRange: parseQueryRange(search.startDate, search.endDate),
   })
@@ -205,12 +205,10 @@ export default function KanbanHome() {
     const mirror = searchQuery([
       ["startDate", query.startDate],
       ["endDate", query.endDate],
-      ["mock", search.mock],
     ])
     const current = searchQuery([
       ["startDate", search.startDate],
       ["endDate", search.endDate],
-      ["mock", search.mock],
     ])
     if (mirror.toString() !== current.toString()) setSearch(Object.fromEntries(mirror.entries()))
   })
@@ -242,7 +240,6 @@ export default function KanbanHome() {
   const query = createMemo(() => searchQuery([
     ["startDate", rangeQuery(state.dateRange).startDate],
     ["endDate", rangeQuery(state.dateRange).endDate],
-    ["mock", search.mock],
   ]).toString())
   const href = (path: string) => query() ? `${path}?${query()}` : path
 

@@ -19,14 +19,13 @@ function fmtCost(value?: number | null) {
 export default function KanbanUserGroupDetail() {
   const params = useParams()
   const navigate = useNavigate()
-  const [search, setSearch] = useSearchParams<{ startDate?: string; endDate?: string; mock?: string }>()
+  const [search, setSearch] = useSearchParams<{ startDate?: string; endDate?: string }>()
 
   const groupId = createMemo(() => decodeURIComponent(params.groupId ?? "").trim())
   const dateRange = createMemo(() => parseQueryRange(search.startDate, search.endDate))
   const routeQuery = createMemo(() => searchQuery([
     ["startDate", search.startDate],
     ["endDate", search.endDate],
-    ["mock", search.mock],
   ]).toString())
   const listHref = createMemo(() => routeQuery() ? `/kanban/user?${routeQuery()}` : "/kanban/user")
 
@@ -35,12 +34,10 @@ export default function KanbanUserGroupDetail() {
     const mirror = searchQuery([
       ["startDate", next.startDate],
       ["endDate", next.endDate],
-      ["mock", search.mock],
     ])
     const current = searchQuery([
       ["startDate", search.startDate],
       ["endDate", search.endDate],
-      ["mock", search.mock],
     ])
     if (mirror.toString() !== current.toString()) setSearch(Object.fromEntries(mirror.entries()))
   })
@@ -109,7 +106,6 @@ export default function KanbanUserGroupDetail() {
                       setSearch(Object.fromEntries(searchQuery([
                         ["startDate", rangeQuery(next).startDate],
                         ["endDate", rangeQuery(next).endDate],
-                        ["mock", search.mock],
                       ]).entries()))
                     }}
                     clearable={false}

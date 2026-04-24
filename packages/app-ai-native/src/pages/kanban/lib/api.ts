@@ -1,15 +1,4 @@
 import { env } from "@/lib/env"
-import { dashboardMock, queryDashboardSummaryMock } from "../mock/dashboard"
-import {
-  addRepoToProjectMock,
-  checkProjectConflictsMock,
-  createProjectOptionMock,
-  getRepoDetailMock,
-  listRepoBranchesMock,
-  loadProjectOptionsMock,
-  queryRepoRowsMock,
-  repoMock,
-} from "../mock/repo"
 import type {
   CorrectionHistoryItem,
   CorrectionPayload,
@@ -482,8 +471,6 @@ export async function queryEfficiencyRows(input: EfficiencyQuery): Promise<Effic
 }
 
 export async function queryDashboardSummary(input: DashboardSummaryQuery = {}): Promise<DashboardSummary> {
-  if (dashboardMock()) return queryDashboardSummaryMock(input)
-
   const raw = await get<unknown>(`${API}/v2/dashboard/summary`, {
     ...range(input.dateRange),
   }, LONG)
@@ -492,8 +479,6 @@ export async function queryDashboardSummary(input: DashboardSummaryQuery = {}): 
 }
 
 export async function queryRepoRows(input: RepoListQuery): Promise<RepoListResult> {
-  if (repoMock()) return queryRepoRowsMock(input)
-
   const currentPage = input.page ?? 1
   const currentSize = input.pageSize ?? 250
   const raw = await get<unknown>(`${API}/v2/repos`, {
@@ -826,8 +811,6 @@ export async function getOrgDetail(input: OrgDetailQuery): Promise<OrgDetailResu
 }
 
 export async function getRepoDetail(input: RepoDetailQuery): Promise<RepoDetailResult> {
-  if (repoMock()) return getRepoDetailMock(input)
-
   const repoAddr = input.repoAddr.trim()
   if (!repoAddr) fail("repoAddr is required")
 
@@ -862,7 +845,6 @@ export async function getRepoDetail(input: RepoDetailQuery): Promise<RepoDetailR
 export async function listRepoBranches(repoAddr: string) {
   const txt = repoAddr.trim()
   if (!txt) return [] as string[]
-  if (repoMock()) return listRepoBranchesMock(txt)
 
   const raw = await get<unknown>(`${API}/v2/repos/branches`, { repoAddr: txt }, LONG)
   if (plain(raw) && Array.isArray(raw.branches)) {
@@ -872,8 +854,6 @@ export async function listRepoBranches(repoAddr: string) {
 }
 
 export async function loadProjectOptions() {
-  if (repoMock()) return loadProjectOptionsMock()
-
   const raw = await get<unknown>(`${API}/v2/projects`, undefined, LONG)
   const list = takeArray(raw, ["data", "items"])
   if (!list) return [] as ProjectOption[]
@@ -888,8 +868,6 @@ export async function loadProjectOptions() {
 }
 
 export async function createProjectOption(input: { name: string; description?: string }) {
-  if (repoMock()) return createProjectOptionMock(input)
-
   const raw = await post<unknown>(`${API}/v2/projects`, {
     name: input.name.trim(),
     description: input.description?.trim() || undefined,
@@ -907,7 +885,6 @@ export async function createProjectOption(input: { name: string; description?: s
 export async function checkProjectConflicts(commitIds: string[]) {
   const ids = commitIds.map((item) => item.trim()).filter(Boolean)
   if (!ids.length) return [] as ProjectConflict[]
-  if (repoMock()) return checkProjectConflictsMock(ids)
 
   const raw = await post<unknown>(`${API}/v2/projects/check-conflicts`, { commit_ids: ids }, undefined, LONG)
   const list = takeArray(raw, ["conflicts", "data"])
@@ -926,7 +903,6 @@ export async function checkProjectConflicts(commitIds: string[]) {
 export async function addRepoToProject(projectId: string, payload: RepoBindingPayload) {
   const id = projectId.trim()
   if (!id) fail("projectId is required")
-  if (repoMock()) return addRepoToProjectMock(id, payload)
 
   return post<unknown>(`${API}/v2/projects/${encodeURIComponent(id)}/repos`, {
     repo_addr: payload.repo_addr.trim(),

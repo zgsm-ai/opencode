@@ -49,7 +49,6 @@ export default function KanbanUserList() {
     org3?: string
     org4?: string
     granularity?: string
-    mock?: string
   }>()
   const [state, setState] = createStore({
     page: 1,
@@ -69,7 +68,6 @@ export default function KanbanUserList() {
       ["org2", state.org.org2],
       ["org3", state.org.org3],
       ["org4", state.org.org4],
-      ["mock", search.mock],
     ]).toString()
   })
 
@@ -100,7 +98,6 @@ export default function KanbanUserList() {
       ["org2", state.org.org2],
       ["org3", state.org.org3],
       ["org4", state.org.org4],
-      ["mock", search.mock],
     ])
     const current = searchQuery([
       ["startDate", search.startDate],
@@ -110,7 +107,6 @@ export default function KanbanUserList() {
       ["org2", search.org2],
       ["org3", search.org3],
       ["org4", search.org4],
-      ["mock", search.mock],
     ])
     if (mirror.toString() !== current.toString()) setSearch(Object.fromEntries(mirror.entries()))
   })

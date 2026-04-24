@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import Back from "../components/back"
 import { MetricCard } from "../components/metric-card"
 import { RatioPill } from "../components/ratio-pill"
+import { searchQuery } from "../lib/date-range"
 import { getTaskDetail, updateTaskManual } from "../lib/api"
 import { formatDuration, formatLocalTime } from "../lib/formatters"
 import type { TaskConversation, TaskManualPayload, TaskRow, TimeSegment } from "../lib/types"
@@ -23,15 +24,6 @@ function dateOf(value?: string | null) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value.slice(0, 10)
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`
-}
-
-function queryString(search: Record<string, string | undefined>) {
-  const next = new URLSearchParams()
-  for (const [key, value] of Object.entries(search)) {
-    const txt = value?.trim()
-    if (txt) next.set(key, txt)
-  }
-  return next.toString()
 }
 
 function num(value?: number | null) {
@@ -146,12 +138,20 @@ export default function KanbanTaskDetail() {
   const params = useParams()
   const navigate = useNavigate()
   const dialog = useDialog()
-  const [search] = useSearchParams<{ startDate?: string; endDate?: string; userName?: string; org1?: string; org2?: string; org3?: string; org4?: string; mock?: string }>()
+  const [search] = useSearchParams<{ startDate?: string; endDate?: string; userName?: string; org1?: string; org2?: string; org3?: string; org4?: string }>()
   const [expand, setExpand] = createStore<Record<string, boolean>>({})
 
   const taskId = createMemo(() => decodeURIComponent(params.taskId ?? "").trim())
   const listHref = createMemo(() => {
-    const txt = queryString(search as Record<string, string | undefined>)
+    const txt = searchQuery([
+      ["startDate", search.startDate],
+      ["endDate", search.endDate],
+      ["userName", search.userName],
+      ["org1", search.org1],
+      ["org2", search.org2],
+      ["org3", search.org3],
+      ["org4", search.org4],
+    ]).toString()
     return txt ? `/kanban/task?${txt}` : "/kanban/task"
   })
 
