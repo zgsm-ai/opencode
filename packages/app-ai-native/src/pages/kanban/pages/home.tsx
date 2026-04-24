@@ -155,15 +155,12 @@ function TopLink(props: { title: string; href: string; active?: boolean }) {
 function TopMenu(props: { title: string; items: Array<{ title: string; href: string }> }) {
   return (
     <div class="group relative">
-      <button
-        type="button"
-        class="inline-flex h-11 items-center gap-2 rounded-full px-4 text-[0.95rem] font-medium tracking-[-0.02em] text-[#53627d] transition-all duration-200 ease-out [@media(hover:hover)]:hover:bg-white/88 [@media(hover:hover)]:hover:text-[#182235] focus-visible:bg-white/88 focus-visible:text-[#182235] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#cddcff] active:scale-[0.98]"
-      >
+      <div class="inline-flex h-11 items-center gap-2 rounded-full px-4 text-[0.95rem] font-medium tracking-[-0.02em] text-[#53627d] transition-all duration-200 ease-out [@media(hover:hover)]:group-hover:bg-white/88 [@media(hover:hover)]:group-hover:text-[#182235]">
         <span>{props.title}</span>
-        <ChevronDown class="h-4 w-4 transition-transform duration-200 ease-out [@media(hover:hover)]:group-hover:rotate-180 group-focus-within:rotate-180" stroke-width={1.8} />
-      </button>
+        <ChevronDown class="h-4 w-4 transition-transform duration-200 ease-out [@media(hover:hover)]:group-hover:rotate-180" stroke-width={1.8} />
+      </div>
 
-      <div class="pointer-events-none invisible absolute left-0 top-full z-20 min-w-[12rem] pt-3 translate-y-2 transition-transform duration-150 ease-out group-hover:pointer-events-auto group-hover:visible group-hover:translate-y-0 group-focus-within:pointer-events-auto group-focus-within:visible group-focus-within:translate-y-0">
+      <div class="pointer-events-none invisible absolute left-0 top-full z-20 min-w-[12rem] pt-3 translate-y-2 transition-transform duration-150 ease-out group-hover:pointer-events-auto group-hover:visible group-hover:translate-y-0">
         <div
           class="relative isolate overflow-hidden rounded-[18px] border border-[#dde3ee] shadow-[0_18px_34px_-24px_rgba(34,58,120,0.28),0_8px_16px_-12px_rgba(72,90,140,0.14)]"
           style={{ "background-color": "#ffffff" }}
