@@ -1,5 +1,5 @@
 import { useNavigate, useParams, useSearchParams } from "@solidjs/router"
-import { createMemo, createResource, For, Show } from "solid-js"
+import { createEffect, createMemo, createResource, createSignal, For, Show } from "solid-js"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { showToast } from "@opencode-ai/ui/toast"
@@ -71,6 +71,7 @@ export default function KanbanRepoDetail() {
 
   const repoAddr = createMemo(() => decodeURIComponent(params.repoAddr ?? "").trim())
   const repoBranch = createMemo(() => decodeURIComponent(params.repoBranch ?? "").trim())
+  const repoKey = createMemo(() => `${repoAddr()}::${repoBranch()}`)
   const dateRange = createMemo(() => parseQueryRange(search.startDate, search.endDate))
   const listHref = createMemo(() => {
     const q = searchQuery([
@@ -119,10 +120,26 @@ export default function KanbanRepoDetail() {
     },
   )
 
-  const commits = createMemo(() => detail()?.commits ?? [])
-  const tasks = createMemo(() => detail()?.tasks ?? [])
-  const branches = createMemo(() => detail()?.branches ?? [])
-  const efficiency = createMemo(() => detail()?.efficiency ?? {})
+  const [cachedDetail, setCachedDetail] = createSignal<{ key: string; data: NonNullable<Awaited<ReturnType<typeof getRepoDetail>>> } | null>(null)
+
+  createEffect(() => {
+    const data = detail()
+    if (!data) return
+    setCachedDetail({ key: repoKey(), data })
+  })
+
+  const view = createMemo(() => {
+    const data = detail()
+    if (data) return data
+    const cached = cachedDetail()
+    if (cached?.key === repoKey()) return cached.data
+    return null
+  })
+
+  const commits = createMemo(() => view()?.commits ?? [])
+  const tasks = createMemo(() => view()?.tasks ?? [])
+  const branches = createMemo(() => view()?.branches ?? [])
+  const efficiency = createMemo(() => view()?.efficiency ?? {})
   const efficiencyRatio = createMemo(() => efficiency().efficiency_ratio ?? null)
 
   const totalDiffLines = createMemo(() => commits().reduce((sum, item) => sum + (item.diff_lines ?? 0), 0))
@@ -199,15 +216,15 @@ export default function KanbanRepoDetail() {
             placeholder="选择日期范围"
           />
 
-          <Button size="sm" class="shrink-0" onClick={openAddDialog} disabled={!detail()}>
+          <Button size="sm" class="shrink-0" onClick={openAddDialog} disabled={!view()}>
             添加到 Project
           </Button>
         </div>
       </header>
 
       <div class="flex w-full flex-col gap-5">
-        <Show when={!detail.loading} fallback={<div class="rounded-[var(--native-radius-lg)] border border-[color:color-mix(in_oklab,var(--native-border)_24%,transparent)] bg-[var(--native-panel)] px-4 py-10 text-sm text-[var(--native-muted)] shadow-[var(--native-shadow-sm)]">仓库详情加载中...</div>}>
-          <Show when={detail()} fallback={<div class="rounded-[var(--native-radius-lg)] border border-[color:color-mix(in_oklab,var(--native-border)_24%,transparent)] bg-[var(--native-panel)] px-4 py-10 text-sm text-[var(--native-muted)] shadow-[var(--native-shadow-sm)]">没有查询到仓库详情</div>}>
+        <Show when={!detail.loading || view()} fallback={<div class="rounded-[var(--native-radius-lg)] border border-[color:color-mix(in_oklab,var(--native-border)_24%,transparent)] bg-[var(--native-panel)] px-4 py-10 text-sm text-[var(--native-muted)] shadow-[var(--native-shadow-sm)]">仓库详情加载中...</div>}>
+          <Show when={view()} fallback={<div class="rounded-[var(--native-radius-lg)] border border-[color:color-mix(in_oklab,var(--native-border)_24%,transparent)] bg-[var(--native-panel)] px-4 py-10 text-sm text-[var(--native-muted)] shadow-[var(--native-shadow-sm)]">没有查询到仓库详情</div>}>
             {(item) => (
               <>
                 <section class="rounded-[var(--native-radius-lg)] border border-[color:color-mix(in_oklab,var(--native-border)_24%,transparent)] bg-[var(--native-panel)] p-4 shadow-[var(--native-shadow-sm)]">

@@ -1,5 +1,5 @@
 import { useNavigate, useParams, useSearchParams } from "@solidjs/router"
-import { createMemo, createResource, For, Show } from "solid-js"
+import { createEffect, createMemo, createResource, createSignal, For, Show } from "solid-js"
 import { showToast } from "@opencode-ai/ui/toast"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -124,9 +124,25 @@ export default function KanbanUserDetail() {
     },
   )
 
-  const summary = createMemo(() => detail()?.summary ?? {})
-  const commits = createMemo(() => detail()?.commits ?? [])
-  const tasks = createMemo(() => detail()?.tasks ?? [])
+  const [cachedDetail, setCachedDetail] = createSignal<{ key: string; data: NonNullable<Awaited<ReturnType<typeof getUserDetail>>> } | null>(null)
+
+  createEffect(() => {
+    const data = detail()
+    if (!data) return
+    setCachedDetail({ key: userId(), data })
+  })
+
+  const view = createMemo(() => {
+    const data = detail()
+    if (data) return data
+    const cached = cachedDetail()
+    if (cached?.key === userId()) return cached.data
+    return null
+  })
+
+  const summary = createMemo(() => view()?.summary ?? {})
+  const commits = createMemo(() => view()?.commits ?? [])
+  const tasks = createMemo(() => view()?.tasks ?? [])
   const labels = createMemo(() => (commits().length ? commits() : tasks()).map((item) => item.period_label || item.period_key || "-"))
   const taskRatio = createMemo(() => summary().task_efficiency_ratio)
   const commitRatio = createMemo(() => summary().commit_efficiency_ratio)

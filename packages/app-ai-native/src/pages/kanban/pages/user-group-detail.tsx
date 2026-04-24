@@ -1,5 +1,5 @@
 import { useNavigate, useParams, useSearchParams } from "@solidjs/router"
-import { createEffect, createMemo, createResource, For } from "solid-js"
+import { createEffect, createMemo, createResource, createSignal, For } from "solid-js"
 import { showToast } from "@opencode-ai/ui/toast"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -59,6 +59,22 @@ export default function KanbanUserGroupDetail() {
     },
   )
 
+  const [cachedDetail, setCachedDetail] = createSignal<{ key: string; data: NonNullable<Awaited<ReturnType<typeof getUserGroupDetail>>> } | null>(null)
+
+  createEffect(() => {
+    const next = data()
+    if (!next) return
+    setCachedDetail({ key: groupId(), data: next })
+  })
+
+  const view = createMemo(() => {
+    const next = data()
+    if (next) return next
+    const cached = cachedDetail()
+    if (cached?.key === groupId()) return cached.data
+    return null
+  })
+
   const drop = async () => {
     if (!groupId()) return
     if (!window.confirm("确定要删除此虚拟组吗？删除后不可恢复。")) return
@@ -76,7 +92,7 @@ export default function KanbanUserGroupDetail() {
     }
   }
 
-  const detail = createMemo(() => data())
+  const detail = createMemo(() => view())
   const group = createMemo(() => detail()?.group ?? {})
   const summary = createMemo(() => detail()?.summary ?? {})
   const members = createMemo(() => detail()?.members ?? [])

@@ -237,7 +237,7 @@ export default function KanbanHome() {
     },
   )
 
-  const view = createMemo(() => summary() ?? blank())
+  const view = createMemo(() => summary.latest ?? summary() ?? blank())
   const query = createMemo(() => searchQuery([
     ["startDate", rangeQuery(state.dateRange).startDate],
     ["endDate", rangeQuery(state.dateRange).endDate],

@@ -1,5 +1,5 @@
 import { useNavigate, useParams, useSearchParams } from "@solidjs/router"
-import { createMemo, createResource, For } from "solid-js"
+import { createEffect, createMemo, createResource, createSignal, For } from "solid-js"
 import { showToast } from "@opencode-ai/ui/toast"
 import type { EChartsOption } from "echarts"
 import { Button } from "@/components/ui/button"
@@ -76,6 +76,7 @@ export default function KanbanOrgDetail() {
   const [search, setSearch] = useSearchParams<{ startDate?: string; endDate?: string; granularity?: string }>()
 
   const org = createMemo(() => parsePath(params.orgPath ?? ""))
+  const orgKey = createMemo(() => orgPath(org()))
   const dateRange = createMemo(() => parseQueryRange(search.startDate, search.endDate))
   const granularity = createMemo(() => parseGranularity(search.granularity))
   const listHref = createMemo(() => {
@@ -96,10 +97,26 @@ export default function KanbanOrgDetail() {
     },
   )
 
-  const summary = createMemo(() => data()?.summary ?? {})
-  const members = createMemo(() => data()?.members ?? [])
-  const commits = createMemo(() => data()?.commits ?? [])
-  const tasks = createMemo(() => data()?.tasks ?? [])
+  const [cachedDetail, setCachedDetail] = createSignal<{ key: string; data: NonNullable<Awaited<ReturnType<typeof getOrgDetail>>> } | null>(null)
+
+  createEffect(() => {
+    const detail = data()
+    if (!detail) return
+    setCachedDetail({ key: orgKey(), data: detail })
+  })
+
+  const view = createMemo(() => {
+    const detail = data()
+    if (detail) return detail
+    const cached = cachedDetail()
+    if (cached?.key === orgKey()) return cached.data
+    return null
+  })
+
+  const summary = createMemo(() => view()?.summary ?? {})
+  const members = createMemo(() => view()?.members ?? [])
+  const commits = createMemo(() => view()?.commits ?? [])
+  const tasks = createMemo(() => view()?.tasks ?? [])
   const taskRatio = createMemo(() => summary().task_efficiency_ratio)
   const commitRatio = createMemo(() => summary().commit_efficiency_ratio)
   const periods = createMemo(() => {
