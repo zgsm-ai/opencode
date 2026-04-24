@@ -73,7 +73,7 @@ function MetricCard(props: {
   const body = (
     <article
       class={cn(
-        "group relative min-h-[11rem] overflow-hidden rounded-[20px] border border-[color:color-mix(in_oklab,var(--native-border)_18%,white)] bg-white px-5 py-4 shadow-[0_10px_26px_-20px_rgba(31,53,120,0.22),0_2px_10px_-6px_rgba(71,85,145,0.12)] transition-transform duration-200 ease-out [@media(hover:hover)]:hover:-translate-y-0.5 active:scale-[0.98]",
+        "group relative h-full min-h-[11rem] overflow-hidden rounded-[20px] border border-[color:color-mix(in_oklab,var(--native-border)_18%,white)] bg-white px-5 py-4 shadow-[0_10px_26px_-20px_rgba(31,53,120,0.22),0_2px_10px_-6px_rgba(71,85,145,0.12)] transition-transform duration-200 ease-out [@media(hover:hover)]:hover:-translate-y-0.5 active:scale-[0.98]",
         props.live && "cursor-pointer",
       )}
       style={{ "--card-tone": props.tone, "touch-action": "manipulation" }}
@@ -96,7 +96,7 @@ function MetricCard(props: {
   )
 
   return props.href && props.live
-    ? <A href={props.href} class="block">{body}</A>
+    ? <A href={props.href} class="block h-full">{body}</A>
     : body
 }
 
