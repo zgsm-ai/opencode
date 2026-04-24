@@ -1,5 +1,6 @@
-import { type ParentProps, Show } from "solid-js"
+import { type JSX, type ParentProps, Show } from "solid-js"
 import { useLocation, useNavigate } from "@solidjs/router"
+import { Gauge } from "lucide-solid"
 import { Icon } from "@opencode-ai/ui/icon"
 import { RadioGroup } from "@opencode-ai/ui/radio-group"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
@@ -21,10 +22,11 @@ function item(on: boolean) {
 }
 
 function NavButton(props: {
-  icon: "bubble-5" | "store" | "folder" | "folder-add-left" | "configuration" | "inbox"
+  icon?: "bubble-5" | "store" | "folder" | "folder-add-left" | "configuration" | "inbox" | "task"
   label: string
   active: boolean
   onClick: () => void
+  node?: JSX.Element
 }) {
   return (
     <Tooltip placement="right" value={props.label}>
@@ -34,7 +36,7 @@ function NavButton(props: {
         onClick={props.onClick}
         class={item(props.active)}
       >
-        <Icon name={props.icon} size="normal" />
+        {props.node ?? <Icon name={props.icon!} size="normal" />}
       </button>
     </Tooltip>
   )
@@ -112,6 +114,7 @@ export default function RootLayout(props: ParentProps) {
   const navigate = useNavigate()
   const platform = usePlatform()
   const language = useLanguage()
+  const auth = useAuth()
 
   const appPathname = () => appPath(location.pathname)
 
@@ -125,6 +128,11 @@ export default function RootLayout(props: ParentProps) {
     return path === "/store" || path.startsWith("/store/")
   }
   const isProjects = () => location.pathname.startsWith("/projects")
+
+  const isKanban = () => {
+    const path = appPathname()
+    return path === "/kanban" || path.startsWith("/kanban/")
+  }
 
   const isConsole = () => {
     const path = appPathname()
@@ -156,6 +164,14 @@ export default function RootLayout(props: ParentProps) {
             active={isWorkspace()}
             onClick={() => navigate("/workspace")}
           />
+          <Show when={auth.canAccessMenu("console.kanban")}>
+            <NavButton
+              label={language.t("sidebar.kanban")}
+              active={isKanban()}
+              onClick={() => navigate("/kanban")}
+              node={<Gauge size={18} strokeWidth={1.75} aria-hidden="true" />}
+            />
+          </Show>
         </nav>
         <div class="mt-auto flex flex-col gap-2">
           <UserButton />

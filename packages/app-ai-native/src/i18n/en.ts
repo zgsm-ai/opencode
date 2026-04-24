@@ -1091,6 +1091,7 @@ export const dict = {
   "sidebar.user.signOut": "Sign Out",
   "sidebar.user.console": "Console",
   "sidebar.store": "Skill Store",
+  "sidebar.kanban": "Kanban",
   "sidebar.projects": "Projects",
   "sidebar.workspace": "Workspace",
 

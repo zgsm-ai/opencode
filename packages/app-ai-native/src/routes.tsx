@@ -2,6 +2,7 @@ import { Navigate, Route } from "@solidjs/router"
 import { Component, lazy, Suspense, type JSX } from "solid-js"
 import { SessionRoute, SessionIndexRoute } from "@/app"
 import AuthGuard from "@/components/auth-guard"
+import { useAuth } from "@/context/auth"
 
 const Loading = () => <div class="size-full" />
 
@@ -59,6 +60,22 @@ const guard = (Component: Component<{ children?: JSX.Element }>) => (props: { ch
   </Suspense>
 )
 
+const MenuRoute: Component<{ code: string, children?: JSX.Element }> = (props) => {
+  const auth = useAuth()
+  if (!auth.canAccessMenu(props.code)) return <Navigate href="/store" />
+  return props.children
+}
+
+const menu = (code: string, Component: Component<{ children?: JSX.Element }>) => (props: { children?: JSX.Element }) => (
+  <Suspense fallback={<Loading />}>
+    <AuthGuard>
+      <MenuRoute code={code}>
+        <Component>{props.children}</Component>
+      </MenuRoute>
+    </AuthGuard>
+  </Suspense>
+)
+
 export const RootLayoutRoute: Component<{ children?: JSX.Element }> = (props) => (
   <Suspense fallback={<Loading />}>
     <RootLayout>{props.children}</RootLayout>
@@ -69,12 +86,13 @@ interface RouteConfig {
   path: string
   component: Component<{ children?: JSX.Element }>
   auth?: boolean
+  menu?: string
   children?: RouteConfig[]
 }
 
 export function renderRoutes(routes: RouteConfig[]) {
   return routes.map((r) => (
-    <Route path={r.path} component={r.auth ? guard(r.component) : wrap(r.component)}>
+    <Route path={r.path} component={r.menu ? menu(r.menu, r.component) : r.auth ? guard(r.component) : wrap(r.component)}>
       {r.children ? renderRoutes(r.children) : null}
     </Route>
   ))
@@ -120,6 +138,7 @@ export const routeConfig: RouteConfig[] = [
     path: "/kanban",
     component: KanbanLayout,
     auth: true,
+    menu: "console.kanban",
     children: [
       { path: "/", component: KanbanHome },
       { path: "/repo", component: KanbanRepoList },

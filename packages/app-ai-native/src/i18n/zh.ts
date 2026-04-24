@@ -1411,6 +1411,7 @@ export const dict = {
   "workspace.home.viewDocs": "查看文档",
   "workspace.home.proTip": "提示",
   "workspace.home.proTipContent": "在 CLI 端使用相同账号登录，可自动关联你的设备。这样会在本地环境和 CoStrict Cloud 之间建立安全的持久隧道。",
+  "sidebar.kanban": "指标看板",
   "sidebar.projects": "项目",
 
   "projects.nav.title": "项目",
