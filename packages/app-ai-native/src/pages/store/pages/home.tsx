@@ -794,7 +794,7 @@ export default function Home() {
     )
 
     const visibleTagOptions = createMemo(() => {
-      const loaded = tagOptions()?.tags ?? []
+      const loaded = tagOptions.latest?.tags ?? []
       const selected = tagFilter.pending.filter((slug) => !loaded.some((tag) => tag.slug === slug)).map((slug) => ({
         id: `mock-${slug}`,
         slug,
@@ -805,7 +805,7 @@ export default function Home() {
       return [...selected, ...loaded].sort(compareTags)
     })
 
-    const tagFilterHasMore = createMemo(() => Boolean(tagOptions()?.hasMore || (tagOptions()?.total ?? 0) > TAG_FILTER_PAGE_SIZE))
+    const tagFilterHasMore = createMemo(() => Boolean(tagOptions.latest?.hasMore || (tagOptions.latest?.total ?? 0) > TAG_FILTER_PAGE_SIZE))
 
     const togglePendingTagFilter = (slug: string) => {
       setTagFilter("pending", (current) => current.includes(slug) ? current.filter((item) => item !== slug) : [...current, slug])
@@ -1181,10 +1181,10 @@ export default function Home() {
             }
           >
             <Show
-              when={rows().length > 0 || !list.loading}
+              when={listCache() !== null || !list.loading}
               fallback={<div class={sx.state}>{language.t("store.loading")}</div>}
             >
-              <Show when={list.loading && rows().length > 0}>
+              <Show when={list.loading && listCache() !== null}>
                 <div class={sx.overlay}>
                   <div class={sx.spinner} />
                 </div>
