@@ -170,6 +170,7 @@ export const dict = {
   "store.kanban.inputTokens7d": "Input Tokens (7d)",
   "store.kanban.outputTokens7d": "Output Tokens (7d)",
   "store.kanban.cost7d": "Cost (7d)",
+  "kanban.view.commit": "Commit View",
   "store.capabilityEditor.createTitle": "Create {{type}}",
   "store.capabilityEditor.editTitle": "Edit {{type}}",
   "store.capabilityEditor.createDescription": "Use a workspace-style split layout to edit capability content and preview Markdown live.",
@@ -1916,7 +1917,6 @@ export const dict = {
 
   "kanban.view.org": "Organizations",
   "kanban.view.user": "Users",
-  "kanban.view.commit": "Commits",
   "kanban.view.task": "Tasks",
   "kanban.detail.org": "Organization Detail",
   "kanban.detail.user": "User Detail",

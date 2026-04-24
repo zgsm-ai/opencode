@@ -147,8 +147,12 @@ export default function KanbanCommitList() {
 
   return (
     <div class="flex min-h-full min-w-0 flex-col gap-4 overflow-y-auto overflow-x-clip p-[clamp(1rem,2vw,2rem)]">
-      <div class="flex w-full flex-col gap-5">
+      <header class="flex w-full flex-col gap-3">
         <Back />
+        <h1 class="m-0 font-[var(--native-font-display)] text-[1.875rem] leading-[1.02] font-semibold tracking-[-0.05em] text-[var(--native-foreground)]">{language.t("kanban.view.commit")}</h1>
+      </header>
+
+      <div class="flex w-full flex-col gap-5">
         <FilterBar
           dateRange={state.dateRange}
           orgValue={state.org}

@@ -152,12 +152,12 @@ export default function RootLayout(props: ParentProps) {
             active={isStore()}
             onClick={() => navigate("/store")}
           />
-          <NavButton
+          {/* <NavButton
             icon="inbox"
             label={language.t("sidebar.projects")}
             active={isProjects()}
             onClick={() => navigate("/projects")}
-          />
+          /> */}
           <NavButton
             icon="folder"
             label={language.t("sidebar.workspace")}

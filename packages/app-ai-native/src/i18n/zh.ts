@@ -1001,6 +1001,7 @@ export const dict = {
   "store.kanban.inputTokens7d": "输入 Token (7天)",
   "store.kanban.outputTokens7d": "输出 Token (7天)",
   "store.kanban.cost7d": "成本 (7天)",
+  "kanban.view.commit": "提交视图",
   "store.capabilityEditor.createTitle": "创建{{type}}",
   "store.capabilityEditor.editTitle": "编辑{{type}}",
   "store.capabilityEditor.createDescription": "使用工作区式左右布局编辑能力内容，并实时预览 Markdown。",
@@ -1888,7 +1889,6 @@ export const dict = {
 
   "kanban.view.org": "组织视图",
   "kanban.view.user": "用户视图",
-  "kanban.view.commit": "提交视图",
   "kanban.view.task": "任务视图",
   "kanban.detail.org": "组织详情",
   "kanban.detail.user": "用户详情",
