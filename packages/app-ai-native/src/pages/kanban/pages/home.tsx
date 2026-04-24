@@ -4,6 +4,7 @@ import { createStore } from "solid-js/store"
 import { ArrowRight, BadgeInfo, Building2, ChevronDown, ClipboardList, FolderGit2, FolderOpen, GitCommitHorizontal, GitMerge, Users, Wallet } from "lucide-solid"
 import { showToast } from "@opencode-ai/ui/toast"
 import { cn } from "@/lib/utils"
+import { env } from "@/lib/env"
 import { DateRangePicker } from "../components/filters/date-range-picker"
 import { queryDashboardSummary } from "../lib/api"
 import { normalizeDateRange, parseQueryRange, rangeQuery, readQueryRange, searchQuery, sameRange } from "../lib/date-range"
@@ -268,7 +269,7 @@ export default function KanbanHome() {
     {
       label: "总 Task 数",
       value: fmtInt(view().total_tasks),
-      hint: "总 TASK 数",
+      hint: "",
       tone: "#ff7a00",
       iconShell: "bg-[#fff3e8] text-[#ff7a00]",
       icon: <ClipboardList class="h-5 w-5" stroke-width={1.9} />,
@@ -426,7 +427,7 @@ export default function KanbanHome() {
 
                 <div class="relative mx-auto h-[12rem] w-full max-w-[20rem] shrink-0 overflow-hidden rounded-[20px] bg-[radial-gradient(circle_at_50%_65%,rgba(91,132,255,0.12),transparent_54%),radial-gradient(circle_at_68%_22%,rgba(137,172,255,0.14),transparent_28%),transparent]">
                   <img
-                    src="/kanban/ratio.webp"
+                    src={`${(env.BASE_PATH || "").replace(/\/+$/, "")}/kanban/ratio.webp`}
                     alt="综合提效比"
                     class="absolute inset-0 h-full w-full object-contain object-center"
                     loading="eager"
