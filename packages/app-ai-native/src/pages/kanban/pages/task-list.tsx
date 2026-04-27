@@ -147,7 +147,7 @@ export default function KanbanTaskList() {
         return id ? <button type="button" class="text-left text-sm text-[var(--native-primary)] transition-colors hover:text-[var(--native-foreground)]" onClick={() => navigate(`/kanban/task/${encodeURIComponent(id)}?${routeQuery()}`)}>{shortId(id, 6)}</button> : <span>-</span>
       },
     },
-    { prop: "start_time", label: language.t("kanban.table.time"), minWidth: 170, display: (row) => formatLocalTime(row.start_time), filter: { type: "date" } },
+    { prop: "start_time", label: language.t("kanban.table.time"), minWidth: 170, display: (row) => formatLocalTime(row.start_time) },
     {
       prop: "org_display",
       label: language.t("kanban.table.org"),

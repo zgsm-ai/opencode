@@ -5,11 +5,12 @@ import { showToast } from "@opencode-ai/ui/toast"
 import { useLanguage } from "@/context/language"
 import { Button } from "@/components/ui/button"
 import Back from "../components/back"
+import { DateRangePicker } from "../components/filters/date-range-picker"
 import { RatioPill } from "../components/ratio-pill"
 import { FilterTable } from "../components/table/filter-table"
 import { useTableFilters } from "../hooks/use-table-filters"
 import { queryRepoRows } from "../lib/api"
-import { normalizeDateRange, parseQueryRange, rangeQuery, readQueryRange, searchQuery, sameRange } from "../lib/date-range"
+import { defaultWideRange, normalizeDateRange, parseQueryRange, rangeQuery, searchQuery, sameRange } from "../lib/date-range"
 import { applyClientFilters } from "../lib/filter-utils"
 import { formatDuration } from "../lib/formatters"
 import type { DateRangeValue, KanbanColumn, RepoAggregateRow } from "../lib/types"
@@ -94,7 +95,6 @@ export default function KanbanRepoList() {
       prop: "start_time",
       label: language.t("kanban.metric.startTime"),
       minWidth: 150,
-      filter: { type: "date", serverSide: true },
     },
   ])
 
@@ -103,37 +103,16 @@ export default function KanbanRepoList() {
     onChange: () => setState("page", 1),
   })
 
-  let seeded = false
-
-  createEffect(() => {
-    if (seeded) return
-    seeded = true
-    controller.setFilter("start_time", state.serverRange)
-  })
-
   createEffect(on(
     () => [search.startDate, search.endDate],
     () => {
-      const next = readQueryRange(search.startDate, search.endDate)
-      if (!next) return
-      const current = normalizeDateRange(controller.filters.start_time as DateRangeValue)
-      if (!sameRange(current, next)) controller.setFilter("start_time", next)
+      const next = parseQueryRange(search.startDate, search.endDate)
       if (!sameRange(state.serverRange, next)) setState("serverRange", next)
     },
   ))
 
   createEffect(() => {
-    const next = normalizeDateRange(controller.filters.start_time as DateRangeValue)
-    if (!next) {
-      if (search.startDate || search.endDate) setSearch({})
-      return
-    }
-
-    const query = rangeQuery(next)
-    if (!sameRange(state.serverRange, next)) {
-      setState("serverRange", next)
-      setState("page", 1)
-    }
+    const query = rangeQuery(state.serverRange)
     const mirror = searchQuery([
       ["startDate", query.startDate],
       ["endDate", query.endDate],
@@ -199,9 +178,21 @@ export default function KanbanRepoList() {
           dateRange={state.serverRange}
           emptyText={repoRows.loading ? language.t("kanban.repo.loading") : language.t("kanban.repo.empty")}
           actions={
-            <Button variant="outline" size="sm" onClick={() => void refetch()} disabled={repoRows.loading}>
-              {repoRows.loading ? language.t("kanban.repo.refreshing") : language.t("kanban.repo.refresh")}
-            </Button>
+            <div class="flex flex-wrap items-center gap-2">
+              <DateRangePicker
+                value={state.serverRange}
+                placeholder={language.t("kanban.form.dateRange")}
+                size="sm"
+                fullWidth={false}
+                onChange={(value) => {
+                  setState("serverRange", normalizeDateRange(value) ?? defaultWideRange())
+                  setState("page", 1)
+                }}
+              />
+              <Button variant="outline" size="sm" onClick={() => void refetch()} disabled={repoRows.loading}>
+                {repoRows.loading ? language.t("kanban.repo.refreshing") : language.t("kanban.repo.refresh")}
+              </Button>
+            </div>
           }
           onPageChange={(page) => setState("page", page)}
           onPageSizeChange={(size) => {
