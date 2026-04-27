@@ -3,6 +3,7 @@ import { createEffect, createMemo, createResource, createSignal, For, Show } fro
 import { showToast } from "@opencode-ai/ui/toast"
 import { useLanguage } from "@/context/language"
 import { Button } from "@/components/ui/button"
+import { createListCollection, SelectContent, SelectControl, SelectIndicator, SelectItem, SelectItemText, SelectList, SelectPositioner, SelectRoot, SelectTrigger, SelectValueText } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import Back from "../components/back"
 import { ChartCard } from "../components/charts/chart-card"
@@ -83,16 +84,6 @@ export default function KanbanUserDetail() {
   const userId = createMemo(() => decodeURIComponent(params.userId ?? "").trim())
   const dateRange = createMemo(() => parseQueryRange(search.startDate, search.endDate))
   const granularity = createMemo(() => parseGranularity(search.granularity))
-  const listHref = createMemo(() => {
-    const q = queryOf(dateRange(), granularity())
-    return `/kanban/user?${q.toString()}`
-  })
-
-  const detailHref = (id: string) => {
-    const q = queryOf(dateRange(), granularity())
-    return `/kanban/user/${encodeURIComponent(id)}?${q.toString()}`
-  }
-
   const [users] = createResource(
     () => true,
     async () => {
@@ -107,6 +98,43 @@ export default function KanbanUserDetail() {
         return [] as UserOption[]
       }
     },
+  )
+
+  const listHref = createMemo(() => {
+    const q = queryOf(dateRange(), granularity())
+    return `/kanban/user?${q.toString()}`
+  })
+
+  const detailHref = (id: string) => {
+    const q = queryOf(dateRange(), granularity())
+    return `/kanban/user/${encodeURIComponent(id)}?${q.toString()}`
+  }
+
+  const userItems = createMemo(() =>
+    createListCollection({
+      items: [
+        { value: "", label: language.t("kanban.label.selectUser") },
+        ...(users() ?? []).map((item) => ({
+          value: item.user_id,
+          label: item.user_name || item.user_id,
+        })),
+      ],
+      itemToValue: (item) => item.value,
+      itemToString: (item) => item.label,
+    }),
+  )
+
+  const granularityItems = createMemo(() =>
+    createListCollection({
+      items: [
+        { value: "day" as const, label: language.t("kanban.granularity.day") },
+        { value: "week" as const, label: language.t("kanban.granularity.week") },
+        { value: "month" as const, label: language.t("kanban.granularity.month") },
+        { value: "year" as const, label: language.t("kanban.granularity.year") },
+      ],
+      itemToValue: (item) => item.value,
+      itemToString: (item) => item.label,
+    }),
   )
 
   const [detail, { refetch }] = createResource(
@@ -204,20 +232,36 @@ export default function KanbanUserDetail() {
 
             <div class="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-end md:justify-end">
               <label class="flex min-w-0 flex-col gap-2 md:min-w-[14rem]">
-                <select
-                  class="flex h-10 min-w-[14rem] rounded-md border border-input bg-transparent px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                  value={userId()}
-                  onChange={(e) => {
-                    const txt = e.currentTarget.value.trim()
+                <SelectRoot
+                  collection={userItems()}
+                  value={[userId()]}
+                  onValueChange={(details) => {
+                    const txt = details.value[0]
                     if (!txt || txt === userId()) return
                     navigate(detailHref(txt))
                   }}
+                  positioning={{ sameWidth: true }}
                 >
-                  <option value="">{language.t("kanban.label.selectUser")}</option>
-                  <For each={users() ?? []}>
-                    {(item) => <option value={item.user_id}>{item.user_name || item.user_id}</option>}
-                  </For>
-                </select>
+                  <SelectControl>
+                    <SelectTrigger class="h-10 min-w-[14rem]">
+                      <SelectValueText placeholder={language.t("kanban.label.selectUser")} />
+                      <SelectIndicator />
+                    </SelectTrigger>
+                  </SelectControl>
+                  <SelectPositioner>
+                    <SelectContent>
+                      <SelectList>
+                        <For each={userItems().items}>
+                          {(item) => (
+                            <SelectItem item={item}>
+                              <SelectItemText>{item.label}</SelectItemText>
+                            </SelectItem>
+                          )}
+                        </For>
+                      </SelectList>
+                    </SelectContent>
+                  </SelectPositioner>
+                </SelectRoot>
               </label>
 
               <label class="flex min-w-0 flex-col gap-2">
@@ -233,19 +277,42 @@ export default function KanbanUserDetail() {
               </label>
 
               <label class="flex min-w-0 flex-col gap-2">
-                <select
-                  class="h-10 w-[6rem] min-w-[6rem] flex-none rounded-md border border-input bg-transparent px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                  value={granularity()}
-                  onChange={(e) => {
-                    const next = e.currentTarget.value as Granularity
-                    setSearch(Object.fromEntries(queryOf(dateRange(), next).entries()))
+                <SelectRoot
+                  collection={granularityItems()}
+                  value={[granularity()]}
+                  onValueChange={(details) => {
+                    const val = details.value[0]
+                    if (val) {
+                      setSearch(Object.fromEntries(queryOf(dateRange(), val as Granularity).entries()))
+                    }
                   }}
+                  positioning={{ sameWidth: true }}
                 >
-                  <option value="day">{language.t("kanban.granularity.day")}</option>
-                  <option value="week">{language.t("kanban.granularity.week")}</option>
-                  <option value="month">{language.t("kanban.granularity.month")}</option>
-                  <option value="year">{language.t("kanban.granularity.year")}</option>
-                </select>
+                  <SelectControl>
+                    <SelectTrigger class="h-10 w-[6rem] min-w-[6rem] flex-none">
+                      <SelectValueText />
+                      <SelectIndicator />
+                    </SelectTrigger>
+                  </SelectControl>
+                  <SelectPositioner>
+                    <SelectContent>
+                      <SelectList>
+                        <SelectItem item={granularityItems().items[0]}>
+                          <SelectItemText>{language.t("kanban.granularity.day")}</SelectItemText>
+                        </SelectItem>
+                        <SelectItem item={granularityItems().items[1]}>
+                          <SelectItemText>{language.t("kanban.granularity.week")}</SelectItemText>
+                        </SelectItem>
+                        <SelectItem item={granularityItems().items[2]}>
+                          <SelectItemText>{language.t("kanban.granularity.month")}</SelectItemText>
+                        </SelectItem>
+                        <SelectItem item={granularityItems().items[3]}>
+                          <SelectItemText>{language.t("kanban.granularity.year")}</SelectItemText>
+                        </SelectItem>
+                      </SelectList>
+                    </SelectContent>
+                  </SelectPositioner>
+                </SelectRoot>
               </label>
 
               <div class="flex items-end">

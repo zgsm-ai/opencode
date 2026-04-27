@@ -4,6 +4,7 @@ import { showToast } from "@opencode-ai/ui/toast"
 import { useLanguage } from "@/context/language"
 import type { EChartsOption } from "echarts"
 import { Button } from "@/components/ui/button"
+import { createListCollection, SelectContent, SelectControl, SelectIndicator, SelectItem, SelectItemText, SelectList, SelectPositioner, SelectRoot, SelectTrigger, SelectValueText } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import Back from "../components/back"
 import { ChartCard } from "../components/charts/chart-card"
@@ -87,6 +88,19 @@ export default function KanbanOrgDetail() {
     return `/kanban/org?${q.toString()}`
   })
 
+  const granularityItems = createMemo(() =>
+    createListCollection({
+      items: [
+        { value: "day" as const, label: language.t("kanban.granularity.day") },
+        { value: "week" as const, label: language.t("kanban.granularity.week") },
+        { value: "month" as const, label: language.t("kanban.granularity.month") },
+        { value: "year" as const, label: language.t("kanban.granularity.year") },
+      ],
+      itemToValue: (item) => item.value,
+      itemToString: (item) => item.label,
+    }),
+  )
+
   const [data, { refetch }] = createResource(
     () => ({ org: org(), dateRange: dateRange(), granularity: granularity() }),
     async (input) => {
@@ -158,21 +172,46 @@ export default function KanbanOrgDetail() {
           actions={
             <>
               <label class="flex min-w-0 flex-col gap-2">
-                <select
-                  class="h-9 w-[6rem] min-w-[6rem] flex-none rounded-md border border-input bg-transparent px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                  value={granularity()}
-                  onChange={(e) => {
-                    const next = e.currentTarget.value as Granularity
-                    setSearch(Object.fromEntries(queryOf(dateRange(), next, org()).entries()))
+                <SelectRoot
+                  collection={granularityItems()}
+                  value={[granularity()]}
+                  onValueChange={(details) => {
+                    const val = details.value[0]
+                    if (val) {
+                      setSearch(Object.fromEntries(queryOf(dateRange(), val as Granularity, org()).entries()))
+                    }
                   }}
+                  positioning={{ sameWidth: true }}
                 >
-                  <option value="day">{language.t("kanban.granularity.day")}</option>
-                  <option value="week">{language.t("kanban.granularity.week")}</option>
-                  <option value="month">{language.t("kanban.granularity.month")}</option>
-                  <option value="year">{language.t("kanban.granularity.year")}</option>
-                </select>
+                  <SelectControl>
+                    <SelectTrigger class="h-10 w-[6rem] min-w-[6rem] flex-none">
+                      <SelectValueText />
+                      <SelectIndicator />
+                    </SelectTrigger>
+                  </SelectControl>
+                  <SelectPositioner>
+                    <SelectContent>
+                      <SelectList>
+                        <SelectItem item={granularityItems().items[0]}>
+                          <SelectItemText>{language.t("kanban.granularity.day")}</SelectItemText>
+                        </SelectItem>
+                        <SelectItem item={granularityItems().items[1]}>
+                          <SelectItemText>{language.t("kanban.granularity.week")}</SelectItemText>
+                        </SelectItem>
+                        <SelectItem item={granularityItems().items[2]}>
+                          <SelectItemText>{language.t("kanban.granularity.month")}</SelectItemText>
+                        </SelectItem>
+                        <SelectItem item={granularityItems().items[3]}>
+                          <SelectItemText>{language.t("kanban.granularity.year")}</SelectItemText>
+                        </SelectItem>
+                      </SelectList>
+                    </SelectContent>
+                  </SelectPositioner>
+                </SelectRoot>
               </label>
-              <Button variant="outline" size="sm" onClick={() => void refetch()} disabled={data.loading}>{data.loading ? language.t("kanban.action.refreshing") : language.t("kanban.action.refresh")}</Button>
+              <div class="flex items-end">
+                <Button variant="outline" size="sm" onClick={() => void refetch()} disabled={data.loading}>{data.loading ? language.t("kanban.action.refreshing") : language.t("kanban.action.refresh")}</Button>
+              </div>
             </>
           }
         />

@@ -1,4 +1,5 @@
 import { DatePicker as Ark, parseDate } from "@ark-ui/solid/date-picker"
+import { Portal } from "solid-js/web"
 import { Show, children, splitProps, type ComponentProps, type ParentProps } from "solid-js"
 
 import { cn } from "@/lib/utils"
@@ -108,9 +109,11 @@ export function DatePickerTrigger(props: ParentProps<DatePickerTriggerProps>) {
 export function DatePickerPositioner(props: ParentProps<DatePickerPositionerProps>) {
   const [local, rest] = splitProps(props, ["class", "children"])
   return (
-    <Ark.Positioner class={cn("z-50", local.class)} {...rest}>
-      {local.children}
-    </Ark.Positioner>
+    <Portal>
+      <Ark.Positioner class={cn("z-50", local.class)} {...rest}>
+        {local.children}
+      </Ark.Positioner>
+    </Portal>
   )
 }
 

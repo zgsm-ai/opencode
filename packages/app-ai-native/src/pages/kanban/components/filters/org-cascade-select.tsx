@@ -1,7 +1,8 @@
-import { For } from "solid-js"
+import { For, createMemo } from "solid-js"
 import { cn } from "@/lib/utils"
 import { useLanguage } from "@/context/language"
 import { useOrgCascade } from "../../hooks/use-org-cascade"
+import { createListCollection, SelectContent, SelectControl, SelectIndicator, SelectItem, SelectItemText, SelectList, SelectPositioner, SelectRoot, SelectTrigger, SelectValueText } from "@/components/ui/select"
 import type { DateRangeValue, OrgCascadeValue } from "../../lib/types"
 
 type Props = {
@@ -23,22 +24,53 @@ export function OrgCascadeSelect(props: Props) {
   return (
     <div class={cn("grid gap-3 md:grid-cols-2 xl:grid-cols-4", props.class)}>
       <For each={cascade.levels()}>
-        {(item) => (
-          <label class="flex min-w-0 flex-col gap-2">
-            <span class="text-[0.75rem] text-[var(--native-muted)]">{item.label}</span>
-            <select
-              class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
-              value={item.value}
-              disabled={item.disabled}
-              onChange={(e) => void cascade.setLevel(item.level, e.currentTarget.value)}
-            >
-              <option value="">{t("common.all")}</option>
-              <For each={item.options}>
-                {(option) => <option value={option}>{option}</option>}
-              </For>
-            </select>
-          </label>
-        )}
+        {(item) => {
+          const collection = createMemo(() =>
+            createListCollection({
+              items: [
+                { value: "", label: t("common.all") },
+                ...item.options.map((opt) => ({ value: opt, label: opt })),
+              ],
+              itemToValue: (i) => i.value,
+              itemToString: (i) => i.label,
+            }),
+          )
+
+          return (
+            <label class="flex min-w-0 flex-col gap-2">
+              <span class="text-[0.75rem] text-[var(--native-muted)]">{item.label}</span>
+              <SelectRoot
+                collection={collection()}
+                value={[item.value]}
+                disabled={item.disabled}
+                onValueChange={(details) => {
+                  void cascade.setLevel(item.level, details.value[0] ?? "")
+                }}
+                positioning={{ sameWidth: true }}
+              >
+                <SelectControl>
+                  <SelectTrigger class="h-10 w-full">
+                    <SelectValueText />
+                    <SelectIndicator />
+                  </SelectTrigger>
+                </SelectControl>
+                <SelectPositioner>
+                  <SelectContent>
+                    <SelectList>
+                      <For each={collection().items}>
+                        {(option) => (
+                          <SelectItem item={option}>
+                            <SelectItemText>{option.label}</SelectItemText>
+                          </SelectItem>
+                        )}
+                      </For>
+                    </SelectList>
+                  </SelectContent>
+                </SelectPositioner>
+              </SelectRoot>
+            </label>
+          )
+        }}
       </For>
     </div>
   )

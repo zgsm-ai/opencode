@@ -5,6 +5,7 @@ import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { showToast } from "@opencode-ai/ui/toast"
 import { useLanguage } from "@/context/language"
 import { Button } from "@/components/ui/button"
+import { createListCollection, SelectContent, SelectControl, SelectIndicator, SelectItem, SelectItemText, SelectList, SelectPositioner, SelectRoot, SelectTrigger, SelectValueText } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { RatioPill } from "../components/ratio-pill"
 import { DateRangePicker } from "../components/filters/date-range-picker"
@@ -140,6 +141,18 @@ export default function KanbanRepoDetail() {
   const commits = createMemo(() => view()?.commits ?? [])
   const tasks = createMemo(() => view()?.tasks ?? [])
   const branches = createMemo(() => view()?.branches ?? [])
+
+  const branchItems = createMemo(() =>
+    createListCollection({
+      items: [
+        { value: "", label: language.t("kanban.repo.allBranches") },
+        ...branches().map((item) => ({ value: item, label: item })),
+      ],
+      itemToValue: (item) => item.value,
+      itemToString: (item) => item.label,
+    }),
+  )
+
   const efficiency = createMemo(() => view()?.efficiency ?? {})
   const efficiencyRatio = createMemo(() => efficiency().efficiency_ratio ?? null)
 
@@ -196,19 +209,35 @@ export default function KanbanRepoDetail() {
         </div>
 
         <div class="flex min-w-0 flex-nowrap items-center justify-end gap-3 overflow-x-auto">
-          <select
-            class="flex h-10 min-w-[12rem] shrink-0 rounded-md border border-input bg-transparent px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            value={repoBranch()}
-            onChange={(e) => {
-              const next = e.currentTarget.value.trim()
+          <SelectRoot
+            collection={branchItems()}
+            value={[repoBranch()]}
+            onValueChange={(details) => {
+              const next = details.value[0]
               navigate(detailHref(next || undefined))
             }}
+            positioning={{ sameWidth: true }}
           >
-            <option value="">{language.t("kanban.repo.allBranches")}</option>
-            <For each={branches()}>
-              {(item) => <option value={item}>{item}</option>}
-            </For>
-          </select>
+            <SelectControl>
+              <SelectTrigger class="flex h-10 min-w-[12rem] shrink-0">
+                <SelectValueText placeholder={language.t("kanban.repo.allBranches")} />
+                <SelectIndicator />
+              </SelectTrigger>
+            </SelectControl>
+            <SelectPositioner>
+              <SelectContent>
+                <SelectList>
+                  <For each={branchItems().items}>
+                    {(item) => (
+                      <SelectItem item={item}>
+                        <SelectItemText>{item.label}</SelectItemText>
+                      </SelectItem>
+                    )}
+                  </For>
+                </SelectList>
+              </SelectContent>
+            </SelectPositioner>
+          </SelectRoot>
 
           <DateRangePicker
             value={dateRange()}
