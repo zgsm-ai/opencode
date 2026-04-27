@@ -23,7 +23,7 @@ const sizeClass = {
   lg: "h-11 min-w-[16rem] text-sm",
 } as const
 
-const nav = "inline-flex size-8 items-center justify-center rounded-md border border-input bg-background text-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-95"
+const nav = "inline-flex size-8 items-center justify-center rounded-md border border-input bg-background text-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus:outline-none active:scale-95"
 const view = "inline-flex min-h-8 items-center justify-center gap-2 rounded-md border border-input bg-background px-3 text-sm font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-95"
 const table = "kb-date-range__table w-full"
 const head = "h-8 w-10 text-center text-xs font-medium text-muted-foreground"
@@ -154,7 +154,7 @@ export function DateRangePicker(props: Props) {
           triggerProps={{
             type: "button",
             class:
-              "inline-flex h-8 w-8 items-center justify-center rounded-[var(--native-radius-sm)] text-[var(--native-dim)] transition-colors hover:bg-[var(--native-primary-soft)] hover:text-[var(--native-primary)]",
+              "inline-flex items-center justify-center text-[var(--native-dim)] transition-colors hover:text-[var(--native-foreground)] focus:outline-none",
             "aria-label": language.t("kanban.aria.openDateRangePicker"),
           }}
           class="rounded-[var(--native-radius-lg)] border border-[color:color-mix(in_oklab,var(--native-border)_24%,transparent)] bg-[var(--native-panel)] p-0 shadow-[var(--native-shadow-lg)] [&_[data-slot=popover-body]]:p-0"
@@ -189,12 +189,13 @@ export function DateRangePicker(props: Props) {
                 <div class="flex flex-wrap content-start gap-1 border-b border-[color:color-mix(in_oklab,var(--native-border)_24%,transparent)] p-3 md:w-[120px] md:flex-none md:flex-col md:flex-nowrap md:border-b-0 md:pr-0">
                   <For each={dateShortcuts}>
                     {(item) => (
-                      <button
-                        type="button"
+                      <div
+                        role="button"
+                        tabIndex={-1}
                         class={cn(
-                          "inline-flex h-8 w-[120px] items-center px-3 text-left text-[13px] leading-none whitespace-nowrap transition-colors",
+                          "inline-flex h-8 w-[120px] cursor-pointer select-none items-center px-3 text-left text-[13px] leading-none whitespace-nowrap transition-colors",
                           active() === item.label
-                            ? "rounded-[var(--native-radius-sm)] bg-[var(--native-primary)] text-[var(--native-primary-foreground)]"
+                            ? "bg-[var(--native-primary)] text-[var(--native-primary-foreground)]"
                             : "rounded-none bg-transparent text-[var(--native-muted)] hover:bg-[var(--native-primary-soft)] hover:text-[var(--native-primary)]",
                         )}
                         onClick={() => {
@@ -205,7 +206,7 @@ export function DateRangePicker(props: Props) {
                         }}
                       >
                         {item.label}
-                      </button>
+                      </div>
                     )}
                   </For>
                 </div>
