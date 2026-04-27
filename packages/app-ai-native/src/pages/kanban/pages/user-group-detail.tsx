@@ -116,7 +116,6 @@ export default function KanbanUserGroupDetail() {
 
               <div class="flex flex-col gap-3 md:flex-row md:items-end">
                 <label class="flex min-w-0 flex-col gap-2">
-                  <span class="text-[0.75rem] text-[var(--native-muted)]">{language.t("kanban.label.dateRange")}</span>
                   <DateRangePicker
                     value={dateRange()}
                     onChange={(value) => {
@@ -128,6 +127,7 @@ export default function KanbanUserGroupDetail() {
                     }}
                     clearable={false}
                     placeholder={language.t("kanban.filter.selectDateRange")}
+                    fullWidth={false}
                   />
                 </label>
 

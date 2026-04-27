@@ -228,6 +228,8 @@ export default function KanbanOrgList() {
         <FilterBar
           dateRange={state.dateRange}
           orgValue={state.org}
+          dateSlot="actions"
+          dateLabel={false}
           showOrg
           onDateRangeChange={(value) => {
             setState("dateRange", value ?? defaultWideRange())
@@ -240,8 +242,7 @@ export default function KanbanOrgList() {
           actions={
             <>
               <label class="flex min-w-0 flex-col gap-2">
-                <span class="text-[0.75rem] text-[var(--native-muted)]">{language.t("kanban.granularity")}</span>
-                <select class="flex h-9 min-w-[8rem] rounded-md border border-input bg-transparent px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" value={state.granularity} onChange={(e) => setState("granularity", e.currentTarget.value as Granularity)}>
+                <select class="h-9 w-[6rem] min-w-[6rem] flex-none rounded-md border border-input bg-transparent px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" value={state.granularity} onChange={(e) => setState("granularity", e.currentTarget.value as Granularity)}>
                   <option value="day">{language.t("kanban.granularity.day")}</option>
                   <option value="week">{language.t("kanban.granularity.week")}</option>
                   <option value="month">{language.t("kanban.granularity.month")}</option>

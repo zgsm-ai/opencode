@@ -461,7 +461,7 @@ export default function KanbanProjectList() {
               }}
             />
 
-            <label class="flex h-10 items-center gap-2 rounded-[var(--native-radius-md)] border border-[color:color-mix(in_oklab,var(--native-border)_24%,transparent)] bg-[color:color-mix(in_oklab,var(--native-panel)_90%,var(--native-bg-subtle))] px-3 text-sm text-[var(--native-muted)]">
+            <label class="flex h-10 items-center gap-2 text-sm text-[var(--native-muted)]">
               <input
                 type="checkbox"
                 class="h-4 w-4 accent-[var(--native-primary)]"

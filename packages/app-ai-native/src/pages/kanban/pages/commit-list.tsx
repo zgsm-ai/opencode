@@ -156,6 +156,8 @@ export default function KanbanCommitList() {
         <FilterBar
           dateRange={state.dateRange}
           orgValue={state.org}
+          dateSlot="actions"
+          dateLabel={false}
           showOrg
           onDateRangeChange={(value) => {
             setState("dateRange", value ?? defaultWideRange())
