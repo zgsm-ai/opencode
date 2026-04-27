@@ -194,19 +194,13 @@ export default function KanbanRepoDetail() {
   }
 
   return (
-    <div class="flex min-h-full min-w-0 flex-col gap-6 overflow-y-auto overflow-x-clip p-[clamp(1rem,2vw,2rem)]">
-      <header class="mx-auto flex w-full max-w-[1320px] flex-col gap-3">
+    <div class="flex min-h-full min-w-0 flex-col gap-4 overflow-y-auto overflow-x-clip p-[clamp(1rem,2vw,2rem)]">
+      <header class="flex w-full flex-col gap-3">
         <A href={listHref()} class="inline-flex items-center gap-2 text-sm text-[var(--native-muted)] transition-colors hover:text-[var(--native-foreground)]">
           <span>←</span>
           <span>{language.t("kanban.repo.backToList")}</span>
         </A>
-        <div>
-          <p class="m-0 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--native-success)]">{language.t("kanban.breadcrumb.repoDetail")}</p>
-          <h1 class="mt-2 font-[var(--native-font-display)] text-[1.875rem] leading-[1.02] font-semibold tracking-[-0.05em] text-[var(--native-foreground)]">{language.t("kanban.repo.detailTitle")}</h1>
-          <p class="mt-3 max-w-[74ch] text-[0.9375rem] leading-[1.7] text-[var(--native-muted)]">
-            {language.t("kanban.repo.detailDescription")}
-          </p>
-        </div>
+        <h1 class="font-[var(--native-font-display)] text-[1.875rem] leading-[1.02] font-semibold tracking-[-0.05em] text-[var(--native-foreground)]">{language.t("kanban.repo.detailTitle")}</h1>
 
         <div class="flex min-w-0 flex-nowrap items-center justify-end gap-3 overflow-x-auto">
           <SelectRoot
@@ -258,7 +252,7 @@ export default function KanbanRepoDetail() {
         </div>
       </header>
 
-      <div class="mx-auto flex w-full max-w-[1320px] flex-col gap-5">
+      <div class="flex w-full flex-col gap-5">
         <Show when={!detail.loading || view()} fallback={<div class="rounded-[var(--native-radius-lg)] border border-[color:color-mix(in_oklab,var(--native-border)_24%,transparent)] bg-[var(--native-panel)] px-4 py-10 text-sm text-[var(--native-muted)] shadow-[var(--native-shadow-sm)]">{language.t("kanban.repo.loadingDetail")}</div>}>
           <Show when={view()} fallback={<div class="rounded-[var(--native-radius-lg)] border border-[color:color-mix(in_oklab,var(--native-border)_24%,transparent)] bg-[var(--native-panel)] px-4 py-10 text-sm text-[var(--native-muted)] shadow-[var(--native-shadow-sm)]">{language.t("kanban.repo.noDetail")}</div>}>
             {(item) => (
@@ -266,9 +260,9 @@ export default function KanbanRepoDetail() {
                 <section class="rounded-[var(--native-radius-lg)] border border-[color:color-mix(in_oklab,var(--native-border)_24%,transparent)] bg-[var(--native-panel)] p-4 shadow-[var(--native-shadow-sm)]">
                   <div class="mb-4 text-[1rem] font-semibold text-[var(--native-foreground)]">{language.t("kanban.repo.basicInfo")}</div>
                   <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                    <MetricCard label={language.t("kanban.metric.repoUrl")} value={item().repo_addr || "-"} hint={language.t("kanban.repo.repoUrlHint")} />
-                    <MetricCard label={language.t("kanban.metric.branch")} value={repoBranch() || item().repo_branch || language.t("kanban.repo.allBranches")} hint={language.t("kanban.repo.branchHint")} accent="var(--native-info, var(--native-primary))" />
-                    <MetricCard label={language.t("kanban.metric.activeTime")} value={activityRange()} hint={language.t("kanban.repo.activeTimeHint")} accent="var(--native-success)" />
+                    <MetricCard label={language.t("kanban.metric.repoUrl")} value={item().repo_addr || "-"} />
+                    <MetricCard label={language.t("kanban.metric.branch")} value={repoBranch() || item().repo_branch || language.t("kanban.repo.allBranches")} accent="var(--native-info, var(--native-primary))" />
+                    <MetricCard label={language.t("kanban.metric.activeTime")} value={activityRange()} accent="var(--native-success)" />
                     <MetricCard label={language.t("kanban.metric.commitCount")} value={String(item().summary.commit_count ?? commits().length)} accent="var(--native-warning)" />
                     <MetricCard label={language.t("kanban.metric.taskCount")} value={String(item().summary.task_count ?? tasks().length)} accent="var(--native-primary)" />
                     <MetricCard label={language.t("kanban.metric.totalTokens")} value={totalTokens().toLocaleString()} accent="var(--native-success)" />
@@ -281,13 +275,11 @@ export default function KanbanRepoDetail() {
                     <MetricCard
                       label={language.t("kanban.metric.traditionalEst")}
                       value={formatDuration(efficiency().repo_ancient_minutes, language.t)}
-                      hint={efficiency().repo_ancient_minutes_reason || "-"}
                       accent="var(--native-warning)"
                     />
                     <MetricCard
                       label={language.t("kanban.metric.actualTime")}
                       value={formatDuration(efficiency().repo_real_minutes, language.t)}
-                      hint={efficiency().repo_real_minutes_reason || "-"}
                       accent="var(--native-primary)"
                     />
                     <MetricCard
