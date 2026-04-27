@@ -139,7 +139,7 @@ export const routeConfig: RouteConfig[] = [
     path: "/kanban",
     component: KanbanLayout,
     auth: true,
-    menu: "console.kanban",
+    menu: "kanban",
     children: [
       { path: "/", component: KanbanHome },
       { path: "/repo", component: KanbanRepoList },
@@ -168,7 +168,6 @@ export const routeConfig: RouteConfig[] = [
       { path: "/capabilities", component: ConsoleCapabilities },
       { path: "/devices", component: ConsoleDevicesRoute },
       { path: "/notifications", component: ConsoleNotificationsRoute },
-      { path: "/kanban", component: ConsoleKanbanRoute },
     ],
   },
   {

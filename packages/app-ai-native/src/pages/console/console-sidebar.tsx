@@ -3,24 +3,20 @@ import { createResource, For, Show } from "solid-js"
 import { Icon } from "@opencode-ai/ui/icon"
 import { LocalIcon } from "@/components/local-icon"
 import { useLanguage } from "@/context/language"
-import { useAuth } from "@/context/auth"
 import { appPath } from "@/lib/router"
 import { deviceManagementService } from "./lib/device-management-service"
 import { notificationChannelService } from "./lib/notification-channel-service"
-import { ALL_CONSOLE_MENUS, type ConsoleMenuItem } from "./lib/menu-registry"
+import { ALL_CONSOLE_MENUS } from "./lib/menu-registry"
 
 type Count = "devices" | "channels"
 
 export default function ConsoleSidebar() {
   const location = useLocation()
   const language = useLanguage()
-  const auth = useAuth()
   const path = () => appPath(location.pathname)
 
   const [devices] = createResource(async () => deviceManagementService.list())
   const [channels] = createResource(async () => notificationChannelService.listWecom())
-
-  const visibleMenus = () => ALL_CONSOLE_MENUS.filter((item) => auth.canAccessMenu(item.code))
 
   const total = (kind: Count) =>
     kind === "devices"
@@ -46,7 +42,7 @@ export default function ConsoleSidebar() {
       <nav class="thin-scrollbar flex flex-1 flex-col gap-5 overflow-y-auto px-2 py-2.5">
         <div>
           <div class="flex flex-col gap-px">
-            <For each={visibleMenus()}>
+            <For each={ALL_CONSOLE_MENUS}>
               {(item) => {
                 const on = () => active(item.href, item.exact)
                 return (

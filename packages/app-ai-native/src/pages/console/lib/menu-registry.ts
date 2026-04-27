@@ -15,9 +15,7 @@ export interface ConsoleMenuItem {
 
 export const ALL_CONSOLE_MENUS: readonly ConsoleMenuItem[] = [
   // { code: "console.repositories", href: "/console", labelKey: "store.dashboard.nav.repositories", localIcon: "repo" as LocalIconName, exact: true },
-  { code: "console.projects", href: "/projects", labelKey: "store.dashboard.nav.projects", icon: "inbox" as IconProps["name"] },
   { code: "console.capabilities", href: "/console/capabilities", labelKey: "store.dashboard.nav.capabilities", icon: "sparkles" as IconProps["name"] },
   { code: "console.devices", href: "/console/devices", labelKey: "store.dashboard.nav.devices", icon: "server" as IconProps["name"], badge: "devices" as Count },
   // { code: "console.notifications", href: "/console/notifications", labelKey: "store.dashboard.nav.notifications", localIcon: "bell" as LocalIconName, badge: "channels" as Count },
-  { code: "console.kanban", href: "/console/kanban", labelKey: "store.dashboard.nav.kanban", icon: "chart" as IconProps["name"] },
 ] as const
