@@ -75,6 +75,130 @@ export const CloudTeamTaskDashboard: Component = () => {
     return cloudTeam.sessions().find((s) => s.id === sid)?.updatedAt
   })
 
+  const tasksByTeammate = createMemo(() => {
+    const map = new Map<string, import("@/client/cloud-team-types").Task[]>()
+    for (const task of cloudTeam.tasks()) {
+      const key = task.assignedMemberId ?? "unassigned"
+      const list = map.get(key) ?? []
+      list.push(task)
+      map.set(key, list)
+    }
+    return map
+  })
+
+  const assigneeGroups = createMemo(() => {
+    const map = tasksByTeammate()
+    return Array.from(map.entries()).filter(([, tasks]) => tasks.length > 0)
+  })
+
+  const sortedTimeline = createMemo(() =>
+    [...cloudTeam.timeline()].sort((a, b) => a.timestamp - b.timestamp),
+  )
+
+  function getEventActor(from?: string): string {
+    if (!from) return "System"
+    const tm = cloudTeam.teammates().find((t) => t.id === from || t.machineId === from)
+    if (tm) {
+      const device = cloudTeam.deviceById().get(tm.machineId)
+      return device?.displayName || tm.machineName
+    }
+    return from.slice(0, 8)
+  }
+
+  function getTimelineItemText(event: import("@/client/cloud-team-types").CloudEvent): string {
+    const p = event.payload
+    switch (event.type) {
+      case "task.assigned":
+        return `任务已分配: ${(p.description as string) ?? (p.taskId as string) ?? ""}`
+      case "task.claim":
+        return `领取任务: ${p.taskId as string}`
+      case "task.progress": {
+        const pct = (p as any).percentage ?? (p as any).progress
+        const msg = (p as any).message
+        return `进度更新${pct != null ? ` ${pct}%` : ""}${msg ? `: ${msg}` : ""}`
+      }
+      case "task.complete":
+        return `任务完成: ${(p.description as string) ?? (p.taskId as string) ?? ""}`
+      case "task.fail":
+        return `任务失败: ${(p.description as string) ?? (p.taskId as string) ?? ""}`
+      case "task.interrupted":
+        return `任务中断: ${p.taskId as string}`
+      case "task.terminate":
+        return `任务终止: ${p.taskId as string}`
+      case "decompose.request":
+        return "开始分解任务..."
+      case "decompose.result":
+        return `任务分解完成，共 ${(p.tasks as any[])?.length ?? 0} 个子任务`
+      case "approval.request":
+      case "approval.push":
+        return `审批请求: ${(p.approval as any)?.toolName ?? ""}`
+      case "approval.response":
+      case "approval.respond":
+        return `审批响应: ${p.status as string}`
+      case "message.send":
+      case "message.receive": {
+        if (typeof p.content === "string") return p.content
+        if (typeof p.text === "string") return p.text
+        if (p.message && typeof p.message === "object") {
+          const m = p.message as Record<string, unknown>
+          if (typeof m.content === "string") return m.content
+          if (typeof m.text === "string") return m.text
+        }
+        return JSON.stringify(p).slice(0, 200)
+      }
+      case "session.join":
+        return "加入会话"
+      case "leader.elected":
+        return `Leader 选举完成: ${getEventActor(p.leaderId as string)}`
+      case "leader.expired":
+        return "Leader 过期"
+      case "orchestrate.progress":
+        return `编排进度: ${p.phase as string}`
+      case "teammate.status":
+        return `状态更新: ${p.status as string}`
+      case "repo.register":
+        return `注册仓库: ${(p.repoUrl as string) ?? ""}`
+      default:
+        return `${event.type}`
+    }
+  }
+
+  function getTimelineItemActor(event: import("@/client/cloud-team-types").CloudEvent): string {
+    const p = event.payload
+    switch (event.type) {
+      case "task.assigned":
+        return getEventActor((p.assignedMemberId as string) ?? undefined)
+      case "task.claim":
+      case "task.progress":
+      case "task.complete":
+      case "task.fail":
+      case "task.interrupted": {
+        const taskId = p.taskId as string
+        const task = cloudTeam.tasks().find((t) => t.id === taskId)
+        return getEventActor(task?.assignedMemberId ?? undefined)
+      }
+      case "message.send":
+      case "message.receive":
+        return getEventActor(typeof p.from === "string" ? p.from : undefined)
+      case "leader.elected":
+        return getEventActor(p.leaderId as string)
+      case "teammate.status":
+        return getEventActor(p.machineId as string)
+      default:
+        return "System"
+    }
+  }
+
+  function getTimelineItemColor(type: string): string {
+    if (type.startsWith("task.complete")) return "text-green-600"
+    if (type.startsWith("task.fail") || type.startsWith("task.interrupted")) return "text-red-600"
+    if (type.startsWith("task.")) return "text-amber-600"
+    if (type.startsWith("message.")) return "text-blue-600"
+    if (type.startsWith("approval.")) return "text-purple-600"
+    if (type.startsWith("leader.")) return "text-orange-600"
+    return "text-text-weaker"
+  }
+
   const handleSend = async () => {
     const text = promptText().trim()
     if (!text || sending()) return
@@ -391,34 +515,108 @@ export const CloudTeamTaskDashboard: Component = () => {
                   </div>
                 </Show>
 
-                {/* Task list */}
+                {/* Timeline activity feed */}
+                <Show when={sortedTimeline().length > 0}>
+                  <div class="mb-4 rounded-lg border border-border-weak-base bg-background-base overflow-hidden">
+                    <div class="px-3 py-2 border-b border-border-weak-base bg-background-stronger flex items-center justify-between">
+                      <span class="text-13-medium text-text-base">Timeline</span>
+                      <span class="text-10-regular text-text-weaker">{sortedTimeline().length} events</span>
+                    </div>
+                    <div class="px-3 py-2 space-y-1.5 max-h-96 overflow-y-auto scrollbar-none">
+                      <For each={sortedTimeline()}>
+                        {(event) => {
+                          const time = () => new Date(event.timestamp).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" })
+                          const actor = () => getTimelineItemActor(event)
+                          const text = () => getTimelineItemText(event)
+                          const color = () => getTimelineItemColor(event.type)
+                          return (
+                            <div class="flex items-start gap-2">
+                              <span class="text-[10px] text-text-weaker shrink-0 pt-0.5 w-14 text-right">{time()}</span>
+                              <span class={`text-10-regular shrink-0 mt-0.5 ${color()}`}>●</span>
+                              <div class="min-w-0 flex-1">
+                                <span class="text-11-medium text-text-base">{actor()}</span>
+                                <span class="text-11-regular text-text-weak ml-1">{text()}</span>
+                              </div>
+                            </div>
+                          )
+                        }}
+                      </For>
+                    </div>
+                  </div>
+                </Show>
+
+                {/* Tasks grouped by teammate */}
                 <Show when={cloudTeam.tasks().length > 0}>
-                  <div class="space-y-3">
-                    <For each={cloudTeam.tasks()}>
-                      {(task) => (
-                        <div class="rounded-lg border border-border-weak-base bg-background-base overflow-hidden">
-                          <TaskItem
-                            id={task.id}
-                            description={task.description}
-                            status={task.status}
-                            assigneeName={
-                              task.assignedMemberId
-                                ? getTeammateDisplayName(task.assignedMemberId)
-                                : undefined
-                            }
-                            assigneeRepos={
-                              task.assignedMemberId
-                                ? memberInfoMap().get(task.assignedMemberId)?.repos
-                                : undefined
-                            }
-                            progress={cloudTeam.progress()[task.id]?.percentage}
-                            progressMessage={cloudTeam.progress()[task.id]?.message}
-                            result={task.result}
-                            errorMessage={task.errorMessage}
-                            retryCount={task.retryCount}
-                          />
-                        </div>
-                      )}
+                  <div class="space-y-4">
+                    <For each={assigneeGroups()}>
+                      {([memberId, tasks]) => {
+                        const tm = () => cloudTeam.teammates().find((t) => t.id === memberId)
+                        const device = () => {
+                          const m = tm()
+                          return m ? cloudTeam.deviceById().get(m.machineId) : undefined
+                        }
+                        const info = () => memberInfoMap().get(memberId)
+                        const workingDir = () => info()?.repos[0]?.localPath
+                        const isUnassigned = memberId === "unassigned"
+                        return (
+                          <div class="rounded-lg border border-border-weak-base bg-background-base overflow-hidden">
+                            {/* Teammate header */}
+                            <Show when={!isUnassigned}>
+                              <div class="px-3 py-2.5 border-b border-border-weak-base bg-background-stronger">
+                                <div class="flex items-center gap-2.5">
+                                  <span class="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--native-radius-sm)] bg-[color:color-mix(in_oklab,var(--native-panel)_76%,var(--native-bg-subtle))] text-sidebar-foreground/70 shadow-[var(--native-shadow-sm)]">
+                                    <span
+                                      class="absolute right-1 top-1 h-1.5 w-1.5 rounded-full"
+                                      classList={{
+                                        "bg-[var(--native-success)]": tm()?.status === "online",
+                                        "bg-amber-500": tm()?.status === "busy",
+                                        "bg-red-400": tm()?.status === "offline",
+                                      }}
+                                    />
+                                    <Icon name="server" size="small" />
+                                  </span>
+                                  <div class="min-w-0 flex-1">
+                                    <span class="block truncate text-[0.8125rem] font-medium text-sidebar-foreground">
+                                      {device()?.displayName || tm()?.machineName || memberId.slice(0, 8)}
+                                    </span>
+                                    <span class="block truncate text-[11px] text-sidebar-foreground/45">
+                                      {device()
+                                        ? `${device()!.platform} · ${device()!.version}`
+                                        : (tm()?.role ?? "member")}
+                                      <Show when={workingDir()}>
+                                        <span> · </span>
+                                        <span class="font-mono">{workingDir()}</span>
+                                      </Show>
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            </Show>
+                            <Show when={isUnassigned}>
+                              <div class="px-3 py-2 border-b border-border-weak-base bg-background-stronger">
+                                <span class="text-13-medium text-text-base">Unassigned</span>
+                              </div>
+                            </Show>
+                            {/* Tasks for this teammate */}
+                            <div class="divide-y divide-border-weak-base">
+                              <For each={tasks}>
+                                {(task) => (
+                                  <TaskItem
+                                    id={task.id}
+                                    description={task.description}
+                                    status={task.status}
+                                    progress={cloudTeam.progress()[task.id]?.percentage}
+                                    progressMessage={cloudTeam.progress()[task.id]?.message}
+                                    result={task.result}
+                                    errorMessage={task.errorMessage}
+                                    retryCount={task.retryCount}
+                                  />
+                                )}
+                              </For>
+                            </div>
+                          </div>
+                        )
+                      }}
                     </For>
                   </div>
                 </Show>

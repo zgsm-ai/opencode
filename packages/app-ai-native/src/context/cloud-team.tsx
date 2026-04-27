@@ -88,6 +88,7 @@ export const { use: useCloudTeam, provider: CloudTeamProvider, context: CloudTea
       teammates: [],
       tasks: [],
       messages: [],
+      timeline: [],
       approvals: [],
       progress: {},
       sessionProgress: undefined,
@@ -306,6 +307,7 @@ export const { use: useCloudTeam, provider: CloudTeamProvider, context: CloudTea
 
     const shouldSyncTasksFromProgress = (p: SessionProgress): boolean => {
       const local = summarizeLocalTasks()
+      if (local.totalTasks === 0 && p.totalTasks > 0) return true
       return (
         local.totalTasks !== p.totalTasks
         || local.completedTasks !== p.completedTasks
@@ -578,6 +580,7 @@ export const { use: useCloudTeam, provider: CloudTeamProvider, context: CloudTea
         setStore("tasks", [])
         setStore("pendingPlan", undefined)
         setStore("messages", [])
+        setStore("timeline", [])
         setStore("approvals", [])
         setStore("progress", {})
         setStore("sessionProgress", undefined)
@@ -780,6 +783,7 @@ export const { use: useCloudTeam, provider: CloudTeamProvider, context: CloudTea
       teammates: () => store.teammates,
       tasks: () => store.tasks,
       messages: () => store.messages,
+      timeline: () => store.timeline,
       approvals: () => store.approvals,
       progress: () => store.progress,
       sessionProgress: () => store.sessionProgress,

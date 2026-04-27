@@ -29,6 +29,7 @@ type CloudTeamStore = {
   teammates: TeammateRegistration[]
   tasks: Task[]
   messages: CloudEvent[]
+  timeline: CloudEvent[]
   approvals: ApprovalRequest[]
   progress: Record<string, ProgressUpdate>
   wsConnected: boolean
@@ -51,6 +52,14 @@ export function applyCloudEvent(store: CloudTeamStore, setStore: SetStore, event
       s.lastEventId = event.eventId
     })
   }
+
+  // Append every event to the timeline for activity feed display
+  setStore((s) => {
+    const exists = s.timeline.some((e) => e.eventId === event.eventId)
+    if (!exists) {
+      s.timeline.push(event)
+    }
+  })
 
   const p = event.payload
 

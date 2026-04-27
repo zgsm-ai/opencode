@@ -23,7 +23,7 @@ export const TaskItem: Component<{
   errorMessage?: string
   retryCount?: number
 }> = (props) => {
-  const [showFiles, setShowFiles] = createSignal(false)
+  const [showFiles, setShowFiles] = createSignal(true)
   const config = () => statusConfig[props.status]
 
   const hasResult = () => props.status === "completed" && props.result
