@@ -5,6 +5,7 @@ import { Icon } from "@opencode-ai/ui/icon"
 import { useLanguage } from "@/context/language"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { SelectRoot, SelectControl, SelectTrigger, SelectValueText, SelectIndicator, SelectPositioner, SelectContent, SelectList, SelectItem, SelectItemText, createListCollection } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 import type { TableFilterController } from "../../hooks/use-table-filters"
 import type { DateRangeValue, EfficiencyRow, KanbanColumn } from "../../lib/types"
@@ -163,23 +164,37 @@ export function FilterTable<Row extends EfficiencyRow>(props: Props<Row>) {
           </Show>
         </div>
         <div class="flex flex-wrap items-center justify-end gap-2">
-          <label class="flex items-center gap-2">
+          <div class="flex items-center gap-2">
             <span class="text-[0.8125rem] text-[var(--native-muted)]">{language.t("kanban.pagination.perPage")}</span>
-            <span class="relative inline-flex items-center">
-              <select
-                class="h-8 min-w-[4.5rem] appearance-none rounded-md border border-input bg-transparent pr-9 pl-3 text-[0.8125rem] text-[var(--native-foreground)]"
-                value={props.pageSize}
-                onChange={(e) => props.onPageSizeChange(Number(e.currentTarget.value))}
-              >
-                <For each={sizes()}>
-                  {(size) => <option value={size}>{size}</option>}
-                </For>
-              </select>
-              <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[var(--native-muted)]">
-                <Icon name="chevron-down" />
-              </span>
-            </span>
-          </label>
+            <SelectRoot
+              collection={createListCollection({ items: sizes().map((s) => ({ label: String(s), value: String(s) })) })}
+              value={[String(props.pageSize)]}
+              onValueChange={(detail) => {
+                const v = Number(detail.value[0])
+                if (!isNaN(v)) props.onPageSizeChange(v)
+              }}
+            >
+              <SelectControl>
+                <SelectTrigger class="h-8 min-w-[4.5rem] px-3 py-0 text-[0.8125rem] text-[var(--native-foreground)]">
+                  <SelectValueText />
+                  <SelectIndicator />
+                </SelectTrigger>
+              </SelectControl>
+              <SelectPositioner>
+                <SelectContent>
+                  <SelectList>
+                    <For each={sizes()}>
+                      {(size) => (
+                        <SelectItem item={{ label: String(size), value: String(size) }}>
+                          <SelectItemText>{size}</SelectItemText>
+                        </SelectItem>
+                      )}
+                    </For>
+                  </SelectList>
+                </SelectContent>
+              </SelectPositioner>
+            </SelectRoot>
+          </div>
           <button
             type="button"
             class="inline-flex h-8 w-8 items-center justify-center rounded-[var(--native-radius-full)] border border-transparent bg-transparent text-[var(--native-muted)] transition-[background-color,color,border-color] hover:bg-[color:color-mix(in_oklab,var(--native-surface)_72%,transparent)] hover:text-[var(--native-foreground)] disabled:cursor-not-allowed disabled:opacity-[var(--native-disabled-opacity)]"
