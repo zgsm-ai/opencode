@@ -5,6 +5,7 @@ import { createStore } from "solid-js/store"
 import { showToast } from "@opencode-ai/ui/toast"
 import { Button } from "@/components/ui/button"
 import Back from "../components/back"
+import { RatioPill } from "../components/ratio-pill"
 import { FilterBar } from "../components/filters/filter-bar"
 import { FilterTable } from "../components/table/filter-table"
 import { useTableFilters } from "../hooks/use-table-filters"
@@ -30,6 +31,18 @@ function sameOrg(a: OrgCascadeValue, b: OrgCascadeValue) {
 function fmtCost(value?: number | null) {
   if (value == null || value === 0) return "-"
   return `¥${value.toLocaleString("zh-CN", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
+}
+
+function real(row: CommitRow) {
+  return row.commit_real_minutes_manual ?? row.commit_real_minutes
+}
+
+function ancient(row: CommitRow) {
+  return row.commit_ancient_minutes_manual ?? row.commit_ancient_minutes
+}
+
+function tokens(row: CommitRow) {
+  return (row.upstream_tokens ?? 0) + (row.downstream_tokens ?? 0)
 }
 
 export default function KanbanCommitList() {
@@ -96,7 +109,12 @@ export default function KanbanCommitList() {
         return id ? <button type="button" class="text-left text-sm text-[var(--native-primary)] transition-colors hover:text-[var(--native-foreground)]" onClick={() => navigate(`/kanban/commit/${encodeURIComponent(id)}?${routeQuery()}`)}>{shortId(id, 8)}</button> : <span>-</span>
       },
     },
-    { prop: "commit_time", label: language.t("kanban.table.time"), minWidth: 170, display: (row) => formatLocalTime(row.commit_time) },
+    {
+      prop: "comment",
+      label: language.t("kanban.table.comment"),
+      minWidth: 180,
+      filter: { type: "text" },
+    },
     {
       prop: "org_display",
       label: language.t("kanban.table.org"),
@@ -114,11 +132,126 @@ export default function KanbanCommitList() {
       label: language.t("kanban.table.user"),
       minWidth: 110,
       render: (row) => <button type="button" class="text-left text-sm text-[var(--native-primary)] transition-colors hover:text-[var(--native-foreground)]" onClick={() => {
-        const txt = row.user_id?.trim()
+        const txt = row.user_id?.trim() || row.user_name?.trim()
         if (!txt) return
         navigate(`/kanban/user/${encodeURIComponent(txt)}?${routeQuery()}`)
       }}>{row.user_name || row.user_id || "-"}</button>,
       filter: { type: "multi-select" },
+    },
+    {
+      prop: "repo_addr",
+      label: language.t("kanban.table.repository"),
+      minWidth: 240,
+      render: (row) => {
+        const addr = row.repo_addr?.trim()
+        if (!addr) return <span>-</span>
+        const branch = row.repo_branch?.trim()
+        const label = `${addr}/${branch || "-"}`
+        return (
+          <button
+            type="button"
+            class="block max-w-[24rem] truncate text-left text-sm text-[var(--native-primary)] transition-colors hover:text-[var(--native-foreground)]"
+            title={label}
+            onClick={() => navigate(`/kanban/repo/${encodeURIComponent(addr)}${branch ? `/${encodeURIComponent(branch)}` : ""}?${routeQuery()}`)}
+          >
+            {label}
+          </button>
+        )
+      },
+      filter: { type: "multi-select" },
+    },
+    {
+      prop: "diff_lines",
+      label: language.t("kanban.table.codeLines"),
+      minWidth: 120,
+      align: "right",
+      filter: {
+        type: "number",
+        shortcuts: [
+          { label: "> 0", value: { min: 1 } },
+          { label: "> 50", value: { min: 50 } },
+          { label: "> 200", value: { min: 200 } },
+        ],
+      },
+    },
+    {
+      prop: "commit_real_minutes",
+      label: language.t("kanban.metric.actualTime"),
+      minWidth: 110,
+      align: "right",
+      display: (row) => formatDuration(real(row), language.t),
+      filter: {
+        type: "number",
+        valueGetter: real,
+        shortcuts: [
+          { label: "> 0", value: { min: 0.1 } },
+          { label: "> 30min", value: { min: 30 } },
+          { label: "> 1h", value: { min: 60 } },
+        ],
+      },
+    },
+    {
+      prop: "commit_ancient_minutes",
+      label: language.t("kanban.metric.traditionalEst"),
+      minWidth: 190,
+      align: "right",
+      display: (row) => formatDuration(ancient(row), language.t),
+      filter: {
+        type: "number",
+        valueGetter: ancient,
+        shortcuts: [
+          { label: "> 0", value: { min: 0.1 } },
+          { label: "> 30min", value: { min: 30 } },
+          { label: "> 1h", value: { min: 60 } },
+        ],
+      },
+    },
+    {
+      prop: "efficiency_ratio",
+      label: language.t("kanban.metric.efficiencyRatio"),
+      minWidth: 110,
+      align: "center",
+      render: (row) => <RatioPill value={row.efficiency_ratio} />,
+      filter: {
+        type: "number",
+        shortcuts: [
+          { label: "> 100%", value: { min: 100 } },
+          { label: "> 200%", value: { min: 200 } },
+          { label: "> 300%", value: { min: 300 } },
+        ],
+      },
+    },
+    {
+      prop: "_tokens",
+      label: language.t("kanban.table.tokensConsumed"),
+      minWidth: 160,
+      align: "right",
+      display: (row) => tokens(row) > 0 ? tokens(row).toLocaleString() : "-",
+      filter: {
+        type: "number",
+        valueGetter: tokens,
+        shortcuts: [
+          { label: "> 0", value: { min: 1 } },
+          { label: "> 10k", value: { min: 10000 } },
+          { label: "> 100k", value: { min: 100000 } },
+        ],
+      },
+    },
+    { prop: "commit_time", label: language.t("kanban.table.time"), minWidth: 170, display: (row) => formatLocalTime(row.commit_time) },
+    {
+      prop: "cost",
+      label: language.t("kanban.table.cost"),
+      minWidth: 100,
+      align: "right",
+      display: (row) => fmtCost(row.cost),
+      filter: {
+        type: "number",
+        shortcuts: [
+          { label: "> 0", value: { min: 0.001 } },
+          { label: "> 0.01", value: { min: 0.01 } },
+          { label: "> 0.1", value: { min: 0.1 } },
+        ],
+      },
     },
   ])
 

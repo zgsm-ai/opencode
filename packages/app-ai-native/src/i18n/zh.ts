@@ -1864,11 +1864,11 @@ export const dict = {
   "kanban.form.dateRange": "时间范围",
   "kanban.dialog.whitelistMode": "白名单模式，仅包含指定 Commits",
   "kanban.dialog.selectCommits": "选择 Commits",
-  "kanban.dialog.selectCommitsDesc": "只会把勾选的 commits 作为 repo 过滤白名单写入目标 Project。",
+  "kanban.dialog.selectCommitsDesc": "只会使用勾选的 commits 作为目标 Project 的 repo 过滤范围。",
   "kanban.table.select": "选择",
   "kanban.dialog.conflictTitle": "以下 Commits 已属于其他 Project",
   "kanban.dialog.selectedTasks": "已选 Tasks",
-  "kanban.dialog.selectedTasksDesc": "将按统一的 silica 权重写入 kanban 自己的 project 体系，不会接到主产品 projects 模块。",
+  "kanban.dialog.selectedTasksDesc": "这些 Tasks 会按统一的 silica 权重加入目标 Project。",
   "kanban.table.actualDuration": "实际耗时",
   "kanban.toast.correctionFailed": "纠错失败",
   "kanban.form.dimension": "维度",
@@ -1996,7 +1996,7 @@ export const dict = {
   "kanban.timeline.collapse": "收起",
 
   "kanban.task.missingEstimate": "{{count}} 条任务缺少「传统开发时长预估」数据",
-  "kanban.task.missingEstimateDesc": "沿用旧版入口，直接触发 kanban 后端的 AI 估算接口回写任务预估时长。",
+  "kanban.task.missingEstimateDesc": "为这些任务生成并回填传统开发时长预估。",
   "kanban.task.aiEstimate": "AI 生成预估数据",
   "kanban.task.estimating": "估算中...",
   "kanban.task.selectedCount": "已选 {{count}} 个 Task",
@@ -2028,7 +2028,7 @@ export const dict = {
   "kanban.chart.series.commitEff": "Commit Eff",
 
   "kanban.hint.efficiencyCalculation": "手工值优先覆盖自动值，提效比按照有效实际耗时和传统开发时长预估计算。",
-  "kanban.hint.timeSegments": "保留旧版的时间片段断点展示方式，连续工作片段之间会插入间隔提示。",
+  "kanban.hint.timeSegments": "连续工作片段之间会显示间隔提示。",
   "kanban.hint.silicaExplanation": "commit 中由 AI Task 生成的代码占比，基于关联 Task diff 行数加权计算。",
 
   "kanban.confirm.deleteVirtualGroup": "确定要删除此虚拟组吗？删除后不可恢复。",

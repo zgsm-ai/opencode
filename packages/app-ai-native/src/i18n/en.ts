@@ -1892,11 +1892,11 @@ export const dict = {
   "kanban.form.dateRange": "Date Range",
   "kanban.dialog.whitelistMode": "Whitelist mode, only include specified commits",
   "kanban.dialog.selectCommits": "Select Commits",
-  "kanban.dialog.selectCommitsDesc": "Only checked commits will be written as repo filter whitelist to the target project.",
+  "kanban.dialog.selectCommitsDesc": "Only selected commits will be used in the target project's repo filter.",
   "kanban.table.select": "Select",
   "kanban.dialog.conflictTitle": "The following commits already belong to other projects",
   "kanban.dialog.selectedTasks": "Selected Tasks",
-  "kanban.dialog.selectedTasksDesc": "Will be written with uniform silica weight to kanban's own project system, not connected to the main product projects module.",
+  "kanban.dialog.selectedTasksDesc": "These tasks will be added to the target project with a uniform silica weight.",
   "kanban.table.actualDuration": "Actual Duration",
   "kanban.toast.correctionFailed": "Correction failed",
   "kanban.form.dimension": "Dimension",
@@ -2024,7 +2024,7 @@ export const dict = {
   "kanban.timeline.collapse": "Collapse",
 
   "kanban.task.missingEstimate": "{{count}} tasks missing traditional estimate",
-  "kanban.task.missingEstimateDesc": "Using legacy entry to trigger kanban AI estimation.",
+  "kanban.task.missingEstimateDesc": "Generate and fill in traditional estimates for these tasks.",
   "kanban.task.aiEstimate": "AI Generate Estimate",
   "kanban.task.estimating": "Estimating...",
   "kanban.task.selectedCount": "{{count}} tasks selected",
@@ -2056,7 +2056,7 @@ export const dict = {
   "kanban.chart.series.commitEff": "Commit Eff",
 
   "kanban.hint.efficiencyCalculation": "Manual values override automatic ones; efficiency is calculated from valid actual time and traditional estimate.",
-  "kanban.hint.timeSegments": "Legacy time segment display with gap indicators between continuous segments.",
+  "kanban.hint.timeSegments": "Gap indicators are shown between continuous work segments.",
   "kanban.hint.silicaExplanation": "Percentage of AI Task-generated code in commit, weighted by related Task diff lines.",
 
   "kanban.confirm.deleteVirtualGroup": "Delete this virtual group? This cannot be undone.",

@@ -1,4 +1,4 @@
-import { useNavigate, useSearchParams } from "@solidjs/router"
+import { A, useNavigate, useSearchParams } from "@solidjs/router"
 import { createEffect, createMemo, createResource, on } from "solid-js"
 import { createStore } from "solid-js/store"
 import { showToast } from "@opencode-ai/ui/toast"
@@ -33,11 +33,36 @@ export default function KanbanRepoList() {
     ]).toString()
   })
 
+  const detailHref = (row: RepoAggregateRow) => {
+    const addr = row.repo_addr?.trim()
+    if (!addr) return ""
+    const branch = row.repo_branch?.trim()
+    const tail = routeQuery()
+    return branch
+      ? `/kanban/repo/${encodeURIComponent(addr)}/${encodeURIComponent(branch)}?${tail}`
+      : `/kanban/repo/${encodeURIComponent(addr)}?${tail}`
+  }
+
   const columns = createMemo<KanbanColumn<RepoAggregateRow>[]>(() => [
     {
       prop: "repo_addr",
       label: language.t("kanban.metric.repoUrl"),
       minWidth: 300,
+      render: (row) => {
+        const addr = row.repo_addr?.trim()
+        const href = detailHref(row)
+        if (!addr || !href) return <span>-</span>
+        return (
+          <A
+            href={href}
+            class="block max-w-[24rem] truncate text-left text-sm text-[var(--native-primary)] underline-offset-2 transition-colors hover:text-[var(--native-foreground)] hover:underline"
+            title={addr}
+            onClick={(event) => event.stopPropagation()}
+          >
+            {addr}
+          </A>
+        )
+      },
       filter: { type: "text" },
     },
     {
@@ -200,13 +225,9 @@ export default function KanbanRepoList() {
             setState("page", 1)
           }}
           onRowClick={(row) => {
-            const repoAddr = row.repo_addr?.trim()
-            if (!repoAddr) return
-            const repoBranch = row.repo_branch?.trim()
-            const tail = routeQuery()
-            navigate(repoBranch
-              ? `/kanban/repo/${encodeURIComponent(repoAddr)}/${encodeURIComponent(repoBranch)}?${tail}`
-              : `/kanban/repo/${encodeURIComponent(repoAddr)}?${tail}`)
+            const href = detailHref(row)
+            if (!href) return
+            navigate(href)
           }}
         />
       </div>

@@ -73,13 +73,13 @@ export function FilterTable<Row extends EfficiencyRow>(props: Props<Row>) {
 
       <Show when={props.rows.length > 0 || !props.loading} fallback={<div class="px-4 py-8 text-sm text-[var(--native-muted)]">{language.t("kanban.misc.loading")}</div>}>
         <Show when={props.rows.length > 0} fallback={<div class="px-4 py-10 text-center text-sm text-[var(--native-muted)]">{props.emptyText ?? language.t("kanban.empty.noData")}</div>}>
-          <div class="relative">
+          <div class="relative overflow-x-auto">
             <Show when={showOverlay()}>
               <div class="absolute inset-0 z-10 flex items-center justify-center bg-[color:color-mix(in_oklab,var(--native-panel)_70%,transparent)] backdrop-blur-[4px]">
                 <div class="h-8 w-8 animate-spin rounded-full border-[3px] border-[color:color-mix(in_srgb,var(--native-border)_30%,transparent)] border-t-[var(--native-primary)]" />
               </div>
             </Show>
-            <Table>
+            <Table class="min-w-max">
             <TableHeader>
               <TableRow>
                 <For each={props.columns}>
