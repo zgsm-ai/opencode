@@ -265,7 +265,7 @@ export default function KanbanCommitList() {
   })
 
   const [data, { refetch }] = createResource(
-    () => ({ dateRange: state.dateRange, org: state.org, page: state.page, pageSize: state.pageSize }),
+    () => ({ dateRange: state.dateRange, org: { org1: state.org.org1, org2: state.org.org2, org3: state.org.org3, org4: state.org.org4 }, page: state.page, pageSize: state.pageSize }),
     async (input) => {
       try {
         return await queryCommitRows(input)
@@ -297,7 +297,7 @@ export default function KanbanCommitList() {
             setState("page", 1)
           }}
           onOrgChange={(value) => {
-            setState("org", value)
+            setState("org", { org1: value.org1, org2: value.org2, org3: value.org3, org4: value.org4 })
             setState("page", 1)
           }}
           actions={<Button variant="outline" size="sm" onClick={() => void refetch()} disabled={data.loading}>{data.loading ? language.t("kanban.action.refreshing") : language.t("kanban.action.refresh")}</Button>}

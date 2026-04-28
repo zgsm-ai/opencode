@@ -213,14 +213,16 @@ export default function KanbanUserList() {
     }),
   )
 
+  const query = createMemo(() => ({
+    dateRange: state.dateRange,
+    org: { org1: state.org.org1, org2: state.org.org2, org3: state.org.org3, org4: state.org.org4 },
+    granularity: state.granularity,
+    page: state.page,
+    pageSize: state.pageSize,
+  }))
+
   const [data, { refetch }] = createResource(
-    () => ({
-      dateRange: state.dateRange,
-      org: state.org,
-      granularity: state.granularity,
-      page: state.page,
-      pageSize: state.pageSize,
-    }),
+    query,
     async (input) => {
       try {
         return await queryUserRows(input)
@@ -321,7 +323,7 @@ export default function KanbanUserList() {
             setState("page", 1)
           }}
           onOrgChange={(value) => {
-            setState("org", value)
+            setState("org", { org1: value.org1, org2: value.org2, org3: value.org3, org4: value.org4 })
             setState("page", 1)
           }}
           actions={

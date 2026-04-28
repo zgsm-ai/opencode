@@ -52,6 +52,7 @@ export function useOrgCascade(props: UseOrgCascadeOptions = {}) {
   })
 
   let token = 0
+  let syncGen = 0
   let syncing = false
 
   const loadLevel = async (level: OrgLevel, parent = "") => {
@@ -68,7 +69,8 @@ export function useOrgCascade(props: UseOrgCascadeOptions = {}) {
   }
 
   const sync = async (value: OrgCascadeValue = {}) => {
-    const current = ++token
+    const gen = ++syncGen
+    ++token // cancel any in-progress loadLevel calls
     syncing = true
     const next = cleanValue(value)
     setState("value", next)
@@ -77,13 +79,13 @@ export function useOrgCascade(props: UseOrgCascadeOptions = {}) {
     setState("options", "org4", [])
 
     const first = await loadLevel("org1")
-    if (current !== token) return
+    if (gen !== syncGen) return
     if (next.org1 && first.includes(next.org1)) {
       const second = await loadLevel("org2", next.org1)
-      if (current !== token) return
+      if (gen !== syncGen) return
       if (next.org2 && second.includes(next.org2)) {
         const third = await loadLevel("org3", `${next.org1}/${next.org2}`)
-        if (current !== token) return
+        if (gen !== syncGen) return
         if (next.org3 && third.includes(next.org3)) {
           await loadLevel("org4", `${next.org1}/${next.org2}/${next.org3}`)
         }
@@ -107,6 +109,10 @@ export function useOrgCascade(props: UseOrgCascadeOptions = {}) {
   }
 
   const setLevel = async (level: OrgLevel, value: string) => {
+    // User-initiated: cancel any in-progress sync so emit is never blocked
+    ++syncGen
+    syncing = false
+
     const index = order.indexOf(level)
     const next = { ...state.value, [level]: value || undefined } as OrgCascadeValue
     for (const lower of order.slice(index + 1)) {

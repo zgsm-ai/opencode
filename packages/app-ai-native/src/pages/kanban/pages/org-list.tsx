@@ -117,7 +117,7 @@ export default function KanbanOrgList() {
 
   const query = createMemo<OrgAggregateQuery>(() => ({
     dateRange: state.dateRange,
-    org: state.org,
+    org: { org1: state.org.org1, org2: state.org.org2, org3: state.org.org3, org4: state.org.org4 },
     granularity: state.granularity,
   }))
 
@@ -250,7 +250,7 @@ export default function KanbanOrgList() {
             setState("page", 1)
           }}
           onOrgChange={(value) => {
-            setState("org", value)
+            setState("org", { org1: value.org1, org2: value.org2, org3: value.org3, org4: value.org4 })
             setState("page", 1)
           }}
           actions={

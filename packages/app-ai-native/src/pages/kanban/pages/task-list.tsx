@@ -190,7 +190,7 @@ export default function KanbanTaskList() {
   })
 
   const [data, { refetch }] = createResource(
-    () => ({ dateRange: state.dateRange, org: state.org, page: state.page, pageSize: state.pageSize }),
+    () => ({ dateRange: state.dateRange, org: { org1: state.org.org1, org2: state.org.org2, org3: state.org.org3, org4: state.org.org4 }, page: state.page, pageSize: state.pageSize }),
     async (input) => {
       try {
         return await queryTaskRows(input)
@@ -272,7 +272,7 @@ export default function KanbanTaskList() {
             setState("page", 1)
           }}
           onOrgChange={(value) => {
-            setState("org", value)
+            setState("org", { org1: value.org1, org2: value.org2, org3: value.org3, org4: value.org4 })
             setState("page", 1)
           }}
           actions={<div class="flex flex-wrap items-center gap-2"><span class="text-sm text-[var(--native-muted)]">{language.t("kanban.task.selectedCount", { count: state.selectedIds.length })}</span><Button variant="outline" size="sm" onClick={toggleVisible} disabled={visibleIds().length === 0}>{visibleIds().length > 0 && visibleIds().every((id) => state.selectedIds.includes(id)) ? language.t("kanban.task.deselectPage") : language.t("kanban.task.selectPage")}</Button><Button size="sm" onClick={openAddDialog} disabled={selectedRows().length === 0}>{language.t("kanban.repo.addToProject")}</Button><Button variant="outline" size="sm" onClick={() => void refetch()} disabled={data.loading}>{data.loading ? language.t("kanban.action.refreshing") : language.t("kanban.action.refresh")}</Button></div>}
