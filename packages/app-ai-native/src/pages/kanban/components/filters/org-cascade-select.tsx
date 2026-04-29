@@ -46,7 +46,7 @@ export function OrgCascadeSelect(props: Props) {
                 onValueChange={(details) => {
                   void cascade.setLevel(item.level, details.value[0] ?? "")
                 }}
-                positioning={{ sameWidth: true }}
+                positioning={{ fitViewport: true, sameWidth: true }}
               >
                 <SelectControl>
                   <SelectTrigger class="h-10 w-full">
@@ -55,7 +55,7 @@ export function OrgCascadeSelect(props: Props) {
                   </SelectTrigger>
                 </SelectControl>
                 <SelectPositioner>
-                  <SelectContent>
+                  <SelectContent class="max-h-[min(20rem,calc(var(--available-height)-1rem))] overflow-y-auto">
                     <SelectList>
                       <For each={collection().items}>
                         {(option) => (
