@@ -258,9 +258,9 @@ export default function KanbanTaskList() {
         <Show when={missingEstimateCount() > 0}>
           <section class="rounded-[var(--native-radius-lg)] border border-[color:color-mix(in_oklab,var(--native-warning)_24%,transparent)] bg-[color:color-mix(in_oklab,var(--native-warning)_10%,var(--native-panel))] p-4 shadow-[var(--native-shadow-sm)]">
             <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-              <div>
+              <div class="min-w-0">
                 <div class="text-sm font-semibold text-[var(--native-foreground)]">{language.t("kanban.task.missingEstimate", { count: missingEstimateCount() })}</div>
-                <div class="mt-1 text-sm text-[var(--native-muted)]">{language.t("kanban.task.missingEstimateDesc")}</div>
+                <div class="mt-1 truncate text-sm text-[var(--native-muted)]" title={language.t("kanban.task.missingEstimateDesc")}>{language.t("kanban.task.missingEstimateDesc")}</div>
               </div>
               <Button size="sm" onClick={() => void runEstimate()} disabled={state.estimating}>{state.estimating ? language.t("kanban.task.estimating") : language.t("kanban.task.aiEstimate")}</Button>
             </div>

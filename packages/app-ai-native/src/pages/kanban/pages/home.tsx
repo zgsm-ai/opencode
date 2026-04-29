@@ -69,7 +69,7 @@ function MetricCard(props: {
   const body = (
     <article
       class={cn(
-        "group relative h-full min-h-[11rem] overflow-hidden rounded-[20px] border border-[color:color-mix(in_oklab,var(--native-border)_18%,white)] bg-white px-5 py-4 shadow-[0_10px_26px_-20px_rgba(31,53,120,0.22),0_2px_10px_-6px_rgba(71,85,145,0.12)] transition-transform duration-200 ease-out [@media(hover:hover)]:hover:-translate-y-0.5 active:scale-[0.98]",
+        "group relative h-full min-h-[11rem] min-w-0 overflow-hidden rounded-[20px] border border-[color:color-mix(in_oklab,var(--native-border)_18%,white)] bg-white px-5 py-4 shadow-[0_10px_26px_-20px_rgba(31,53,120,0.22),0_2px_10px_-6px_rgba(71,85,145,0.12)] transition-transform duration-200 ease-out [@media(hover:hover)]:hover:-translate-y-0.5 active:scale-[0.98]",
         props.live && "cursor-pointer",
       )}
       style={{ "--card-tone": props.tone, "touch-action": "manipulation" }}
@@ -87,7 +87,7 @@ function MetricCard(props: {
             <span class="text-[1.55rem] leading-none font-medium tracking-[-0.03em]">{props.value.prefix}</span>
             <span class="text-[3rem] leading-none font-medium tracking-[-0.07em]">{props.value.amount}</span>
           </p>}
-      <p class="mt-5 text-[0.95rem] leading-6 text-[#97a2b8]">{props.hint}</p>
+      <p class="mt-5 line-clamp-2 text-[0.95rem] leading-6 text-[#97a2b8]" title={props.hint}>{props.hint}</p>
     </article>
   )
 

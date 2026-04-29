@@ -341,9 +341,9 @@ export default function KanbanTaskDetail() {
 
             <section class="rounded-[var(--native-radius-lg)] border border-[color:color-mix(in_oklab,var(--native-border)_24%,transparent)] bg-[var(--native-panel)] p-4 shadow-[var(--native-shadow-sm)]">
               <div class="flex flex-wrap items-center justify-between gap-3">
-                <div>
+                <div class="min-w-0">
                   <div class="text-[1rem] font-semibold text-[var(--native-foreground)]">{language.t("kanban.section.efficiencyView")}</div>
-                  <div class="mt-1 text-sm text-[var(--native-muted)]">{language.t("kanban.hint.efficiencyCalculation")}</div>
+                  <div class="mt-1 truncate text-sm text-[var(--native-muted)]" title={language.t("kanban.hint.efficiencyCalculation")}>{language.t("kanban.hint.efficiencyCalculation")}</div>
                 </div>
                 <RatioPill value={efficiency()} digits={0} />
               </div>
@@ -355,10 +355,10 @@ export default function KanbanTaskDetail() {
                 <div class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                   <For each={segments()}>
                     {(item: TimeSegment, index) => (
-                      <article class="rounded-[var(--native-radius-md)] border border-[color:color-mix(in_oklab,var(--native-border)_20%,transparent)] bg-[color:color-mix(in_oklab,var(--native-panel)_88%,var(--native-bg-subtle))] p-3">
+                      <article class="min-w-0 rounded-[var(--native-radius-md)] border border-[color:color-mix(in_oklab,var(--native-border)_20%,transparent)] bg-[color:color-mix(in_oklab,var(--native-panel)_88%,var(--native-bg-subtle))] p-3">
                         <div class="text-[11px] uppercase tracking-[0.12em] text-[var(--native-dim)]">{language.t("kanban.timeline.segment", { index: index() + 1 })}</div>
                         <div class="mt-2 text-sm text-[var(--native-foreground)]">{formatLocalTime(item.start)} ~ {formatLocalTime(item.end)}</div>
-                        <div class="mt-1 text-sm text-[var(--native-muted)]">{language.t("kanban.timeline.conversations", { count: item.conv_count ?? 0 })}</div>
+                        <div class="mt-1 truncate text-sm text-[var(--native-muted)]" title={language.t("kanban.timeline.conversations", { count: item.conv_count ?? 0 })}>{language.t("kanban.timeline.conversations", { count: item.conv_count ?? 0 })}</div>
                       </article>
                     )}
                   </For>
@@ -368,9 +368,9 @@ export default function KanbanTaskDetail() {
 
             <section class="rounded-[var(--native-radius-lg)] border border-[color:color-mix(in_oklab,var(--native-border)_24%,transparent)] bg-[var(--native-panel)] p-4 shadow-[var(--native-shadow-sm)]">
               <div class="flex flex-wrap items-center justify-between gap-3">
-                <div>
+                <div class="min-w-0">
                   <div class="text-[1rem] font-semibold text-[var(--native-foreground)]">{language.t("kanban.section.conversationHistory")}</div>
-                  <div class="mt-1 text-sm text-[var(--native-muted)]">{language.t("kanban.hint.timeSegments")}</div>
+                  <div class="mt-1 truncate text-sm text-[var(--native-muted)]" title={language.t("kanban.hint.timeSegments")}>{language.t("kanban.hint.timeSegments")}</div>
                 </div>
                 <Show when={!convs().length}>
                   <div class="text-sm text-[var(--native-muted)]">{language.t("kanban.empty.noConversation")}</div>

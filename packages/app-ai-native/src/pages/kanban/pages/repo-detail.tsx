@@ -50,16 +50,16 @@ function ReasonTip(props: { value?: string }) {
   )
 }
 
-function MetricCard(props: { label: string; value: string; hint?: string; accent?: string }) {
+function MetricCard(props: { label: string; value: string; hint?: string; accent?: string; title?: string; clip?: boolean }) {
   return (
     <article
-      class="rounded-[var(--native-radius-lg)] border border-[color:color-mix(in_oklab,var(--native-border)_24%,transparent)] bg-[color:color-mix(in_oklab,var(--native-panel)_88%,var(--native-bg-subtle))] p-4 shadow-[var(--native-shadow-sm)]"
+      class="min-w-0 rounded-[var(--native-radius-lg)] border border-[color:color-mix(in_oklab,var(--native-border)_24%,transparent)] bg-[color:color-mix(in_oklab,var(--native-panel)_88%,var(--native-bg-subtle))] p-4 shadow-[var(--native-shadow-sm)]"
       style={{ "--metric-accent": props.accent ?? "var(--native-primary)" }}
     >
       <p class="m-0 text-[11px] font-semibold uppercase tracking-[0.12em] text-[color:color-mix(in_oklab,var(--metric-accent)_72%,var(--native-dim))]">{props.label}</p>
-      <p class="mt-2 text-[1.4rem] leading-none font-semibold tracking-[-0.04em] text-[var(--native-foreground)]">{props.value}</p>
+      <p class={props.clip ? "mt-2 truncate text-[1.4rem] leading-none font-semibold tracking-[-0.04em] text-[var(--native-foreground)]" : "mt-2 text-[1.4rem] leading-none font-semibold tracking-[-0.04em] text-[var(--native-foreground)]"} title={props.title}>{props.value}</p>
       <Show when={props.hint}>
-        <p class="mt-2 text-[0.8125rem] text-[var(--native-muted)]">{props.hint}</p>
+        <p class="mt-2 line-clamp-2 text-[0.8125rem] text-[var(--native-muted)]" title={props.hint}>{props.hint}</p>
       </Show>
     </article>
   )
@@ -257,8 +257,8 @@ export default function KanbanRepoDetail() {
               <>
                 <section class="rounded-[var(--native-radius-lg)] border border-[color:color-mix(in_oklab,var(--native-border)_24%,transparent)] bg-[var(--native-panel)] p-4 shadow-[var(--native-shadow-sm)]">
                   <div class="mb-4 text-[1rem] font-semibold text-[var(--native-foreground)]">{language.t("kanban.repo.basicInfo")}</div>
-                  <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                    <MetricCard label={language.t("kanban.metric.repoUrl")} value={item().repo_addr || "-"} />
+                  <div class="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                    <MetricCard label={language.t("kanban.metric.repoUrl")} value={item().repo_addr || "-"} title={item().repo_addr || undefined} clip />
                     <MetricCard label={language.t("kanban.metric.branch")} value={repoBranch() || item().repo_branch || language.t("kanban.repo.allBranches")} accent="var(--native-info, var(--native-primary))" />
                     <MetricCard label={language.t("kanban.metric.activeTime")} value={activityRange()} accent="var(--native-success)" />
                     <MetricCard label={language.t("kanban.metric.commitCount")} value={String(item().summary.commit_count ?? commits().length)} accent="var(--native-warning)" />
