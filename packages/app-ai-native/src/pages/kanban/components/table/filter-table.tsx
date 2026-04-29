@@ -189,7 +189,7 @@ export function FilterTable<Row extends EfficiencyRow>(props: Props<Row>) {
                 </SelectTrigger>
               </SelectControl>
               <SelectPositioner>
-                <SelectContent>
+                <SelectContent class="max-h-[min(20rem,calc(var(--available-height)-1rem))] overflow-y-auto">
                   <SelectList>
                     <For each={sizes()}>
                       {(size) => (

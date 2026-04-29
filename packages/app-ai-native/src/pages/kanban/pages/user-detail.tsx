@@ -240,7 +240,7 @@ export default function KanbanUserDetail() {
                     if (!txt || txt === userId()) return
                     navigate(detailHref(txt))
                   }}
-                  positioning={{ sameWidth: true }}
+                  positioning={{ fitViewport: true, sameWidth: true }}
                 >
                   <SelectControl>
                     <SelectTrigger class="h-10 min-w-[14rem]">
@@ -249,7 +249,7 @@ export default function KanbanUserDetail() {
                     </SelectTrigger>
                   </SelectControl>
                   <SelectPositioner>
-                    <SelectContent>
+                    <SelectContent class="max-h-[min(20rem,calc(var(--available-height)-1rem))] overflow-y-auto">
                       <SelectList>
                         <For each={userItems().items}>
                           {(item) => (
@@ -286,7 +286,7 @@ export default function KanbanUserDetail() {
                       setSearch(Object.fromEntries(queryOf(dateRange(), val as Granularity).entries()))
                     }
                   }}
-                  positioning={{ sameWidth: true }}
+                  positioning={{ fitViewport: true, sameWidth: true }}
                 >
                   <SelectControl>
                     <SelectTrigger class="h-10 w-[6rem] min-w-[6rem] flex-none">
@@ -295,7 +295,7 @@ export default function KanbanUserDetail() {
                     </SelectTrigger>
                   </SelectControl>
                   <SelectPositioner>
-                    <SelectContent>
+                    <SelectContent class="max-h-[min(20rem,calc(var(--available-height)-1rem))] overflow-y-auto">
                       <SelectList>
                         <SelectItem item={granularityItems().items[0]}>
                           <SelectItemText>{language.t("kanban.granularity.day")}</SelectItemText>

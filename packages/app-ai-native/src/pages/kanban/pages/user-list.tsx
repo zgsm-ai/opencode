@@ -344,7 +344,7 @@ export default function KanbanUserList() {
                       setState("page", 1)
                     }
                   }}
-                  positioning={{ sameWidth: true }}
+                  positioning={{ fitViewport: true, sameWidth: true }}
                 >
                   <SelectControl>
                     <SelectTrigger class="h-10 w-[6rem] min-w-[6rem] flex-none">
@@ -353,7 +353,7 @@ export default function KanbanUserList() {
                     </SelectTrigger>
                   </SelectControl>
                   <SelectPositioner>
-                    <SelectContent>
+                    <SelectContent class="max-h-[min(20rem,calc(var(--available-height)-1rem))] overflow-y-auto">
                       <SelectList>
                         <SelectItem item={granularityItems().items[0]}>
                           <SelectItemText>{language.t("kanban.granularity.day")}</SelectItemText>
