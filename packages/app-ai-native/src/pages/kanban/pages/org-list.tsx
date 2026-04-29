@@ -129,13 +129,15 @@ export default function KanbanOrgList() {
       label: language.t("kanban.table.org"),
       minWidth: 160,
       render: (row) => {
-        const scope = nextOrg(state.org, row.org_name)
+        const txt = row.org_name?.trim()
+        const scope = nextOrg(state.org, txt)
         const path = orgPath(scope)
+        if (!txt) return <span>-</span>
         return path ? (
-          <button type="button" class="text-left text-sm text-[var(--native-primary)] transition-colors hover:text-[var(--native-foreground)]" onClick={() => navigate(`/kanban/org/${encodeURIComponent(path)}?${routeQuery(scope)}`)}>
-            {row.org_name || "-"}
+          <button type="button" class="block max-w-[18rem] truncate text-left text-sm text-[var(--native-primary)] transition-colors hover:text-[var(--native-foreground)]" title={txt} onClick={() => navigate(`/kanban/org/${encodeURIComponent(path)}?${routeQuery(scope)}`)}>
+            {txt}
           </button>
-        ) : <span>{row.org_name || "-"}</span>
+        ) : <span class="block max-w-[18rem] truncate" title={txt}>{txt}</span>
       },
       filter: { type: "text" },
     },
@@ -304,7 +306,8 @@ export default function KanbanOrgList() {
         />
 
         <FilterTable
-          class="rounded-none"
+          class="min-w-0 rounded-none"
+          scrollClass="max-h-[calc(100vh-22rem)] min-h-0 min-w-0 overflow-auto"
           columns={columns()}
           rows={paged()}
           rawRows={data.latest?.rows ?? []}

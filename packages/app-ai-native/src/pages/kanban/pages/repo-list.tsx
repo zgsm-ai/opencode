@@ -69,6 +69,7 @@ export default function KanbanRepoList() {
       prop: "repo_branch",
       label: language.t("kanban.metric.branch"),
       minWidth: 120,
+      showOverflowTooltip: true,
       filter: { type: "multi-select" },
     },
     {
@@ -182,15 +183,16 @@ export default function KanbanRepoList() {
   const filteredRows = createMemo(() => applyClientFilters(repoRows.latest?.rows ?? [], columns(), controller.filters))
 
   return (
-    <div class="flex min-h-full min-w-0 flex-col gap-4 overflow-y-auto overflow-x-clip p-[clamp(1rem,2vw,2rem)]">
+    <div class="flex h-full min-h-0 min-w-0 flex-col gap-4 overflow-hidden p-[clamp(1rem,2vw,2rem)]">
       <header class="flex w-full flex-col gap-3">
         <Back />
         <h1 class="m-0 font-[var(--native-font-display)] text-[1.875rem] leading-[1.02] font-semibold tracking-[-0.05em] text-[var(--native-foreground)]">{language.t("kanban.repo.listTitle")}</h1>
       </header>
 
-      <div class="flex w-full flex-col gap-5">
+      <div class="flex min-h-0 w-full flex-1 flex-col gap-5">
         <FilterTable
-          class="rounded-none"
+          class="flex min-h-0 min-w-0 flex-1 flex-col rounded-none"
+          scrollClass="min-h-0 min-w-0 flex-1 overflow-auto"
           columns={columns()}
           rows={filteredRows()}
           rawRows={repoRows.latest?.rows ?? []}

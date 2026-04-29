@@ -3,10 +3,10 @@ import { splitProps } from "solid-js"
 
 import { cn } from "@/lib/utils"
 
-const Table: Component<ComponentProps<"table">> = (props) => {
-  const [local, others] = splitProps(props, ["class"])
+const Table: Component<ComponentProps<"table"> & { wrapClass?: string }> = (props) => {
+  const [local, others] = splitProps(props, ["class", "wrapClass"])
   return (
-    <div class="relative w-full overflow-auto">
+    <div class={cn("relative w-full overflow-auto", local.wrapClass)}>
       <table class={cn("w-full caption-bottom text-sm", local.class)} {...others} />
     </div>
   )

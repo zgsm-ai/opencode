@@ -113,29 +113,37 @@ export default function KanbanCommitList() {
       prop: "comment",
       label: language.t("kanban.table.comment"),
       minWidth: 180,
+      render: (row) => {
+        const txt = row.comment?.trim()
+        return txt ? <span class="block max-w-[18rem] truncate" title={txt}>{txt}</span> : <span>-</span>
+      },
       filter: { type: "text" },
     },
     {
       prop: "org_display",
       label: language.t("kanban.table.org"),
       minWidth: 180,
-      render: (row) => row.org_display?.trim()
-        ? <button type="button" class="text-left text-sm text-[var(--native-primary)] transition-colors hover:text-[var(--native-foreground)]" onClick={() => {
-            const path = [row.org1, row.org2, row.org3, row.org4].filter(Boolean).join("/")
-            if (!path) return
-            navigate(`/kanban/org/${encodeURIComponent(path)}?${routeQuery()}`)
-          }}>{row.org_display}</button>
-        : <span>-</span>,
+      render: (row) => {
+        const txt = row.org_display?.trim()
+        if (!txt) return <span>-</span>
+        return <button type="button" class="block max-w-[18rem] truncate text-left text-sm text-[var(--native-primary)] transition-colors hover:text-[var(--native-foreground)]" title={txt} onClick={() => {
+          const path = [row.org1, row.org2, row.org3, row.org4].filter(Boolean).join("/")
+          if (!path) return
+          navigate(`/kanban/org/${encodeURIComponent(path)}?${routeQuery()}`)
+        }}>{txt}</button>
+      },
     },
     {
       prop: "user_name",
       label: language.t("kanban.table.user"),
       minWidth: 110,
-      render: (row) => <button type="button" class="text-left text-sm text-[var(--native-primary)] transition-colors hover:text-[var(--native-foreground)]" onClick={() => {
-        const txt = row.user_id?.trim() || row.user_name?.trim()
-        if (!txt) return
-        navigate(`/kanban/user/${encodeURIComponent(txt)}?${routeQuery()}`)
-      }}>{row.user_name || row.user_id || "-"}</button>,
+      render: (row) => {
+        const txt = row.user_name?.trim() || row.user_id?.trim()
+        return txt ? <button type="button" class="block max-w-[12rem] truncate text-left text-sm text-[var(--native-primary)] transition-colors hover:text-[var(--native-foreground)]" title={txt} onClick={() => {
+          const id = row.user_id?.trim() || txt
+          navigate(`/kanban/user/${encodeURIComponent(id)}?${routeQuery()}`)
+        }}>{txt}</button> : <span>-</span>
+      },
       filter: { type: "multi-select" },
     },
     {
@@ -279,13 +287,13 @@ export default function KanbanCommitList() {
   const rows = createMemo(() => applyClientFilters(data.latest?.rows ?? [], columns(), table.filters))
 
   return (
-    <div class="flex min-h-full min-w-0 flex-col gap-4 overflow-y-auto overflow-x-clip p-[clamp(1rem,2vw,2rem)]">
+    <div class="flex h-full min-h-0 min-w-0 flex-col gap-4 overflow-hidden p-[clamp(1rem,2vw,2rem)]">
       <header class="flex w-full flex-col gap-3">
         <Back />
         <h1 class="m-0 font-[var(--native-font-display)] text-[1.875rem] leading-[1.02] font-semibold tracking-[-0.05em] text-[var(--native-foreground)]">{language.t("kanban.view.commit")}</h1>
       </header>
 
-      <div class="flex w-full flex-col gap-5">
+      <div class="flex min-h-0 w-full flex-1 flex-col gap-5">
         <FilterBar
           dateRange={state.dateRange}
           orgValue={state.org}
@@ -304,7 +312,8 @@ export default function KanbanCommitList() {
         />
 
         <FilterTable
-          class="rounded-none"
+          class="flex min-h-0 min-w-0 flex-1 flex-col rounded-none"
+          scrollClass="min-h-0 min-w-0 flex-1 overflow-auto"
           columns={columns()}
           rows={rows()}
           rawRows={data.latest?.rows ?? []}

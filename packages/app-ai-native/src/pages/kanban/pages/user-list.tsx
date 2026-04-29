@@ -119,23 +119,28 @@ export default function KanbanUserList() {
       prop: "org_display",
       label: language.t("kanban.table.org"),
       minWidth: 180,
-      render: (row) => row.org_display?.trim()
-        ? <button type="button" class="text-left text-sm text-[var(--native-primary)] transition-colors hover:text-[var(--native-foreground)]" onClick={() => {
-            const path = [row.org1, row.org2, row.org3, row.org4].filter(Boolean).join("/")
-            if (!path) return
-            navigate(`/kanban/org/${encodeURIComponent(path)}?${routeQuery()}`)
-          }}>{row.org_display}</button>
-        : <span>-</span>,
+      render: (row) => {
+        const txt = row.org_display?.trim()
+        if (!txt) return <span>-</span>
+        return <button type="button" class="block max-w-[18rem] truncate text-left text-sm text-[var(--native-primary)] transition-colors hover:text-[var(--native-foreground)]" title={txt} onClick={() => {
+          const path = [row.org1, row.org2, row.org3, row.org4].filter(Boolean).join("/")
+          if (!path) return
+          navigate(`/kanban/org/${encodeURIComponent(path)}?${routeQuery()}`)
+        }}>{txt}</button>
+      },
     },
     {
       prop: "user_name",
       label: language.t("kanban.table.userName"),
       minWidth: 140,
-      render: (row) => <button type="button" class="text-left text-sm text-[var(--native-primary)] transition-colors hover:text-[var(--native-foreground)]" onClick={() => {
-        const txt = row.user_id?.trim()
-        if (!txt) return
-        navigate(`/kanban/user/${encodeURIComponent(txt)}?${routeQuery()}`)
-      }}>{row.user_name || row.user_id || "-"}</button>,
+      render: (row) => {
+        const txt = row.user_name?.trim() || row.user_id?.trim()
+        return txt ? <button type="button" class="block max-w-[12rem] truncate text-left text-sm text-[var(--native-primary)] transition-colors hover:text-[var(--native-foreground)]" title={txt} onClick={() => {
+          const id = row.user_id?.trim()
+          if (!id) return
+          navigate(`/kanban/user/${encodeURIComponent(id)}?${routeQuery()}`)
+        }}>{txt}</button> : <span>-</span>
+      },
       filter: { type: "multi-select" },
     },
     { prop: "task_count", label: language.t("kanban.table.taskCount"), minWidth: 90, align: "left", filter: { type: "number" } },
@@ -377,7 +382,8 @@ export default function KanbanUserList() {
         />
 
         <FilterTable
-          class="rounded-none"
+          class="min-w-0 rounded-none"
+          scrollClass="max-h-[calc(100vh-22rem)] min-h-0 min-w-0 overflow-auto"
           columns={columns()}
           rows={rows()}
           rawRows={data.latest?.rows ?? []}

@@ -197,7 +197,16 @@ export default function KanbanProjectList() {
   }
 
   const columns = createMemo<KanbanColumn<EnrichedProjectRow>[]>(() => [
-    { prop: "name", label: language.t("kanban.form.projectName"), minWidth: 200, filter: { type: "text" }, render: (row) => <button type="button" class="text-left font-semibold text-[var(--native-primary)] transition-colors hover:text-[var(--native-foreground)]" onClick={(e) => { e.stopPropagation(); if (row.project_id) navigate(`/kanban/project/${encodeURIComponent(row.project_id)}`) }}>{row.name || "-"}</button> },
+    {
+      prop: "name",
+      label: language.t("kanban.form.projectName"),
+      minWidth: 200,
+      filter: { type: "text" },
+      render: (row) => {
+        const txt = row.name?.trim()
+        return txt ? <button type="button" class="block max-w-[18rem] truncate text-left font-semibold text-[var(--native-primary)] transition-colors hover:text-[var(--native-foreground)]" title={txt} onClick={(e) => { e.stopPropagation(); if (row.project_id) navigate(`/kanban/project/${encodeURIComponent(row.project_id)}`) }}>{txt}</button> : <span>-</span>
+      },
+    },
     {
       prop: "start_time",
       label: language.t("kanban.table.startTime"),
@@ -482,6 +491,8 @@ export default function KanbanProjectList() {
             <Button size="sm" onClick={() => dialog.show(() => <CreateProjectDialog onCreated={() => void refetch()} />)}>{language.t("kanban.form.createProject")}</Button>
           </div>
           <FilterTable
+            class="min-w-0"
+            scrollClass="max-h-[calc(100vh-22rem)] min-h-0 min-w-0 overflow-auto"
             columns={columns()}
             rows={filteredData()}
             rawRows={data() ?? []}

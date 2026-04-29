@@ -18,6 +18,7 @@ type Props<Row extends EfficiencyRow> = {
   rows: Row[]
   rawRows?: Row[]
   class?: string
+  scrollClass?: string
   controller: TableFilterController<Row>
   loading?: boolean
   total: number
@@ -38,6 +39,13 @@ function valueOf<Row extends EfficiencyRow>(row: Row, column: KanbanColumn<Row>)
 
 function displayOf<Row extends EfficiencyRow>(row: Row, column: KanbanColumn<Row>) {
   return column.display ? column.display(row) : String(valueOf(row, column) ?? "-")
+}
+
+function cellOf<Row extends EfficiencyRow>(row: Row, column: KanbanColumn<Row>) {
+  if (column.render) return column.render(row)
+  const txt = displayOf(row, column)
+  if (!column.showOverflowTooltip) return txt
+  return <span class="block max-w-[18rem] truncate" title={txt}>{txt}</span>
 }
 
 function alignClass(align?: KanbanColumn["align"]) {
@@ -74,13 +82,13 @@ export function FilterTable<Row extends EfficiencyRow>(props: Props<Row>) {
 
       <Show when={props.rows.length > 0 || !props.loading} fallback={<div class="px-4 py-8 text-sm text-[var(--native-muted)]">{language.t("kanban.misc.loading")}</div>}>
         <Show when={props.rows.length > 0} fallback={<div class="px-4 py-10 text-center text-sm text-[var(--native-muted)]">{props.emptyText ?? language.t("kanban.empty.noData")}</div>}>
-          <div class="relative overflow-x-auto">
+          <div class={cn("relative min-w-0 overflow-x-auto", props.scrollClass)}>
             <Show when={showOverlay()}>
               <div class="absolute inset-0 z-10 flex items-center justify-center bg-[color:color-mix(in_oklab,var(--native-panel)_70%,transparent)] backdrop-blur-[4px]">
                 <div class="h-8 w-8 animate-spin rounded-full border-[3px] border-[color:color-mix(in_srgb,var(--native-border)_30%,transparent)] border-t-[var(--native-primary)]" />
               </div>
             </Show>
-            <Table class="min-w-max">
+            <Table class="min-w-max" wrapClass="contents">
             <TableHeader>
               <TableRow>
                 <For each={props.columns}>
@@ -144,7 +152,7 @@ export function FilterTable<Row extends EfficiencyRow>(props: Props<Row>) {
                     <For each={props.columns}>
                       {(column) => (
                         <TableCell class={cn(alignClass(column.align), column.align === "right" ? "tabular-nums" : undefined)}>
-                          {column.render ? column.render(row) : displayOf(row, column)}
+                          {cellOf(row, column)}
                         </TableCell>
                       )}
                     </For>
