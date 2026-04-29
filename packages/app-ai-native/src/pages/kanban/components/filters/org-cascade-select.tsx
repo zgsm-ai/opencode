@@ -44,12 +44,13 @@ export function OrgCascadeSelect(props: Props) {
                 value={[item.value]}
                 disabled={item.disabled}
                 onValueChange={(details) => {
+                  if (item.disabled) return
                   void cascade.setLevel(item.level, details.value[0] ?? "")
                 }}
                 positioning={{ fitViewport: true, sameWidth: true }}
               >
                 <SelectControl>
-                  <SelectTrigger class="h-10 w-full">
+                  <SelectTrigger class="h-10 w-full disabled:cursor-not-allowed disabled:opacity-[var(--native-disabled-opacity)] data-[disabled]:cursor-not-allowed data-[disabled]:opacity-[var(--native-disabled-opacity)]" disabled={item.disabled}>
                     <SelectValueText />
                     <SelectIndicator />
                   </SelectTrigger>

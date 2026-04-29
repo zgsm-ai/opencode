@@ -16,9 +16,15 @@ function makeLabels(t: (key: string) => string): Record<OrgLevel, string> {
 }
 
 function cleanValue(input: OrgCascadeValue) {
-  return Object.fromEntries(
-    Object.entries(input).filter(([, value]) => typeof value === "string" && value.trim()),
+  const value = Object.fromEntries(
+    Object.entries(input).filter(([, item]) => typeof item === "string" && item.trim()),
   ) as OrgCascadeValue
+
+  return order.reduce((next, level, index) => {
+    if (index > 0 && !next[order[index - 1]]) return next
+    if (value[level]) next[level] = value[level]
+    return next
+  }, {} as OrgCascadeValue)
 }
 
 function parentOf(level: OrgLevel, value: OrgCascadeValue) {
@@ -145,7 +151,7 @@ export function useOrgCascade(props: UseOrgCascadeOptions = {}) {
       value: state.value[level] ?? "",
       options: state.options[level],
       loading: state.loading[level],
-      disabled: index > 0 && !state.value[order[index - 1]],
+      disabled: index > 0 && order.slice(0, index).some((key) => !state.value[key]),
     })),
   )
 
