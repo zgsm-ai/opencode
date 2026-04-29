@@ -2,7 +2,6 @@ import { useNavigate, useParams, useSearchParams } from "@solidjs/router"
 import { createMemo, createResource, For, Show } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
-import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { showToast } from "@opencode-ai/ui/toast"
 import { useLanguage } from "@/context/language"
 import { Modal } from "@/components/modal"
@@ -187,20 +186,6 @@ export default function KanbanTaskDetail() {
   })
   const repoLabel = createMemo(() => task().repo_addr ? `${task().repo_addr}${task().repo_branch ? `#${task().repo_branch}` : ""}` : "-")
 
-  const summaryHref = createMemo(() => {
-    const date = dateOf(task().start_time)
-    const id = task().task_id?.trim()
-    if (!id || !date) return ""
-    return `/api/v2/tasks/file?type=summary&taskId=${encodeURIComponent(id)}&date=${encodeURIComponent(date)}`
-  })
-
-  const conversationHref = createMemo(() => {
-    const date = dateOf(task().start_time)
-    const id = task().task_id?.trim()
-    if (!id || !date) return ""
-    return `/api/v2/tasks/file?type=conversation&taskId=${encodeURIComponent(id)}&date=${encodeURIComponent(date)}`
-  })
-
   const items = createMemo<TimelineItem[]>(() => {
     const values = convs()
     const spans = segments()
@@ -259,7 +244,7 @@ export default function KanbanTaskDetail() {
             </div>
 
             <div class="flex flex-wrap items-center gap-2">
-              <Show when={summaryHref()}>
+              {/* <Show when={summaryHref()}>
                 <a href={summaryHref()} target="_blank" rel="noreferrer">
                   <Button variant="outline" size="sm">{language.t("kanban.action.viewSummary")}</Button>
                 </a>
@@ -268,7 +253,7 @@ export default function KanbanTaskDetail() {
                 <a href={conversationHref()} target="_blank" rel="noreferrer">
                   <Button variant="outline" size="sm">{language.t("kanban.action.viewRawConversation")}</Button>
                 </a>
-              </Show>
+              </Show> */}
               <Button size="sm" onClick={openManual} disabled={!task().task_id}>{language.t("kanban.dialog.manualAdjustment")}</Button>
             </div>
           </div>
