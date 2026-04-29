@@ -1651,6 +1651,7 @@ export const dict = {
   "kanban.home.summary.savedTime": "节省时间",
   "kanban.home.summary.traditionalEst": "传统预估",
   "kanban.home.summary.actualTime": "实际耗时",
+  "kanban.home.summary.unit": "计量单位：{{unit}}",
   "kanban.duration.minutes": "分钟",
   "kanban.duration.hour": "小时",
   "kanban.duration.hours": "小时",

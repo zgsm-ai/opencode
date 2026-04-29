@@ -2,14 +2,14 @@ import { A, useSearchParams } from "@solidjs/router"
 import { createEffect, createMemo, createResource, For, on, untrack, type JSX } from "solid-js"
 import { useLanguage } from "@/context/language"
 import { createStore } from "solid-js/store"
-import { ArrowRight, BadgeInfo, Building2, ChevronDown, ClipboardList, FolderGit2, FolderOpen, GitCommitHorizontal, GitMerge, Users, Wallet } from "lucide-solid"
+import { ArrowRight, Building2, ChevronDown, ClipboardList, FolderGit2, FolderOpen, GitCommitHorizontal, GitMerge, Users, Wallet } from "lucide-solid"
 import { showToast } from "@opencode-ai/ui/toast"
 import { cn } from "@/lib/utils"
 import { env } from "@/lib/env"
 import { DateRangePicker } from "../components/filters/date-range-picker"
 import { queryDashboardSummary } from "../lib/api"
 import { normalizeDateRange, parseQueryRange, rangeQuery, readQueryRange, searchQuery, sameRange } from "../lib/date-range"
-import { formatDuration, formatPercent } from "../lib/formatters"
+import { formatPercent } from "../lib/formatters"
 import type { DashboardSummary } from "../lib/types"
 
 function fmtInt(value?: number | null) {
@@ -29,21 +29,15 @@ function fmtRatio(value?: number | null) {
   return formatPercent(value)
 }
 
+function days(value?: number | null) {
+  if (value == null || value <= 0) return "-"
+  const minutes = Math.round(Number(value))
+  if (!Number.isFinite(minutes) || minutes <= 0) return "-"
+  return (minutes / 480).toFixed(1)
+}
+
 function saved(summary: DashboardSummary) {
   return Math.max(0, summary.total_task_ancient_minutes - summary.total_real_minutes)
-}
-
-function stat(value?: number | null, t: (key: string) => string = (k) => k) {
-  if (value == null || value <= 0) return "-"
-  return formatDuration(value, t)
-}
-
-function splitHumanDays(value?: number | null, t: (key: string) => string = (k) => k) {
-  const text = stat(value, t)
-  const unit = t("kanban.duration.manDays")
-  const match = text.match(new RegExp(`^(.+?)(${unit})$`))
-  if (!match) return null
-  return { amount: match[1], unit: match[2] }
 }
 
 function blank(): DashboardSummary {
@@ -337,21 +331,18 @@ export default function KanbanHome() {
   const summaryStat = createMemo(() => [
     {
       label: language.t("kanban.home.summary.savedTime"),
-      value: splitHumanDays(saved(view()), language.t) ?? stat(saved(view()), language.t),
+      value: days(saved(view())),
       tone: "text-[#1f2937]",
-      unitTone: "text-[#6f7d96]",
     },
     {
       label: language.t("kanban.home.summary.traditionalEst"),
-      value: splitHumanDays(view().total_task_ancient_minutes, language.t) ?? stat(view().total_task_ancient_minutes, language.t),
+      value: days(view().total_task_ancient_minutes),
       tone: "text-[#1f2937]",
-      unitTone: "text-[#6f7d96]",
     },
     {
       label: language.t("kanban.home.summary.actualTime"),
-      value: stat(view().total_real_minutes, language.t),
+      value: days(view().total_real_minutes),
       tone: "text-[#1f2937]",
-      unitTone: "text-[#6f7d96]",
     },
   ])
 
@@ -409,15 +400,12 @@ export default function KanbanHome() {
             )}</For>
           </div>
 
-          <section class="overflow-hidden rounded-[22px] border border-[color:color-mix(in_oklab,var(--native-primary)_14%,white)] bg-[linear-gradient(115deg,#f7faff_42%,#e8f0ff_100%)] px-6 py-6 shadow-[0_18px_38px_-30px_rgba(50,92,191,0.42),0_10px_24px_-18px_rgba(89,118,195,0.22)]">
+          <section class="relative overflow-hidden rounded-[22px] border border-[color:color-mix(in_oklab,var(--native-primary)_14%,white)] bg-[linear-gradient(115deg,#f7faff_42%,#e8f0ff_100%)] px-6 pt-6 pb-10 shadow-[0_18px_38px_-30px_rgba(50,92,191,0.42),0_10px_24px_-18px_rgba(89,118,195,0.22)]">
             <div class="flex h-full flex-col justify-between gap-8">
               <div class="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
                 <div class="max-w-[16rem]">
                   <div class="flex items-center gap-2 text-[#2a3348]">
                     <p class="m-0 text-[0.95rem] font-medium tracking-[-0.02em]">{language.t("kanban.home.summary.efficiency")}</p>
-                    <span class="flex h-5 w-5 items-center justify-center rounded-full border border-[#d9e6ff] text-[#8c9bb7]">
-                      <BadgeInfo class="h-3.5 w-3.5" stroke-width={2} />
-                    </span>
                   </div>
                   <p class="mt-10 text-[clamp(2.4rem,5vw,4rem)] leading-none font-medium tracking-[-0.08em] text-[#2d6bff] tabular-nums">{fmtRatio(view().avg_efficiency_ratio)}</p>
                 </div>
@@ -437,17 +425,15 @@ export default function KanbanHome() {
                   {(item) => (
                     <div class="space-y-2 md:px-5 first:md:pl-0 last:md:pr-0">
                       <p class="text-[0.95rem] text-[#33405b]">{item.label}</p>
-                      {typeof item.value === "string"
-                        ? <p class={`text-[2.2rem] leading-none font-medium tracking-[-0.06em] tabular-nums ${item.tone}`}>{item.value}</p>
-                        : <p class={`flex items-baseline gap-1.5 text-[2.2rem] leading-none font-medium tracking-[-0.06em] tabular-nums ${item.tone}`}>
-                            <span>{item.value.amount}</span>
-                            <span class={`text-[1.15rem] font-normal tracking-[-0.02em] ${item.unitTone}`}>{item.value.unit}</span>
-                          </p>}
+                      <p class={`text-[2.2rem] leading-none font-medium tracking-[-0.06em] tabular-nums ${item.tone}`}>{item.value}</p>
                     </div>
                   )}
                 </For>
               </div>
             </div>
+            <p class="absolute right-6 bottom-4 text-[0.78rem] leading-none tracking-[-0.01em] text-[#8a96ad]">
+              {language.t("kanban.home.summary.unit", { unit: language.t("kanban.unit.manDays") })}
+            </p>
           </section>
         </section>
 
