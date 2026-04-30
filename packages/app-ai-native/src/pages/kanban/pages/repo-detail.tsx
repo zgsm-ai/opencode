@@ -70,13 +70,15 @@ export default function KanbanRepoDetail() {
   const params = useParams()
   const navigate = useNavigate()
   const dialog = useDialog()
-  const [search, setSearch] = useSearchParams<{ startDate?: string; endDate?: string }>()
+  const [search, setSearch] = useSearchParams<{ startDate?: string; endDate?: string; back?: string }>()
 
   const repoAddr = createMemo(() => decodeURIComponent(params.repoAddr ?? "").trim())
   const repoBranch = createMemo(() => decodeURIComponent(params.repoBranch ?? "").trim())
   const repoKey = createMemo(() => `${repoAddr()}::${repoBranch()}`)
   const dateRange = createMemo(() => parseQueryRange(search.startDate, search.endDate))
   const listHref = createMemo(() => {
+    const back = search.back?.trim()
+    if (back) return decodeURIComponent(back)
     const q = searchQuery([
       ["startDate", search.startDate],
       ["endDate", search.endDate],
@@ -91,6 +93,7 @@ export default function KanbanRepoDetail() {
       ["startDate", next.startDate],
       ["endDate", next.endDate],
     ])
+    if (search.back?.trim()) q.set("back", search.back.trim())
     const txt = q.toString()
     return branch
       ? `/kanban/repo/${encodeURIComponent(repoAddr())}/${encodeURIComponent(branch)}?${txt}`
@@ -236,10 +239,12 @@ export default function KanbanRepoDetail() {
             fullWidth={false}
             onChange={(value) => {
               const next = value ?? defaultWideRange()
-              setSearch(Object.fromEntries(searchQuery([
+              const q = searchQuery([
                 ["startDate", rangeQuery(next).startDate],
                 ["endDate", rangeQuery(next).endDate],
-              ]).entries()))
+              ])
+              if (search.back?.trim()) q.set("back", search.back.trim())
+              setSearch(Object.fromEntries(q.entries()))
             }}
             placeholder={language.t("kanban.filter.selectDateRange")}
           />

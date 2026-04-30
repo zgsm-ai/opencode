@@ -4,7 +4,19 @@ import { createStore } from "solid-js/store"
 import { showToast } from "@opencode-ai/ui/toast"
 import { useLanguage } from "@/context/language"
 import { Button } from "@/components/ui/button"
-import { createListCollection, SelectContent, SelectControl, SelectIndicator, SelectItem, SelectItemText, SelectList, SelectPositioner, SelectRoot, SelectTrigger, SelectValueText } from "@/components/ui/select"
+import {
+  createListCollection,
+  SelectContent,
+  SelectControl,
+  SelectIndicator,
+  SelectItem,
+  SelectItemText,
+  SelectList,
+  SelectPositioner,
+  SelectRoot,
+  SelectTrigger,
+  SelectValueText,
+} from "@/components/ui/select"
 import Back from "../components/back"
 import { FilterBar } from "../components/filters/filter-bar"
 import { ChartCard } from "../components/charts/chart-card"
@@ -13,10 +25,25 @@ import { FilterTable } from "../components/table/filter-table"
 import { useTableFilters } from "../hooks/use-table-filters"
 import { queryUserRows } from "../lib/api"
 import { chart } from "../lib/chart-options"
-import { defaultWideRange, normalizeDateRange, parseQueryRange, rangeQuery, readQueryRange, searchQuery, sameRange } from "../lib/date-range"
+import {
+  defaultWideRange,
+  normalizeDateRange,
+  parseQueryRange,
+  rangeQuery,
+  readQueryRange,
+  searchQuery,
+  sameRange,
+} from "../lib/date-range"
 import { applyClientFilters } from "../lib/filter-utils"
 import { formatDuration, formatPercent } from "../lib/formatters"
-import type { DateRangeValue, Granularity, KanbanColumn, OrgCascadeValue, UserAggregateRow, UserSeries } from "../lib/types"
+import type {
+  DateRangeValue,
+  Granularity,
+  KanbanColumn,
+  OrgCascadeValue,
+  UserAggregateRow,
+  UserSeries,
+} from "../lib/types"
 import type { EChartsOption } from "echarts"
 
 function parseGranularity(value?: string): Granularity {
@@ -74,19 +101,34 @@ export default function KanbanUserList() {
     ]).toString()
   })
 
-  createEffect(on(
-    () => [search.startDate, search.endDate, search.org1, search.org2, search.org3, search.org4, search.granularity],
-    () => {
-      const next = readQueryRange(search.startDate, search.endDate)
-      if (next && !sameRange(untrack(() => state.dateRange), next)) setState("dateRange", next)
+  createEffect(
+    on(
+      () => [search.startDate, search.endDate, search.org1, search.org2, search.org3, search.org4, search.granularity],
+      () => {
+        const next = readQueryRange(search.startDate, search.endDate)
+        if (
+          next &&
+          !sameRange(
+            untrack(() => state.dateRange),
+            next,
+          )
+        )
+          setState("dateRange", next)
 
-      const org = parseOrg(search)
-      if (!sameOrg(untrack(() => state.org), org)) setState("org", org)
+        const org = parseOrg(search)
+        if (
+          !sameOrg(
+            untrack(() => state.org),
+            org,
+          )
+        )
+          setState("org", org)
 
-      const granularity = parseGranularity(search.granularity)
-      if (untrack(() => state.granularity) !== granularity) setState("granularity", granularity)
-    },
-  ))
+        const granularity = parseGranularity(search.granularity)
+        if (untrack(() => state.granularity) !== granularity) setState("granularity", granularity)
+      },
+    ),
+  )
 
   createEffect(() => {
     const next = normalizeDateRange(state.dateRange)
@@ -116,37 +158,81 @@ export default function KanbanUserList() {
 
   const columns = createMemo<KanbanColumn<UserAggregateRow>[]>(() => [
     {
+      prop: "user_name",
+      label: language.t("kanban.table.userName"),
+      minWidth: 140,
+      render: (row) => {
+        const txt = row.user_name?.trim() || row.user_id?.trim()
+        return txt ? (
+          <button
+            type="button"
+            class="block max-w-[12rem] truncate text-left text-sm text-[var(--native-primary)] transition-colors hover:text-[var(--native-foreground)] cursor-pointer"
+            title={txt}
+            onClick={() => {
+              const id = row.user_id?.trim()
+              if (!id) return
+              navigate(`/kanban/user/${encodeURIComponent(id)}?${routeQuery()}`)
+            }}
+          >
+            {txt}
+          </button>
+        ) : (
+          <span>-</span>
+        )
+      },
+      filter: { type: "multi-select" },
+    },
+    {
       prop: "org_display",
       label: language.t("kanban.table.org"),
       minWidth: 180,
       render: (row) => {
         const txt = row.org_display?.trim()
         if (!txt) return <span>-</span>
-        return <button type="button" class="block max-w-[18rem] truncate text-left text-sm text-[var(--native-primary)] transition-colors hover:text-[var(--native-foreground)] cursor-pointer" title={txt} onClick={() => {
-          const path = [row.org1, row.org2, row.org3, row.org4].filter(Boolean).join("/")
-          if (!path) return
-          navigate(`/kanban/org/${encodeURIComponent(path)}?${routeQuery()}`)
-        }}>{txt}</button>
+        return (
+          <button
+            type="button"
+            class="block max-w-[18rem] truncate text-left text-sm text-[var(--native-primary)] transition-colors hover:text-[var(--native-foreground)] cursor-pointer"
+            title={txt}
+            onClick={() => {
+              const path = [row.org1, row.org2, row.org3, row.org4].filter(Boolean).join("/")
+              if (!path) return
+              navigate(`/kanban/org/${encodeURIComponent(path)}?${routeQuery()}`)
+            }}
+          >
+            {txt}
+          </button>
+        )
       },
     },
     {
-      prop: "user_name",
-      label: language.t("kanban.table.userName"),
-      minWidth: 140,
-      render: (row) => {
-        const txt = row.user_name?.trim() || row.user_id?.trim()
-        return txt ? <button type="button" class="block max-w-[12rem] truncate text-left text-sm text-[var(--native-primary)] transition-colors hover:text-[var(--native-foreground)] cursor-pointer" title={txt} onClick={() => {
-          const id = row.user_id?.trim()
-          if (!id) return
-          navigate(`/kanban/user/${encodeURIComponent(id)}?${routeQuery()}`)
-        }}>{txt}</button> : <span>-</span>
-      },
-      filter: { type: "multi-select" },
+      prop: "task_count",
+      label: language.t("kanban.table.taskCount"),
+      minWidth: 90,
+      align: "left",
+      filter: { type: "number" },
     },
-    { prop: "task_count", label: language.t("kanban.table.taskCount"), minWidth: 90, align: "left", filter: { type: "number" } },
-    { prop: "commit_count", label: language.t("kanban.table.commitCount"), minWidth: 100, align: "left", filter: { type: "number" } },
-    { prop: "task_diff_lines", label: language.t("kanban.table.taskCodeLines"), minWidth: 110, align: "left", filter: { type: "number" } },
-    { prop: "commit_diff_lines", label: language.t("kanban.table.commitCodeLines"), minWidth: 120, align: "left", filter: { type: "number" } },
+    {
+      prop: "commit_count",
+      label: language.t("kanban.table.commitCount"),
+      minWidth: 100,
+      align: "left",
+      filter: { type: "number" },
+    },
+    {
+      prop: "task_diff_lines",
+      label: language.t("kanban.table.taskCodeLines"),
+      minWidth: 110,
+      align: "left",
+      filter: { type: "number" },
+    },
+    {
+      prop: "commit_diff_lines",
+      label: language.t("kanban.table.commitCodeLines"),
+      minWidth: 120,
+      align: "left",
+      filter: { type: "number" },
+    },
     {
       prop: "task_real_minutes",
       label: language.t("kanban.table.taskActualTime"),
@@ -195,7 +281,10 @@ export default function KanbanUserList() {
       label: language.t("kanban.table.cost"),
       minWidth: 90,
       align: "left",
-      display: (row) => row.cost == null || row.cost === 0 ? "-" : `¥${row.cost.toLocaleString("zh-CN", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`,
+      display: (row) =>
+        row.cost == null || row.cost === 0
+          ? "-"
+          : `¥${row.cost.toLocaleString("zh-CN", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`,
       filter: { type: "number" },
     },
   ])
@@ -226,32 +315,33 @@ export default function KanbanUserList() {
     pageSize: state.pageSize,
   }))
 
-  const [data, { refetch }] = createResource(
-    query,
-    async (input) => {
-      try {
-        return await queryUserRows(input)
-      } catch (err) {
-        showToast({
-          variant: "error",
-          title: language.t("kanban.loading.userList"),
-          description: err instanceof Error ? err.message : String(err),
-        })
-        return {
-          rows: [],
-          total: 0,
-          page: input.page,
-          pageSize: input.pageSize,
-          periods: [],
-          series: [],
-        }
+  const [data, { refetch }] = createResource(query, async (input) => {
+    try {
+      return await queryUserRows(input)
+    } catch (err) {
+      showToast({
+        variant: "error",
+        title: language.t("kanban.loading.userList"),
+        description: err instanceof Error ? err.message : String(err),
+      })
+      return {
+        rows: [],
+        total: 0,
+        page: input.page,
+        pageSize: input.pageSize,
+        periods: [],
+        series: [],
       }
-    },
-  )
+    }
+  })
 
   const rows = createMemo(() => applyClientFilters(data.latest?.rows ?? [], columns(), table.filters))
   const series = createMemo(() => {
-    const names = new Set(rows().map((row) => (row.user_name?.trim() || row.user_id?.trim() || "")).filter(Boolean))
+    const names = new Set(
+      rows()
+        .map((row) => row.user_name?.trim() || row.user_id?.trim() || "")
+        .filter(Boolean),
+    )
     const all = data.latest?.series ?? []
     if (!names.size || names.size === all.length) return all
     return all.filter((item) => names.has(item.user_name?.trim() || item.user_id?.trim() || ""))
@@ -261,8 +351,14 @@ export default function KanbanUserList() {
   const countOption = createMemo<EChartsOption | undefined>(() => {
     if (!periods().length || !series().length) return undefined
     const list = series().flatMap((item) => [
-      { name: `${item.user_name || item.user_id || "-"} ${language.t("kanban.chart.series.task")}`, data: points(item, "task_count") },
-      { name: `${item.user_name || item.user_id || "-"} ${language.t("kanban.chart.series.commit")}`, data: points(item, "commit_count") },
+      {
+        name: `${item.user_name || item.user_id || "-"} ${language.t("kanban.chart.series.task")}`,
+        data: points(item, "task_count"),
+      },
+      {
+        name: `${item.user_name || item.user_id || "-"} ${language.t("kanban.chart.series.commit")}`,
+        data: points(item, "commit_count"),
+      },
     ])
     return chart(language.t("kanban.chart.tasksAndCommits"), periods(), list)
   })
@@ -270,8 +366,14 @@ export default function KanbanUserList() {
   const codeOption = createMemo<EChartsOption | undefined>(() => {
     if (!periods().length || !series().length) return undefined
     const list = series().flatMap((item) => [
-      { name: `${item.user_name || item.user_id || "-"} ${language.t("kanban.chart.series.taskCode")}`, data: points(item, "task_diff_lines") },
-      { name: `${item.user_name || item.user_id || "-"} ${language.t("kanban.chart.series.commitCode")}`, data: points(item, "commit_diff_lines") },
+      {
+        name: `${item.user_name || item.user_id || "-"} ${language.t("kanban.chart.series.taskCode")}`,
+        data: points(item, "task_diff_lines"),
+      },
+      {
+        name: `${item.user_name || item.user_id || "-"} ${language.t("kanban.chart.series.commitCode")}`,
+        data: points(item, "commit_diff_lines"),
+      },
     ])
     return chart(language.t("kanban.chart.taskAndCommitCode"), periods(), list)
   })
@@ -279,32 +381,60 @@ export default function KanbanUserList() {
   const timeOption = createMemo<EChartsOption | undefined>(() => {
     if (!periods().length || !series().length) return undefined
     const list = series().flatMap((item) => [
-      { name: `${item.user_name || item.user_id || "-"} ${language.t("kanban.chart.series.taskTrad")}`, data: points(item, "task_ancient_minutes") },
-      { name: `${item.user_name || item.user_id || "-"} ${language.t("kanban.chart.series.commitTrad")}`, data: points(item, "commit_ancient_minutes") },
-      { name: `${item.user_name || item.user_id || "-"} ${language.t("kanban.chart.series.taskActual")}`, data: points(item, "task_real_minutes") },
-      { name: `${item.user_name || item.user_id || "-"} ${language.t("kanban.chart.series.commitActual")}`, data: points(item, "commit_real_minutes") },
+      {
+        name: `${item.user_name || item.user_id || "-"} ${language.t("kanban.chart.series.taskTrad")}`,
+        data: points(item, "task_ancient_minutes"),
+      },
+      {
+        name: `${item.user_name || item.user_id || "-"} ${language.t("kanban.chart.series.commitTrad")}`,
+        data: points(item, "commit_ancient_minutes"),
+      },
+      {
+        name: `${item.user_name || item.user_id || "-"} ${language.t("kanban.chart.series.taskActual")}`,
+        data: points(item, "task_real_minutes"),
+      },
+      {
+        name: `${item.user_name || item.user_id || "-"} ${language.t("kanban.chart.series.commitActual")}`,
+        data: points(item, "commit_real_minutes"),
+      },
     ])
-    return chart(language.t("kanban.chart.traditionalVsActual"), periods(), list, { format: (value) => formatDuration(value, language.t) })
+    return chart(language.t("kanban.chart.traditionalVsActual"), periods(), list, {
+      format: (value) => formatDuration(value, language.t),
+    })
   })
 
   const ratioOption = createMemo<EChartsOption | undefined>(() => {
     if (!periods().length || !series().length) return undefined
     const list = series().flatMap((item) => [
-      { name: `${item.user_name || item.user_id || "-"} ${language.t("kanban.chart.series.taskEff")}`, data: points(item, "task_efficiency_ratio") },
-      { name: `${item.user_name || item.user_id || "-"} ${language.t("kanban.chart.series.commitEff")}`, data: points(item, "commit_efficiency_ratio") },
+      {
+        name: `${item.user_name || item.user_id || "-"} ${language.t("kanban.chart.series.taskEff")}`,
+        data: points(item, "task_efficiency_ratio"),
+      },
+      {
+        name: `${item.user_name || item.user_id || "-"} ${language.t("kanban.chart.series.commitEff")}`,
+        data: points(item, "commit_efficiency_ratio"),
+      },
     ])
-    return chart(language.t("kanban.chart.efficiencyRatio"), periods(), list, { format: (value) => formatPercent(value) })
+    return chart(language.t("kanban.chart.efficiencyRatio"), periods(), list, {
+      format: (value) => formatPercent(value),
+    })
   })
 
   const tokenOption = createMemo<EChartsOption | undefined>(() => {
     if (!periods().length || !series().length) return undefined
-    const list = series().map((item) => ({ name: item.user_name || item.user_id || "-", data: points(item, "total_tokens") }))
+    const list = series().map((item) => ({
+      name: item.user_name || item.user_id || "-",
+      data: points(item, "total_tokens"),
+    }))
     return chart(language.t("kanban.chart.tokens"), periods(), list)
   })
 
   const costOption = createMemo<EChartsOption | undefined>(() => {
     if (!periods().length || !series().length) return undefined
-    const list = series().map((item) => ({ name: item.user_name || item.user_id || "-", data: points(item, "total_cost") }))
+    const list = series().map((item) => ({
+      name: item.user_name || item.user_id || "-",
+      data: points(item, "total_cost"),
+    }))
     return chart(language.t("kanban.chart.cost"), periods(), list, { format: (value) => `¥${value.toFixed(2)}` })
   })
 
@@ -313,7 +443,9 @@ export default function KanbanUserList() {
       <div class="flex w-full flex-col gap-5">
         <header class="flex w-full flex-col gap-3">
           <Back />
-          <h1 class="m-0 font-[var(--native-font-display)] text-[1.875rem] leading-[1.02] font-semibold tracking-[-0.05em] text-[var(--native-foreground)]">{language.t("kanban.view.user")}</h1>
+          <h1 class="m-0 font-[var(--native-font-display)] text-[1.875rem] leading-[1.02] font-semibold tracking-[-0.05em] text-[var(--native-foreground)]">
+            {language.t("kanban.view.user")}
+          </h1>
         </header>
 
         <FilterBar

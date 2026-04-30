@@ -141,7 +141,21 @@ export default function KanbanCommitList() {
         const txt = row.user_name?.trim() || row.user_id?.trim()
         return txt ? <button type="button" class="block max-w-[12rem] truncate text-left text-sm text-[var(--native-primary)] transition-colors hover:text-[var(--native-foreground)] cursor-pointer" title={txt} onClick={() => {
           const id = row.user_id?.trim() || txt
-          navigate(`/kanban/user/${encodeURIComponent(id)}?${routeQuery()}`)
+          const back = searchQuery([
+            ["startDate", search.startDate],
+            ["endDate", search.endDate],
+            ["userName", search.userName],
+            ["org1", search.org1],
+            ["org2", search.org2],
+            ["org3", search.org3],
+            ["org4", search.org4],
+          ]).toString()
+          const backUrl = back ? `/kanban/commit?${back}` : "/kanban/commit"
+          const q = routeQuery()
+          const url = q
+            ? `/kanban/user/${encodeURIComponent(id)}?${q}&back=${encodeURIComponent(backUrl)}`
+            : `/kanban/user/${encodeURIComponent(id)}?back=${encodeURIComponent(backUrl)}`
+          navigate(url)
         }}>{txt}</button> : <span>-</span>
       },
       filter: { type: "multi-select" },
@@ -160,7 +174,23 @@ export default function KanbanCommitList() {
             type="button"
             class="block max-w-[24rem] truncate text-left text-sm text-[var(--native-primary)] transition-colors hover:text-[var(--native-foreground)]"
             title={label}
-            onClick={() => navigate(`/kanban/repo/${encodeURIComponent(addr)}${branch ? `/${encodeURIComponent(branch)}` : ""}?${routeQuery()}`)}
+            onClick={() => {
+              const back = searchQuery([
+                ["startDate", search.startDate],
+                ["endDate", search.endDate],
+                ["userName", search.userName],
+                ["org1", search.org1],
+                ["org2", search.org2],
+                ["org3", search.org3],
+                ["org4", search.org4],
+              ]).toString()
+              const backUrl = back ? `/kanban/commit?${back}` : "/kanban/commit"
+              const q = routeQuery()
+              const url = q
+                ? `/kanban/repo/${encodeURIComponent(addr)}${branch ? `/${encodeURIComponent(branch)}` : ""}?${q}&back=${encodeURIComponent(backUrl)}`
+                : `/kanban/repo/${encodeURIComponent(addr)}${branch ? `/${encodeURIComponent(branch)}` : ""}?back=${encodeURIComponent(backUrl)}`
+              navigate(url)
+            }}
           >
             {label}
           </button>

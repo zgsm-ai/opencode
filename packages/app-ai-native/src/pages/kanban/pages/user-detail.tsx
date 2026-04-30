@@ -79,7 +79,7 @@ export default function KanbanUserDetail() {
   const language = useLanguage()
   const params = useParams()
   const navigate = useNavigate()
-  const [search, setSearch] = useSearchParams<{ startDate?: string; endDate?: string; granularity?: string }>()
+  const [search, setSearch] = useSearchParams<{ startDate?: string; endDate?: string; granularity?: string; back?: string }>()
 
   const userId = createMemo(() => decodeURIComponent(params.userId ?? "").trim())
   const dateRange = createMemo(() => parseQueryRange(search.startDate, search.endDate))
@@ -101,6 +101,8 @@ export default function KanbanUserDetail() {
   )
 
   const listHref = createMemo(() => {
+    const back = search.back?.trim()
+    if (back) return decodeURIComponent(back)
     const q = queryOf(dateRange(), granularity())
     return `/kanban/user?${q.toString()}`
   })

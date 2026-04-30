@@ -440,7 +440,7 @@ export default function KanbanProjectList() {
       <div class="flex w-full flex-col gap-5">
         <header class="flex w-full flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
           <div class="flex flex-col gap-3">
-            <Back href="/kanban" label={language.t("kanban.backToHome")} />
+            <Back href="/kanban" label={language.t("kanban.back")} />
             <div>
               <h1 class="m-0 font-[var(--native-font-display)] text-[1.875rem] leading-[1.02] font-semibold tracking-[-0.05em] text-[var(--native-foreground)]">{language.t("kanban.home.nav.project")}</h1>
             </div>
