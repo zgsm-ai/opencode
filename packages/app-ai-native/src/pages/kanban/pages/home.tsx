@@ -256,6 +256,8 @@ export default function KanbanHome() {
       tone: "#18a957",
       iconShell: "bg-[#edf9f0] text-[#18a95@7]",
       icon: <Users class="h-5 w-5" stroke-width={1.9} />,
+      href: href("/kanban/user"),
+      live: true,
     },
     {
       label: language.t("kanban.home.metric.totalTasks"),
@@ -264,6 +266,8 @@ export default function KanbanHome() {
       tone: "#ff7a00",
       iconShell: "bg-[#fff3e8] text-[#ff7a00]",
       icon: <ClipboardList class="h-5 w-5" stroke-width={1.9} />,
+      href: href("/kanban/task"),
+      live: true,
     },
     {
       label: language.t("kanban.home.metric.totalCommits"),
@@ -272,6 +276,8 @@ export default function KanbanHome() {
       tone: "#8a4cf6",
       iconShell: "bg-[#f5eefe] text-[#8a4cf6]",
       icon: <GitMerge class="h-5 w-5" stroke-width={1.9} />,
+      href: href("/kanban/commit"),
+      live: true,
     },
     {
       label: language.t("kanban.home.metric.totalCost"),

@@ -180,7 +180,11 @@ export default function KanbanUserList() {
           <span>-</span>
         )
       },
-      filter: { type: "multi-select" },
+      filter: {
+        type: "multi-select",
+        placeholder: language.t("kanban.filter.enterKeyword"),
+        valueGetter: (row) => row.user_name?.trim() || row.user_id?.trim() || "",
+      },
     },
     {
       prop: "org_display",

@@ -113,65 +113,65 @@ export function DateRangePicker(props: Props) {
   })
 
   return (
-    <div
-      class={cn(
-        "flex items-center gap-2 rounded-[var(--native-radius-md)] border border-[color:color-mix(in_oklab,var(--native-border)_34%,transparent)] bg-[color:color-mix(in_oklab,var(--native-panel)_88%,var(--native-bg-subtle))] px-3 text-left shadow-[var(--native-shadow-sm)] transition-colors hover:border-[color:color-mix(in_oklab,var(--native-primary)_24%,var(--native-border))]",
-        props.fullWidth === false ? "w-auto max-w-full" : "w-full",
-        open() && "border-[color:color-mix(in_oklab,var(--native-primary)_40%,var(--native-border))]",
-        sizeClass[props.size ?? "default"],
-      )}
+    <Popover
+      open={open()}
+      onOpenChange={handleOpenChange}
+      placement="bottom-end"
+      gutter={8}
+      flip={false}
+      overflowPadding={16}
+      triggerAs="div"
+      triggerProps={{
+        class: cn(
+          "flex items-center gap-2 rounded-[var(--native-radius-md)] border border-[color:color-mix(in_oklab,var(--native-border)_34%,transparent)] bg-[color:color-mix(in_oklab,var(--native-panel)_88%,var(--native-bg-subtle))] px-3 text-left shadow-[var(--native-shadow-sm)] transition-colors hover:border-[color:color-mix(in_oklab,var(--native-primary)_24%,var(--native-border))] focus:outline-none cursor-pointer",
+          props.fullWidth === false ? "w-auto max-w-full" : "w-full",
+          open() && "border-[color:color-mix(in_oklab,var(--native-primary)_40%,var(--native-border))]",
+          sizeClass[props.size ?? "default"],
+        ),
+      }}
+      class="rounded-[var(--native-radius-lg)] border border-[color:color-mix(in_oklab,var(--native-border)_24%,transparent)] bg-[var(--native-panel)] p-0 shadow-[var(--native-shadow-lg)] [&_[data-slot=popover-body]]:p-0"
+      style={{
+        width: "min(760px, calc(100vw - 2rem))",
+        "min-width": "0",
+        "max-width": "min(760px, calc(100vw - 2rem))",
+      }}
+      trigger={
+        <>
+          <span class={cn("min-w-0 flex-1 truncate whitespace-nowrap", filled() ? "text-[var(--native-foreground)]" : "text-[var(--native-dim)]")}>
+            {label()}
+          </span>
+
+          <div class="ml-auto flex items-center gap-1">
+            <Show when={props.clearable && filled()}>
+              <button
+                type="button"
+                class="inline-flex h-7 w-7 items-center justify-center rounded-full text-[var(--native-dim)] transition-colors hover:bg-[var(--native-primary-soft)] hover:text-[var(--native-primary)]"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  clear()
+                }}
+                aria-label={language.t("kanban.aria.clearDateRange")}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-3.5 w-3.5">
+                  <path d="M18 6 6 18" />
+                  <path d="m6 6 12 12" />
+                </svg>
+              </button>
+            </Show>
+
+            <span class="inline-flex h-7 w-7 items-center justify-center text-[var(--native-dim)] transition-colors hover:text-[var(--native-foreground)]" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-4 w-4 shrink-0">
+                <path d="M8 2v4" />
+                <path d="M16 2v4" />
+                <rect x="3" y="4" width="18" height="18" rx="2" />
+                <path d="M3 10h18" />
+              </svg>
+            </span>
+          </div>
+        </>
+      }
     >
-      <span class={cn("min-w-0 flex-1 truncate whitespace-nowrap", filled() ? "text-[var(--native-foreground)]" : "text-[var(--native-dim)]")}>
-        {label()}
-      </span>
-
-      <div class="ml-auto flex items-center gap-1">
-        <Show when={props.clearable && filled()}>
-          <button
-            type="button"
-            class="inline-flex h-7 w-7 items-center justify-center rounded-full text-[var(--native-dim)] transition-colors hover:bg-[var(--native-primary-soft)] hover:text-[var(--native-primary)]"
-            onClick={(e) => {
-              e.stopPropagation()
-              clear()
-            }}
-            aria-label={language.t("kanban.aria.clearDateRange")}
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-3.5 w-3.5">
-              <path d="M18 6 6 18" />
-              <path d="m6 6 12 12" />
-            </svg>
-          </button>
-        </Show>
-
-        <Popover
-          open={open()}
-          onOpenChange={handleOpenChange}
-          placement="bottom-end"
-          gutter={8}
-          flip={false}
-          overflowPadding={16}
-          triggerAs="button"
-          triggerProps={{
-            type: "button",
-            class:
-              "inline-flex items-center justify-center text-[var(--native-dim)] transition-colors hover:text-[var(--native-foreground)] focus:outline-none",
-            "aria-label": language.t("kanban.aria.openDateRangePicker"),
-          }}
-          class="rounded-[var(--native-radius-lg)] border border-[color:color-mix(in_oklab,var(--native-border)_24%,transparent)] bg-[var(--native-panel)] p-0 shadow-[var(--native-shadow-lg)] [&_[data-slot=popover-body]]:p-0"
-          style={{
-            width: "min(760px, calc(100vw - 2rem))",
-            "min-width": "0",
-            "max-width": "min(760px, calc(100vw - 2rem))",
-          }}
-          trigger={
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-4 w-4 shrink-0">
-              <path d="M8 2v4" />
-              <path d="M16 2v4" />
-              <rect x="3" y="4" width="18" height="18" rx="2" />
-              <path d="M3 10h18" />
-            </svg>
-          }
-        >
           <DatePicker.Root
             inline
             open
@@ -369,9 +369,7 @@ export function DateRangePicker(props: Props) {
               </div>
             </div>
           </DatePicker.Root>
-        </Popover>
-      </div>
-    </div>
+    </Popover>
   )
 }
 

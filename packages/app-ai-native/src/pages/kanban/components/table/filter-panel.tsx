@@ -1,7 +1,17 @@
-import { For } from "solid-js"
+import { createEffect, createMemo, createSignal, For } from "solid-js"
+import { useFilter } from "@ark-ui/solid/locale"
 import { useLanguage } from "@/context/language"
-import { Checkbox } from "@/components/ui/checkbox"
 import { Button } from "@/components/ui/button"
+import {
+  ListboxContent,
+  ListboxEmpty,
+  ListboxInput,
+  ListboxItem,
+  ListboxItemIndicator,
+  ListboxItemText,
+  ListboxRoot,
+  useListCollection,
+} from "@/components/ui/listbox"
 import { TextField, TextFieldInput, TextFieldLabel } from "@/components/ui/text-field"
 import { deriveFilterOptions } from "../../lib/filter-utils"
 import type { DateRangeValue, EfficiencyRow, FilterValue, KanbanColumn, OrgCascadeValue } from "../../lib/types"
@@ -21,9 +31,21 @@ type Props<Row extends EfficiencyRow> = {
 
 export function FilterPanel<Row extends EfficiencyRow>(props: Props<Row>) {
   const language = useLanguage()
-  const options = () => deriveFilterOptions(props.column, props.rows)
+  const opts = createMemo(() => deriveFilterOptions(props.column, props.rows))
   const type = () => props.column.filter?.type
   const shortcuts = () => props.column.filter?.shortcuts ?? []
+  const intl = useFilter({ sensitivity: "base" })
+  const list = useListCollection(() => ({
+    initialItems: opts(),
+    filter: (txt, q) => intl().contains(txt, q),
+  }))
+  const [q, setQ] = createSignal("")
+  const sel = () => (Array.isArray(props.value) ? props.value : [])
+
+  createEffect(() => {
+    list.set(opts())
+    setQ("")
+  })
 
   return (
     <div class="flex w-[min(22rem,calc(100vw-2rem))] flex-col gap-4 p-4">
@@ -42,7 +64,7 @@ export function FilterPanel<Row extends EfficiencyRow>(props: Props<Row>) {
       {type() === "search-select" ? (
         <SearchCreateSelect
           value={(props.value as string) ?? ""}
-          options={options()}
+          options={opts()}
           onChange={(value) => props.onChange(value)}
           onCreate={(value) => props.onChange(value)}
           clearable
@@ -68,24 +90,37 @@ export function FilterPanel<Row extends EfficiencyRow>(props: Props<Row>) {
       ) : null}
 
       {type() === "enum" || type() === "multi-select" ? (
-        <div class="grid gap-2 rounded-[var(--native-radius-md)] border border-[color:color-mix(in_oklab,var(--native-border)_24%,transparent)] p-3">
-          <For each={options()}>
-            {(item) => {
-              const selected = () => ((props.value as string[]) ?? []).includes(item.value)
-              return (
-                <label class="flex items-center gap-2 text-sm text-[var(--native-foreground)]">
-                  <Checkbox checked={selected()} onChange={(checked) => {
-                    const current = new Set((props.value as string[]) ?? [])
-                    if (checked) current.add(item.value)
-                    else current.delete(item.value)
-                    props.onChange(Array.from(current))
-                  }} />
-                  <span>{item.label}</span>
-                </label>
-              )
+        <ListboxRoot
+          collection={list.collection()}
+          value={sel()}
+          selectionMode="multiple"
+          onValueChange={(detail) => props.onChange(detail.value)}
+          class="gap-2"
+        >
+          <ListboxInput
+            value={q()}
+            onInput={(e) => {
+              setQ(e.currentTarget.value)
+              list.filter(e.currentTarget.value)
             }}
-          </For>
-        </div>
+            placeholder={props.column.filter?.placeholder ?? language.t("kanban.filter.enterKeyword")}
+            class="h-9 border-[color:color-mix(in_oklab,var(--native-border)_24%,transparent)] bg-[color:color-mix(in_oklab,var(--native-surface)_82%,var(--native-panel))] text-[var(--native-foreground)] placeholder:text-[var(--native-dim)] focus-visible:ring-[var(--native-primary)]"
+          />
+          <ListboxContent class="max-h-[min(16rem,40vh)] rounded-[var(--native-radius-md)] border-[color:color-mix(in_oklab,var(--native-border)_24%,transparent)] bg-[var(--native-panel)] text-[var(--native-foreground)] shadow-none">
+            <ListboxEmpty>{language.t("kanban.empty.noData")}</ListboxEmpty>
+            <For each={list.collection().items}>
+              {(item) => (
+                <ListboxItem
+                  item={item}
+                  class="cursor-pointer rounded-[var(--native-radius-sm)] text-[var(--native-foreground)] data-[highlighted]:bg-[var(--native-primary-soft)] data-[highlighted]:text-[var(--native-primary)] data-[selected]:bg-[var(--native-primary-soft)] data-[selected]:text-[var(--native-primary)]"
+                >
+                  <ListboxItemText>{item.label}</ListboxItemText>
+                  <ListboxItemIndicator />
+                </ListboxItem>
+              )}
+            </For>
+          </ListboxContent>
+        </ListboxRoot>
       ) : null}
 
       {type() === "cascade-org" ? (
