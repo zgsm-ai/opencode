@@ -46,6 +46,14 @@ function hasPendingInteraction(
   return treeIds.some((id) => (questions[id]?.length ?? 0) > 0 || (permissions[id]?.length ?? 0) > 0)
 }
 
+function sessionGroup(session: { time: { updated?: number; created: number } }) {
+  const now = Date.now()
+  const startOfDay = new Date(now).setHours(0, 0, 0, 0)
+  const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000
+  const t = session.time.updated ?? session.time.created
+  return t >= startOfDay ? "today" : t >= sevenDaysAgo ? "thisWeek" : "older"
+}
+
 function DiffStatusBadge(props: { status: string }) {
   const label = () => {
     switch (props.status) {
@@ -298,7 +306,7 @@ type SidebarSection = "sessions" | "files" | "diffs"
 
 const SECTION_HEADER_HEIGHT = 32
 
-function ContentSidebar(props: { directory: string }) {
+function ContentSidebar(props: { directory: string; autoExpandGroup?: () => { group: string; nonce: number } | undefined }) {
   const language = useLanguage()
   const dl = useLayout()
   const tabStore = useContentTabs()
@@ -326,18 +334,15 @@ function ContentSidebar(props: { directory: string }) {
   type SessionGroup = { key: string; label: string; sessions: Session[] }
 
   const sessionGroups = createMemo<SessionGroup[]>(() => {
-    const now = Date.now()
-    const startOfDay = new Date(now).setHours(0, 0, 0, 0)
-    const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000
     const groups: SessionGroup[] = [
       { key: "today", label: language.t("workspace.session.group.today"), sessions: [] },
       { key: "thisWeek", label: language.t("workspace.session.group.thisWeek"), sessions: [] },
       { key: "older", label: language.t("workspace.session.group.older"), sessions: [] },
     ]
     for (const s of sortedSessions()) {
-      const t = s.time.updated ?? s.time.created
-      if (t >= startOfDay) groups[0].sessions.push(s)
-      else if (t >= sevenDaysAgo) groups[1].sessions.push(s)
+      const key = sessionGroup(s)
+      if (key === "today") groups[0].sessions.push(s)
+      else if (key === "thisWeek") groups[1].sessions.push(s)
       else groups[2].sessions.push(s)
     }
     return groups.filter((g) => g.sessions.length > 0)
@@ -380,6 +385,13 @@ function ContentSidebar(props: { directory: string }) {
   createEffect(() => {
     if (expanded().diffs) diff.scheduler.start()
     else diff.scheduler.stop()
+  })
+
+  createEffect(() => {
+    const event = props.autoExpandGroup?.()
+    if (event) {
+      setSessionGroupsCollapsed((prev) => ({ ...prev, [event.group]: false }))
+    }
   })
 
   const statusLabel = (status: string) => {
@@ -753,6 +765,7 @@ export function WorkspaceContentLayout(props: { workspaceId: string; directory: 
   const terminal = useDeviceTerminal()
   const active = createMemo(() => params.workspaceID === props.workspaceId)
   const [done, setDone] = createSignal<string | undefined>()
+  const [autoExpandGroup, setAutoExpandGroup] = createSignal<{ group: string; nonce: number }>()
 
   const ready = createMemo(() => !!props.workspaceId && !!props.directory)
   const directory = createMemo(() => {
@@ -828,6 +841,8 @@ export function WorkspaceContentLayout(props: { workspaceId: string; directory: 
     const existing = tabStore.tabs().find((t) => t.kind === "session" && t.meta?.sessionID === sid)
     if (existing) {
       tabStore.activate(existing.id)
+      const session = ws.data.session.find((s) => s.id === sid)
+      if (session) setAutoExpandGroup({ group: sessionGroup(session), nonce: Date.now() })
       return
     }
     const session = ws.data.session.find((s) => s.id === sid)
@@ -838,6 +853,7 @@ export function WorkspaceContentLayout(props: { workspaceId: string; directory: 
       icon: SESSION_TAB_ICON,
       meta: { sessionID: sid },
     })
+    if (session) setAutoExpandGroup({ group: sessionGroup(session), nonce: Date.now() })
   }
 
   createEffect(() => {
@@ -870,7 +886,7 @@ export function WorkspaceContentLayout(props: { workspaceId: string; directory: 
           style={{ width: dl.fileTree.opened() ? `${dl.fileTree.width()}px` : "0px" }}
         >
           <div class="h-full relative" style={{ width: `${dl.fileTree.width()}px` }}>
-            <ContentSidebar directory={directory()!} />
+            <ContentSidebar directory={directory()!} autoExpandGroup={autoExpandGroup} />
             <ResizeHandle
               direction="horizontal"
               size={dl.fileTree.width()}
