@@ -738,6 +738,7 @@ export default function StoreManagerPage() {
           }}
           emptyMessage={language.t(state.tab === "created" ? "store.console.capabilities.empty" : "store.console.capabilities.favorited.empty")}
           maxVisibleRows={PAGE_SIZE}
+          fixedRows
           renderActions={(item) => (
             <div class="flex items-center justify-end gap-1">
               <button
@@ -781,7 +782,7 @@ export default function StoreManagerPage() {
           </div>
         }
       >
-        <div class="flex h-full min-h-0 w-full flex-1 flex-col">
+        <div class="flex h-full min-h-0 w-full flex-1 flex-col overflow-x-hidden overflow-y-auto">
           <header class="relative overflow-hidden bg-[linear-gradient(135deg,color-mix(in_srgb,var(--native-primary)_2%,white),color-mix(in_srgb,var(--native-primary)_10%,var(--native-panel))_62%,color-mix(in_srgb,var(--native-primary)_14%,var(--native-panel)))] before:pointer-events-none before:absolute before:right-[-10%] before:top-[-60%] before:h-[340px] before:w-[340px] before:rounded-full before:bg-[radial-gradient(circle,color-mix(in_srgb,var(--native-primary)_8%,transparent),transparent_70%)] before:content-['']">
             <div class="relative flex flex-row items-center justify-between gap-4 px-5 py-3 lg:gap-6">
               <div class="min-w-0 flex flex-1 items-center gap-4">
@@ -810,7 +811,7 @@ export default function StoreManagerPage() {
             </div>
           </header>
 
-          <div class="flex w-full flex-1 items-center justify-center">
+          <div class="flex min-h-[5rem] w-full flex-1 items-center justify-center overflow-hidden">
             <section class={sx.section}>
               <div class="mx-auto flex w-full max-w-[64rem] items-center gap-3 px-4 max-[768px]:flex-col max-[768px]:items-stretch max-[640px]:gap-2">
               <div class="relative min-w-0 flex-1 rounded-full transition-shadow hover:shadow-[0_2px_6px_-3px_color-mix(in_srgb,var(--native-primary)_22%,rgba(15,23,42,0.3))] focus-within:shadow-[0_2px_6px_-3px_color-mix(in_srgb,var(--native-primary)_22%,rgba(15,23,42,0.3))]">
@@ -889,8 +890,8 @@ export default function StoreManagerPage() {
           </section>
           </div>
 
-          <section class={cn(sx.section, "flex min-h-0 flex-col px-2 sm:px-3")}>
-            <div class={cn(sx.tableShell, "flex min-h-0 flex-col")}>
+          <section class={cn(sx.section, "flex min-h-0 shrink-0 flex-col px-2 sm:px-3")}>
+            <div class={cn(sx.tableShell, "flex min-h-0 flex-1 flex-col")}>
               <Show when={state.createdLoaded || state.favoritedLoaded}>
                 <Show when={activeLoading()}>
                   <div class={sx.overlay}>

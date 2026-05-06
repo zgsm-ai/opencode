@@ -756,6 +756,7 @@ export function StoreCapabilityTable(props: {
   renderActions: (item: CapabilityItem) => JSX.Element
   typeLabel?: (value: string) => string
   maxVisibleRows?: number
+  fixedRows?: boolean
 }) {
   const isColumnVisible = (key: TableColumnKey) => props.visibleColumns[key]
   const stickyHeadClass = "sticky top-0 z-10 bg-[color:color-mix(in_oklab,var(--native-surface)_82%,var(--native-panel))]"
@@ -768,15 +769,16 @@ export function StoreCapabilityTable(props: {
 
   let scrollRef: HTMLDivElement | undefined
 
-  const tableMaxHeight = createMemo(() => {
+  const tableHeight = createMemo(() => {
     const max = props.maxVisibleRows
     if (!max) return undefined
     return `calc(2.5rem + 3.9375rem * ${max} + 1px)`
   })
+  const fixed = createMemo(() => props.fixedRows && tableHeight() != null)
 
   return (
-    <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <div ref={scrollRef} class="min-h-0 flex-1 overflow-auto" style={tableMaxHeight() != null ? { "max-height": tableMaxHeight() } : undefined}>
+    <div class={cn("flex min-h-0 flex-col overflow-hidden", fixed() ? "shrink-0" : "flex-1")} style={fixed() ? { height: tableHeight(), "max-height": tableHeight() } : undefined}>
+      <div ref={scrollRef} class="min-h-0 flex-1 overflow-auto" style={!props.fixedRows && tableHeight() != null ? { "max-height": tableHeight() } : undefined}>
         <table class="w-full table-fixed caption-bottom text-sm text-[0.8125rem]">
           <thead class={cn("[&_tr]:border-b [&_tr]:border-border", sx.thead)}>
             <tr class={stickyHeadRowClass}>
