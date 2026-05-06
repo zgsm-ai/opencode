@@ -13,7 +13,10 @@ import { useLanguage } from "@/context/language"
 import SecurityTag from "./security-tag"
 import "@/styles/vscode-markdown.css"
 
-const TYPE_META: Record<string, { accent: string; bg: string; label: string; icon: "sparkles" | "brain" | "console" | "mcp" }> = {
+const TYPE_META: Record<
+  string,
+  { accent: string; bg: string; label: string; icon: "sparkles" | "brain" | "console" | "mcp" }
+> = {
   skill: { accent: "#ffa000", bg: "#FEF3C7", label: "store.sidebar.nav.skills", icon: "sparkles" },
   subagent: { accent: "#1670ff", bg: "#DBEAFE", label: "store.sidebar.nav.subagents", icon: "brain" },
   command: { accent: "#09b179", bg: "#D1FAE5", label: "store.sidebar.nav.commands", icon: "console" },
@@ -99,16 +102,34 @@ function VisibilityIcon(props: { visibility?: string }) {
     <span class="inline-flex items-center text-text-weak" aria-hidden="true">
       <Show
         when={props.visibility === "private"}
-        fallback={(
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="size-4">
+        fallback={
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="size-4"
+          >
             <circle cx="12" cy="12" r="9" />
             <path d="M3 12h18" />
             <path d="M12 3a15 15 0 0 1 0 18" />
             <path d="M12 3a15 15 0 0 0 0 18" />
           </svg>
-        )}
+        }
       >
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="size-4">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          class="size-4"
+        >
           <rect x="5" y="11" width="14" height="10" rx="2" />
           <path d="M8 11V8a4 4 0 1 1 8 0v3" />
         </svg>
@@ -197,14 +218,20 @@ export default function ItemDetailContent(props: ItemDetailContentProps) {
   }
 
   return (
-    <Show when={!item.loading} fallback={<div class="flex justify-center py-16 text-text-weak">{language.t("store.loading")}</div>}>
+    <Show
+      when={!item.loading}
+      fallback={<div class="flex justify-center py-16 text-text-weak">{language.t("store.loading")}</div>}
+    >
       <Show
         when={item()}
         fallback={
           <div class="flex flex-col items-center justify-center gap-4 py-16">
             <p class="text-text-weak">{language.t("store.detail.notFound")}</p>
             <Show when={props.onBack && props.showBackButton}>
-              <button onClick={props.onBack} class="text-12-regular text-text-weak transition-colors hover:text-text-strong">
+              <button
+                onClick={props.onBack}
+                class="text-12-regular text-text-weak transition-colors hover:text-text-strong"
+              >
                 {language.t("store.detail.back")}
               </button>
             </Show>
@@ -241,55 +268,67 @@ export default function ItemDetailContent(props: ItemDetailContentProps) {
                     </h1>
                   </div>
                   <div class="flex shrink-0 items-center gap-1.5 self-start">
-                  <Show when={data().sourceType === "archive"}>
-                    <span
-                      class="mt-0.5 inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-xs"
-                      style={{ "background-color": "rgba(59,130,246,0.12)", color: "rgb(59,130,246)" }}
-                      title={language.t("store.sourceType.archive")}
-                    >
-                      <Icon name="cloud-upload" size="small" />
-                    </span>
-                  </Show>
-                  <Show when={canEditItem()}>
-                    <button
-                      onClick={() => navigate(`/capabilities/${data().id}/edit`)}
-                      class="inline-flex items-center gap-1.5 rounded-lg border border-border-weak-base px-3 py-1.5 text-12-regular text-text-weak transition-colors duration-150 hover:bg-bg-muted hover:text-text-strong"
-                      title={language.t("common.edit")}
-                    >
-                      <Icon name="edit" size="small" />
-                      <span>{language.t("common.edit")}</span>
-                    </button>
-                  </Show>
-                  <Show when={props.onToggleFavorite}>
-                    <button
-                      onClick={() => void props.onToggleFavorite?.()}
-                      disabled={!props.isAuthenticated || props.favoritePending}
-                      class="inline-flex items-center gap-1.5 rounded-lg border border-border-weak-base px-3 py-1.5 text-12-regular transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-60"
-                      classList={{
-                        "bg-bg-muted text-text-strong hover:bg-bg-muted/70": props.favorited,
-                        "text-text-weak hover:text-text-strong hover:bg-bg-muted": !props.favorited,
-                      }}
-                      title={
-                        props.isAuthenticated
-                          ? props.favorited
-                            ? language.t("store.detail.unfavorite")
-                            : language.t("store.detail.favorite")
-                          : language.t("store.detail.favoriteSignIn")
-                      }
-                    >
-                      <span class="inline-flex items-center" style={{ width: "14px", height: "14px" }}><LocalIcon name={props.favorited ? "star-filled" : "star"} size="small" style={{ color: props.favorited ? (TYPE_META[item()?.itemType ?? ""]?.accent ?? "var(--native-primary)") : undefined, width: "14px", height: "14px" }} /></span>
-                      <span>
-                        {props.isAuthenticated
-                          ? props.favorited
-                            ? language.t("store.detail.favorited")
-                            : language.t("store.detail.favorite")
-                          : language.t("store.detail.favoriteSignIn")}
+                    <Show when={data().sourceType === "archive"}>
+                      <span
+                        class="mt-0.5 inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-xs"
+                        style={{ "background-color": "rgba(59,130,246,0.12)", color: "rgb(59,130,246)" }}
+                        title={language.t("store.sourceType.archive")}
+                      >
+                        <Icon name="cloud-upload" size="small" />
                       </span>
-                    </button>
-                  </Show>
+                    </Show>
+                    <Show when={canEditItem()}>
+                      <button
+                        onClick={() => navigate(`/capabilities/${data().id}/edit`)}
+                        class="inline-flex items-center gap-1.5 rounded-lg border border-border-weak-base px-3 py-1.5 text-12-regular text-text-weak transition-colors duration-150 hover:bg-bg-muted hover:text-text-strong"
+                        title={language.t("common.edit")}
+                      >
+                        <Icon name="edit" size="small" />
+                        <span>{language.t("common.edit")}</span>
+                      </button>
+                    </Show>
+                    <Show when={props.onToggleFavorite}>
+                      <button
+                        onClick={() => void props.onToggleFavorite?.()}
+                        disabled={!props.isAuthenticated || props.favoritePending}
+                        class="inline-flex items-center gap-1.5 rounded-lg border border-border-weak-base px-3 py-1.5 text-12-regular transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-60"
+                        classList={{
+                          "bg-bg-muted text-text-strong hover:bg-bg-muted/70": props.favorited,
+                          "text-text-weak hover:text-text-strong hover:bg-bg-muted": !props.favorited,
+                        }}
+                        title={
+                          props.isAuthenticated
+                            ? props.favorited
+                              ? language.t("store.detail.unfavoriteTooltip")
+                              : language.t("store.detail.favoriteTooltip")
+                            : language.t("store.detail.favoriteSignInTooltip")
+                        }
+                      >
+                        <span class="inline-flex items-center" style={{ width: "14px", height: "14px" }}>
+                          <LocalIcon
+                            name={props.favorited ? "star-filled" : "star"}
+                            size="small"
+                            style={{
+                              color: props.favorited
+                                ? (TYPE_META[item()?.itemType ?? ""]?.accent ?? "var(--native-primary)")
+                                : undefined,
+                              width: "14px",
+                              height: "14px",
+                            }}
+                          />
+                        </span>
+                        <span>
+                          {props.isAuthenticated
+                            ? props.favorited
+                              ? language.t("store.detail.favorited")
+                              : language.t("store.detail.favorite")
+                            : language.t("store.detail.favoriteSignIn")}
+                        </span>
+                      </button>
+                    </Show>
+                  </div>
                 </div>
-                </div>
-                <div class="flex w-[70%] max-w-full items-center gap-2 rounded-lg px-4 py-2" style="background-color: var(--native-surface-strong)">
+                {/* <div class="flex w-[70%] max-w-full items-center gap-2 rounded-lg px-4 py-2" style="background-color: var(--native-surface-strong)">
                   <div class="thin-scrollbar flex min-w-0 flex-1 items-center overflow-x-auto">
                     <code class="select-all whitespace-nowrap text-12-mono text-text-weak">{getInstallCommand(data())}</code>
                   </div>
@@ -300,7 +339,7 @@ export default function ItemDetailContent(props: ItemDetailContentProps) {
                   >
                     <Icon name={copied() ? "check-small" : "copy"} size="small" class={copied() ? "text-green-500" : ""} />
                   </button>
-                </div>
+                </div> */}
               </div>
             </div>
 
@@ -328,7 +367,6 @@ export default function ItemDetailContent(props: ItemDetailContentProps) {
                       </Show>
                     </div>
                   </Show>
-
                 </div>
 
                 <aside class="min-w-0 space-y-5 xl:sticky xl:top-0 xl:self-start">
@@ -336,7 +374,10 @@ export default function ItemDetailContent(props: ItemDetailContentProps) {
                     <div class="space-y-3">
                       <div>
                         <div class="flex items-center gap-4 text-sm leading-5 text-text-strong">
-                          <span class="inline-flex items-center gap-1.5" title={language.t("store.capability.type." + (data().itemType ?? "skill"))}>
+                          <span
+                            class="inline-flex items-center gap-1.5"
+                            title={language.t("store.capability.type." + (data().itemType ?? "skill"))}
+                          >
                             <div
                               class="flex h-5 w-5 shrink-0 items-center justify-center rounded-[0.375rem]"
                               style={{ "background-color": meta().bg, color: meta().accent }}
@@ -392,7 +433,10 @@ export default function ItemDetailContent(props: ItemDetailContentProps) {
                               <Show
                                 when={verified}
                                 fallback={
-                                  <span class="inline-flex w-full items-center justify-center gap-1.5 rounded-[0.5rem] border border-[rgba(156,163,175,0.65)] px-3 py-2 text-[14px] font-bold leading-5 text-[rgb(107,114,128)] transition-colors hover:bg-[rgba(156,163,175,0.08)]" title={`${language.t("store.home.table.source")}: ${sourceLabel}`}>
+                                  <span
+                                    class="inline-flex w-full items-center justify-center gap-1.5 rounded-[0.5rem] border border-[rgba(156,163,175,0.65)] px-3 py-2 text-[14px] font-bold leading-5 text-[rgb(107,114,128)] transition-colors hover:bg-[rgba(156,163,175,0.08)]"
+                                    title={`${language.t("store.home.table.source")}: ${sourceLabel}`}
+                                  >
                                     {sourceLabel}
                                   </span>
                                 }
@@ -404,7 +448,17 @@ export default function ItemDetailContent(props: ItemDetailContentProps) {
                                   class="inline-flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-[0.5rem] border border-[rgba(245,138,25,0.9)] px-3 py-2 text-[14px] font-bold leading-5 text-[#f58b19] transition-colors hover:bg-[rgba(245,138,25,0.07)]"
                                   title={`${language.t("store.home.table.source")}: ${sourceLabel}`}
                                 >
-                                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="size-3.5 shrink-0" aria-hidden="true">
+                                  <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    class="size-3.5 shrink-0"
+                                    aria-hidden="true"
+                                  >
                                     <path d="M7 17 17 7" />
                                     <path d="M9 7h8v8" />
                                   </svg>
@@ -418,7 +472,15 @@ export default function ItemDetailContent(props: ItemDetailContentProps) {
 
                       <div>
                         <div class="flex items-center justify-between gap-4">
-                          <div class="text-xs" style={{ color: "color-mix(in srgb, var(--native-muted) 70%, var(--native-panel))", "font-weight": 700 }}>{language.t("store.console.capabilities.visibility")}</div>
+                          <div
+                            class="text-xs"
+                            style={{
+                              color: "color-mix(in srgb, var(--native-muted) 70%, var(--native-panel))",
+                              "font-weight": 700,
+                            }}
+                          >
+                            {language.t("store.console.capabilities.visibility")}
+                          </div>
                           <div class="inline-flex items-center gap-1.5 text-right text-sm leading-5 text-text-strong">
                             <VisibilityIcon visibility={data().repoVisibility} />
                             <span>
@@ -435,7 +497,15 @@ export default function ItemDetailContent(props: ItemDetailContentProps) {
                       <Show when={authorInfo() || authorName()}>
                         <div>
                           <div class="flex items-center justify-between gap-4">
-                            <div class="text-xs" style={{ color: "color-mix(in srgb, var(--native-muted) 70%, var(--native-panel))", "font-weight": 700 }}>{language.t("store.detail.author")}</div>
+                            <div
+                              class="text-xs"
+                              style={{
+                                color: "color-mix(in srgb, var(--native-muted) 70%, var(--native-panel))",
+                                "font-weight": 700,
+                              }}
+                            >
+                              {language.t("store.detail.author")}
+                            </div>
                             <div>
                               <Show
                                 keyed
@@ -466,14 +536,32 @@ export default function ItemDetailContent(props: ItemDetailContentProps) {
                       <Show when={data().category}>
                         <div>
                           <div class="flex items-center justify-between gap-4">
-                            <div class="text-xs" style={{ color: "color-mix(in srgb, var(--native-muted) 70%, var(--native-panel))", "font-weight": 700 }}>{language.t("store.console.capabilities.category")}</div>
-                            <div class="text-right text-sm leading-5 text-text-strong">{itemFilterOptions.categoryLabel(data().category) || data().category}</div>
+                            <div
+                              class="text-xs"
+                              style={{
+                                color: "color-mix(in srgb, var(--native-muted) 70%, var(--native-panel))",
+                                "font-weight": 700,
+                              }}
+                            >
+                              {language.t("store.console.capabilities.category")}
+                            </div>
+                            <div class="text-right text-sm leading-5 text-text-strong">
+                              {itemFilterOptions.categoryLabel(data().category) || data().category}
+                            </div>
                           </div>
                         </div>
                       </Show>
 
                       <div>
-                        <div class="mb-1 text-xs" style={{ color: "color-mix(in srgb, var(--native-muted) 70%, var(--native-panel))", "font-weight": 700 }}>{language.t("store.security.riskLevel")}</div>
+                        <div
+                          class="mb-1 text-xs"
+                          style={{
+                            color: "color-mix(in srgb, var(--native-muted) 70%, var(--native-panel))",
+                            "font-weight": 700,
+                          }}
+                        >
+                          {language.t("store.security.riskLevel")}
+                        </div>
                         <div>
                           <SecurityTag status={data().securityStatus} />
                         </div>
@@ -481,34 +569,61 @@ export default function ItemDetailContent(props: ItemDetailContentProps) {
 
                       <Show when={(data().tags ?? []).length > 0}>
                         <div>
-                        <div class="mb-2 text-xs" style={{ color: "color-mix(in srgb, var(--native-muted) 70%, var(--native-panel))", "font-weight": 700 }}>{language.t("store.home.table.tag")}</div>
-                        <div class="flex flex-wrap items-center gap-1.5">
-                          <For each={[...(data().tags ?? [])].sort(compareTags)}>
-                            {(tag) => (
-                              <span
-                                class="inline-flex max-w-full items-center rounded-full px-2.5 py-0.5 text-[11px] leading-4 font-semibold"
-                                style={tagStyle(tag.tagClass)}
-                                title={tag.slug}
-                              >
-                                <span class="truncate">{tag.slug}</span>
-                              </span>
-                            )}
-                          </For>
+                          <div
+                            class="mb-2 text-xs"
+                            style={{
+                              color: "color-mix(in srgb, var(--native-muted) 70%, var(--native-panel))",
+                              "font-weight": 700,
+                            }}
+                          >
+                            {language.t("store.home.table.tag")}
+                          </div>
+                          <div class="flex flex-wrap items-center gap-1.5">
+                            <For each={[...(data().tags ?? [])].sort(compareTags)}>
+                              {(tag) => (
+                                <span
+                                  class="inline-flex max-w-full items-center rounded-full px-2.5 py-0.5 text-[11px] leading-4 font-semibold"
+                                  style={tagStyle(tag.tagClass)}
+                                  title={tag.slug}
+                                >
+                                  <span class="truncate">{tag.slug}</span>
+                                </span>
+                              )}
+                            </For>
                           </div>
                         </div>
                       </Show>
 
                       <div class="space-y-3">
                         <div class="flex items-center justify-between gap-4">
-                          <div class="text-xs" style={{ color: "color-mix(in srgb, var(--native-muted) 70%, var(--native-panel))", "font-weight": 700 }}>{language.t("store.detail.created")}</div>
-                          <div class="text-right text-sm leading-5 text-text-strong">{formatDate(data().createdAt, language.locale())}</div>
+                          <div
+                            class="text-xs"
+                            style={{
+                              color: "color-mix(in srgb, var(--native-muted) 70%, var(--native-panel))",
+                              "font-weight": 700,
+                            }}
+                          >
+                            {language.t("store.detail.created")}
+                          </div>
+                          <div class="text-right text-sm leading-5 text-text-strong">
+                            {formatDate(data().createdAt, language.locale())}
+                          </div>
                         </div>
                         <div class="flex items-center justify-between gap-4">
-                          <div class="text-xs" style={{ color: "color-mix(in srgb, var(--native-muted) 70%, var(--native-panel))", "font-weight": 700 }}>{language.t("store.detail.updated")}</div>
-                          <div class="text-right text-sm leading-5 text-text-strong">{formatDate(data().updatedAt, language.locale())}</div>
+                          <div
+                            class="text-xs"
+                            style={{
+                              color: "color-mix(in srgb, var(--native-muted) 70%, var(--native-panel))",
+                              "font-weight": 700,
+                            }}
+                          >
+                            {language.t("store.detail.updated")}
+                          </div>
+                          <div class="text-right text-sm leading-5 text-text-strong">
+                            {formatDate(data().updatedAt, language.locale())}
+                          </div>
                         </div>
                       </div>
-
                     </div>
                   </div>
                 </aside>

@@ -260,7 +260,7 @@ export default function BestPracticeCarousel(props: BestPracticeCarouselProps) {
                             : "inline-flex h-7 w-7 items-center justify-center rounded-md bg-transparent text-[var(--native-muted)] transition-[background-color,color] hover:bg-[color-mix(in_srgb,var(--native-surface)_60%,transparent)] hover:text-[var(--native-foreground)] [&_[data-component=icon]]:text-[var(--native-muted)] [&_[data-slot=icon-svg]]:text-[var(--native-muted)] hover:[&_[data-component=icon]]:text-[var(--native-foreground)] hover:[&_[data-slot=icon-svg]]:text-[var(--native-foreground)] disabled:cursor-not-allowed disabled:opacity-[var(--native-disabled-opacity)]",
                         ].join(" ")}
                         onClick={(e) => toggleFavorite(item, e)}
-                        title={isFavorited(item.id) ? language.t("store.detail.unfavorite") : language.t("store.detail.favorite")}
+                        title={isFavorited(item.id) ? language.t("store.detail.unfavoriteTooltip") : language.t("store.detail.favoriteTooltip")}
                         disabled={favPending() === item.id}
                       >
                         <LocalIcon name={isFavorited(item.id) ? "star-filled" : "star"} size="small" class="h-3.5 w-3.5" />

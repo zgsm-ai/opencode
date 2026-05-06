@@ -880,6 +880,9 @@ export default function Home() {
                   favoriteCount: language.t("store.home.table.favoriteCount"),
                   favorite: language.t("store.detail.favorite"),
                   unfavorite: language.t("store.detail.unfavorite"),
+                  favoriteTooltip: language.t("store.detail.favoriteTooltip"),
+                  unfavoriteTooltip: language.t("store.detail.unfavoriteTooltip"),
+                  favoriteSignInTooltip: language.t("store.detail.favoriteSignInTooltip"),
                   updated: language.t("store.detail.updated"),
                   action: language.t("store.home.table.action"),
                   toggleColumns: language.t("store.home.table.toggleColumns"),
@@ -910,7 +913,7 @@ export default function Home() {
                       type="button"
                       disabled={!auth.user() || auth.loading() || favoriteActionItemId() === item.id}
                       class="inline-flex size-8 min-w-8 items-center justify-center rounded-full bg-transparent text-[var(--native-foreground)] transition-colors hover:bg-[color:color-mix(in_oklab,var(--native-foreground)_10%,transparent)] disabled:cursor-not-allowed disabled:opacity-60"
-                      title={auth.user() ? (item.favorited ? language.t("store.detail.unfavorite") : language.t("store.detail.favorite")) : language.t("store.detail.favoriteSignIn")}
+                      title={auth.user() ? (item.favorited ? language.t("store.detail.unfavoriteTooltip") : language.t("store.detail.favoriteTooltip")) : language.t("store.detail.favoriteSignInTooltip")}
                       onClick={() => void toggleRowFavorite(item)}
                     >
                       <LocalIcon name={item.favorited ? "star-filled" : "star"} size="small" style={{ color: favoriteIconColor(item.favorited) }} />

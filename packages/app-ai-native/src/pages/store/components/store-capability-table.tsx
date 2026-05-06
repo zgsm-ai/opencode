@@ -737,6 +737,9 @@ export function StoreCapabilityTable(props: {
     favoriteCount: string
     favorite: string
     unfavorite: string
+    favoriteTooltip: string
+    unfavoriteTooltip: string
+    favoriteSignInTooltip: string
     updated: string
     action: string
     toggleColumns: string
@@ -1016,7 +1019,7 @@ export function StoreCapabilityTable(props: {
                         type="button"
                         class="inline-flex size-6 items-center justify-center rounded-full transition-colors hover:bg-[color:color-mix(in_oklab,var(--native-foreground)_10%,transparent)] active:bg-[color:color-mix(in_oklab,var(--native-foreground)_16%,transparent)]]"
                         disabled={!props.onToggleFavorite}
-                        title={item.favorited ? props.labels.unfavorite : props.labels.favorite}
+                        title={item.favorited ? props.labels.unfavoriteTooltip : props.labels.favoriteTooltip}
                         onClick={(e: MouseEvent) => {
                           e.stopPropagation()
                           props.onToggleFavorite?.(item)
