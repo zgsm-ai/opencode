@@ -1,4 +1,4 @@
-import { type JSX, type ParentProps, Show } from "solid-js"
+import { type JSX, type ParentProps, Show, createEffect } from "solid-js"
 import { useLocation, useNavigate } from "@solidjs/router"
 import { Gauge } from "lucide-solid"
 import { Icon } from "@opencode-ai/ui/icon"
@@ -164,6 +164,14 @@ export default function RootLayout(props: ParentProps) {
     const path = appPathname()
     return path === "/store" || path.startsWith("/store/")
   }
+
+  let lastWorkspace = "/workspace"
+  createEffect(() => {
+    const path = appPathname()
+    if (path === "/workspace" || path.startsWith("/workspace/")) {
+      lastWorkspace = path + location.search
+    }
+  })
   const isProjects = () => location.pathname.startsWith("/projects")
 
   const isKanban = () => {
@@ -199,7 +207,7 @@ export default function RootLayout(props: ParentProps) {
             icon="folder"
             label={language.t("sidebar.workspace")}
             active={isWorkspace()}
-            onClick={() => navigate("/workspace")}
+            onClick={() => navigate(lastWorkspace)}
           />
           <Show when={auth.canAccessMenu("kanban")}>
             <NavButton
