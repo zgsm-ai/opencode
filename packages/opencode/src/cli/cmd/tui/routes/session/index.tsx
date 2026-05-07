@@ -7,6 +7,7 @@ import {
   For,
   Match,
   on,
+  onCleanup,
   onMount,
   Show,
   Switch,
@@ -153,7 +154,7 @@ export function Session() {
   const [timestamps, setTimestamps] = kv.signal<"hide" | "show">("timestamps", "hide")
   const [showDetails, setShowDetails] = kv.signal("tool_details_visibility", true)
   const [showAssistantMetadata, setShowAssistantMetadata] = kv.signal("assistant_metadata_visibility", true)
-  const [showScrollbar, setShowScrollbar] = kv.signal("scrollbar_visible", true)
+  const [showScrollbar, setShowScrollbar] = kv.signal("scrollbar_visible", false)
   const [diffWrapMode] = kv.signal<"word" | "none">("diff_wrap_mode", "word")
   const [animationsEnabled, setAnimationsEnabled] = kv.signal("animations_enabled", true)
   const [showGenericToolOutput, setShowGenericToolOutput] = kv.signal("generic_tool_output_visibility", false)
@@ -186,19 +187,20 @@ export function Session() {
     }
   })
 
-  createEffect(async () => {
-    await sync.session
-      .sync(route.sessionID)
+  createEffect(() => {
+    const id = route.sessionID
+    sync.session
+      .sync(id)
       .then(() => {
         if (scroll) scroll.scrollBy(100_000)
       })
       .catch((e) => {
         console.error(e)
         toast.show({
-          message: `Session not found: ${route.sessionID}`,
+          message: `Session not found: ${id}`,
           variant: "error",
         })
-        return navigate({ type: "home" })
+        navigate({ type: "home" })
       })
   })
 
@@ -213,20 +215,23 @@ export function Session() {
   })
 
   let lastSwitch: string | undefined = undefined
-  sdk.event.on("message.part.updated", (evt) => {
-    const part = evt.properties.part
-    if (part.type !== "tool") return
-    if (part.sessionID !== route.sessionID) return
-    if (part.state.status !== "completed") return
-    if (part.id === lastSwitch) return
+  onMount(() => {
+    const unsub = sdk.event.on("message.part.updated", (evt) => {
+      const part = evt.properties.part
+      if (part.type !== "tool") return
+      if (part.sessionID !== route.sessionID) return
+      if (part.state.status !== "completed") return
+      if (part.id === lastSwitch) return
 
-    if (part.tool === "plan_exit") {
-      local.agent.set("build")
-      lastSwitch = part.id
-    } else if (part.tool === "plan_enter") {
-      local.agent.set("plan")
-      lastSwitch = part.id
-    }
+      if (part.tool === "plan_exit") {
+        local.agent.set("build")
+        lastSwitch = part.id
+      } else if (part.tool === "plan_enter") {
+        local.agent.set("plan")
+        lastSwitch = part.id
+      }
+    })
+    onCleanup(() => unsub())
   })
 
   let scroll: ScrollBoxRenderable
@@ -362,6 +367,7 @@ export function Session() {
       keybind: "session_share",
       category: "Session",
       enabled: sync.data.config.share !== "disabled",
+      scope: "shared",
       slash: {
         name: "share",
       },
@@ -380,7 +386,10 @@ export function Session() {
           .share({
             sessionID: route.sessionID,
           })
-          .then((res) => copy(res.data!.share!.url))
+          .then((res) => {
+            const url = res.data?.share?.url
+            if (url) return copy(url)
+          })
           .catch((error) => {
             toast.show({
               message: error instanceof Error ? error.message : "Failed to share session",
@@ -395,6 +404,7 @@ export function Session() {
       value: "session.rename",
       keybind: "session_rename",
       category: "Session",
+      scope: "shared",
       slash: {
         name: "rename",
       },
@@ -407,6 +417,7 @@ export function Session() {
       value: "session.timeline",
       keybind: "session_timeline",
       category: "Session",
+      scope: "shared",
       slash: {
         name: "timeline",
       },
@@ -430,6 +441,7 @@ export function Session() {
       value: "session.fork",
       keybind: "session_fork",
       category: "Session",
+      scope: "shared",
       slash: {
         name: "fork",
       },
@@ -452,6 +464,7 @@ export function Session() {
       value: "session.compact",
       keybind: "session_compact",
       category: "Session",
+      scope: "shared",
       slash: {
         name: "compact",
         aliases: ["summarize"],
@@ -466,11 +479,13 @@ export function Session() {
           })
           return
         }
-        sdk.client.session.summarize({
-          sessionID: route.sessionID,
-          modelID: selectedModel.modelID,
-          providerID: selectedModel.providerID,
-        })
+        sdk.client.session
+          .summarize({
+            sessionID: route.sessionID,
+            modelID: selectedModel.modelID,
+            providerID: selectedModel.providerID,
+          })
+          .catch(() => {})
         dialog.clear()
       },
     },
@@ -480,6 +495,7 @@ export function Session() {
       keybind: "session_unshare",
       category: "Session",
       enabled: !!session()?.share?.url,
+      scope: "shared",
       slash: {
         name: "unshare",
       },
@@ -503,6 +519,7 @@ export function Session() {
       value: "session.undo",
       keybind: "messages_undo",
       category: "Session",
+      scope: "shared",
       slash: {
         name: "undo",
       },
@@ -520,6 +537,7 @@ export function Session() {
           .then(() => {
             toBottom()
           })
+          .catch(() => {})
         const parts = sync.data.part[message.id]
         prompt.set(
           parts.reduce(
@@ -542,6 +560,7 @@ export function Session() {
       keybind: "messages_redo",
       category: "Session",
       enabled: !!session()?.revert?.messageID,
+      scope: "shared",
       slash: {
         name: "redo",
       },
@@ -551,14 +570,17 @@ export function Session() {
         if (!messageID) return
         const message = messages().find((x) => x.role === "user" && x.id > messageID)
         if (!message) {
-          sdk.client.session.unrevert({
-            sessionID: route.sessionID,
-          })
+          sdk.client.session
+            .unrevert({
+              sessionID: route.sessionID,
+            })
+            .catch(() => {})
           prompt.set({ input: "", parts: [] })
           return
         }
-        sdk.client.session.revert({
-          sessionID: route.sessionID,
+        sdk.client.session
+          .revert({
+            sessionID: route.sessionID,
           messageID: message.id,
         })
       },
@@ -591,6 +613,7 @@ export function Session() {
       title: showTimestamps() ? "Hide timestamps" : "Show timestamps",
       value: "session.toggle.timestamps",
       category: "Session",
+      scope: "shared",
       slash: {
         name: "timestamps",
         aliases: ["toggle-timestamps"],
@@ -605,6 +628,7 @@ export function Session() {
       value: "session.toggle.thinking",
       keybind: "display_thinking",
       category: "Session",
+      scope: "shared",
       slash: {
         name: "thinking",
         aliases: ["toggle-thinking"],
@@ -1120,7 +1144,12 @@ export function Session() {
                         )
                       })()}
                     </Match>
-                    <Match when={revert()?.messageID && message.id >= revert()!.messageID}>
+                    <Match
+                      when={(() => {
+                        const r = revert()
+                        return r?.messageID && message.id >= r.messageID
+                      })()}
+                    >
                       <></>
                     </Match>
                     <Match when={message.role === "user"}>
@@ -1267,7 +1296,7 @@ function UserMessage(props: {
                 <For each={files()}>
                   {(file) => {
                     const bg = createMemo(() => {
-                      if (file.mime.startsWith("image/")) return theme.accent
+                      if (file.mime?.startsWith("image/")) return theme.accent
                       if (file.mime === "application/pdf") return theme.primary
                       return theme.secondary
                     })
@@ -1985,7 +2014,10 @@ function Task(props: ToolProps<typeof TaskTool>) {
 
     if (isRunning() && tools().length > 0) {
       // content[0] += ` · ${tools().length} toolcalls`
-      if (current()) content.push(`↳ ${Locale.titlecase(current()!.tool)} ${(current()!.state as any).title}`)
+      if (current()) {
+        const c = current()!
+        content.push(`↳ ${Locale.titlecase(c.tool)} ${(c.state as any).title}`)
+      }
       else content.push(`↳ ${tools().length} toolcalls`)
     }
 

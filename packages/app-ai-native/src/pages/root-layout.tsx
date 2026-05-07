@@ -1,11 +1,15 @@
-import { type ParentProps, Show } from "solid-js"
+import { type JSX, type ParentProps, Show, createEffect } from "solid-js"
 import { useLocation, useNavigate } from "@solidjs/router"
+import { Gauge } from "lucide-solid"
 import { Icon } from "@opencode-ai/ui/icon"
+import { IconButton } from "@opencode-ai/ui/icon-button"
+import { RadioGroup } from "@opencode-ai/ui/radio-group"
+import { showToast } from "@opencode-ai/ui/toast"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { DropdownMenu } from "@opencode-ai/ui/dropdown-menu"
 import AvatarDisplay from "@/components/avatar-display"
 import { usePlatform } from "@/context/platform"
-import { useLanguage } from "@/context/language"
+import { type Locale, useLanguage } from "@/context/language"
 import { useAuth } from "@/context/auth"
 import { appPath } from "@/lib/router"
 import { getLoginUrl } from "@/pages/store/lib/auth"
@@ -20,10 +24,11 @@ function item(on: boolean) {
 }
 
 function NavButton(props: {
-  icon: "bubble-5" | "store" | "folder" | "folder-add-left" | "configuration" | "inbox" | "team"
+  icon?: "bubble-5" | "store" | "folder" | "folder-add-left" | "configuration" | "inbox" | "team" | "task"
   label: string
   active: boolean
   onClick: () => void
+  node?: JSX.Element
 }) {
   return (
     <Tooltip placement="right" value={props.label}>
@@ -33,7 +38,7 @@ function NavButton(props: {
         onClick={props.onClick}
         class={item(props.active)}
       >
-        <Icon name={props.icon} size="normal" />
+        {props.node ?? <Icon name={props.icon!} size="normal" />}
       </button>
     </Tooltip>
   )
@@ -44,6 +49,24 @@ function UserButton() {
   const language = useLanguage()
   const displayName = () => user()?.name || user()?.preferred_username || user()?.email || ""
   const username = () => user()?.preferred_username || user()?.email || user()?.name || ""
+  const subjectId = () => user()?.subjectId || user()?.id || ""
+
+  const copySubjectId = () => {
+    const id = subjectId()
+    if (!id) return
+    navigator.clipboard
+      .writeText(id)
+      .then(() => {
+        showToast({
+          variant: "success",
+          title: "Copied",
+          description: id,
+        })
+      })
+      .catch(() => {})
+  }
+
+  const languageOptions: Locale[] = ["zh", "en"]
 
   return (
     <Show
@@ -71,15 +94,48 @@ function UserButton() {
           <AvatarDisplay avatarUrl={user()?.picture} username={displayName()} class="size-6" />
         </DropdownMenu.Trigger>
         <DropdownMenu.Portal>
-          <DropdownMenu.Content>
-            <div class="px-3 py-2 border-b border-border-weak-base">
-              <p class="text-13-medium text-text-strong">
+          <DropdownMenu.Content class="w-[280px]">
+            <div class="px-3 py-2 min-w-0">
+              <p class="text-13-medium text-text-strong truncate" title={displayName()}>
                 {displayName()}
               </p>
-              <p class="text-11-regular text-text-weak mt-0.5">
+              <p class="text-[10px] text-text-weak mt-0.5 truncate" title={`@${username()}`}>
                 @{username()}
               </p>
             </div>
+            <div class="px-3 py-1.5 flex items-center justify-between gap-2">
+              <div class="min-w-0 flex-1">
+                <p class="text-11-medium text-text-weak">{language.t("sidebar.user.subjectId")}</p>
+                <p class="text-11-regular text-text-weak truncate" title={subjectId()}>
+                  {subjectId()}
+                </p>
+              </div>
+              <IconButton
+                icon="copy"
+                variant="ghost"
+                class="shrink-0"
+                onClick={copySubjectId}
+                aria-label={language.t("sidebar.user.copySubjectId")}
+              />
+            </div>
+            <DropdownMenu.Separator class="my-0 mx-0" />
+            <div class="px-3 py-2 flex items-center justify-between gap-3">
+              <span class="text-12-medium leading-none text-text-strong">{language.t("sidebar.user.language")}</span>
+              <RadioGroup
+                options={languageOptions}
+                current={language.locale()}
+                size="small"
+                pad="none"
+                class="leading-none"
+                value={(locale) => locale}
+                label={(locale) => language.label(locale)}
+                onSelect={(locale) => locale && language.setLocale(locale as Locale)}
+              />
+            </div>
+            <DropdownMenu.Separator class="my-0 mx-0" />
+            <DropdownMenu.Item onSelect={() => window.open("/credit/manager/?tab=usage", "_blank")}>
+              <DropdownMenu.ItemLabel>{language.t("sidebar.user.creditUsage")}</DropdownMenu.ItemLabel>
+            </DropdownMenu.Item>
             <DropdownMenu.Item onSelect={logout}>
               <DropdownMenu.ItemLabel>{language.t("sidebar.user.signOut")}</DropdownMenu.ItemLabel>
             </DropdownMenu.Item>
@@ -95,6 +151,7 @@ export default function RootLayout(props: ParentProps) {
   const navigate = useNavigate()
   const platform = usePlatform()
   const language = useLanguage()
+  const auth = useAuth()
 
   const appPathname = () => appPath(location.pathname)
 
@@ -107,8 +164,21 @@ export default function RootLayout(props: ParentProps) {
     const path = appPathname()
     return path === "/store" || path.startsWith("/store/")
   }
+
+  let lastWorkspace = "/workspace"
+  createEffect(() => {
+    const path = appPathname()
+    if (path === "/workspace" || path.startsWith("/workspace/")) {
+      lastWorkspace = path + location.search
+    }
+  })
   const isProjects = () => location.pathname.startsWith("/projects")
   const isCloudTeam = () => location.pathname.startsWith("/team")
+
+  const isKanban = () => {
+    const path = appPathname()
+    return path === "/kanban" || path.startsWith("/kanban/")
+  }
 
   const isConsole = () => {
     const path = appPathname()
@@ -128,17 +198,17 @@ export default function RootLayout(props: ParentProps) {
             active={isStore()}
             onClick={() => navigate("/store")}
           />
-          <NavButton
+          {/* <NavButton
             icon="inbox"
             label={language.t("sidebar.projects")}
             active={isProjects()}
             onClick={() => navigate("/projects")}
-          />
+          /> */}
           <NavButton
             icon="folder"
             label={language.t("sidebar.workspace")}
             active={isWorkspace()}
-            onClick={() => navigate("/workspace")}
+            onClick={() => navigate(lastWorkspace)}
           />
           <NavButton
             icon="team"
@@ -146,6 +216,14 @@ export default function RootLayout(props: ParentProps) {
             active={isCloudTeam()}
             onClick={() => navigate("/team")}
           />
+          <Show when={auth.canAccessMenu("kanban")}>
+            <NavButton
+              label={language.t("sidebar.kanban")}
+              active={isKanban()}
+              onClick={() => navigate("/kanban")}
+              node={<Gauge size={18} strokeWidth={1.75} aria-hidden="true" />}
+            />
+          </Show>
         </nav>
         <div class="mt-auto flex flex-col gap-2">
           <UserButton />
@@ -153,7 +231,7 @@ export default function RootLayout(props: ParentProps) {
             icon="configuration"
             label={language.t("sidebar.console")}
             active={isConsole()}
-            onClick={() => navigate("/console/capabilities")}
+            onClick={() => navigate("/console/devices")}
           />
           {/* TODO: 未来恢复设置入口后，再重新展示设置按钮，并放开语言/主题切换能力。 */}
           <Tooltip placement="right" value={language.t("sidebar.help")}>

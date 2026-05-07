@@ -116,13 +116,25 @@ function favoriteStatePath() {
 }
 
 function globalConfigPath() {
-  const candidates = ["opencode.jsonc", "opencode.json", "config.json"].map((file) =>
-    path.join(Global.Path.config, file),
-  )
+  // Match the global config load order (config.ts:1348-1352):
+  // later files override earlier ones, so higher-index = higher priority.
+  const candidates = [
+    "config.json",
+    "opencode.json",
+    "opencode.jsonc",
+    "costrict.json",
+    "costrict.jsonc",
+  ].map((file) => path.join(Global.Path.config, file))
+
+  let lastExisting: string | undefined
   for (const file of candidates) {
-    if (existsSync(file)) return file
+    if (existsSync(file)) {
+      lastExisting = file
+    }
   }
-  return candidates[0]
+  // Write to the highest-priority existing file, or default to opencode.jsonc
+  // for backward compatibility when no config exists yet.
+  return lastExisting ?? candidates[2]
 }
 
 async function ensureFavoriteDirs() {
@@ -359,6 +371,73 @@ async function removeSkillPath(skillPath: string) {
 
 // ── Per-type config registration ───────────────────────────────────────
 
+// ── MCP config format conversion ───────────────────────────────────────
+
+/**
+ * Convert various MCP config formats to opencode's native format.
+ * Supports:
+ * - Opencode native: { type: "local", command: [...] }
+ * - VS Code / Claude Desktop: { mcpServers: { "name": { command, args } } }
+ * - Simplified: { command, args }
+ */
+function convertMcpConfig(config: Record<string, unknown>): Record<string, unknown> | undefined {
+  // Already opencode native format
+  if (typeof config.type === "string" && (config.type === "local" || config.type === "remote")) {
+    return config
+  }
+
+  // VS Code / Claude Desktop format: { mcpServers: { "name": { command, args } } }
+  if (config.mcpServers && typeof config.mcpServers === "object" && !Array.isArray(config.mcpServers)) {
+    const servers = Object.entries(config.mcpServers as Record<string, unknown>)
+    if (servers.length === 0) return undefined
+    const [, server] = servers[0]
+    if (server && typeof server === "object") {
+      return convertSingleMcpServer(server as Record<string, unknown>)
+    }
+    return undefined
+  }
+
+  // Simplified format: { command, args }
+  return convertSingleMcpServer(config)
+}
+
+function convertSingleMcpServer(server: Record<string, unknown>): Record<string, unknown> | undefined {
+  const command = server.command
+  const args = server.args
+
+  if (!command && !args) return undefined
+
+  const cmdArray: string[] = []
+  if (typeof command === "string") {
+    cmdArray.push(command)
+  } else if (Array.isArray(command)) {
+    for (const c of command) {
+      if (typeof c === "string") cmdArray.push(c)
+    }
+  }
+
+  if (Array.isArray(args)) {
+    for (const arg of args) {
+      if (typeof arg === "string") cmdArray.push(arg)
+    }
+  }
+
+  if (cmdArray.length === 0) return undefined
+
+  const result: Record<string, unknown> = {
+    type: "local",
+    command: cmdArray,
+  }
+
+  if (typeof server.environment === "object" && server.environment !== null) {
+    result.environment = server.environment
+  }
+
+  return result
+}
+
+// ── Per-type config registration ───────────────────────────────────────
+
 async function addItemToConfig(item: FavoriteItem, localPath: string) {
   switch (item.itemType) {
     case "skill":
@@ -379,12 +458,41 @@ async function addItemToConfig(item: FavoriteItem, localPath: string) {
       break
     }
     case "mcp": {
-      const configJson = await Filesystem.readJson<Record<string, unknown>>(
-        path.join(localPath, "mcp.json"),
-      ).catch(() => null)
-      if (configJson) {
-        await patchGlobalConfig(["mcp", item.slug], configJson)
+      const mcpJsonPath = path.join(localPath, "mcp.json")
+      const configJson = await Filesystem.readJson<Record<string, unknown>>(mcpJsonPath).catch(() => null)
+      if (!configJson) {
+        throw new Error(
+          `MCP configuration file not found or unreadable: ${mcpJsonPath}\n\n` +
+            `Please check that the file exists and contains valid JSON.`,
+        )
       }
+      const converted = convertMcpConfig(configJson)
+      if (!converted) {
+        const rawPreview = JSON.stringify(configJson, null, 2).slice(0, 500)
+        throw new Error(
+          `Unable to recognize MCP configuration format: ${item.slug}\n\n` +
+            `Configuration file: ${mcpJsonPath}\n` +
+            `Current content preview:\n${rawPreview}${rawPreview.length >= 500 ? "..." : ""}\n\n` +
+            `Supported formats:\n\n` +
+            `1. Opencode native (recommended):\n` +
+            `   {\n` +
+            `     "type": "local",\n` +
+            `     "command": ["npx", "-y", "@modelcontextprotocol/server-zip"]\n` +
+            `   }\n\n` +
+            `2. VS Code / Claude Desktop style (auto-converted):\n` +
+            `   {\n` +
+            `     "mcpServers": {\n` +
+            `       "server-name": {\n` +
+            `         "command": "npx",\n` +
+            `         "args": ["-y", "@modelcontextprotocol/server-zip"]\n` +
+            `       }\n` +
+            `     }\n` +
+            `   }\n\n` +
+            `Please edit the file above and re-run:\n` +
+            `  cs cloud favorite load ${item.slug}`,
+        )
+      }
+      await patchGlobalConfig(["mcp", item.slug], converted)
       break
     }
   }
@@ -457,15 +565,22 @@ async function persistInstalledItem(item: FavoriteItem) {
     case "command":
       await Filesystem.write(path.join(dir, `${item.slug}.md`), item.content)
       break
-    case "mcp":
-      // MCP content is expected to be JSON config; try parsing, fallback to raw
+    case "mcp": {
+      const mcpDestPath = path.join(dir, "mcp.json")
       try {
         const mcpConfig = JSON.parse(item.content)
-        await Filesystem.writeJson(path.join(dir, "mcp.json"), mcpConfig)
+        await Filesystem.writeJson(mcpDestPath, mcpConfig)
       } catch {
-        await Filesystem.write(path.join(dir, "mcp.json"), item.content)
+        // Content is not valid JSON — write raw but warn the user
+        await Filesystem.write(mcpDestPath, item.content)
+        log.warn(
+          `MCP content for "${item.slug}" is not valid JSON. ` +
+            `Written raw to ${mcpDestPath}. ` +
+            `You may need to manually convert it to opencode MCP format before loading.`,
+        )
       }
       break
+    }
   }
 
   // Write metadata snapshot
@@ -584,6 +699,25 @@ export async function listFavoriteItems(type?: FavoriteItemType): Promise<Favori
       status: deriveStatus(local, activeSkillPaths, activeAgentNames, activeCommandNames, activeMcpNames),
       localPath: local?.localPath,
     })
+  }
+
+  // Fallback: when cloud fetch returned nothing, show locally installed items
+  if (result.length === 0) {
+    for (const [slug, record] of Object.entries(state.items)) {
+      if (type && record.itemType !== type) continue
+      if (seen.has(slug)) continue
+      seen.add(slug)
+      result.push({
+        id: record.id,
+        slug: record.slug,
+        name: record.name,
+        description: "",
+        itemType: record.itemType,
+        content: "",
+        status: deriveStatus(record, activeSkillPaths, activeAgentNames, activeCommandNames, activeMcpNames),
+        localPath: record.localPath,
+      })
+    }
   }
 
   return result.sort((a, b) => a.name.localeCompare(b.name))

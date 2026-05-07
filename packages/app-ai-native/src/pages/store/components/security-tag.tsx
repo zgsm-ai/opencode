@@ -1,4 +1,5 @@
 import { Show } from "solid-js"
+import { useItemFilterOptions } from "@/context/item-filter-options"
 import { useLanguage } from "@/context/language"
 import type { SecurityStatus } from "../lib/api"
 
@@ -34,8 +35,9 @@ const PULSE: Set<SecurityStatus> = new Set(["pending", "scanning"])
 /** Filled pill tag for security status, styled after severity filter tags. */
 export default function SecurityTag(props: { status?: SecurityStatus }) {
   const language = useLanguage()
+  const itemFilterOptions = useItemFilterOptions()
   const status = () => props.status ?? "unscanned"
-  const text = () => language.t(KEYS[status()]).replace(/\.{2,}$/, "")
+  const text = () => itemFilterOptions.securityStatusLabel(props.status) || language.t(KEYS[status()]).replace(/\.{2,}$/, "")
 
   return (
     <Show when={props.status}>

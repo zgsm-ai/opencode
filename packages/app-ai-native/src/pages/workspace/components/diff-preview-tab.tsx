@@ -95,9 +95,9 @@ export function DiffPreviewTab(props: { tab: ContentTab }) {
             {language.t("common.loading")}...
           </div>
         </Match>
-        <Match when={state()?.error}>
+        <Match when={state()?.errorKey || state()?.error}>
           <div class="flex-1 flex items-center justify-center text-text-weak text-14-regular">
-            {state()?.error}
+            {state()?.errorKey ? language.t(state()!.errorKey!) : state()?.error}
           </div>
         </Match>
       </Switch>

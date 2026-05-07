@@ -27,6 +27,7 @@
       "packages/slack"
     ],
     "catalog": {
+      "@ark-ui/solid": "5.36.1",
       "@effect/platform-node": "4.0.0-beta.42",
       "@types/bun": "1.3.11",
       "@octokit/rest": "22.0.0",
@@ -112,7 +113,8 @@
   ],
   "overrides": {
     "@types/bun": "catalog:",
-    "@types/node": "catalog:"
+    "@types/node": "catalog:",
+    "@effect/platform-node-shared": "4.0.0-beta.42"
   },
   "patchedDependencies": {
     "@standard-community/standard-openapi@0.2.9": "patches/@standard-community%2Fstandard-openapi@0.2.9.patch",

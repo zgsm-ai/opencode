@@ -1,5 +1,5 @@
 import type { ParentProps } from "solid-js"
-import { createSignal, createMemo, Show, createEffect, untrack, onCleanup, For } from "solid-js"
+import { createSignal, createMemo, Show, createEffect, untrack, onCleanup, For, on } from "solid-js"
 import { createStore, reconcile } from "solid-js/store"
 import { useNavigate, useParams } from "@solidjs/router"
 import { IconButton } from "@opencode-ai/ui/icon-button"
@@ -21,9 +21,9 @@ import { createSdkForServer } from "@/utils/server"
 import { DeviceClientContext } from "@/context/device-client"
 import { DeviceSDKContext } from "@/context/device-sdk"
 import { DeviceInitGate } from "@/context/device-init"
+import { WorkspaceInitGate } from "@/context/workspace-init-gate"
 import { DeviceFileProvider } from "@/context/device-file"
 import { DeviceTerminalProvider } from "@/context/device-terminal"
-import { DeviceProjectProvider } from "@/context/device-project"
 import { DeviceWorkspaceProvider } from "@/context/device-workspace"
 import { DeviceLocalProvider } from "@/context/device-local"
 import { DirectoryContext } from "@/context/directory"
@@ -396,19 +396,19 @@ function WorkspaceContentInstance(props: { workspaceId: string; directory: strin
       <DeviceInitGate>
         <DeviceLayoutProvider deviceLayout={dl}>
           <DirectoryContext.Provider value={() => props.directory}>
-            <DeviceWorkspaceProvider>
-              <DeviceProjectProvider>
+            <WorkspaceInitGate>
+              <DeviceWorkspaceProvider workspaceId={props.workspaceId}>
                 <DeviceFileProvider>
                   <DeviceTerminalProvider>
-                    <DeviceLocalProvider>
+                    <DeviceLocalProvider workspaceId={props.workspaceId}>
                       <ContentTabContext.Provider value={tabStore}>
                         <WorkspaceContentLayout workspaceId={props.workspaceId} directory={props.directory} />
                       </ContentTabContext.Provider>
                     </DeviceLocalProvider>
                   </DeviceTerminalProvider>
                 </DeviceFileProvider>
-              </DeviceProjectProvider>
             </DeviceWorkspaceProvider>
+            </WorkspaceInitGate>
           </DirectoryContext.Provider>
         </DeviceLayoutProvider>
       </DeviceInitGate>
@@ -498,8 +498,43 @@ function WorkspaceContent(props: ParentProps) {
     if (!workspace.enabledWorkspaceIds().includes(id)) workspace.enableWorkspace(id)
   })
 
+  const [transitionState, setTransitionState] = createSignal<{
+    direction: "up" | "down"
+    leavingId: string
+    enteringId: string
+  } | null>(null)
+  let animationTimer: ReturnType<typeof setTimeout> | undefined
+
+  createEffect(
+    on(
+      () => params.workspaceID,
+      (next, prev) => {
+        if (!prev || !next || prev === next) return
+        const enabled = new Set(workspace.enabledWorkspaceIds())
+        const ids = workspace.workspaces().filter((w) => enabled.has(w.id)).map((w) => w.id)
+        const prevIdx = ids.indexOf(prev)
+        const nextIdx = ids.indexOf(next)
+        if (prevIdx < 0 || nextIdx < 0) return
+        if (animationTimer) clearTimeout(animationTimer)
+        setTransitionState({
+          direction: nextIdx > prevIdx ? "down" : "up",
+          leavingId: prev,
+          enteringId: next,
+        })
+        animationTimer = setTimeout(() => {
+          setTransitionState(null)
+          animationTimer = undefined
+        }, 380)
+      },
+    ),
+  )
+
+  onCleanup(() => {
+    if (animationTimer) clearTimeout(animationTimer)
+  })
+
   return (
-    <div class="flex-1 min-w-0 h-full overflow-hidden flex flex-col">
+    <div class="flex-1 min-w-0 h-full overflow-hidden flex flex-col relative">
       <Show when={!params.workspaceID}>
         {props.children}
         <Toast.Region />
@@ -516,11 +551,29 @@ function WorkspaceContent(props: ParentProps) {
           const serverUrl = createMemo(() => ws()?.deviceUniqueId ? getProxyUrl(ws()!.deviceUniqueId!) : "")
           const isActive = createMemo(() => params.workspaceID === id)
 
+          const animClass = createMemo(() => {
+            const ts = transitionState()
+            if (!ts) return ""
+            if (id === ts.enteringId) {
+              return ts.direction === "down"
+                ? "ws-enter ws-enter-from-bottom"
+                : "ws-enter ws-enter-from-top"
+            }
+            if (id === ts.leavingId) {
+              return ts.direction === "down"
+                ? "ws-leave ws-leave-to-top"
+                : "ws-leave ws-leave-to-bottom"
+            }
+            return ""
+          })
+
+          const visible = createMemo(() => isActive() || transitionState()?.leavingId === id)
+
           return (
             <Show when={dir() && serverUrl()}>
               <div
-                class="flex-1 min-w-0 h-full flex flex-col"
-                style={{ display: isActive() ? "flex" : "none" }}
+                class={`absolute inset-0 flex flex-col ${animClass()}`}
+                style={{ display: visible() ? "flex" : "none" }}
               >
                 <WorkspaceContentInstance
                   workspaceId={id}

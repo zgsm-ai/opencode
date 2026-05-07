@@ -59,9 +59,25 @@ export function useDeviceLocal() {
 
 export { DeviceLocalContext }
 
-export function DeviceLocalProvider(props: ParentProps) {
+export function DeviceLocalProvider(props: ParentProps<{ workspaceId?: string }>) {
   const device = useDeviceSDK()
   const sync = useDeviceWorkspace()
+
+  const storageKey = () => `opencode.device.model.${props.workspaceId ?? base64Encode(device.directory)}`
+
+  function loadPersistedModel(): ModelKey | undefined {
+    try {
+      const raw = localStorage.getItem(storageKey())
+      if (raw) return JSON.parse(raw) as ModelKey
+    } catch {}
+  }
+
+  function savePersistedModel(model: ModelKey | undefined) {
+    try {
+      if (model) localStorage.setItem(storageKey(), JSON.stringify(model))
+      else localStorage.removeItem(storageKey())
+    } catch {}
+  }
 
   const [store, setStore] = createStore<{
     currentAgent: string | undefined
@@ -125,6 +141,12 @@ export function DeviceLocalProvider(props: ParentProps) {
   const currentModel = createMemo<ModelInfo | undefined>(() => {
     const providers = sync.data.provider.connected as ProviderCapability[]
     if (!store.currentModel) {
+      const persisted = loadPersistedModel()
+      if (persisted) {
+        const provider = providers.find((p) => p.id === persisted.providerID)
+        const m = provider?.models[persisted.modelID]
+        if (m) return { ...m, provider: { id: provider.id, name: provider.name } }
+      }
       for (const p of providers) {
         const defaultModel = p.default_model
         if (defaultModel) {
@@ -145,6 +167,7 @@ export function DeviceLocalProvider(props: ParentProps) {
 
   const setModel = (model: ModelKey | undefined) => {
     setStore("currentModel", model)
+    savePersistedModel(model)
   }
 
   const value: DeviceLocalValue = {

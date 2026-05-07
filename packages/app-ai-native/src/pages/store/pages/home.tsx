@@ -1,27 +1,21 @@
-import { createEffect, createMemo, createResource, createSignal, For, Show, Suspense } from "solid-js"
+import { createEffect, createMemo, createResource, createSignal, For, onCleanup, Show, Suspense } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useNavigate, useSearchParams } from "@solidjs/router"
+import { useItemFilterOptions } from "@/context/item-filter-options"
 import { useLanguage } from "@/context/language"
+import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Button } from "@/components/ui/button"
-import { TextField, TextFieldInput } from "@/components/ui/text-field"
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { behaviorApi, categoryApi, itemApi, type Category, type CapabilityItem, type ItemOrder, type ItemSort } from "../lib/api"
-import { typeKey } from "../lib/constants"
+import { Persist, persisted } from "@/utils/persist"
+import { behaviorApi, itemApi, userApi, type CapabilityItem, type ItemOrder, type ItemSort, type SecurityRiskGroup } from "../lib/api"
 import ItemDetailContent, { getInstallCommand } from "../components/item-detail-content"
-import SecurityTag from "../components/security-tag"
+import { ItemDetailLoadingSkeleton } from "../components/item-detail-loading-skeleton"
+import { buildStoreTableColumnOptions, DEFAULT_VISIBLE_COLUMNS, formatCompact, formatSourceMetric, formatStoreDate, formatStoreTablePaginationSummary, StoreCapabilityTable, StoreTableFooter, type TableColumnKey } from "../components/store-capability-table"
 import { Icon, type IconProps } from "@opencode-ai/ui/icon"
 import { LocalIcon } from "@/components/local-icon"
 import { useAuth } from "../hooks/use-auth"
 import { cn } from "@/lib/utils"
-import { st, sx } from "../lib/styles"
+import { typeKey } from "../lib/constants"
+import { sx } from "../lib/styles"
 
 const STORE_TYPES = [
   { value: "skill", labelKey: "store.sidebar.nav.skills", descKey: "store.home.type.skill.description", icon: "sparkles" as IconProps["name"], color: "#ffa000", bg: "#FEF3C7" },
@@ -32,32 +26,12 @@ const STORE_TYPES = [
 
 type StoreType = (typeof STORE_TYPES)[number]["value"]
 type ListData = Awaited<ReturnType<typeof itemApi.list>>
-
+type SecurityFilterValue = SecurityRiskGroup
 const PAGE_SIZE = 10
-const SORTS = [
-  ["favoriteCount", "store.home.table.favoriteCount"],
-  ["previewCount", "store.home.table.previewCount"],
-] as const satisfies readonly [ItemSort, string][]
-
-function formatDate(iso?: string) {
-  if (!iso) return "—"
-  return new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })
-}
-
-function formatCompact(n: number) {
-  if (n >= 1000) return (n / 1000).toFixed(1) + "k"
-  return String(n)
-}
-
-function rangePages(page: number, totalPages: number) {
-  const size = 5
-  if (totalPages <= size) return Array.from({ length: totalPages }, (_, i) => i + 1)
-  const start = Math.max(1, Math.min(page - 2, totalPages - size + 1))
-  return Array.from({ length: size }, (_, i) => start + i)
-}
 
 export default function Home() {
   const language = useLanguage()
+  const itemFilterOptions = useItemFilterOptions()
   const auth = useAuth()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -69,38 +43,98 @@ export default function Home() {
 
   const [activeType, setActiveType] = createSignal<StoreType>(initialType())
   const [hoveredType, setHoveredType] = createSignal<StoreType | null>(null)
-  const [activeCategory, setActiveCategory] = createSignal("all")
   const [page, setPage] = createSignal(1)
   const [selectedItemId, setSelectedItemId] = createSignal<string | null>(null)
   const [copiedItemId, setCopiedItemId] = createSignal<string | null>(null)
   const [searchText, setSearchText] = createSignal("")
   const [debouncedSearch, setDebouncedSearch] = createSignal("")
+  let searchInputRef: HTMLInputElement | undefined
+  let searchSelectionStart: number | null = null
+  let searchSelectionEnd: number | null = null
+  let allowSearchRefocusUntil = 0
+  let pendingBlurRefocusTimer: ReturnType<typeof setTimeout> | undefined
   const [listCache, setListCache] = createSignal<{ key: string; data: ListData } | null>(null)
-  const [sort, setSort] = createStore<{ by?: ItemSort; order?: ItemOrder }>({})
+  const [sort, setSort] = createStore<{ by?: ItemSort; order?: ItemOrder }>({ by: "favoriteCount", order: "desc" })
+  const [categoryFilterOpen, setCategoryFilterOpen] = createSignal(false)
+  const [sourceFilterOpen, setSourceFilterOpen] = createSignal(false)
+  const [securityFilterOpen, setSecurityFilterOpen] = createSignal(false)
+  const [categoryFilterQuery, setCategoryFilterQuery] = createSignal("")
+  const [sourceFilterQuery, setSourceFilterQuery] = createSignal("")
+  const [securityFilterQuery, setSecurityFilterQuery] = createSignal("")
+  const [appliedTagFilters, setAppliedTagFilters] = createSignal<string[]>([])
+  const [appliedCategoryFilters, setAppliedCategoryFilters] = createSignal<string[]>([])
+  const [pendingCategoryFilters, setPendingCategoryFilters] = createSignal<string[]>([])
+  const [appliedSourceFilters, setAppliedSourceFilters] = createSignal<string[]>([])
+  const [pendingSourceFilters, setPendingSourceFilters] = createSignal<string[]>([])
+  const [appliedSecurityFilters, setAppliedSecurityFilters] = createSignal<SecurityFilterValue[]>([])
+  const [pendingSecurityFilters, setPendingSecurityFilters] = createSignal<SecurityFilterValue[]>([])
   const [detailItem, setDetailItem] = createSignal<CapabilityItem | null>(null)
+  const [favoriteActionItemId, setFavoriteActionItemId] = createSignal<string | null>(null)
   const [favoritePending, setFavoritePending] = createSignal(false)
   const [favorited, setFavorited] = createSignal(false)
   const [favoriteCount, setFavoriteCount] = createSignal(0)
   const [previewCount, setPreviewCount] = createSignal(0)
   const [installCount, setInstallCount] = createSignal(0)
   const [trackedItemId, setTrackedItemId] = createSignal<string | null>(null)
+  const [detailContentReady, setDetailContentReady] = createSignal(false)
+  const [detailRenderItemId, setDetailRenderItemId] = createSignal<string | null>(null)
+  let detailContentTimer: ReturnType<typeof setTimeout> | undefined
 
-  const [allCategories] = createResource(() => categoryApi.list().catch(() => [] as Category[]))
+  const [columnPrefs, setColumnPrefs] = persisted(
+    Persist.global("store.table.columns", ["store.table.columns.v1"]),
+    createStore({ visible: DEFAULT_VISIBLE_COLUMNS }),
+  )
+  const visibleColumns = createMemo(() => ({ ...columnPrefs.visible, type: false as const }))
 
-  const categoryName = (cat: Category) => {
-    const locale = language.locale()
-    return cat.names[locale] || cat.names.en || cat.slug
-  }
+  onCleanup(() => {
+    clearTimeout(searchTimer)
+    clearTimeout(pendingBlurRefocusTimer)
+    clearTimeout(detailContentTimer)
+  })
+
+  const formatDate = (iso?: string) => formatStoreDate(language.locale(), iso)
 
   let searchTimer: ReturnType<typeof setTimeout> | undefined
+  const toggleColumnVisibility = (key: TableColumnKey) => {
+    setColumnPrefs("visible", key, (current) => !current)
+  }
+  const captureSearchSelection = () => {
+    if (!searchInputRef) return
+    searchSelectionStart = searchInputRef.selectionStart
+    searchSelectionEnd = searchInputRef.selectionEnd
+  }
+  const restoreSearchFocus = () => {
+    if (!searchInputRef) return
+    searchInputRef.focus({ preventScroll: true })
+    if (searchSelectionStart === null || searchSelectionEnd === null) return
+    try {
+      searchInputRef.setSelectionRange(searchSelectionStart, searchSelectionEnd)
+    } catch {
+      // Ignore inputs that do not support selection restoration.
+    }
+  }
   const handleSearchInput = (value: string) => {
+    allowSearchRefocusUntil = Date.now() + 600
     setSearchText(value)
+    captureSearchSelection()
     clearTimeout(searchTimer)
     searchTimer = setTimeout(() => {
       setDebouncedSearch(value.trim())
       setPage(1)
-      setSelectedItemId(null)
+      requestAnimationFrame(() => restoreSearchFocus())
+      pendingBlurRefocusTimer = setTimeout(() => restoreSearchFocus(), 0)
     }, 300)
+  }
+  const clearSearchInput = () => {
+    clearTimeout(searchTimer)
+    clearTimeout(pendingBlurRefocusTimer)
+    allowSearchRefocusUntil = Date.now() + 600
+    searchSelectionStart = 0
+    searchSelectionEnd = 0
+    setSearchText("")
+    setDebouncedSearch("")
+    setPage(1)
+    requestAnimationFrame(() => restoreSearchFocus())
   }
 
   const searchPlaceholderKey = createMemo(() => {
@@ -115,8 +149,11 @@ export default function Home() {
 
   const listParams = createMemo(() => ({
     type: activeType(),
-    category: activeCategory() === "all" ? undefined : activeCategory(),  // slug
     search: debouncedSearch() || undefined,
+    categories: appliedCategoryFilters().length ? appliedCategoryFilters() : undefined,
+    source: appliedSourceFilters().length ? appliedSourceFilters() : undefined,
+    tags: appliedTagFilters().length ? appliedTagFilters() : undefined,
+    securityStatuses: appliedSecurityFilters().length ? appliedSecurityFilters() : undefined,
     page: page(),
     pageSize: PAGE_SIZE,
     sortBy: sort.by,
@@ -125,20 +162,10 @@ export default function Home() {
 
   const listKey = createMemo(() => JSON.stringify(listParams()))
   const listSrc = createMemo(() => ({ key: listKey(), params: listParams() }))
-  const [list] = createResource(listSrc, async (src) => ({ key: src.key, data: await itemApi.list(src.params) }))
-  const [stats] = createResource(async () =>
-    Object.fromEntries(
-      await Promise.all(
-        STORE_TYPES.map(
-          async (entry) =>
-            [entry.value, (await itemApi.list({ type: entry.value, page: 1, pageSize: 1 })).total] as const,
-        ),
-      ),
-    ),
-  )
-
+  const [list, { mutate: mutateList }] = createResource(listSrc, async (src) => ({ key: src.key, data: await itemApi.list(src.params) }))
   const typeMeta = createMemo(() => STORE_TYPES.find((entry) => entry.value === activeType()) ?? STORE_TYPES[0])
   const isTypeListMode = createMemo(() => !!searchParams.type && STORE_TYPES.some((e) => e.value === searchParams.type))
+  const currentUserId = createMemo(() => auth.user()?.id ?? auth.user()?.subjectId ?? auth.user()?.sub ?? "")
 
   // Popular items for type-list mode (top 3 by installCount)
   const popularParams = createMemo(() => isTypeListMode() ? { type: activeType(), page: 1, pageSize: 20 } : null)
@@ -160,6 +187,30 @@ export default function Home() {
     setListCache(data)
   })
 
+  const patchListItem = (itemId: string, updater: (item: CapabilityItem) => CapabilityItem) => {
+    mutateList((prev) => {
+      if (!prev || prev.key !== listKey()) return prev
+      return {
+        ...prev,
+        data: {
+          ...prev.data,
+          items: prev.data.items.map((item) => (item.id === itemId ? updater(item) : item)),
+        },
+      }
+    })
+
+    setListCache((prev) => {
+      if (!prev || prev.key !== listKey()) return prev
+      return {
+        ...prev,
+        data: {
+          ...prev.data,
+          items: prev.data.items.map((item) => (item.id === itemId ? updater(item) : item)),
+        },
+      }
+    })
+  }
+
   const toggleFavorite = async () => {
     const data = detailItem()
     if (!data || !auth.user() || auth.loading() || favoritePending()) return
@@ -180,6 +231,33 @@ export default function Home() {
       setFavoritePending(false)
     }
   }
+
+  const toggleRowFavorite = async (item: CapabilityItem) => {
+    if (!auth.user() || auth.loading() || favoriteActionItemId() === item.id) return
+
+    setFavoriteActionItemId(item.id)
+    try {
+      const result = item.favorited
+        ? await behaviorApi.unfavorite(item.id)
+        : await behaviorApi.favorite(item.id)
+
+      patchListItem(item.id, (current) => ({
+        ...current,
+        favorited: result.favorited,
+        favoriteCount: result.favoriteCount,
+      }))
+
+      if (detailItem()?.id === item.id) {
+        setDetailItem((current) => current ? { ...current, favorited: result.favorited, favoriteCount: result.favoriteCount } : current)
+        setFavorited(result.favorited)
+        setFavoriteCount(result.favoriteCount)
+      }
+    } finally {
+      setFavoriteActionItemId((current) => (current === item.id ? null : current))
+    }
+  }
+
+  const canEditItem = (item: CapabilityItem) => item.createdBy === currentUserId()
 
   createEffect(() => {
     const data = detailItem()
@@ -209,39 +287,69 @@ export default function Home() {
       .catch(() => undefined)
   })
 
-  const categories = createMemo(() => allCategories() ?? [])
-
+  const categories = createMemo(() => itemFilterOptions.categories())
+  const sourceOptions = createMemo(() => itemFilterOptions.sources())
+  const securityOptions = createMemo(() => itemFilterOptions.securityRiskGroups())
+  const categoryFilterActive = createMemo(() => appliedCategoryFilters().length > 0)
+  const sourceFilterActive = createMemo(() => appliedSourceFilters().length > 0)
+  const securityFilterActive = createMemo(() => appliedSecurityFilters().length > 0)
+  const tagFilterActive = createMemo(() => appliedTagFilters().length > 0)
+  const columnOptions = createMemo(() => buildStoreTableColumnOptions(language.t).filter((column) => column.key !== "type"))
+  const filteredCategoryOptions = createMemo(() => {
+    const query = categoryFilterQuery().trim().toLowerCase()
+    if (!query) return categories()
+    return categories().filter((cat) => itemFilterOptions.categoryLabel(cat.slug, cat).toLowerCase().includes(query) || cat.slug.toLowerCase().includes(query))
+  })
+  const filteredSourceOptions = createMemo(() => {
+    const query = sourceFilterQuery().trim().toLowerCase()
+    if (!query) return sourceOptions()
+    return sourceOptions().filter((source) => (itemFilterOptions.sourceLabel(source.value, source) || source.value).toLowerCase().includes(query) || source.value.toLowerCase().includes(query))
+  })
+  const filteredSecurityOptions = createMemo(() => {
+    const query = securityFilterQuery().trim().toLowerCase()
+    if (!query) return securityOptions()
+    return securityOptions().filter((option) => itemFilterOptions.securityRiskGroupLabel(option.value as SecurityFilterValue, option).toLowerCase().includes(query) || option.value.toLowerCase().includes(query))
+  })
   const rows = createMemo(() => listData()?.items ?? [])
   const totalItems = createMemo(() => listData()?.total ?? 0)
+  const [creatorInfoMap] = createResource(
+    () => rows().map((item) => item.createdBy).filter(Boolean),
+    (ids) => userApi.getInfo(ids),
+  )
   const totalPages = createMemo(() => Math.max(1, Math.ceil(totalItems() / PAGE_SIZE)))
-  const visiblePages = createMemo(() => rangePages(page(), totalPages()))
   const listError = createMemo(() => (list.error instanceof Error ? list.error.message : ""))
   const showError = createMemo(() => !!listError() && rows().length === 0)
   const detailOpen = createMemo(() => !!selectedItemId())
+
+  const openItemDetail = (item: CapabilityItem) => {
+    setSelectedItemId(item.id)
+    setDetailItem(item)
+  }
 
   createEffect(() => {
     if (page() > totalPages()) setPage(totalPages())
   })
 
   createEffect(() => {
-    if (activeCategory() !== "all" && !categories().some((c) => c.slug === activeCategory())) {
-      setActiveCategory("all")
-      setPage(1)
-      setSelectedItemId(null)
+    const itemId = selectedItemId()
+    clearTimeout(detailContentTimer)
+    if (!itemId) {
+      setDetailContentReady(false)
+      setDetailRenderItemId(null)
+      return
     }
+    setDetailContentReady(false)
+    detailContentTimer = setTimeout(() => {
+      setDetailRenderItemId(itemId)
+      setDetailContentReady(true)
+    }, 180)
   })
 
-  const statCards = createMemo(() =>
-    STORE_TYPES.map((entry) => ({
-      ...entry,
-      total: stats()?.[entry.value] ?? null,
-    })),
-  )
+  const statCards = createMemo(() => STORE_TYPES)
 
   const resetToType = (type: StoreType) => {
     setListCache(null)
     setActiveType(type)
-    setActiveCategory("all")
     setSearchText("")
     setDebouncedSearch("")
     setPage(1)
@@ -262,13 +370,6 @@ export default function Home() {
       resetToType(validType)
     }
   })
-
-  const handleCategoryChange = (category: string) => {
-    if (category === activeCategory()) return
-    setActiveCategory(category)
-    setPage(1)
-    setSelectedItemId(null)
-  }
 
   const handlePageChange = (nextPage: number) => {
     if (nextPage === page() || nextPage < 1 || nextPage > totalPages()) return
@@ -295,6 +396,79 @@ export default function Home() {
     return sort.order === "asc" ? "ascending" : "descending"
   }
 
+  const togglePendingCategoryFilter = (slug: string) => {
+    setPendingCategoryFilters((current) => current.includes(slug) ? current.filter((item) => item !== slug) : [...current, slug])
+  }
+
+  const togglePendingSourceFilter = (source: string) => {
+    setPendingSourceFilters((current) => current.includes(source) ? current.filter((item) => item !== source) : [...current, source])
+  }
+
+  const togglePendingSecurityFilter = (status: SecurityFilterValue) => {
+    setPendingSecurityFilters((current) => current.includes(status) ? current.filter((item) => item !== status) : [...current, status])
+  }
+
+  const applyCategoryFilters = () => {
+    setAppliedCategoryFilters([...pendingCategoryFilters()])
+    setPage(1)
+    setSelectedItemId(null)
+    setCategoryFilterQuery("")
+    setCategoryFilterOpen(false)
+  }
+
+  const applySourceFilters = () => {
+    setAppliedSourceFilters([...pendingSourceFilters()])
+    setPage(1)
+    setSelectedItemId(null)
+    setSourceFilterQuery("")
+    setSourceFilterOpen(false)
+  }
+
+  const applySecurityFilters = () => {
+    setAppliedSecurityFilters([...pendingSecurityFilters()])
+    setPage(1)
+    setSelectedItemId(null)
+    setSecurityFilterQuery("")
+    setSecurityFilterOpen(false)
+  }
+
+  const resetCategoryFilters = () => {
+    setPendingCategoryFilters([])
+    setAppliedCategoryFilters([])
+    setPage(1)
+    setSelectedItemId(null)
+    setCategoryFilterQuery("")
+    setCategoryFilterOpen(false)
+  }
+
+  const resetSourceFilters = () => {
+    setPendingSourceFilters([])
+    setAppliedSourceFilters([])
+    setPage(1)
+    setSelectedItemId(null)
+    setSourceFilterQuery("")
+    setSourceFilterOpen(false)
+  }
+
+  const resetSecurityFilters = () => {
+    setPendingSecurityFilters([])
+    setAppliedSecurityFilters([])
+    setPage(1)
+    setSelectedItemId(null)
+    setSecurityFilterQuery("")
+    setSecurityFilterOpen(false)
+  }
+
+  const toggleAppliedTagFilter = (slug: string) => {
+    setAppliedTagFilters((current) => current.includes(slug) ? current.filter((item) => item !== slug) : [...current, slug])
+    setPage(1)
+    setSelectedItemId(null)
+  }
+
+  const creatorInfo = (userId: string) => creatorInfoMap()?.[userId]
+  const favoriteIconColor = (favorited?: boolean) => favorited ? (typeMeta().color ?? "var(--native-primary)") : "var(--native-muted)"
+  const typeLabel = (value: string) => language.t(typeKey(value))
+
   const copyInstall = async (item: CapabilityItem) => {
     await navigator.clipboard.writeText(getInstallCommand(item))
     setCopiedItemId(item.id)
@@ -313,7 +487,7 @@ export default function Home() {
   })
 
   return (
-    <div class="flex h-full min-h-0 w-full flex-1 flex-col gap-6 max-[1280px]:gap-5">
+    <div class="flex h-full min-h-0 w-full flex-1 flex-col">
       <Show
         when={isTypeListMode()}
         fallback={
@@ -326,7 +500,8 @@ export default function Home() {
                   <p class="relative m-0 min-w-0 max-w-[38rem] text-[0.8125rem] leading-6 text-[var(--native-muted)]">{language.t("store.home.hero.description")}</p>
                 </div>
 
-                <div class="flex shrink-0 flex-nowrap items-stretch justify-end gap-2 overflow-x-auto">
+                <div class="flex shrink-0 items-center justify-end gap-3">
+                  <div class="flex flex-nowrap items-stretch justify-end gap-2 overflow-x-auto">
                   <For each={statCards()}>
                     {(entry) => (
                       <button
@@ -365,21 +540,58 @@ export default function Home() {
                       </button>
                     )}
                   </For>
+                  </div>
+                  <Tooltip value={language.t("store.console.capabilities.title")} placement="bottom">
+                    <button
+                      type="button"
+                      class="flex h-8 shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-[0.375rem] bg-[color:color-mix(in_oklab,var(--native-primary)_85%,white)] px-3 !text-white shadow-[var(--native-shadow-sm)] transition-[background-color,filter,transform] hover:cursor-pointer hover:bg-[var(--native-primary)] hover:!text-white"
+                      style={{ color: "#ffffff" }}
+                      aria-label={language.t("store.console.capabilities.title")}
+                      onClick={() => navigate("/store/manager")}
+                    >
+                      <Icon name="sliders" class="size-4" style={{ color: "#ffffff" }} />
+                      <span class="text-sm font-medium leading-none !text-white" style={{ color: "#ffffff" }}>{language.t("store.console.capabilities.manage")}</span>
+                    </button>
+                  </Tooltip>
+                  <Tooltip value={language.t("store.console.capabilities.create")} placement="bottom">
+                    <button
+                      type="button"
+                      class="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-[0.375rem] bg-[color:color-mix(in_oklab,var(--native-primary)_85%,white)] text-white shadow-[var(--native-shadow-sm)] transition-[background-color,filter,transform] hover:cursor-pointer hover:bg-[var(--native-primary)]"
+                      aria-label={language.t("store.console.capabilities.create")}
+                      onClick={() => navigate("/capabilities/new")}
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="size-5"
+                        style={{ color: "#ffffff" }}
+                      >
+                        <path d="M12 5v14" />
+                        <path d="M5 12h14" />
+                      </svg>
+                    </button>
+                  </Tooltip>
                 </div>
               </div>
             </header>
 
-            <div class="flex min-h-0 min-w-0 flex-1 flex-col gap-6 max-[1280px]:gap-5">
-              <SearchControls />
+            <div class="flex min-h-0 min-w-0 flex-1 flex-col">
+              <div class="flex w-full flex-1 items-center justify-center">
+                <SearchControls />
+              </div>
 
-              {/* Home mode content shell */}
               <ContentShell />
             </div>
           </>
         }
       >
         {/* ═══ TYPE LIST MODE ═══ */}
-        <div class="flex min-h-0 min-w-0 flex-1 flex-col gap-6 max-[1280px]:gap-5">
+        <div class="flex min-h-0 min-w-0 flex-1 flex-col gap-4 max-[1280px]:gap-3">
           {/* Type Hero Header */}
           <header class="relative flex flex-col gap-5 overflow-hidden rounded-[1.25rem] border border-[color:color-mix(in_srgb,var(--native-border)_12%,transparent)] bg-[linear-gradient(135deg,var(--native-panel),color-mix(in_srgb,var(--tp-accent)_5%,var(--native-panel)))] px-7 py-6 before:pointer-events-none before:absolute before:right-[-5%] before:top-[-40%] before:h-[280px] before:w-[280px] before:rounded-full before:bg-[radial-gradient(circle,color-mix(in_srgb,var(--tp-accent)_8%,transparent),transparent_70%)] before:content-[''] lg:flex-row lg:items-center lg:justify-between" style={{ "--tp-accent": typeMeta().color }}>
             <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-[var(--native-radius-lg)] bg-[color-mix(in_srgb,var(--tp-accent)_10%,transparent)]">
@@ -412,7 +624,7 @@ export default function Home() {
             <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3" style={{ "--tp-accent": typeMeta().color }}>
               <For each={popularItems()}>
                 {(item, idx) => (
-                  <article class="relative flex cursor-pointer items-center gap-3 overflow-hidden rounded-[var(--native-radius-lg)] border border-[color:color-mix(in_srgb,var(--native-border)_12%,transparent)] bg-[var(--native-panel)] py-3.5 pr-4 pl-8 shadow-[var(--native-shadow-sm)] transition-all hover:-translate-y-px hover:border-[color:color-mix(in_srgb,var(--tp-accent)_20%,transparent)] hover:shadow-[var(--native-shadow-md)]" onClick={() => setSelectedItemId(item.id)}>
+                   <article class="relative flex cursor-pointer items-center gap-3 overflow-hidden rounded-[var(--native-radius-lg)] border border-[color:color-mix(in_srgb,var(--native-border)_12%,transparent)] bg-[var(--native-panel)] py-3.5 pr-4 pl-8 shadow-[var(--native-shadow-sm)] transition-all hover:-translate-y-px hover:border-[color:color-mix(in_srgb,var(--tp-accent)_20%,transparent)] hover:shadow-[var(--native-shadow-md)]" onClick={() => openItemDetail(item)}>
                     <span class="absolute left-0 top-0 flex h-[1.375rem] w-[1.375rem] items-center justify-center rounded-br-[var(--native-radius-sm)] bg-[var(--tp-accent)] text-[12px] font-extrabold text-white">#{idx() + 1}</span>
                     <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--native-radius-md)] bg-[color-mix(in_srgb,var(--tp-accent)_8%,transparent)]">
                       <Icon name={typeMeta().icon} />
@@ -425,9 +637,7 @@ export default function Home() {
                       </div>
                     </div>
                     <Show when={item.category}>
-                      <span class="shrink-0 whitespace-nowrap rounded-[var(--native-radius-full)] bg-[color-mix(in_srgb,var(--tp-accent)_8%,transparent)] px-1.5 py-px text-[12px] text-[var(--tp-accent)]">{categories().find((c) => c.slug === item.category)
-                        ? categoryName(categories().find((c) => c.slug === item.category)!)
-                        : item.category}</span>
+                      <span class="shrink-0 whitespace-nowrap rounded-[var(--native-radius-full)] bg-[color-mix(in_srgb,var(--tp-accent)_8%,transparent)] px-1.5 py-px text-[12px] text-[var(--tp-accent)]">{itemFilterOptions.categoryLabel(item.category) || item.category}</span>
                     </Show>
                   </article>
                 )}
@@ -443,27 +653,32 @@ export default function Home() {
       </Show>
 
       <Sheet open={detailOpen()} onOpenChange={(open) => !open && setSelectedItemId(null)} modal={false}>
-        <SheetContent position="right" class={cn(sx.sheet, "w-[min(48rem,92vw)] sm:max-w-none")} style={{ "background-color": "var(--st-surface-lowest, #ffffff)" }}>
+          <SheetContent position="right" class={cn(sx.sheet, "w-[min(68rem,94vw)] sm:max-w-none")} style={{ "background-color": "var(--st-surface-lowest, #ffffff)" }}>
           <SheetHeader class="sr-only">
             <SheetTitle>{language.t("store.home.detail.title")}</SheetTitle>
             <SheetDescription>{language.t("store.home.detail.description")}</SheetDescription>
           </SheetHeader>
-          <Show when={selectedItemId()}>
+          <Show when={detailRenderItemId()}>
             {(itemId) => (
-              <Suspense fallback={<div class="flex justify-center py-16 text-muted-foreground">{language.t("store.loading")}</div>}>
-                <ItemDetailContent
-                  itemId={itemId()}
-                  class={cn(sx.sheetBody, "thin-scrollbar")}
-                  onItemLoaded={setDetailItem}
-                  favorited={favorited()}
-                  favoriteCount={favoriteCount()}
-                  previewCount={previewCount()}
-                  installCount={installCount()}
-                  onToggleFavorite={toggleFavorite}
-                  favoritePending={favoritePending()}
-                  isAuthenticated={!!auth.user() && !auth.loading()}
-                />
-              </Suspense>
+              <Show
+                when={detailContentReady()}
+                fallback={<ItemDetailLoadingSkeleton class={sx.sheetBody} />}
+              >
+                <Suspense fallback={<div class="flex justify-center py-16 text-muted-foreground">{language.t("store.loading")}</div>}>
+                  <ItemDetailContent
+                    itemId={itemId()}
+                    class={cn(sx.sheetBody, "thin-scrollbar")}
+                    onItemLoaded={setDetailItem}
+                    favorited={favorited()}
+                    favoriteCount={favoriteCount()}
+                    previewCount={previewCount()}
+                    installCount={installCount()}
+                    onToggleFavorite={toggleFavorite}
+                    favoritePending={favoritePending()}
+                    isAuthenticated={!!auth.user() && !auth.loading()}
+                  />
+                </Suspense>
+              </Show>
             )}
           </Show>
         </SheetContent>
@@ -471,12 +686,12 @@ export default function Home() {
     </div>
   )
 
-  // Shared content shell: table, search, category filter, pagination
+  // Shared content shell: table, search, pagination
   function SearchControls() {
     return (
       <section class={sx.section}>
-        <div class="mx-auto mt-4 flex w-full max-w-[64rem] items-center gap-3 max-[640px]:gap-2">
-          <div class="relative min-w-0 flex-1 rounded-full transition-shadow hover:shadow-[0_6px_16px_-10px_color-mix(in_srgb,var(--native-primary)_14%,rgba(15,23,42,0.18))] focus-within:shadow-[0_6px_16px_-10px_color-mix(in_srgb,var(--native-primary)_14%,rgba(15,23,42,0.18))]">
+        <div class="mx-auto flex w-full max-w-[64rem] items-center gap-3 px-4 max-[640px]:gap-2">
+          <div class="relative min-w-0 flex-1 rounded-full transition-shadow hover:shadow-[0_2px_6px_-3px_color-mix(in_srgb,var(--native-primary)_22%,rgba(15,23,42,0.3))] focus-within:shadow-[0_2px_6px_-3px_color-mix(in_srgb,var(--native-primary)_22%,rgba(15,23,42,0.3))]">
             <div class="pointer-events-none absolute inset-y-0 left-0 z-10 flex items-center pl-4 text-[color:color-mix(in_srgb,var(--native-muted)_82%,white)]">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -492,101 +707,56 @@ export default function Home() {
                 <path d="m20 20 -3.5 -3.5" />
               </svg>
             </div>
-            <TextField class="min-w-0 flex-1 rounded-full">
-              <TextFieldInput
-                type="search"
-                placeholder={language.t(searchPlaceholderKey())}
-                value={searchText()}
-                onInput={(e: InputEvent) => handleSearchInput((e.currentTarget as HTMLInputElement).value)}
-                class="h-12 rounded-full border-[color:color-mix(in_srgb,var(--native-border)_30%,transparent)] bg-[var(--native-panel)] pr-5 pl-11 text-base text-[var(--native-foreground)] caret-[var(--native-primary)] placeholder:text-[color:color-mix(in_srgb,var(--native-muted)_72%,white)] shadow-[var(--native-shadow-sm)] focus-visible:border-2 focus-visible:border-[color:color-mix(in_srgb,var(--native-primary)_52%,var(--native-border))] focus-visible:text-[var(--native-foreground)] focus-visible:placeholder:text-[color:color-mix(in_srgb,var(--native-muted)_36%,white)] focus-visible:ring-0 focus-visible:ring-offset-0"
-              />
-            </TextField>
+            <input
+              ref={searchInputRef}
+              type="text"
+              inputmode="search"
+              placeholder={language.t(searchPlaceholderKey())}
+              value={searchText()}
+              onInput={(e: InputEvent) => handleSearchInput((e.currentTarget as HTMLInputElement).value)}
+              onBlur={(e) => {
+                if (e.relatedTarget || Date.now() > allowSearchRefocusUntil) return
+                clearTimeout(pendingBlurRefocusTimer)
+                pendingBlurRefocusTimer = setTimeout(() => {
+                  if (!searchInputRef) return
+                  if (document.activeElement && document.activeElement !== document.body) return
+                  restoreSearchFocus()
+                }, 0)
+              }}
+              class="h-12 w-full rounded-full border border-[color:color-mix(in_srgb,var(--native-border)_58%,transparent)] bg-[var(--native-panel)] pr-12 pl-11 text-base !text-[var(--native-foreground)] caret-[var(--native-primary)] placeholder:text-[color:color-mix(in_srgb,var(--native-muted)_72%,white)] shadow-[var(--native-shadow-sm)] focus-visible:border-2 focus-visible:border-[color:color-mix(in_srgb,var(--native-primary)_52%,var(--native-border))] focus-visible:!text-[var(--native-foreground)] focus-visible:placeholder:text-[color:color-mix(in_srgb,var(--native-muted)_36%,white)] focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0"
+            />
+            <Show when={searchText().length > 0}>
+              <button
+                type="button"
+                aria-label={language.t("common.clear")}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={clearSearchInput}
+                class="absolute inset-y-0 right-0 flex h-full w-12 cursor-pointer items-center justify-center rounded-r-full text-[color:color-mix(in_srgb,var(--native-muted)_78%,white)] transition-colors hover:text-[var(--native-foreground)]"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  class="size-4"
+                >
+                  <path d="M18 6 6 18" />
+                  <path d="m6 6 12 12" />
+                </svg>
+              </button>
+            </Show>
           </div>
-          <DropdownMenu placement="bottom-end">
-            <DropdownMenuTrigger as={Button<"button">} variant="outline" size="sm" class="h-12 shrink-0 rounded-full px-4 whitespace-nowrap">
-              {activeCategory() === "all"
-                ? language.t("store.console.capabilities.category")
-                : categories().find((c) => c.slug === activeCategory())
-                  ? categoryName(categories().find((c) => c.slug === activeCategory())!)
-                  : activeCategory()}
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                class="size-4"
-              >
-                <path d="M6 9l6 6l6 -6" />
-              </svg>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent class="max-h-72 overflow-y-auto">
-              <DropdownMenuCheckboxItem
-                checked={activeCategory() === "all"}
-                onChange={() => handleCategoryChange("all")}
-              >
-                {language.t("store.console.filters.all")}
-              </DropdownMenuCheckboxItem>
-              <For each={categories()}>
-                {(cat) => (
-                  <DropdownMenuCheckboxItem
-                    checked={cat.slug === activeCategory()}
-                    onChange={() => handleCategoryChange(cat.slug)}
-                  >
-                    {categoryName(cat)}
-                  </DropdownMenuCheckboxItem>
-                )}
-              </For>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <button
-            type="button"
-            class="flex h-12 w-12 shrink-0 cursor-pointer items-center justify-center rounded-full bg-[color:color-mix(in_oklab,var(--native-primary)_70%,white)] text-white shadow-[var(--native-shadow-sm)] transition-[background-color,filter,transform] hover:cursor-pointer hover:bg-[var(--native-primary)]"
-            aria-label="Add"
-            onClick={() => navigate("/capabilities/new")}
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              class="size-5"
-              style={{ color: "#ffffff" }}
-            >
-              <path d="M12 5v14" />
-              <path d="M5 12h14" />
-            </svg>
-          </button>
         </div>
       </section>
     )
   }
 
   function ContentShell() {
-    const tableTitle = () =>
-      isTypeListMode()
-        ? language.t("store.typeList.allItems", { type: language.t(typeMeta().labelKey) })
-        : language.t(typeMeta().labelKey)
-
-    const tableSub = () =>
-      isTypeListMode()
-        ? language.t("store.typeList.itemsAvailable", { count: totalItems() })
-        : language.t(typeMeta().descKey)
-
     return (
-      <section class={cn(sx.section, "flex min-h-0 flex-1 flex-col p-3 sm:p-4")}>
-        <div class={sx.head}>
-          <div>
-            <h2 class={sx.title}>{tableTitle()}</h2>
-            <p class={sx.sub}>{tableSub()}</p>
-          </div>
-        </div>
-
+      <section class={cn(sx.section, "flex min-h-0 flex-col px-2 sm:px-3")} >
         <div class={cn(sx.tableShell, "flex min-h-0 flex-1 flex-col")}>
           <Show
             when={!showError()}
@@ -597,167 +767,179 @@ export default function Home() {
             }
           >
             <Show
-              when={rows().length > 0 || !list.loading}
+              when={listCache() !== null || !list.loading}
               fallback={<div class={sx.state}>{language.t("store.loading")}</div>}
             >
-              <Show when={list.loading && rows().length > 0}>
+              <Show when={list.loading && listCache() !== null}>
                 <div class={sx.overlay}>
                   <div class={sx.spinner} />
                 </div>
               </Show>
-              <Table class="table-fixed text-[0.8125rem]">
-                <TableHeader class={sx.thead}>
-                  <TableRow>
-                    <TableHead class={cn(sx.th, sx.colTitle)}>{language.t("store.home.table.title")}</TableHead>
-                    <TableHead class={cn(sx.th, sx.colDescription)}>{language.t("store.home.table.description")}</TableHead>
-                    <For each={SORTS}>
-                      {([by, label]) => (
-                        <TableHead class={sx.th} aria-sort={sortState(by)}>
-                          <button
-                            type="button"
-                            class={st.sort(sort.by === by)}
-                            onClick={() => handleSortChange(by)}
-                          >
-                            <span>{language.t(label)}</span>
-                            <span class={sx.sortIcon} aria-hidden="true">
-                              <span class={st.arrow("up", sort.by === by && sort.order === "asc")} />
-                              <span class={st.arrow("down", sort.by === by && sort.order === "desc")} />
-                            </span>
-                          </button>
-                        </TableHead>
-                      )}
-                    </For>
-                    <TableHead class={cn(sx.th, sx.colCategory)}>
-                      {language.t("store.console.capabilities.category")}
-                    </TableHead>
-                    <TableHead class={sx.th}>{language.t("store.scanResults.securityScan")}</TableHead>
-                    <TableHead class={cn(sx.th, sx.colUpdated)}>{language.t("store.detail.updated")}</TableHead>
-                    <TableHead class={cn(sx.th, sx.colAction, "text-right")}>{language.t("store.home.table.action")}</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  <Show
-                    when={rows().length > 0}
-                      fallback={<TableEmptyState colSpan={8} message={language.t("store.home.emptyCategory")} />}
-                  >
-                    <For each={rows()}>
-                      {(item) => (
-                        <TableRow class={sx.row} onClick={() => setSelectedItemId(item.id)}>
-                          <TableCell class={cn(sx.td, sx.colTitle)}>
-                            <span class={cn(sx.item, "block truncate")} title={item.name}>
-                              {item.name}
-                            </span>
-                          </TableCell>
-                          <TableCell class={cn(sx.td, sx.colDescription, sx.mut)}>
-                            <span class="block truncate" title={item.description || "—"}>
-                              {item.description || "—"}
-                            </span>
-                          </TableCell>
-                          <TableCell class={cn(sx.td, sx.mut)}>
-                            {item.favoriteCount?.toLocaleString() ?? "0"}
-                          </TableCell>
-                          <TableCell class={cn(sx.td, sx.mut)}>
-                            {item.previewCount?.toLocaleString() ?? "0"}
-                          </TableCell>
-                          <TableCell class={cn(sx.td, sx.colCategory, sx.mut)}>
-                            {item.category
-                              ? categories().find((c) => c.slug === item.category)
-                                ? categoryName(categories().find((c) => c.slug === item.category)!)
-                                : item.category
-                              : "—"}
-                          </TableCell>
-                          <TableCell class={sx.td}>
-                            <SecurityTag status={item.securityStatus} />
-                          </TableCell>
-                          <TableCell class={cn(sx.td, sx.colUpdated, sx.mut)}>
-                            {formatDate(item.updatedAt)}
-                          </TableCell>
-                          <TableCell class={cn(sx.td, sx.colAction, "text-right")} onClick={(e: MouseEvent) => e.stopPropagation()}>
-                            <DropdownMenu placement="bottom-end">
-                              <DropdownMenuTrigger
-                                as={Button<"button">}
-                                variant="ghost"
-                                class="size-8 p-0"
-                              >
-                                <span class="sr-only">{language.t("store.home.table.action")}</span>
-                                <svg
-                                  xmlns="http://www.w3.org/2000/svg"
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  stroke-width="2"
-                                  stroke-linecap="round"
-                                  stroke-linejoin="round"
-                                  class="size-4"
-                                >
-                                  <circle cx="12" cy="12" r="1" />
-                                  <circle cx="12" cy="5" r="1" />
-                                  <circle cx="12" cy="19" r="1" />
-                                </svg>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent>
-                                <DropdownMenuItem class="justify-center cursor-pointer" onClick={() => copyInstall(item)}>
-                                  {copiedItemId() === item.id
-                                    ? language.t("store.itemCard.copied")
-                                    : language.t("store.home.table.copyInstall")}
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </For>
-                  </Show>
-                </TableBody>
-              </Table>
+              <StoreCapabilityTable
+                rows={rows()}
+                visibleColumns={visibleColumns()}
+                columnOptions={columnOptions()}
+                onToggleColumnVisibility={toggleColumnVisibility}
+                sort={sort}
+                onSortChange={handleSortChange}
+                onRowClick={openItemDetail}
+                creatorInfo={creatorInfo}
+                typeLabel={typeLabel}
+                categoryLabel={(slug, category) => itemFilterOptions.categoryLabel(slug, category)}
+                sourceLabel={(value, source) => itemFilterOptions.sourceLabel(value, source as Parameters<typeof itemFilterOptions.sourceLabel>[1])}
+                sourceUrl={(value) => itemFilterOptions.sourceUrl(value)}
+                securityLabel={(value, option) => itemFilterOptions.securityRiskGroupLabel(value, option as Parameters<typeof itemFilterOptions.securityRiskGroupLabel>[1])}
+                favoriteIconColor={favoriteIconColor}
+                onToggleFavorite={(item) => void toggleRowFavorite(item)}
+                formatDate={formatDate}
+                formatSourceMetric={formatSourceMetric}
+                formatCompact={formatCompact}
+                filters={{
+                  category: {
+                    open: categoryFilterOpen(),
+                    onOpenChange: (open) => {
+                      setCategoryFilterOpen(open)
+                      if (open) {
+                        setPendingCategoryFilters([...appliedCategoryFilters()])
+                        setCategoryFilterQuery("")
+                      }
+                    },
+                    active: categoryFilterActive(),
+                    appliedValues: appliedCategoryFilters(),
+                    pendingValues: pendingCategoryFilters(),
+                    query: categoryFilterQuery(),
+                    onQueryChange: setCategoryFilterQuery,
+                    options: filteredCategoryOptions(),
+                    togglePending: togglePendingCategoryFilter,
+                    apply: applyCategoryFilters,
+                    reset: resetCategoryFilters,
+                  },
+                  security: {
+                    open: securityFilterOpen(),
+                    onOpenChange: (open) => {
+                      setSecurityFilterOpen(open)
+                      if (open) {
+                        setPendingSecurityFilters([...appliedSecurityFilters()])
+                        setSecurityFilterQuery("")
+                      }
+                    },
+                    active: securityFilterActive(),
+                    appliedValues: appliedSecurityFilters(),
+                    pendingValues: pendingSecurityFilters(),
+                    query: securityFilterQuery(),
+                    onQueryChange: setSecurityFilterQuery,
+                    options: filteredSecurityOptions(),
+                    togglePending: togglePendingSecurityFilter,
+                    apply: applySecurityFilters,
+                    reset: resetSecurityFilters,
+                  },
+                  source: {
+                    open: sourceFilterOpen(),
+                    onOpenChange: (open) => {
+                      setSourceFilterOpen(open)
+                      if (open) {
+                        setPendingSourceFilters([...appliedSourceFilters()])
+                        setSourceFilterQuery("")
+                      }
+                    },
+                    active: sourceFilterActive(),
+                    appliedValues: appliedSourceFilters(),
+                    pendingValues: pendingSourceFilters(),
+                    query: sourceFilterQuery(),
+                    onQueryChange: setSourceFilterQuery,
+                    options: filteredSourceOptions(),
+                    togglePending: togglePendingSourceFilter,
+                    apply: applySourceFilters,
+                    reset: resetSourceFilters,
+                  },
+                  tag: {
+                    active: tagFilterActive(),
+                    appliedValues: appliedTagFilters(),
+                    onApply: (values) => {
+                      setAppliedTagFilters(values)
+                      setPage(1)
+                      setSelectedItemId(null)
+                    },
+                    onReset: () => {
+                      setAppliedTagFilters([])
+                      setPage(1)
+                      setSelectedItemId(null)
+                    },
+                    onTagClick: toggleAppliedTagFilter,
+                  },
+                }}
+          labels={{
+            title: language.t("store.home.table.title"),
+            description: language.t("store.home.table.description"),
+            type: language.t("store.console.capabilities.type"),
+            category: language.t("store.console.capabilities.category"),
+            security: language.t("store.security.riskLevel"),
+                  tag: language.t("store.home.table.tag"),
+                  source: language.t("store.home.table.source"),
+                  experienceScore: language.t("store.home.table.experienceScore"),
+                  favoriteCount: language.t("store.home.table.favoriteCount"),
+                  favorite: language.t("store.detail.favorite"),
+                  unfavorite: language.t("store.detail.unfavorite"),
+                  favoriteTooltip: language.t("store.detail.favoriteTooltip"),
+                  unfavoriteTooltip: language.t("store.detail.unfavoriteTooltip"),
+                  favoriteSignInTooltip: language.t("store.detail.favoriteSignInTooltip"),
+                  updated: language.t("store.detail.updated"),
+                  action: language.t("store.home.table.action"),
+                  toggleColumns: language.t("store.home.table.toggleColumns"),
+                  noResults: language.t("store.noResults"),
+                  reset: language.t("common.reset"),
+                  confirm: language.t("channels.add.confirm"),
+                  searchCategory: language.t("store.home.filters.searchCategory"),
+                  searchSecurity: language.t("store.home.filters.searchSecurity"),
+                  searchSource: language.t("store.home.filters.searchSource"),
+                  searchTag: language.t("store.home.filters.searchTag"),
+                  tagLimitHint: language.t("store.home.filters.tagLimitHint"),
+                }}
+                emptyMessage={language.t("store.home.emptyCategory")}
+                maxVisibleRows={PAGE_SIZE}
+                renderActions={(item) => (
+                  <div class="flex items-center justify-end gap-1">
+                    <Show when={canEditItem(item)}>
+                      <button
+                        type="button"
+                        class="inline-flex size-8 min-w-8 items-center justify-center rounded-full bg-transparent text-[var(--native-foreground)] transition-colors hover:bg-[color:color-mix(in_oklab,var(--native-foreground)_10%,transparent)]"
+                        title={language.t("common.edit")}
+                        onClick={() => navigate(`/capabilities/${item.id}/edit`)}
+                      >
+                        <Icon name="edit" size="small" />
+                      </button>
+                    </Show>
+                    <button
+                      type="button"
+                      disabled={!auth.user() || auth.loading() || favoriteActionItemId() === item.id}
+                      class="inline-flex size-8 min-w-8 items-center justify-center rounded-full bg-transparent text-[var(--native-foreground)] transition-colors hover:bg-[color:color-mix(in_oklab,var(--native-foreground)_10%,transparent)] disabled:cursor-not-allowed disabled:opacity-60"
+                      title={auth.user() ? (item.favorited ? language.t("store.detail.unfavoriteTooltip") : language.t("store.detail.favoriteTooltip")) : language.t("store.detail.favoriteSignInTooltip")}
+                      onClick={() => void toggleRowFavorite(item)}
+                    >
+                      <LocalIcon name={item.favorited ? "star-filled" : "star"} size="small" style={{ color: favoriteIconColor(item.favorited) }} />
+                    </button>
+                  </div>
+                )}
+              />
             </Show>
           </Show>
         </div>
 
-        <div class={sx.pager}>
-          <div class={sx.pagerSum}>
-            <Show when={totalItems() > 0} fallback={language.t("store.home.pagination.empty")}>
-              {language.t("store.console.capabilities.showing", {
-                from: Math.min((page() - 1) * PAGE_SIZE + 1, totalItems()),
-                to: Math.min(page() * PAGE_SIZE, totalItems()),
-                total: totalItems(),
-              })}
-            </Show>
-          </div>
-          <div class={sx.pagerActs}>
-            <button class={st.page(false)} disabled={page() <= 1} onClick={() => handlePageChange(page() - 1)}>
-              <Icon name="chevron-left" />
-            </button>
-            <For each={visiblePages()}>
-              {(pageNumber) => (
-                <button
-                  class={st.page(pageNumber === page())}
-                  onClick={() => handlePageChange(pageNumber)}
-                >
-                  {pageNumber}
-                </button>
-              )}
-            </For>
-            <button
-              class={st.page(false)}
-              disabled={page() >= totalPages()}
-              onClick={() => handlePageChange(page() + 1)}
-            >
-              <Icon name="chevron-right" />
-            </button>
-          </div>
-        </div>
+        <StoreTableFooter
+          page={page()}
+          pageSize={PAGE_SIZE}
+          totalPages={totalPages()}
+          totalItems={totalItems()}
+          summary={formatStoreTablePaginationSummary({
+            page: page(),
+            pageSize: PAGE_SIZE,
+            totalItems: totalItems(),
+            showingLabel: (args) => language.t("store.console.capabilities.showing", args),
+            emptyLabel: language.t("store.home.pagination.empty"),
+          })}
+          onPageChange={handlePageChange}
+        />
       </section>
     )
   }
-}
-
-function TableEmptyState(props: { colSpan: number; message: string }) {
-  return (
-    <TableRow>
-      <TableCell class="border-b-0 p-0" colSpan={props.colSpan}>
-        <div class={sx.state}>{props.message}</div>
-      </TableCell>
-    </TableRow>
-  )
 }

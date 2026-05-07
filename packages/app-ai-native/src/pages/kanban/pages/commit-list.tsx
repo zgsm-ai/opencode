@@ -1,0 +1,366 @@
+import { useLanguage } from "@/context/language"
+import { useNavigate, useSearchParams } from "@solidjs/router"
+import { createEffect, createMemo, createResource, on, untrack } from "solid-js"
+import { createStore } from "solid-js/store"
+import { showToast } from "@opencode-ai/ui/toast"
+import { Button } from "@/components/ui/button"
+import Back from "../components/back"
+import { RatioPill } from "../components/ratio-pill"
+import { FilterBar } from "../components/filters/filter-bar"
+import { FilterTable } from "../components/table/filter-table"
+import { useTableFilters } from "../hooks/use-table-filters"
+import { queryCommitRows } from "../lib/api"
+import { defaultWideRange, parseQueryRange, rangeQuery, readQueryRange, searchQuery, sameRange } from "../lib/date-range"
+import { applyClientFilters } from "../lib/filter-utils"
+import { formatDuration, formatLocalTime, formatPercent, shortId } from "../lib/formatters"
+import type { CommitRow, KanbanColumn, OrgCascadeValue } from "../lib/types"
+
+function parseOrg(search: { org1?: string; org2?: string; org3?: string; org4?: string }) {
+  return {
+    org1: search.org1?.trim() || undefined,
+    org2: search.org2?.trim() || undefined,
+    org3: search.org3?.trim() || undefined,
+    org4: search.org4?.trim() || undefined,
+  } satisfies OrgCascadeValue
+}
+
+function sameOrg(a: OrgCascadeValue, b: OrgCascadeValue) {
+  return a.org1 === b.org1 && a.org2 === b.org2 && a.org3 === b.org3 && a.org4 === b.org4
+}
+
+function fmtCost(value?: number | null) {
+  if (value == null || value === 0) return "-"
+  return `¥${value.toLocaleString("zh-CN", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
+}
+
+function real(row: CommitRow) {
+  return row.commit_real_minutes_manual ?? row.commit_real_minutes
+}
+
+function ancient(row: CommitRow) {
+  return row.commit_ancient_minutes_manual ?? row.commit_ancient_minutes
+}
+
+function tokens(row: CommitRow) {
+  return (row.upstream_tokens ?? 0) + (row.downstream_tokens ?? 0)
+}
+
+export default function KanbanCommitList() {
+  const language = useLanguage()
+  const navigate = useNavigate()
+  const [search, setSearch] = useSearchParams<{ startDate?: string; endDate?: string; userName?: string; org1?: string; org2?: string; org3?: string; org4?: string }>()
+  const [state, setState] = createStore({
+    page: 1,
+    pageSize: 250,
+    dateRange: parseQueryRange(search.startDate, search.endDate),
+    org: parseOrg(search),
+  })
+
+  const routeQuery = createMemo(() => searchQuery([
+    ["startDate", search.startDate],
+    ["endDate", search.endDate],
+    ["userName", search.userName],
+    ["org1", search.org1],
+    ["org2", search.org2],
+    ["org3", search.org3],
+    ["org4", search.org4],
+  ]).toString())
+
+  createEffect(on(
+    () => [search.startDate, search.endDate, search.org1, search.org2, search.org3, search.org4],
+    () => {
+      const next = readQueryRange(search.startDate, search.endDate)
+      if (next && !sameRange(untrack(() => state.dateRange), next)) setState("dateRange", next)
+      const org = parseOrg(search)
+      if (!sameOrg(untrack(() => state.org), org)) setState("org", org)
+    },
+  ))
+
+  createEffect(() => {
+    const next = rangeQuery(state.dateRange)
+    const query = searchQuery([
+      ["startDate", next.startDate],
+      ["endDate", next.endDate],
+      ["userName", search.userName],
+      ["org1", state.org.org1],
+      ["org2", state.org.org2],
+      ["org3", state.org.org3],
+      ["org4", state.org.org4],
+    ])
+    const current = searchQuery([
+      ["startDate", search.startDate],
+      ["endDate", search.endDate],
+      ["userName", search.userName],
+      ["org1", search.org1],
+      ["org2", search.org2],
+      ["org3", search.org3],
+      ["org4", search.org4],
+    ])
+    if (query.toString() !== current.toString()) setSearch(Object.fromEntries(query.entries()))
+  })
+
+  const columns = createMemo<KanbanColumn<CommitRow>[]>(() => [
+    {
+      prop: "commit_id",
+      label: language.t("kanban.table.commitId"),
+      minWidth: 110,
+      render: (row) => {
+        const id = row.commit_id?.trim()
+        return id ? <button type="button" class="text-left text-sm text-[var(--native-primary)] transition-colors hover:text-[var(--native-foreground)] cursor-pointer" onClick={() => navigate(`/kanban/commit/${encodeURIComponent(id)}?${routeQuery()}`)}>{shortId(id, 8)}</button> : <span>-</span>
+      },
+    },
+    {
+      prop: "comment",
+      label: language.t("kanban.table.comment"),
+      minWidth: 180,
+      render: (row) => {
+        const txt = row.comment?.trim()
+        return txt ? <span class="block max-w-[18rem] truncate" title={txt}>{txt}</span> : <span>-</span>
+      },
+      filter: { type: "text" },
+    },
+    {
+      prop: "org_display",
+      label: language.t("kanban.table.org"),
+      minWidth: 180,
+      render: (row) => {
+        const txt = row.org_display?.trim()
+        if (!txt) return <span>-</span>
+        return <button type="button" class="block max-w-[18rem] truncate text-left text-sm text-[var(--native-primary)] transition-colors hover:text-[var(--native-foreground)] cursor-pointer" title={txt} onClick={() => {
+          const path = [row.org1, row.org2, row.org3, row.org4].filter(Boolean).join("/")
+          if (!path) return
+          navigate(`/kanban/org/${encodeURIComponent(path)}?${routeQuery()}`)
+        }}>{txt}</button>
+      },
+    },
+    {
+      prop: "user_name",
+      label: language.t("kanban.table.user"),
+      minWidth: 110,
+      render: (row) => {
+        const txt = row.user_name?.trim() || row.user_id?.trim()
+        return txt ? <button type="button" class="block max-w-[12rem] truncate text-left text-sm text-[var(--native-primary)] transition-colors hover:text-[var(--native-foreground)] cursor-pointer" title={txt} onClick={() => {
+          const id = row.user_id?.trim() || txt
+          const back = searchQuery([
+            ["startDate", search.startDate],
+            ["endDate", search.endDate],
+            ["userName", search.userName],
+            ["org1", search.org1],
+            ["org2", search.org2],
+            ["org3", search.org3],
+            ["org4", search.org4],
+          ]).toString()
+          const backUrl = back ? `/kanban/commit?${back}` : "/kanban/commit"
+          const q = routeQuery()
+          const url = q
+            ? `/kanban/user/${encodeURIComponent(id)}?${q}&back=${encodeURIComponent(backUrl)}`
+            : `/kanban/user/${encodeURIComponent(id)}?back=${encodeURIComponent(backUrl)}`
+          navigate(url)
+        }}>{txt}</button> : <span>-</span>
+      },
+      filter: { type: "multi-select" },
+    },
+    {
+      prop: "repo_addr",
+      label: language.t("kanban.table.repository"),
+      minWidth: 240,
+      render: (row) => {
+        const addr = row.repo_addr?.trim()
+        if (!addr) return <span>-</span>
+        const branch = row.repo_branch?.trim()
+        const label = `${addr}/${branch || "-"}`
+        return (
+          <button
+            type="button"
+            class="block max-w-[24rem] truncate text-left text-sm text-[var(--native-primary)] transition-colors hover:text-[var(--native-foreground)]"
+            title={label}
+            onClick={() => {
+              const back = searchQuery([
+                ["startDate", search.startDate],
+                ["endDate", search.endDate],
+                ["userName", search.userName],
+                ["org1", search.org1],
+                ["org2", search.org2],
+                ["org3", search.org3],
+                ["org4", search.org4],
+              ]).toString()
+              const backUrl = back ? `/kanban/commit?${back}` : "/kanban/commit"
+              const q = routeQuery()
+              const url = q
+                ? `/kanban/repo/${encodeURIComponent(addr)}${branch ? `/${encodeURIComponent(branch)}` : ""}?${q}&back=${encodeURIComponent(backUrl)}`
+                : `/kanban/repo/${encodeURIComponent(addr)}${branch ? `/${encodeURIComponent(branch)}` : ""}?back=${encodeURIComponent(backUrl)}`
+              navigate(url)
+            }}
+          >
+            {label}
+          </button>
+        )
+      },
+      filter: { type: "multi-select" },
+    },
+    {
+      prop: "diff_lines",
+      label: language.t("kanban.table.codeLines"),
+      minWidth: 120,
+      align: "right",
+      filter: {
+        type: "number",
+        shortcuts: [
+          { label: "> 0", value: { min: 1 } },
+          { label: "> 50", value: { min: 50 } },
+          { label: "> 200", value: { min: 200 } },
+        ],
+      },
+    },
+    {
+      prop: "commit_real_minutes",
+      label: language.t("kanban.metric.actualTime"),
+      minWidth: 110,
+      align: "right",
+      display: (row) => formatDuration(real(row), language.t),
+      filter: {
+        type: "number",
+        valueGetter: real,
+        shortcuts: [
+          { label: "> 0", value: { min: 0.1 } },
+          { label: "> 30min", value: { min: 30 } },
+          { label: "> 1h", value: { min: 60 } },
+        ],
+      },
+    },
+    {
+      prop: "commit_ancient_minutes",
+      label: language.t("kanban.metric.traditionalEst"),
+      minWidth: 190,
+      align: "right",
+      display: (row) => formatDuration(ancient(row), language.t),
+      filter: {
+        type: "number",
+        valueGetter: ancient,
+        shortcuts: [
+          { label: "> 0", value: { min: 0.1 } },
+          { label: "> 30min", value: { min: 30 } },
+          { label: "> 1h", value: { min: 60 } },
+        ],
+      },
+    },
+    {
+      prop: "efficiency_ratio",
+      label: language.t("kanban.metric.efficiencyRatio"),
+      minWidth: 110,
+      align: "center",
+      render: (row) => <RatioPill value={row.efficiency_ratio} />,
+      filter: {
+        type: "number",
+        shortcuts: [
+          { label: "> 100%", value: { min: 100 } },
+          { label: "> 200%", value: { min: 200 } },
+          { label: "> 300%", value: { min: 300 } },
+        ],
+      },
+    },
+    {
+      prop: "_tokens",
+      label: language.t("kanban.table.tokensConsumed"),
+      minWidth: 160,
+      align: "right",
+      display: (row) => tokens(row) > 0 ? tokens(row).toLocaleString() : "-",
+      filter: {
+        type: "number",
+        valueGetter: tokens,
+        shortcuts: [
+          { label: "> 0", value: { min: 1 } },
+          { label: "> 10k", value: { min: 10000 } },
+          { label: "> 100k", value: { min: 100000 } },
+        ],
+      },
+    },
+    { prop: "commit_time", label: language.t("kanban.table.time"), minWidth: 170, display: (row) => formatLocalTime(row.commit_time) },
+    {
+      prop: "cost",
+      label: language.t("kanban.table.cost"),
+      minWidth: 100,
+      align: "right",
+      display: (row) => fmtCost(row.cost),
+      filter: {
+        type: "number",
+        shortcuts: [
+          { label: "> 0", value: { min: 0.001 } },
+          { label: "> 0.01", value: { min: 0.01 } },
+          { label: "> 0.1", value: { min: 0.1 } },
+        ],
+      },
+    },
+  ])
+
+  const table = useTableFilters<CommitRow>({
+    columns,
+    onChange: () => setState("page", 1),
+  })
+
+  createEffect(() => {
+    table.setFilter("user_name", search.userName?.trim() || undefined)
+  })
+
+  const [data, { refetch }] = createResource(
+    () => ({ dateRange: state.dateRange, org: { org1: state.org.org1, org2: state.org.org2, org3: state.org.org3, org4: state.org.org4 }, page: state.page, pageSize: state.pageSize }),
+    async (input) => {
+      try {
+        return await queryCommitRows(input)
+      } catch (err) {
+        showToast({ variant: "error", title: language.t("kanban.toast.loadFailed"), description: err instanceof Error ? err.message : String(err) })
+        return { rows: [], total: 0, page: input.page, pageSize: input.pageSize }
+      }
+    },
+  )
+
+  const rows = createMemo(() => applyClientFilters(data.latest?.rows ?? [], columns(), table.filters))
+
+  return (
+    <div class="flex h-full min-h-0 min-w-0 flex-col gap-4 overflow-hidden p-[clamp(1rem,2vw,2rem)]">
+      <header class="flex w-full flex-col gap-3">
+        <Back />
+        <h1 class="m-0 font-[var(--native-font-display)] text-[1.875rem] leading-[1.02] font-semibold tracking-[-0.05em] text-[var(--native-foreground)]">{language.t("kanban.view.commit")}</h1>
+      </header>
+
+      <div class="flex min-h-0 w-full flex-1 flex-col gap-5">
+        <FilterBar
+          dateRange={state.dateRange}
+          orgValue={state.org}
+          dateSlot="actions"
+          dateLabel={false}
+          showOrg
+          onDateRangeChange={(value) => {
+            setState("dateRange", value ?? defaultWideRange())
+            setState("page", 1)
+          }}
+          onOrgChange={(value) => {
+            setState("org", { org1: value.org1, org2: value.org2, org3: value.org3, org4: value.org4 })
+            setState("page", 1)
+          }}
+          actions={<Button variant="outline" size="sm" onClick={() => void refetch()} disabled={data.loading}>{data.loading ? language.t("kanban.action.refreshing") : language.t("kanban.action.refresh")}</Button>}
+        />
+
+        <FilterTable
+          class="flex min-h-0 min-w-0 flex-1 flex-col rounded-none"
+          scrollClass="min-h-0 min-w-0 flex-1 overflow-auto"
+          columns={columns()}
+          rows={rows()}
+          rawRows={data.latest?.rows ?? []}
+          controller={table}
+          loading={data.loading}
+          total={data.latest?.total ?? 0}
+          page={state.page}
+          pageSize={state.pageSize}
+          pageSizeOptions={[100, 250, 500]}
+          emptyText={data.loading ? language.t("kanban.loading.commitList") : language.t("kanban.empty.noCommitData")}
+          onPageChange={(page) => setState("page", page)}
+          onPageSizeChange={(pageSize) => {
+            setState("pageSize", pageSize)
+            setState("page", 1)
+          }}
+        />
+      </div>
+    </div>
+  )
+}

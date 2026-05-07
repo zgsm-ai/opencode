@@ -460,7 +460,13 @@ export function FileTabContent(props: { tab: string }) {
           <Match when={state()?.loading}>
             <div class="px-6 py-4 text-text-weak">{language.t("common.loading")}...</div>
           </Match>
-          <Match when={state()?.error}>{(err) => <div class="px-6 py-4 text-text-weak">{err()}</div>}</Match>
+          <Match when={state()?.errorKey || state()?.error}>
+            {(err) => (
+              <div class="px-6 py-4 text-text-weak">
+                {state()?.errorKey ? language.t(state()!.errorKey!) : err()}
+              </div>
+            )}
+          </Match>
         </Switch>
       </ScrollView>
     </Tabs.Content>

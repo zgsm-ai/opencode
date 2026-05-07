@@ -23,12 +23,32 @@ export type DiffData = {
   branch: string
   stagedFiles: DiffFileEntry[]
   unstagedFiles: DiffFileEntry[]
+  untrackedFiles?: DiffFileEntry[]
 }
 
 export type DiffContentData = {
   diff: string
   before?: string
   after?: string
+}
+
+export type InitStatusAgent = {
+  state: string
+  healthy: boolean
+}
+
+export type InitStatusPrewarm = {
+  status: string
+  started_at?: string
+  finished_at?: string
+  error?: string
+}
+
+export type InitStatusData = {
+  directory: string
+  ready: boolean
+  agent: InitStatusAgent
+  prewarm: InitStatusPrewarm
 }
 
 export type RuntimeConfig = {
@@ -56,6 +76,7 @@ export type FileReadData = {
 
 export type DeviceClient = {
   baseUrl: string
+  directory?: string
   transport: ReturnType<typeof createDeviceTransport>
   raw: OpencodeClient
   getConfig(): { baseUrl: string }
@@ -75,6 +96,7 @@ export type DeviceClient = {
     findFiles: (query: string, dirs: "true" | "false") => Promise<unknown>
     diff: (input?: { staged?: boolean; stat?: boolean; path?: string }) => Promise<DiffData | undefined>
     diffContent: (input?: { staged?: boolean; path?: string }) => Promise<DiffContentData | undefined>
+    initStatus: () => Promise<InitStatusData | undefined>
     dispose: () => Promise<unknown>
   }
   agent: {
@@ -146,6 +168,7 @@ export function createDeviceClient(opts: ClientOpts): DeviceClient {
 
   return {
     baseUrl: opts.baseUrl,
+    directory: opts.directory,
     transport: http,
     raw: sdk as OpencodeClient,
     getConfig() {
@@ -191,6 +214,7 @@ export function createDeviceClient(opts: ClientOpts): DeviceClient {
     diffContent: (input?: { staged?: boolean; path?: string }) =>
       http.get<DiffContentData>("/api/v1/runtime/diff/content", input as Record<string, string | number | boolean | undefined>),
       dispose: () => http.post("/api/v1/runtime/dispose"),
+      initStatus: () => http.get<InitStatusData>("/api/v1/runtime/init-status"),
     },
     agent: {
       list: () => http.get("/api/v1/agents"),
@@ -248,7 +272,7 @@ export function createDeviceClient(opts: ClientOpts): DeviceClient {
               credentials: "include",
               headers: {
                 Accept: "text/event-stream",
-                ...(opts.directory ? { "X-Workspace-Directory": opts.directory } : {}),
+                ...(opts.directory ? { "X-Workspace-Directory": encodeURIComponent(opts.directory) } : {}),
                 ...(opts.headers ?? {}),
               },
               signal: controller.signal,

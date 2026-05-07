@@ -32,7 +32,7 @@ const BUILTIN_SKILLS: Record<string, SkillConfig> = {
   "security-review": {
     repo: "zgsm-ai/security-review-skill",
     branch: "main",
-    subdir: "security-review",
+    subdir: "skills/security-review",
   },
 }
 

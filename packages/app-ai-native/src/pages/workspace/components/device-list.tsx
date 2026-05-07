@@ -1,8 +1,12 @@
-import { createMemo, For, Show } from "solid-js"
+import { createEffect, createMemo, createSignal, For, Show } from "solid-js"
 import { Icon } from "@opencode-ai/ui/icon"
+import { showToast } from "@opencode-ai/ui/toast"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
-import type { Device } from "../types"
+import { useDialog } from "@opencode-ai/ui/context/dialog"
+import type { Device, UpdateCheckResponse } from "../types"
 import { useLanguage } from "@/context/language"
+import { deviceManagementService } from "@/pages/console/lib/device-management-service"
+import { DeviceUpgradeDialog } from "@/pages/console/components/device-upgrade-dialog"
 
 export type DeviceListProps = {
   devices: () => Device[]
@@ -16,6 +20,9 @@ export type DeviceListProps = {
 export function DeviceList(props: DeviceListProps) {
   const language = useLanguage()
   const t = language.t
+  const dialog = useDialog()
+  const [upgrades, setUpgrades] = createSignal<Record<string, UpdateCheckResponse>>({})
+
   const filtered = createMemo(() => {
     const query = props.searchQuery().toLowerCase()
     if (!query) return props.devices()
@@ -29,6 +36,51 @@ export function DeviceList(props: DeviceListProps) {
       )
   })
 
+  const checkUpdates = (list: Device[]) => {
+    const online = list.filter((d) => d.status === "online" && d.platform && d.version)
+    if (online.length === 0) return
+
+    Promise.allSettled(
+      online.map(async (d) => {
+        const info = await deviceManagementService.checkUpdate(d.platform, d.version)
+        return [d.deviceId, info] as const
+      }),
+    ).then((results) => {
+      const map: Record<string, UpdateCheckResponse> = {}
+      for (const r of results) {
+        if (r.status === "fulfilled" && r.value[1].can_update) {
+          map[r.value[0]] = r.value[1]
+        }
+      }
+      setUpgrades((prev) => ({ ...prev, ...map }))
+    })
+  }
+
+  const handleUpgrade = async (deviceId: string) => {
+    try {
+      await deviceManagementService.sendCommand(deviceId, {
+        command_id: `upgrade-${Date.now()}`,
+        type: "upgrade",
+        timestamp: new Date().toISOString(),
+      })
+      showToast({
+        variant: "success",
+        icon: "circle-check",
+        title: language.t("store.devices.upgrade.toast.sent.title"),
+        description: language.t("store.devices.upgrade.toast.sent.description"),
+      })
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error)
+      const unsupported = /404|not found/i.test(msg)
+      showToast({
+        variant: "error",
+        icon: "circle-x",
+        title: language.t(unsupported ? "store.devices.upgrade.toast.unsupported.title" : "store.devices.upgrade.toast.failed.title"),
+        description: language.t(unsupported ? "store.devices.upgrade.toast.unsupported.description" : "store.devices.upgrade.toast.failed.description"),
+      })
+    }
+  }
+
   const detail = (device: Device) => {
     const parts = [device.platform, device.version].filter(Boolean)
     return parts.join(" · ") || device.deviceId
@@ -38,6 +90,31 @@ export function DeviceList(props: DeviceListProps) {
     if (device.status === "offline") return
     props.onCreateWorkspace(device)
   }
+
+  const upgrade = (device: Device) => {
+    const info = upgrades()[device.deviceId]
+    if (!info || device.status !== "online") return
+    dialog.show(() => (
+      <DeviceUpgradeDialog
+        deviceName={device.displayName}
+        currentVersion={device.version}
+        update={info}
+        onConfirm={() => handleUpgrade(device.deviceId)}
+      />
+    ))
+  }
+
+  let checked = false
+  const checkUpdatesOnce = (list: Device[]) => {
+    if (checked) return
+    checked = true
+    checkUpdates(list)
+  }
+
+  createEffect(() => {
+    const d = props.devices()
+    if (d.length > 0) checkUpdatesOnce(d)
+  })
 
   return (
     <div class="flex flex-col py-1">
@@ -79,78 +156,111 @@ export function DeviceList(props: DeviceListProps) {
 
         <ul class="space-y-1 px-2">
           <For each={filtered()}>
-            {(device) => (
-              <li
-                class="group/device flex items-center gap-2 rounded-[var(--native-radius-md)] border border-transparent px-2.5 py-2 text-xs transition-all duration-150 hover:border-sidebar-border hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                classList={{
-                  "opacity-60 text-sidebar-foreground/40": device.status === "offline",
-                  "text-sidebar-foreground/70": device.status !== "offline",
-                }}
-              >
-                <Tooltip
-                  placement="bottom-end"
-                  value={detail(device)}
-                  class="flex-1 min-w-0"
-                  contentStyle={{
-                    background: "hsl(var(--sidebar-accent))",
-                    color: "hsl(var(--sidebar-accent-foreground))",
-                    border: "1px solid hsl(var(--sidebar-border))",
-                    "box-shadow": "var(--shadow-xs)",
+            {(device) => {
+              const hasUpgrade = () => upgrades()[device.deviceId]?.can_update && device.status === "online"
+
+              return (
+                <li
+                  class="group/device flex items-center gap-2 rounded-[var(--native-radius-md)] border border-transparent px-2.5 py-2 text-xs transition-all duration-150 hover:border-sidebar-border hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                  classList={{
+                    "opacity-60 text-sidebar-foreground/40": device.status === "offline",
+                    "text-sidebar-foreground/70": device.status !== "offline",
                   }}
                 >
-                  <button
-                    type="button"
-                    class="flex min-w-0 flex-1 items-center gap-2.5 text-left focus:outline-none"
-                    classList={{
-                      "cursor-pointer": device.status !== "offline",
-                      "cursor-not-allowed": device.status === "offline",
+                  <Tooltip
+                    placement="bottom-end"
+                    value={detail(device)}
+                    class="flex-1 min-w-0"
+                    contentStyle={{
+                      background: "hsl(var(--sidebar-accent))",
+                      color: "hsl(var(--sidebar-accent-foreground))",
+                      border: "1px solid hsl(var(--sidebar-border))",
+                      "box-shadow": "var(--shadow-xs)",
                     }}
-                    onClick={() => open(device)}
                   >
-                    <span class="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--native-radius-sm)] bg-[color:color-mix(in_oklab,var(--native-panel)_76%,var(--native-bg-subtle))] text-sidebar-foreground/70 shadow-[var(--native-shadow-sm)]">
-                      <span
-                        class="absolute right-1 top-1 h-1.5 w-1.5 rounded-full"
-                        classList={{
-                          "bg-[var(--native-success)]": device.status === "online",
-                          "bg-[var(--native-error)]": device.status === "offline",
-                          "bg-sidebar-border": device.status !== "online" && device.status !== "offline",
+                    <button
+                      type="button"
+                      class="flex min-w-0 flex-1 items-center gap-2.5 text-left focus:outline-none"
+                      classList={{
+                        "cursor-pointer": device.status !== "offline",
+                        "cursor-not-allowed": device.status === "offline",
+                      }}
+                      onClick={() => open(device)}
+                    >
+                       <span class="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--native-radius-sm)] bg-[color:color-mix(in_oklab,var(--native-panel)_76%,var(--native-bg-subtle))] text-sidebar-foreground/70 shadow-[var(--native-shadow-sm)]">
+                         <span
+                           class="absolute right-1 top-1 h-1.5 w-1.5 rounded-full"
+                           classList={{
+                             "bg-[var(--native-success)]": device.status === "online",
+                             "bg-[var(--native-error)]": device.status === "offline",
+                             "bg-sidebar-border": device.status !== "online" && device.status !== "offline",
+                           }}
+                         />
+                         <Icon name="server" class="text-sm" />
+                       </span>
+                       <span class="min-w-0 flex-1">
+                         <span class="block truncate text-[0.8125rem] font-medium text-sidebar-foreground">{device.displayName}</span>
+                         <span class="block truncate text-[11px] text-sidebar-foreground/45">
+                           {detail(device)}
+                         </span>
+                       </span>
+                    </button>
+                  </Tooltip>
+                  <Tooltip
+                    placement="bottom-end"
+                    value={device.status === "offline" ? t("workspace.device.offlineHint") : t("workspace.device.createWorkspace")}
+                    contentStyle={{
+                      background: "hsl(var(--sidebar-accent))",
+                      color: "hsl(var(--sidebar-accent-foreground))",
+                      border: "1px solid hsl(var(--sidebar-border))",
+                      "box-shadow": "var(--shadow-xs)",
+                    }}
+                  >
+                    <button
+                      type="button"
+                        class="flex h-7 items-center justify-center rounded-[var(--native-radius-sm)] text-sidebar-foreground/55 max-w-0 opacity-0 transition-all duration-150 group-hover/device:max-w-7 group-hover/device:opacity-100 group-focus-within/device:max-w-7 group-focus-within/device:opacity-100 hover:bg-sidebar-accent focus:outline-none focus-visible:bg-sidebar-accent overflow-hidden px-0"
+                      classList={{
+                        "cursor-pointer": device.status !== "offline",
+                        "cursor-not-allowed": device.status === "offline",
+                      }}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        open(device)
+                      }}
+                    >
+                      <Icon name="plus-small" />
+                    </button>
+                  </Tooltip>
+                  <Show when={hasUpgrade()}>
+                    <Tooltip
+                      placement="bottom-end"
+                      value={t("workspace.device.upgradeHint", { version: upgrades()[device.deviceId].version })}
+                      contentStyle={{
+                        background: "hsl(var(--sidebar-accent))",
+                        color: "hsl(var(--sidebar-accent-foreground))",
+                        border: "1px solid hsl(var(--sidebar-border))",
+                        "box-shadow": "var(--shadow-xs)",
+                      }}
+                    >
+                       <button
+                         type="button"
+                         class="flex h-7 w-7 items-center justify-center rounded-md cursor-pointer transition-colors hover:opacity-80"
+                        style={{
+                          background: "#ff9800",
+                          color: "white",
                         }}
-                      />
-                      <Icon name="server" class="text-sm" />
-                    </span>
-                    <span class="min-w-0 flex-1">
-                      <span class="block truncate text-[0.8125rem] font-medium text-sidebar-foreground">{device.displayName}</span>
-                      <span class="block truncate text-[11px] text-sidebar-foreground/45">{detail(device)}</span>
-                    </span>
-                  </button>
-                </Tooltip>
-                <Tooltip
-                  placement="bottom-end"
-                  value={device.status === "offline" ? t("workspace.device.offlineHint") : t("workspace.device.createWorkspace")}
-                  contentStyle={{
-                    background: "hsl(var(--sidebar-accent))",
-                    color: "hsl(var(--sidebar-accent-foreground))",
-                    border: "1px solid hsl(var(--sidebar-border))",
-                    "box-shadow": "var(--shadow-xs)",
-                  }}
-                >
-                  <button
-                    type="button"
-                    class="flex h-7 w-7 items-center justify-center rounded-[var(--native-radius-sm)] text-sidebar-foreground/55 opacity-0 transition-all duration-150 group-hover/device:opacity-100 group-focus-within/device:opacity-100 hover:bg-sidebar-accent focus:outline-none focus-visible:bg-sidebar-accent"
-                    classList={{
-                      "cursor-pointer": device.status !== "offline",
-                      "cursor-not-allowed": device.status === "offline",
-                    }}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      open(device)
-                    }}
-                  >
-                    <Icon name="plus-small" />
-                  </button>
-                </Tooltip>
-              </li>
-            )}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          upgrade(device)
+                        }}
+                      >
+                        <Icon name="cloud-upload" size="small" style={{ color: "white" }} />
+                      </button>
+                    </Tooltip>
+                  </Show>
+                 </li>
+              )
+            }}
           </For>
 
           <Show when={filtered().length === 0}>

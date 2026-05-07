@@ -16,11 +16,15 @@ export function ErrorComponent(props: {
   const renderer = useRenderer()
 
   const handleExit = async () => {
-    await props.onBeforeExit?.()
-    renderer.setTerminalTitle("")
-    renderer.destroy()
-    win32FlushInputBuffer()
-    await props.onExit()
+    try {
+      await props.onBeforeExit?.()
+      renderer.setTerminalTitle("")
+      renderer.destroy()
+      win32FlushInputBuffer()
+      await props.onExit()
+    } catch {
+      /* ignore */
+    }
   }
 
   useKeyboard((evt) => {

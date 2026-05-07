@@ -8,6 +8,7 @@ import { useSDK } from "./sdk"
 import { useSync } from "./sync"
 import { useLanguage } from "@/context/language"
 import { useLayout } from "@/context/layout"
+import { DeviceHttpError, isBinaryFileError } from "@/client/device-transport"
 import { createPathHelpers } from "./file/path"
 import {
   approxBytes,
@@ -222,7 +223,18 @@ export const { use: useFile, provider: FileProvider, context: FileContext } = cr
         })
         .catch((e) => {
           if (scope() !== directory) return
-          setLoadError(file, errorMessage(e))
+          if (isBinaryFileError(e)) {
+            setStore(
+              "file",
+              file,
+              produce((draft) => {
+                draft.loading = false
+                draft.errorKey = "file.preview.binaryUnsupported"
+              }),
+            )
+          } else {
+            setLoadError(file, errorMessage(e))
+          }
         })
         .finally(() => {
           inflight.delete(key)

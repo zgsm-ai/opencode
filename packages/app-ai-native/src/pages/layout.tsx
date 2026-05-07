@@ -978,7 +978,6 @@ export default function Layout(props: ParentProps) {
         title: language.t("command.workspace.toggle"),
         description: language.t("command.workspace.toggle.description"),
         category: language.t("command.category.workspace"),
-        slash: "workspace",
         disabled: !currentWorkspace() || currentWorkspace()?.vcs !== "git",
         onSelect: () => {
           const workspace = currentWorkspace()

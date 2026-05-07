@@ -1,5 +1,6 @@
 import { showToast } from "@opencode-ai/ui/toast"
 import { createDeviceClient, type RuntimeConfig } from "@/client/device-client"
+import { isBinaryFileError } from "@/client/device-transport"
 import { getProxyUrl } from "./url"
 
 export type { RuntimeConfig }
@@ -69,6 +70,12 @@ export const deviceFileApi = {
       const res = await client(deviceId).runtime.fileRead(absolutePath)
       return { type: res.type, content: res.content }
     } catch (err) {
+      if (isBinaryFileError(err)) {
+        const { useLanguage } = await import("@/context/language")
+        const msg = useLanguage().t("file.preview.binaryUnsupported")
+        showToast({ title: msg })
+        throw new Error(msg)
+      }
       const msg = err instanceof Error ? err.message : String(err)
       showToast({ title: "无法读取文件", description: msg })
       throw err
@@ -96,4 +103,16 @@ export const deviceFileApi = {
 
   getConfig: (deviceId: string): Promise<RuntimeConfig> =>
     client(deviceId).runtime.config(),
+
+  getDefaultPath: (() => {
+    const cache = new Map<string, string>()
+    return async (deviceId: string): Promise<string> => {
+      const hit = cache.get(deviceId)
+      if (hit) return hit
+      const res = await client(deviceId).runtime.path() as { home?: string; directory?: string } | null
+      const p = res?.directory || res?.home || "/"
+      cache.set(deviceId, p)
+      return p
+    }
+  })(),
 }

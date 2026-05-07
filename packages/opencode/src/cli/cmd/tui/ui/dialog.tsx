@@ -81,7 +81,8 @@ function init() {
       if (renderer.getSelection()) {
         renderer.clearSelection()
       }
-      const current = store.stack.at(-1)!
+      const current = store.stack.at(-1)
+      if (!current) return
       current.onClose?.()
       setStore("stack", store.stack.slice(0, -1))
       evt.preventDefault()
@@ -175,7 +176,7 @@ export function DialogProvider(props: ParentProps) {
       >
         <Show when={value.stack.length}>
           <Dialog onClose={() => value.clear()} size={value.size}>
-            {value.stack.at(-1)!.element}
+            {value.stack.at(-1)?.element}
           </Dialog>
         </Show>
       </box>

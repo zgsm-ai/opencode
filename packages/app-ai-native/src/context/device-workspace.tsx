@@ -2,14 +2,29 @@ import { createContext, useContext, type ParentProps } from "solid-js"
 import { batch, createEffect, createMemo, onCleanup } from "solid-js"
 import { createStore, produce, reconcile } from "solid-js/store"
 import { useDeviceSDK } from "./device-sdk"
-import type { Session, Command, Agent, VcsInfo } from "@opencode-ai/sdk/v2/client"
+import { syncSummary, clearSummary } from "./workspace-summary-store"
+import type { Session, Command, Agent, VcsInfo, SessionStatus, PermissionRequest, QuestionRequest } from "@opencode-ai/sdk/v2/client"
 import type { ProviderCapabilitiesResponse } from "./global-sync/types"
+
+function groupBy<T extends { id?: string; sessionID?: string }>(items: T[]): Record<string, T[]> {
+  const map: Record<string, T[]> = {}
+  for (const item of items) {
+    if (!item?.id || !item.sessionID) continue
+    const list = map[item.sessionID]
+    if (list) list.push(item)
+    else map[item.sessionID] = [item]
+  }
+  return map
+}
 
 type WorkspaceData = {
   status: "loading" | "ready" | "unavailable"
   agent: Agent[]
   command: Command[]
   session: Session[]
+  sessionStatus: Record<string, SessionStatus>
+  questions: Record<string, QuestionRequest[]>
+  permissions: Record<string, PermissionRequest[]>
   sessionTotal: number
   vcs: VcsInfo | undefined
   provider: ProviderCapabilitiesResponse
@@ -31,6 +46,9 @@ type DeviceWorkspaceValue = {
     get: (id: string) => Session | undefined
     fetch(count?: number): Promise<void>
     archive(id: string): Promise<void>
+    setStatus(id: string, status: SessionStatus | undefined): void
+    setQuestions(questions: Record<string, QuestionRequest[]>): void
+    setPermissions(permissions: Record<string, PermissionRequest[]>): void
   }
   command: {
     load(): Promise<Command[]>
@@ -52,7 +70,7 @@ export function useDeviceWorkspace() {
 
 export { DeviceWorkspaceContext }
 
-export function DeviceWorkspaceProvider(props: ParentProps) {
+export function DeviceWorkspaceProvider(props: ParentProps<{ workspaceId?: string }>) {
   const device = useDeviceSDK()
 
   const [store, setStore] = createStore<WorkspaceData>({
@@ -60,6 +78,9 @@ export function DeviceWorkspaceProvider(props: ParentProps) {
     agent: [],
     command: [],
     session: [],
+    sessionStatus: {},
+    questions: {},
+    permissions: {},
     sessionTotal: 0,
     vcs: undefined,
     provider: { connected: [] } as ProviderCapabilitiesResponse,
@@ -92,24 +113,40 @@ export function DeviceWorkspaceProvider(props: ParentProps) {
         return
       }
 
-      const [agentsRes, commandsRes, sessionsRes, vcsRes, providersRes] = await Promise.all([
+      const [agentsRes, sessionsRes, sessionStatusRes, vcsRes, providersRes, allSessionsRes, permsRes, questionsRes] = await Promise.all([
         device.client.agent.sessionModes().catch(() => undefined),
-        device.client.agent.commands().catch(() => undefined),
         device.client.conversation.list({ roots: "true", limit: 50, directory: device.directory }).catch(() => undefined),
+        device.client.conversation.status().catch(() => undefined),
         device.client.runtime.vcs().catch(() => undefined),
         device.client.agent.models().catch(() => undefined),
+        device.client.conversation.list({ limit: 50 }).catch(() => undefined),
+        device.client.permission.list().catch(() => undefined),
+        device.client.question.list().catch(() => undefined),
       ])
 
       batch(() => {
         setStore("agent", reconcile((agentsRes as Agent[]) ?? [], { key: "name" }))
-        setStore("command", reconcile((commandsRes as Command[]) ?? [], { key: "name" }))
-        const sessions = (sessionsRes as Session[]) ?? []
-        setStore("session", reconcile(sessions.filter((s) => !!s?.id).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)), { key: "id" }))
-        setStore("sessionTotal", sessions.length)
+        const rootSessions = (sessionsRes as Session[]) ?? []
+        const allSessions = (allSessionsRes as Session[]) ?? []
+        const children = allSessions.filter((s) => !!s?.id && !!s.parentID)
+        const merged = [...rootSessions, ...children].filter((s) => !!s?.id)
+        setStore("session", reconcile(merged.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)), { key: "id" }))
+        setStore("sessionStatus", reconcile((sessionStatusRes as Record<string, SessionStatus>) ?? {}))
+        setStore("sessionTotal", rootSessions.length)
         setStore("vcs", vcsRes as VcsInfo | undefined)
         const providerData = (providersRes as ProviderCapabilitiesResponse) ?? { connected: [] }
         setStore("provider", reconcile(providerData, { key: "id" }))
+        setStore("questions", reconcile(groupBy(Array.isArray(questionsRes) ? questionsRes : [])))
+        setStore("permissions", reconcile(groupBy(Array.isArray(permsRes) ? permsRes : [])))
         setStore("status", "ready")
+        if (props.workspaceId) {
+          syncSummary(props.workspaceId, {
+            vcs: vcsRes as VcsInfo | undefined,
+            sessionStatus: (sessionStatusRes as Record<string, SessionStatus>) ?? {},
+            questions: groupBy(Array.isArray(questionsRes) ? questionsRes : []),
+            permissions: groupBy(Array.isArray(permsRes) ? permsRes : []),
+          })
+        }
       })
     } catch {
       setStore("status", "unavailable")
@@ -148,13 +185,74 @@ export function DeviceWorkspaceProvider(props: ParentProps) {
 
   const getSession = (id: string) => store.session.find((s) => s.id === id)
 
+  const setSessionStatus = (id: string, status: SessionStatus | undefined) => {
+    if (!id) return
+    if (!status || status.type === "idle") {
+      setStore("sessionStatus", produce((draft) => {
+        delete draft[id]
+      }))
+      return
+    }
+    setStore("sessionStatus", id, reconcile(status))
+  }
+
+  const addQuestion = (item: QuestionRequest) => {
+    if (!item?.id || !item?.sessionID) return
+    if (!store.questions[item.sessionID]) {
+      setStore("questions", item.sessionID, [item])
+      return
+    }
+    if (store.questions[item.sessionID].some((r) => r.id === item.id)) return
+    setStore("questions", item.sessionID, produce((draft: QuestionRequest[]) => {
+      draft.push(item)
+    }))
+  }
+
+  const removeQuestion = (sessionID: string, requestID: string) => {
+    if (!sessionID || !requestID) return
+    const list = store.questions[sessionID]
+    if (!list) return
+    const idx = list.findIndex((r) => r.id === requestID)
+    if (idx === -1) return
+    setStore("questions", sessionID, produce((draft: QuestionRequest[]) => {
+      draft.splice(idx, 1)
+    }))
+  }
+
+  const addPermission = (item: PermissionRequest) => {
+    if (!item?.id || !item?.sessionID) return
+    if (!store.permissions[item.sessionID]) {
+      setStore("permissions", item.sessionID, [item])
+      return
+    }
+    if (store.permissions[item.sessionID].some((r) => r.id === item.id)) return
+    setStore("permissions", item.sessionID, produce((draft: PermissionRequest[]) => {
+      draft.push(item)
+    }))
+  }
+
+  const removePermission = (sessionID: string, requestID: string) => {
+    if (!sessionID || !requestID) return
+    const list = store.permissions[sessionID]
+    if (!list) return
+    const idx = list.findIndex((r) => r.id === requestID)
+    if (idx === -1) return
+    setStore("permissions", sessionID, produce((draft: PermissionRequest[]) => {
+      draft.splice(idx, 1)
+    }))
+  }
+
   const fetchSessions = async (count = 10) => {
     if (!store.agentAvailable) return
     try {
-      const result = await device.client.conversation.list({ roots: "true", limit: 50, directory: device.directory })
+      const [result, statusResult] = await Promise.all([
+        device.client.conversation.list({ roots: "true", limit: 50, directory: device.directory }),
+        device.client.conversation.status().catch(() => undefined),
+      ])
       const sessions = (result as Session[]) ?? []
       batch(() => {
         setStore("session", reconcile(sessions.filter((s) => !!s?.id).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)), { key: "id" }))
+        setStore("sessionStatus", reconcile((statusResult as Record<string, SessionStatus>) ?? {}))
         setStore("sessionTotal", sessions.length)
       })
     } catch {}
@@ -168,6 +266,7 @@ export function DeviceWorkspaceProvider(props: ParentProps) {
         const idx = draft.findIndex((s) => s.id === id)
         if (idx !== -1) draft.splice(idx, 1)
       }))
+      setSessionStatus(id, undefined)
     } catch {}
   }
 
@@ -244,12 +343,61 @@ export function DeviceWorkspaceProvider(props: ParentProps) {
                   const props = payload.properties as { sessionID?: string; info?: Session }
                   const id = props?.sessionID ?? props?.info?.id ?? payload.sessionID
                   if (!id) break
-                  setStore("session", produce((draft) => {
-                    const idx = draft.findIndex((s) => s.id === id)
-                    if (idx !== -1) draft.splice(idx, 1)
-                  }))
+                  batch(() => {
+                    setStore("session", produce((draft) => {
+                      const idx = draft.findIndex((s) => s.id === id)
+                      if (idx !== -1) draft.splice(idx, 1)
+                    }))
+                    setSessionStatus(id, undefined)
+                    setStore("questions", produce((draft) => { delete draft[id] }))
+                    setStore("permissions", produce((draft) => { delete draft[id] }))
+                  })
                   break
                 }
+                case "session.status": {
+                  const props = payload.properties as { sessionID?: string; status?: SessionStatus }
+                  const id = props?.sessionID ?? payload.sessionID
+                  if (!id || !props?.status) break
+                  setSessionStatus(id, props.status)
+                  break
+                }
+                case "question.asked": {
+                  const q = payload.properties as QuestionRequest
+                  if (q?.id) addQuestion(q)
+                  break
+                }
+                case "question.replied":
+                case "question.rejected": {
+                  const props = payload.properties as { sessionID?: string; requestID?: string }
+                  removeQuestion(props?.sessionID ?? "", props?.requestID ?? "")
+                  break
+                }
+                case "permission.asked": {
+                  const p = payload.properties as PermissionRequest
+                  if (p?.id) addPermission(p)
+                  break
+                }
+                case "permission.replied": {
+                  const props = payload.properties as { sessionID?: string; requestID?: string }
+                  removePermission(props?.sessionID ?? "", props?.requestID ?? "")
+                  break
+                }
+                case "vcs.branch.updated": {
+                  const props = payload.properties as { branch?: string }
+                  if (props?.branch == null) break
+                  const prev = store.vcs
+                  if (prev?.branch === props.branch) break
+                  setStore("vcs", { ...prev, branch: props.branch })
+                  break
+                }
+              }
+              if (props.workspaceId) {
+                syncSummary(props.workspaceId, {
+                  vcs: store.vcs,
+                  sessionStatus: store.sessionStatus,
+                  questions: store.questions,
+                  permissions: store.permissions,
+                })
               }
               dispatch(payload)
             })
@@ -269,6 +417,7 @@ export function DeviceWorkspaceProvider(props: ParentProps) {
   onCleanup(() => {
     streamAbort?.abort()
     streamAbort = undefined
+    if (props.workspaceId) clearSummary(props.workspaceId)
   })
 
   const projectValue = createMemo(() => ({
@@ -287,6 +436,9 @@ export function DeviceWorkspaceProvider(props: ParentProps) {
       get: getSession,
       fetch: fetchSessions,
       archive: archiveSession,
+      setStatus: setSessionStatus,
+      setQuestions: (q: Record<string, QuestionRequest[]>) => setStore("questions", reconcile(q)),
+      setPermissions: (p: Record<string, PermissionRequest[]>) => setStore("permissions", reconcile(p)),
     },
     command: { load: loadCommands },
     vcs: { load: loadVcs },

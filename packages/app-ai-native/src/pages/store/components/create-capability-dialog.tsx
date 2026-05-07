@@ -1,12 +1,13 @@
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { showToast } from "@opencode-ai/ui/toast"
-import { createMemo } from "solid-js"
+import { createEffect, createMemo } from "solid-js"
 import { createStore } from "solid-js/store"
+import { useItemFilterOptions } from "@/context/item-filter-options"
 import { useLanguage } from "@/context/language"
 import { itemApi, repoApi, registryApi2, type CapabilityItem, type Repository } from "../lib/api"
 import type { ContentMode } from "../lib/content"
 import { canArchive, contentValue, usableMode } from "../lib/content"
-import { CATEGORIES, TYPE_CONTENT_PLACEHOLDER, typeKey, categoryKey } from "../lib/constants"
+import { TYPE_CONTENT_PLACEHOLDER, typeKey } from "../lib/constants"
 import { ContentField } from "./content-field"
 import { Modal } from "@/components/modal"
 
@@ -34,6 +35,7 @@ function slugify(value: string) {
 export function CreateCapabilityDialog(props: CreateCapabilityDialogProps) {
   const dialog = useDialog()
   const language = useLanguage()
+  const itemFilterOptions = useItemFilterOptions()
   const [store, setStore] = createStore({
     itemType: "skill" as "skill" | "subagent" | "command" | "mcp",
     namespace: "public",
@@ -92,6 +94,19 @@ export function CreateCapabilityDialog(props: CreateCapabilityDialogProps) {
   const selectedNamespace = createMemo(
     () => namespaceOptions().find((option) => option.value === store.namespace) ?? namespaceOptions()[0],
   )
+
+  const categoryOptions = createMemo(() => {
+    const options = itemFilterOptions.categories().map((category) => category.slug)
+    if (!store.category || options.includes(store.category)) return options
+    return [...options, store.category]
+  })
+
+  createEffect(() => {
+    const options = itemFilterOptions.categories()
+    if (!options.length) return
+    if (options.some((category) => category.slug === store.category)) return
+    setStore("category", options[0]!.slug)
+  })
 
   function setItemType(value: "skill" | "subagent" | "command" | "mcp") {
     setStore("itemType", value)
@@ -273,8 +288,8 @@ export function CreateCapabilityDialog(props: CreateCapabilityDialogProps) {
                 onInput={(e) => setStore("category", e.currentTarget.value)}
                 class="modal-input"
               >
-                {CATEGORIES.map((category) => (
-                  <option value={category}>{language.t(categoryKey(category))}</option>
+                {categoryOptions().map((category) => (
+                  <option value={category}>{itemFilterOptions.categoryLabel(category)}</option>
                 ))}
               </select>
             </div>

@@ -1,5 +1,10 @@
-import type { UpdateDeviceRequest } from "@/pages/workspace/types"
-import { deviceApi } from "@/pages/store/lib/api"
+import type {
+  DeviceCommandAck,
+  DeviceCommandRequest,
+  UpdateCheckResponse,
+  UpdateDeviceRequest,
+} from "@/pages/workspace/types"
+import { deviceApi, updateApi } from "@/pages/store/lib/api"
 
 export const deviceManagementService = {
   async list() {
@@ -10,5 +15,17 @@ export const deviceManagementService = {
   async update(deviceId: string, data: UpdateDeviceRequest) {
     const res = await deviceApi.update(deviceId, data)
     return res.device
+  },
+
+  checkUpdate(platform: string, version: string): Promise<UpdateCheckResponse> {
+    return updateApi.check(platform, version)
+  },
+
+  sendCommand(deviceId: string, cmd: DeviceCommandRequest): Promise<DeviceCommandAck> {
+    return updateApi.sendCommand(deviceId, cmd)
+  },
+
+  remove(deviceId: string): Promise<void> {
+    return deviceApi.remove(deviceId)
   },
 }

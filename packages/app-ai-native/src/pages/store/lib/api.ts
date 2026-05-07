@@ -1,12 +1,19 @@
 import { env } from "@/lib/env"
-import type { Device, ListDevicesResponse, UpdateDeviceRequest } from "@/pages/workspace/types"
+import type {
+  Device,
+  DeviceCommandAck,
+  DeviceCommandRequest,
+  ListDevicesResponse,
+  UpdateCheckResponse,
+  UpdateDeviceRequest,
+} from "@/pages/workspace/types"
 
 // In dev the Vite proxy forwards /api/* to the real backend.
 // Set VITE_API_URL only for standalone mode (packages/store dev server on port 3002).
 const PREFIX = env.API_PREFIX
 const API_BASE = env.API_URL || PREFIX
 
-async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
+export async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const headers =
     options?.body instanceof FormData ? options.headers : { "Content-Type": "application/json", ...options?.headers }
   const res = await fetch(`${API_BASE}${path}`, {
@@ -206,6 +213,14 @@ export interface CapabilityItemAsset {
   contentSha?: string
 }
 
+export interface ItemTag {
+  id: string
+  slug: string
+  tagClass: string
+  createdBy: string
+  createdAt: string
+}
+
 export type SecurityStatus =
   | "unscanned"
   | "pending"
@@ -235,12 +250,14 @@ export interface CapabilityItem {
   currentRevision?: number
   sourcePath?: string
   sourceType?: string
+  source?: string
   previewCount?: number
   installCount?: number
   favoriteCount?: number
   favorited?: boolean
   securityStatus?: SecurityStatus
   lastScanId?: string
+  experienceScore?: number
   repoName?: string
   createdBy: string
   createdAt: string
@@ -249,9 +266,10 @@ export interface CapabilityItem {
   versions?: CapabilityVersion[]
   artifacts?: CapabilityArtifact[]
   assets?: CapabilityItemAsset[]
+  tags?: ItemTag[]
 }
 
-export type ItemSort = "favoriteCount" | "installCount" | "previewCount"
+export type ItemSort = "favoriteCount" | "installCount" | "previewCount" | "experienceScore" | "updatedAt"
 export type ItemOrder = "asc" | "desc"
 
 export interface RepoRegistryStatus {
@@ -426,6 +444,14 @@ export const deviceApi = {
     return { device: normalizeDevice(res.device) }
   },
 
+  async remove(deviceId: string) {
+    const res = await fetch(`${API_BASE}/api/devices/${deviceId}`, { method: "DELETE" })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }))
+      throw new Error(err.error || err.message || `Request failed: ${res.status}`)
+    }
+  },
+
   async listByWorkspace(workspaceId: string, page = 1, pageSize = 20) {
     const res = await apiFetch<{
       devices?: DeviceResponse[]
@@ -511,10 +537,8 @@ export const repoRegistryApi = {
 }
 
 export const repoApi = {
-  async listMy(userId: string) {
-    const res = await apiFetch<{ repositories: RepositoryResponse[] }>(
-      `/api/repositories/my?userId=${encodeURIComponent(userId)}`,
-    )
+  async listMy() {
+    const res = await apiFetch<{ repositories: RepositoryResponse[] }>("/api/repositories/my")
     return { repositories: (res.repositories ?? []).map(normalizeRepository) }
   },
 
@@ -583,6 +607,8 @@ export const repoApi = {
 // ---------------------------------------------------------------------------
 const _userNameCache = new Map<string, { name: string; expiresAt: number }>()
 const USER_NAME_CACHE_TTL = 10 * 60 * 1000 // 10 minutes
+const _userInfoCache = new Map<string, UserBasicInfo>()
+const _userInfoPending = new Map<string, Promise<UserBasicInfo>>()
 
 async function resolveUserNames(ids: string[]): Promise<Record<string, string>> {
   const now = Date.now()
@@ -618,9 +644,49 @@ async function resolveUserNames(ids: string[]): Promise<Record<string, string>> 
   return result
 }
 
+async function resolveUserInfo(userIds: string[]) {
+  const unique = Array.from(new Set(userIds.filter(Boolean)))
+  if (unique.length === 0) return {} as Record<string, UserBasicInfo>
+
+  const entries = await Promise.all(
+    unique.map(async (userId) => {
+      const cached = _userInfoCache.get(userId)
+      if (cached) return [userId, cached] as const
+
+      const pending = _userInfoPending.get(userId)
+      if (pending) return [userId, await pending] as const
+
+      const request = apiFetch<{ user: UserBasicInfo & { picture?: string; avatar_url?: string } }>(`/api/users/info?id=${encodeURIComponent(userId)}`)
+        .then((res) => {
+          const raw = res.user ?? { id: userId, name: userId }
+          const user = {
+            id: raw.id ?? userId,
+            name: raw.name ?? userId,
+            avatarUrl: raw.avatarUrl ?? raw.picture ?? raw.avatar_url,
+          } satisfies UserBasicInfo
+          _userInfoCache.set(userId, user)
+          _userInfoPending.delete(userId)
+          return user
+        })
+        .catch(() => {
+          const fallback = { id: userId, name: userId, avatarUrl: undefined } satisfies UserBasicInfo
+          _userInfoCache.set(userId, fallback)
+          _userInfoPending.delete(userId)
+          return fallback
+        })
+
+      _userInfoPending.set(userId, request)
+      return [userId, await request] as const
+    }),
+  )
+
+  return Object.fromEntries(entries)
+}
+
 export const userApi = {
   search: (q: string) => apiFetch<{ users: SearchedUser[] }>(`/api/users/search?q=${encodeURIComponent(q)}`),
   getNames: (ids: string[]) => resolveUserNames(ids),
+  getInfo: (ids: string[]) => resolveUserInfo(ids),
 }
 
 export const syncApi = {
@@ -683,11 +749,29 @@ export const registryApi = {
 }
 
 export const itemApi = {
-  listMy: (ownerId: string, opts?: { type?: string; page?: number; pageSize?: number }) => {
-    const p = new URLSearchParams({ ownerId })
+  listMy: (opts?: {
+    type?: string
+    page?: number
+    pageSize?: number
+    search?: string
+    categories?: string[]
+    source?: string[]
+    tags?: string[]
+    securityStatuses?: string[]
+    sortBy?: ItemSort
+    sortOrder?: ItemOrder
+  }) => {
+    const p = new URLSearchParams()
     if (opts?.type) p.set("type", opts.type)
     if (opts?.page) p.set("page", String(opts.page))
     if (opts?.pageSize) p.set("pageSize", String(opts.pageSize))
+    if (opts?.search) p.set("search", opts.search)
+    if (opts?.categories?.length) p.set("categories", opts.categories.join(","))
+    if (opts?.source?.length) p.set("source", opts.source.join(","))
+    if (opts?.tags?.length) p.set("tags", opts.tags.join(","))
+    if (opts?.securityStatuses?.length) p.set("securityStatuses", opts.securityStatuses.join(","))
+    if (opts?.sortBy) p.set("sortBy", opts.sortBy)
+    if (opts?.sortOrder) p.set("sortOrder", opts.sortOrder)
     return apiFetch<{ items: CapabilityItem[]; total: number }>(`/api/items/my?${p.toString()}`)
   },
 
@@ -695,6 +779,10 @@ export const itemApi = {
     type?: string
     search?: string
     category?: string
+    categories?: string[]
+    source?: string[]
+    tags?: string[]
+    securityStatuses?: string[]
     registryId?: string
     page?: number
     pageSize?: number
@@ -706,7 +794,11 @@ export const itemApi = {
     const p = new URLSearchParams()
     if (params?.type) p.set("type", params.type)
     if (params?.search) p.set("search", params.search)
+    if (params?.categories?.length) p.set("categories", params.categories.join(","))
     if (params?.category) p.set("category", params.category)
+    if (params?.source?.length) p.set("source", params.source.join(","))
+    if (params?.tags?.length) p.set("tags", params.tags.join(","))
+    if (params?.securityStatuses?.length) p.set("securityStatuses", params.securityStatuses.join(","))
     if (params?.registryId) p.set("registryId", params.registryId)
     if (params?.page) p.set("page", String(params.page))
     if (params?.pageSize) p.set("pageSize", String(params.pageSize))
@@ -722,6 +814,7 @@ export const itemApi = {
     name: string
     description?: string
     category?: string
+    tags?: string[]
     version?: string
     content?: string
     visibility?: string
@@ -787,6 +880,8 @@ export const itemApi = {
 
   get: (id: string) => apiFetch<CapabilityItem>(`/api/items/${id}`, { credentials: "include" }),
 
+  getAssets: (id: string) => apiFetch<{ assets: CapabilityItemAsset[] }>(`/api/items/${id}/assets`, { credentials: "include" }).then((res) => res.assets ?? []),
+
   listVersions: (id: string) => apiFetch<{ versions: CapabilityVersion[] }>(`/api/items/${id}/versions`, { credentials: "include" }).then((res) => res.versions ?? []),
 
   getVersion: (id: string, revision: number) => apiFetch<CapabilityVersion>(`/api/items/${id}/versions/${revision}`, { credentials: "include" }),
@@ -795,6 +890,12 @@ export const itemApi = {
     apiFetch<CapabilityItem>(`/api/items/${id}/transfer`, {
       method: "PUT",
       body: JSON.stringify({ targetRepoId }),
+    }),
+
+  setTags: (id: string, tags: string[]) =>
+    apiFetch<{ tags: ItemTag[] }>(`/api/items/${id}/tags`, {
+      method: "POST",
+      body: JSON.stringify({ tags }),
     }),
 }
 
@@ -886,8 +987,57 @@ export interface Category {
   updatedAt: string
 }
 
+export interface FilterOption {
+  value: string
+  names: Record<string, string>
+}
+
+export type SecurityRiskGroup = "unknown" | "low" | "medium" | "high"
+
+export interface SourceOption {
+  value: string
+  label: string
+  url: string
+}
+
+export interface UserBasicInfo {
+  id: string
+  name: string
+  avatarUrl?: string
+}
+
+export interface ItemFilterOptions {
+  categories: Category[]
+  securityStatuses: FilterOption[]
+  securityRiskGroups: FilterOption[]
+  sources: SourceOption[]
+}
+
+export interface TagListResponse {
+  tags: ItemTag[]
+  total: number
+  page: number
+  pageSize: number
+  hasMore: boolean
+}
+
 export const categoryApi = {
   list: () => apiFetch<{ categories: Category[] }>("/api/categories").then((res) => res.categories),
+}
+
+export const itemFilterApi = {
+  list: () => apiFetch<ItemFilterOptions>("/api/items/filter-options"),
+}
+
+export const tagApi = {
+  list: (params?: { query?: string; page?: number; pageSize?: number; tagClass?: string }, options?: RequestInit) => {
+    const p = new URLSearchParams()
+    if (params?.query) p.set("q", params.query)
+    if (params?.page) p.set("page", String(params.page))
+    if (params?.pageSize) p.set("pageSize", String(params.pageSize))
+    if (params?.tagClass) p.set("tagClass", params.tagClass)
+    return apiFetch<TagListResponse>(`/api/tags?${p.toString()}`, options)
+  },
 }
 
 export interface ChannelConfig {
@@ -962,4 +1112,15 @@ export const channelApi = {
     apiFetch<{ status: string; token?: string }>(
       `/api/channels/wechat/login/status?qrcode=${encodeURIComponent(qrcode)}`,
     ),
+}
+
+export const updateApi = {
+  check: (platform: string, version: string) =>
+    apiFetch<UpdateCheckResponse>(`/api/updates/check?platform=${encodeURIComponent(platform)}&version=${encodeURIComponent(version)}`),
+
+  sendCommand: (deviceId: string, cmd: DeviceCommandRequest) =>
+    apiFetch<DeviceCommandAck>(`/cloud/device/${deviceId}/proxy/api/v1/commands`, {
+      method: "POST",
+      body: JSON.stringify(cmd),
+    }),
 }

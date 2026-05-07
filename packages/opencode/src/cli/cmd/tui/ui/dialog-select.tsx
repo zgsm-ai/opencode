@@ -86,7 +86,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
     const result = fuzzysort
       .go(needle, options, {
         keys: ["title", "category"],
-        scoreFn: (r) => r[0].score * 2 + r[1].score,
+        scoreFn: (r) => r[0].score * 2 + (r[1]?.score ?? 0),
       })
       .map((x) => x.obj)
 
@@ -176,7 +176,8 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
       }
       if (y < 0) {
         scroll.scrollBy(y)
-        if (isDeepEqual(flat()[0].value, selected()?.value)) {
+        const first = flat()[0]
+        if (first && isDeepEqual(first.value, selected()?.value)) {
           scroll.scrollTo(0)
         }
       }
@@ -295,7 +296,13 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
                     const current = createMemo(() => isDeepEqual(option.value, props.current))
                     return (
                       <box
-                        id={JSON.stringify(option.value)}
+                        id={(() => {
+                          try {
+                            return JSON.stringify(option.value)
+                          } catch {
+                            return String(option.value)
+                          }
+                        })()}
                         flexDirection="row"
                         onMouseMove={() => {
                           setStore("input", "mouse")

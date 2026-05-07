@@ -26,11 +26,15 @@ export const { use: useRoute, provider: RouteProvider } = createSimpleContext({
   name: "Route",
   init: () => {
     const [store, setStore] = createStore<Route>(
-      process.env["COSTRICT_ROUTE"]
-        ? JSON.parse(process.env["COSTRICT_ROUTE"])
-        : {
-            type: "home",
-          },
+      (() => {
+        const raw = process.env["COSTRICT_ROUTE"]
+        if (!raw) return { type: "home" }
+        try {
+          return JSON.parse(raw)
+        } catch {
+          return { type: "home" }
+        }
+      })(),
     )
 
     return {

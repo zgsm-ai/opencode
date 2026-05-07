@@ -28,6 +28,7 @@ export type CommandOption = DialogSelectOption<string> & {
   slash?: Slash
   hidden?: boolean
   enabled?: boolean
+  scope?: "shared" | "tui-only"
 }
 
 function init() {
@@ -97,6 +98,16 @@ function init() {
     },
     keybinds(enabled: boolean) {
       setSuspendCount((count) => count + (enabled ? -1 : 1))
+    },
+    manifest() {
+      return visibleOptions()
+        .filter((option) => option.slash)
+        .map((option) => ({
+          name: option.slash!.name,
+          aliases: option.slash!.aliases,
+          title: option.title,
+          scope: option.scope ?? "shared",
+        }))
     },
     suspended,
     show() {

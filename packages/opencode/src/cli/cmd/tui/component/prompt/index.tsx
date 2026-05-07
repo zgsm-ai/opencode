@@ -108,24 +108,29 @@ export function Prompt(props: PromptProps) {
 
   const textareaKeybindings = useTextareaKeybindings()
 
-  const fileStyleId = syntax().getStyleId("extmark.file")!
-  const agentStyleId = syntax().getStyleId("extmark.agent")!
-  const pasteStyleId = syntax().getStyleId("extmark.paste")!
+  const fileStyleId = syntax().getStyleId("extmark.file") ?? 0
+  const agentStyleId = syntax().getStyleId("extmark.agent") ?? 0
+  const pasteStyleId = syntax().getStyleId("extmark.paste") ?? 0
   let promptPartTypeId = 0
 
   sdk.event.on(TuiEvent.PromptAppend.type, (evt) => {
-    if (!input || input.isDestroyed) return
-    input.insertText(evt.properties.text)
-    setTimeout(() => {
-      // setTimeout is a workaround and needs to be addressed properly
+    try {
       if (!input || input.isDestroyed) return
-      input.getLayoutNode().markDirty()
-      input.gotoBufferEnd()
-      renderer.requestRender()
-    }, 0)
+      input.insertText(evt.properties.text)
+      setTimeout(() => {
+        // setTimeout is a workaround and needs to be addressed properly
+        if (!input || input.isDestroyed) return
+        input.getLayoutNode().markDirty()
+        input.gotoBufferEnd()
+        renderer.requestRender()
+      }, 0)
+    } catch {
+      /* ignore */
+    }
   })
 
   createEffect(() => {
+    if (!input) return
     if (props.disabled) input.cursorColor = theme.backgroundElement
     if (!props.disabled) input.cursorColor = theme.text
   })
@@ -236,13 +241,17 @@ export function Prompt(props: PromptProps) {
         category: "Prompt",
         hidden: true,
         onSelect: async () => {
-          const content = await Clipboard.read()
-          if (content?.mime.startsWith("image/")) {
-            await pasteImage({
-              filename: "clipboard",
-              mime: content.mime,
-              content: content.data,
-            })
+          try {
+            const content = await Clipboard.read()
+            if (content?.mime.startsWith("image/")) {
+              await pasteImage({
+                filename: "clipboard",
+                mime: content.mime,
+                content: content.data,
+              })
+            }
+          } catch (e) {
+            toast.error(e instanceof Error ? e.message : "Failed to read clipboard")
           }
         },
       },
@@ -270,9 +279,11 @@ export function Prompt(props: PromptProps) {
           }, 5000)
 
           if (store.interrupt >= 2) {
-            sdk.client.session.abort({
-              sessionID: props.sessionID,
-            })
+            sdk.client.session
+              .abort({
+                sessionID: props.sessionID,
+              })
+              .catch(() => {})
             setStore("interrupt", 0)
           }
           dialog.clear()
@@ -283,6 +294,7 @@ export function Prompt(props: PromptProps) {
         category: "Session",
         keybind: "editor_open",
         value: "prompt.editor",
+        scope: "tui-only",
         slash: {
           name: "editor",
         },
@@ -369,6 +381,7 @@ export function Prompt(props: PromptProps) {
         title: "Skills",
         value: "prompt.skills",
         category: "Prompt",
+        scope: "shared",
         slash: {
           name: "skills",
         },
@@ -637,15 +650,17 @@ export function Prompt(props: PromptProps) {
     const variant = local.model.variant.current()
 
     if (store.mode === "shell") {
-      sdk.client.session.shell({
-        sessionID,
-        agent: local.agent.current().name,
-        model: {
-          providerID: selectedModel.providerID,
-          modelID: selectedModel.modelID,
-        },
-        command: inputText,
-      })
+      sdk.client.session
+        .shell({
+          sessionID,
+          agent: local.agent.current().name,
+          model: {
+            providerID: selectedModel.providerID,
+            modelID: selectedModel.modelID,
+          },
+          command: inputText,
+        })
+        .catch(() => {})
       setStore("mode", "normal")
     } else if (
       inputText.startsWith("/") &&
@@ -662,21 +677,23 @@ export function Prompt(props: PromptProps) {
       const restOfInput = firstLineEnd === -1 ? "" : inputText.slice(firstLineEnd + 1)
       const args = firstLineArgs.join(" ") + (restOfInput ? "\n" + restOfInput : "")
 
-      sdk.client.session.command({
-        sessionID,
-        command: command.slice(1),
-        arguments: args,
-        agent: local.agent.current().name,
-        model: `${selectedModel.providerID}/${selectedModel.modelID}`,
-        messageID,
-        variant,
-        parts: nonTextParts
-          .filter((x) => x.type === "file")
-          .map((x) => ({
-            id: PartID.ascending(),
-            ...x,
-          })),
-      })
+      sdk.client.session
+        .command({
+          sessionID,
+          command: command.slice(1),
+          arguments: args,
+          agent: local.agent.current().name,
+          model: `${selectedModel.providerID}/${selectedModel.modelID}`,
+          messageID,
+          variant,
+          parts: nonTextParts
+            .filter((x) => x.type === "file")
+            .map((x) => ({
+              id: PartID.ascending(),
+              ...x,
+            })),
+        })
+        .catch(() => {})
     } else {
       sdk.client.session
         .prompt({
@@ -904,15 +921,19 @@ export function Prompt(props: PromptProps) {
                 // This helps terminals that forward Ctrl+V to the app; Windows
                 // Terminal 1.25+ usually handles Ctrl+V before this path.
                 if (keybind.match("input_paste", e)) {
-                  const content = await Clipboard.read()
-                  if (content?.mime.startsWith("image/")) {
-                    e.preventDefault()
-                    await pasteImage({
-                      filename: "clipboard",
-                      mime: content.mime,
-                      content: content.data,
-                    })
-                    return
+                  try {
+                    const content = await Clipboard.read()
+                    if (content?.mime.startsWith("image/")) {
+                      e.preventDefault()
+                      await pasteImage({
+                        filename: "clipboard",
+                        mime: content.mime,
+                        content: content.data,
+                      })
+                      return
+                    }
+                  } catch (err) {
+                    toast.error(err instanceof Error ? err.message : "Failed to read clipboard")
                   }
                   // If no image, let the default paste behavior continue
                 }

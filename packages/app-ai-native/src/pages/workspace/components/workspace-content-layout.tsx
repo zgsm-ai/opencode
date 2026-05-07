@@ -1,30 +1,29 @@
-import { createMemo, createSignal, For, Match, onMount, Show, Switch, createEffect, on, onCleanup, untrack } from "solid-js"
+import { createMemo, createSignal, For, Match, onMount, onCleanup, Show, Switch, createEffect, untrack } from "solid-js"
 import { useParams, useSearchParams } from "@solidjs/router"
 import { Toast } from "@opencode-ai/ui/toast"
 import { IconButton } from "@opencode-ai/ui/icon-button"
 import { Icon } from "@opencode-ai/ui/icon"
+import { FileIcon } from "@opencode-ai/ui/file-icon"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { ResizeHandle } from "@opencode-ai/ui/resize-handle"
 import { Tabs } from "@opencode-ai/ui/tabs"
-import { Collapsible } from "@opencode-ai/ui/collapsible"
 import { useLanguage } from "@/context/language"
 import { useFile } from "@/context/file"
-import { useDeviceProject } from "@/context/device-project"
-import { useDeviceSDK } from "@/context/device-sdk"
+import { useDiff, useTreePolling } from "@/context/device-file"
 import { useDeviceWorkspace } from "@/context/device-workspace"
+import { sessionTreeIDs } from "@/pages/session/composer/session-request-tree"
 import { DeviceSessionProvider } from "@/context/device-session"
 import { DeviceSessionTab } from "./device-session-tab"
 import { TerminalTab } from "./terminal-tab"
 import { useDeviceTerminal } from "@/context/device-terminal"
 import { ContentTabContext, useContentTabs, type ContentTab } from "@/context/content-tabs"
-import { useDeviceLayout } from "./device-interface"
+import { useLayout } from "@/context/layout"
 import { FilePreviewTab } from "./file-preview-tab"
 import { DiffPreviewTab } from "./diff-preview-tab"
 import { workspaceKey } from "@/pages/layout/helpers"
 import { shouldRestore, activeSession } from "./workspace-content-layout-sync"
 import FileTree from "@/components/file-tree"
 import type { FileNode } from "@opencode-ai/sdk/v2"
-import type { DiffFileEntry } from "@/client/device-client"
 import type { Session } from "@opencode-ai/sdk/v2/client"
 import { getDirectory, getFilename } from "@opencode-ai/util/path"
 import { useWorkspace } from "../context"
@@ -34,8 +33,126 @@ let newSessionCounter = 0
 
 let newTerminalCounter = 0
 
+const SESSION_TAB_ICON = "bubble-5"
+
+function hasPendingInteraction(
+  sessions: { id: string; parentID?: string }[],
+  questions: Record<string, unknown[]>,
+  permissions: Record<string, unknown[]>,
+  sessionID?: string,
+): boolean {
+  if (!sessionID) return false
+  const treeIds = sessionTreeIDs(sessions as any, sessionID)
+  return treeIds.some((id) => (questions[id]?.length ?? 0) > 0 || (permissions[id]?.length ?? 0) > 0)
+}
+
+function sessionGroup(session: { time: { updated?: number; created: number } }) {
+  const now = Date.now()
+  const startOfDay = new Date(now).setHours(0, 0, 0, 0)
+  const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000
+  const t = session.time.updated ?? session.time.created
+  return t >= startOfDay ? "today" : t >= sevenDaysAgo ? "thisWeek" : "older"
+}
+
+function DiffStatusBadge(props: { status: string }) {
+  const label = () => {
+    switch (props.status) {
+      case "modified": return "M"
+      case "deleted": return "D"
+      case "renamed": return "R"
+      case "untracked": return "?"
+      default: return "?"
+    }
+  }
+  const bg = () => {
+    switch (props.status) {
+      case "modified": return "hsl(25 95% 53%)"
+      case "deleted": return "hsl(0 84% 60%)"
+      case "renamed": return "hsl(199 89% 48%)"
+      case "untracked": return "hsl(220 9% 60%)"
+      default: return "hsl(220 9% 60%)"
+    }
+  }
+  return (
+    <span
+      class="shrink-0 w-4 h-4 flex items-center justify-center text-[10px] rounded-[3px]"
+      style={{ "background-color": bg(), color: "#ffffff", "font-weight": 700 }}
+    >
+      {label()}
+    </span>
+  )
+}
+
 function TabIcon(props: { tab: ContentTab }) {
-  return <Icon name={props.tab.icon as any ?? "file-tree"} size="small" class="shrink-0 text-text-weak" />
+  return (() => {
+    if (props.tab.kind === "diff") {
+      return <DiffStatusBadge status={(props.tab.meta as any)?.status ?? "modified"} />
+    }
+    if (props.tab.kind === "file") {
+      const path = (props.tab.meta as any)?.path as string | undefined
+      return <FileIcon node={{ path: path ?? "", type: "file" }} class="size-4 shrink-0" />
+    }
+    return <Icon name={props.tab.icon as any ?? "file-tree"} size="small" class="shrink-0 text-text-weak" />
+  })()
+}
+
+function PendingInteractionIcon() {
+  return (
+    <div class="shrink-0 flex items-center justify-center w-4 h-4 animate-bell" style={{ "transform-origin": "top center" }}>
+      <Icon name="bell" size="small" style={{ color: "#ffa000" }} />
+    </div>
+  )
+}
+
+function WorkingIcon(props: { class?: string; classList?: Record<string, boolean>; title?: string }) {
+  return (
+    <div class="shrink-0 flex items-center justify-center w-4 h-4">
+      <div
+        class="size-3 rounded-full border border-t-transparent animate-spin"
+        classList={props.classList}
+        title={props.title}
+      />
+    </div>
+  )
+}
+
+function SessionTabIcon(props: { tab: ContentTab }) {
+  const dw = useDeviceWorkspace()
+  const status = createMemo(() => {
+    const id = props.tab.meta?.sessionID as string | undefined
+    if (!id) return undefined
+    return dw.data.sessionStatus[id]
+  })
+  const working = createMemo(() => {
+    const t = status()?.type
+    return t === "busy" || t === "retry"
+  })
+  const pending = createMemo(() => {
+    const id = props.tab.meta?.sessionID as string | undefined
+    return hasPendingInteraction(dw.data.session, dw.data.questions, dw.data.permissions, id)
+  })
+
+  const tabStore = useContentTabs()
+  const isActiveTab = createMemo(() => tabStore.activeId() === props.tab.id)
+
+  return (
+    <Show
+      when={pending()}
+      fallback={
+        <Show when={working()} fallback={<TabIcon tab={props.tab} />}>
+          <WorkingIcon
+            title={status()?.type === "retry" ? "retry" : "busy"}
+            classList={{
+              "border-native-primary": isActiveTab(),
+              "border-native-dim": !isActiveTab(),
+            }}
+          />
+        </Show>
+      }
+    >
+      <PendingInteractionIcon />
+    </Show>
+  )
 }
 
 function TabContent(props: { tab: ContentTab }) {
@@ -63,6 +180,7 @@ function ContentTabPanel() {
   const tabStore = useContentTabs()
   const terminal = useDeviceTerminal()
   const language = useLanguage()
+  const layout = useLayout()
 
   const closeTab = (id: string) => {
     const tab = tabStore.tabs().find((t) => t.id === id)
@@ -78,8 +196,21 @@ function ContentTabPanel() {
       <Show
         when={tabStore.tabs().length > 0}
         fallback={
-          <div class="flex-1 h-full flex items-center justify-center text-text-weak text-14-regular">
-            {language.t("workspace.content.selectFileOrSession")}
+          <div class="flex-1 h-full flex items-center justify-center vscode-markdown">
+            <div class="flex flex-col gap-1.5" style={{ "min-width": "280px" }}>
+              <div class="flex items-center justify-between gap-8">
+                <span>{language.t("workspace.content.shortcut.newSession")}</span>
+                <span class="flex items-center gap-0.5"><code>Alt</code>+<code>N</code></span>
+              </div>
+              <div class="flex items-center justify-between gap-8">
+                <span>{language.t("workspace.content.shortcut.newTerminal")}</span>
+                <span class="flex items-center gap-0.5"><code>Alt</code>+<code>T</code></span>
+              </div>
+              <div class="flex items-center justify-between gap-8">
+                <span>{language.t("workspace.content.shortcut.toggleSidebar")}</span>
+                <span class="flex items-center gap-0.5"><code>Alt</code>+<code>M</code></span>
+              </div>
+            </div>
           </div>
         }
       >
@@ -88,18 +219,31 @@ function ContentTabPanel() {
           onChange={tabStore.activate}
           class="h-full flex flex-col"
         >
-          <div class="h-[41px] shrink-0 flex items-center  border-b pr-2">
-            <Tabs.List class="flex-1 min-w-0 h-full [&::after]:border-b-0 overflow-x-auto scrollbar-none" onWheel={(e) => { e.currentTarget.scrollLeft += e.deltaY }}>
+          <div class="h-[41px] shrink-0 flex items-center border-b">
+            <div class="shrink-0 flex items-center px-2">
+              <Tooltip value={language.t(layout.fileTree.opened() ? "workspace.sidebar.collapse" : "workspace.sidebar.expand")} placement="bottom">
+                <IconButton
+                  icon={layout.fileTree.opened() ? "chevron-left" : "chevron-right"}
+                  variant="ghost"
+                  iconSize="small"
+                  onClick={layout.fileTree.toggle}
+                  aria-label={language.t(layout.fileTree.opened() ? "workspace.sidebar.collapse" : "workspace.sidebar.expand")}
+                />
+              </Tooltip>
+            </div>
+            <Tabs.List class="flex-1 min-w-0 h-full border-l [&::after]:border-b-0 overflow-x-auto scrollbar-none" onWheel={(e) => { e.currentTarget.scrollLeft += e.deltaY }}>
               <For each={tabStore.tabs()}>
                 {(tab) => (
                   <Tabs.Trigger
                     value={tab.id}
-                    class="group h-full min-w-[100px] max-w-[180px] !bg-background-weak !border-b-0 has-[[data-selected]]:!bg-background-base has-[[data-selected]]:!border-b has-[[data-selected]]:before:absolute has-[[data-selected]]:before:top-0 has-[[data-selected]]:before:left-0 has-[[data-selected]]:before:right-0 has-[[data-selected]]:before:h-[2px] has-[[data-selected]]:before:bg-icon-strong-base [&>[data-slot=tabs-trigger]]:h-full [&>[data-slot=tabs-trigger]]:w-full [&>[data-slot=tabs-trigger]]:px-2 [&>[data-slot=tabs-trigger]]:gap-1.5 flex items-center gap-1.5 text-13-regular text-text-weak hover:text-text-base has-[[data-selected]]:text-text-base transition-colors relative"
+                    class="group h-full w-[160px] shrink-0 !bg-background-weak !border-b-0 has-[[data-selected]]:!bg-background-base has-[[data-selected]]:!border-b has-[[data-selected]]:before:absolute has-[[data-selected]]:before:top-0 has-[[data-selected]]:before:left-0 has-[[data-selected]]:before:right-0 has-[[data-selected]]:before:h-[2px] has-[[data-selected]]:before:bg-icon-strong-base [&>[data-slot=tabs-trigger]]:h-full [&>[data-slot=tabs-trigger]]:w-full [&>[data-slot=tabs-trigger]]:px-2 [&>[data-slot=tabs-trigger]]:gap-1.5 [&>[data-slot=tabs-trigger]]:justify-start flex items-center gap-1.5 text-13-regular text-text-weak hover:text-text-base has-[[data-selected]]:text-text-base transition-colors relative"
                   >
-                    <TabIcon tab={tab} />
-                    <span class="truncate flex-1 min-w-0">{tab.title}</span>
+                    <Show when={tab.kind === "session"} fallback={<TabIcon tab={tab} />}>
+                      <SessionTabIcon tab={tab} />
+                    </Show>
+                    <span class="truncate flex-1 min-w-0 text-left">{tab.title}</span>
                     <button
-                      class="flex items-center justify-center h-full w-6 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                      class="flex items-center justify-center h-full w-0 overflow-hidden group-hover:w-6 shrink-0 opacity-0 group-hover:opacity-100 transition-[width,opacity]"
                       onClick={(e) => {
                         e.stopPropagation()
                         closeTab(tab.id)
@@ -111,7 +255,7 @@ function ContentTabPanel() {
                 )}
               </For>
             </Tabs.List>
-            <div class="shrink-0 flex items-center px-1">
+            <div class="shrink-0 flex items-center px-2">
               <Tooltip value={language.t("workspace.content.closeAll")} placement="bottom">
                 <IconButton
                   icon="trash"
@@ -169,33 +313,24 @@ function FileTreeWithTabs(props: { path: string }) {
 
 type SidebarSection = "sessions" | "files" | "diffs"
 
-const SECTION_MIN_HEIGHT = 120
 const SECTION_HEADER_HEIGHT = 32
 
-function ContentSidebar(props: { directory: string }) {
+function ContentSidebar(props: { directory: string; autoExpandGroup?: () => { group: string; nonce: number } | undefined }) {
   const language = useLanguage()
-  const dl = useDeviceLayout()
+  const dl = useLayout()
   const tabStore = useContentTabs()
   const terminal = useDeviceTerminal()
-  const sdk = useDeviceSDK()
   const dw = useDeviceWorkspace()
   const work = useWorkspace()
+  const diff = useDiff()
+  const treePolling = useTreePolling()
   const [expanded, setExpanded] = createSignal<Record<SidebarSection, boolean>>({
     sessions: true,
     files: false,
     diffs: false,
   })
-  const [heights, setHeights] = createSignal<Record<SidebarSection, number>>({
-    sessions: SECTION_MIN_HEIGHT,
-    files: 300,
-    diffs: SECTION_MIN_HEIGHT,
-  })
-  const [stagedFiles, setStagedFiles] = createSignal<DiffFileEntry[]>([])
-  const [unstagedFiles, setUnstagedFiles] = createSignal<DiffFileEntry[]>([])
-  const [diffBranch, setDiffBranch] = createSignal<string>("")
-  const [diffLoading, setDiffLoading] = createSignal(false)
-  const [statusMap, setStatusMap] = createSignal<Record<string, { type: string }>>({})
   const [diffGroupsCollapsed, setDiffGroupsCollapsed] = createSignal<Record<string, boolean>>({})
+  const [sessionGroupsCollapsed, setSessionGroupsCollapsed] = createSignal<Record<string, boolean>>({ older: true })
 
   const sortedSessions = createMemo(() => {
     const sessions = dw.data.session
@@ -208,34 +343,36 @@ function ContentSidebar(props: { directory: string }) {
   type SessionGroup = { key: string; label: string; sessions: Session[] }
 
   const sessionGroups = createMemo<SessionGroup[]>(() => {
-    const now = Date.now()
-    const startOfDay = new Date(now).setHours(0, 0, 0, 0)
-    const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000
     const groups: SessionGroup[] = [
       { key: "today", label: language.t("workspace.session.group.today"), sessions: [] },
       { key: "thisWeek", label: language.t("workspace.session.group.thisWeek"), sessions: [] },
       { key: "older", label: language.t("workspace.session.group.older"), sessions: [] },
     ]
     for (const s of sortedSessions()) {
-      const t = s.time.updated ?? s.time.created
-      if (t >= startOfDay) groups[0].sessions.push(s)
-      else if (t >= sevenDaysAgo) groups[1].sessions.push(s)
+      const key = sessionGroup(s)
+      if (key === "today") groups[0].sessions.push(s)
+      else if (key === "thisWeek") groups[1].sessions.push(s)
       else groups[2].sessions.push(s)
     }
     return groups.filter((g) => g.sessions.length > 0)
   })
 
   const isWorking = (id: string) => {
-    const s = statusMap()[id]
+    const s = dw.data.sessionStatus[id]
     return s?.type === "busy" || s?.type === "retry"
   }
 
   const openSession = (session: Session) => {
+    const existing = tabStore.tabs().find((t) => t.kind === "session" && t.meta?.sessionID === session.id)
+    if (existing) {
+      tabStore.activate(existing.id)
+      return
+    }
     tabStore.open({
       kind: "session",
       key: session.id,
       title: session.title || language.t("command.session.new"),
-      icon: "bubble-5",
+      icon: SESSION_TAB_ICON,
       meta: { sessionID: session.id },
     })
   }
@@ -255,66 +392,47 @@ function ContentSidebar(props: { directory: string }) {
   })
 
   createEffect(() => {
-    const unsub = dw.subscribe((payload) => {
-      if (payload.type === "session.status") {
-        const props = payload.properties as { sessionID: string; status: { type: string } }
-        if (!props?.sessionID) return
-        if (props.status.type === "idle") {
-          setStatusMap((prev) => {
-            const next = { ...prev }
-            delete next[props.sessionID]
-            return next
-          })
-        } else {
-          setStatusMap((prev) => ({ ...prev, [props.sessionID]: props.status }))
-        }
-      }
-    })
-    onCleanup(unsub)
+    if (expanded().files) treePolling.start()
+    else treePolling.stop()
   })
-
-  const loadDiff = async () => {
-    if (diffLoading()) return
-    setDiffLoading(true)
-    try {
-      const result = await sdk.client.runtime.diff()
-      if (result) {
-        setStagedFiles(result.stagedFiles ?? [])
-        setUnstagedFiles(result.unstagedFiles ?? [])
-        setDiffBranch(result.branch ?? "")
-      }
-    } catch {
-      setStagedFiles([])
-      setUnstagedFiles([])
-    } finally {
-      setDiffLoading(false)
-    }
-  }
 
   createEffect(() => {
-    if (expanded().diffs) untrack(() => loadDiff())
+    if (expanded().diffs) diff.scheduler.start()
+    else diff.scheduler.stop()
   })
 
-  const statusColor = (status: string) => {
+  createEffect(() => {
+    const event = props.autoExpandGroup?.()
+    if (event) {
+      setSessionGroupsCollapsed((prev) => ({ ...prev, [event.group]: false }))
+    }
+  })
+
+  const statusLabel = (status: string) => {
     switch (status) {
-      case "modified": return "text-warning"
-      case "deleted": return "text-danger"
-      case "renamed": return "text-info"
-      default: return "text-text-weak"
+      case "modified": return "M"
+      case "deleted": return "D"
+      case "renamed": return "R"
+      case "untracked": return "?"
+      default: return "?"
     }
   }
 
-  const statusIcon = (status: string) => {
+  const statusBadgeStyle = (status: string) => {
     switch (status) {
-      case "modified": return "pencil-line"
-      case "deleted": return "trash"
-      case "renamed": return "arrow-right"
-      default: return "file-tree"
+      case "modified": return { "background-color": "hsl(25 95% 53%)" }
+      case "deleted": return { "background-color": "hsl(0 84% 60%)" }
+      case "renamed": return { "background-color": "hsl(199 89% 48%)" }
+      case "untracked": return { "background-color": "hsl(220 9% 60%)" }
+      default: return { "background-color": "hsl(220 9% 60%)" }
     }
   }
 
   const toggle = (section: SidebarSection) => {
-    setExpanded((prev) => ({ ...prev, [section]: !prev[section] }))
+    setExpanded((prev) => {
+      if (prev[section]) return { sessions: false, files: false, diffs: false }
+      return { sessions: section === "sessions", files: section === "files", diffs: section === "diffs" }
+    })
   }
 
   const expandedCount = createMemo(() =>
@@ -352,7 +470,7 @@ function ContentSidebar(props: { directory: string }) {
                 kind: "session",
                 key: `new-${newSessionCounter}`,
                 title: language.t("command.session.new"),
-                icon: "bubble-5",
+                icon: SESSION_TAB_ICON,
                 meta: { sessionID: undefined },
               })
             }}
@@ -398,35 +516,18 @@ function ContentSidebar(props: { directory: string }) {
         <For each={sections()}>
           {(section, idx) => {
             const isOpen = createMemo(() => expanded()[section.key])
-            const isFirstExpanded = createMemo(() => {
-              if (!isOpen()) return false
-              const keys: SidebarSection[] = ["sessions", "files", "diffs"]
-              for (const k of keys) {
-                if (expanded()[k]) return k === section.key
-              }
-              return false
-            })
 
             return (
               <div
                 class="flex flex-col min-h-0 relative"
                 classList={{
-                  "flex-1": isFirstExpanded(),
-                  "shrink-0": isOpen() && !isFirstExpanded(),
+                  "flex-1": isOpen(),
+                  "shrink-0": !isOpen(),
                 }}
                 style={{
-                  height: isOpen() && !isFirstExpanded() ? `${heights()[section.key]}px` : undefined,
+                  height: !isOpen() ? `${SECTION_HEADER_HEIGHT}px` : undefined,
                 }}
               >
-                <Show when={isOpen() && !isFirstExpanded()}>
-                  <ResizeHandle
-                    direction="vertical"
-                    size={heights()[section.key]}
-                    min={SECTION_MIN_HEIGHT}
-                    max={800}
-                    onResize={(h: number) => setHeights((prev) => ({ ...prev, [section.key]: h }))}
-                  />
-                </Show>
                 <button
                   class="shrink-0 flex items-center gap-1.5 w-full px-2 text-12-regular text-text-weak hover:text-text-base hover:bg-background-stronger transition-colors cursor-pointer border-b"
                   style={{ height: `${SECTION_HEADER_HEIGHT}px` }}
@@ -443,7 +544,7 @@ function ContentSidebar(props: { directory: string }) {
                   </Show>
                 </button>
                 <Show when={isOpen()}>
-                  <div class="flex-1 min-h-0 overflow-y-auto">
+                  <div class="flex-1 min-h-0 overflow-y-auto thin-scrollbar">
                     <Show when={section.key === "sessions"}>
                       <Show when={dw.data.status === "loading"} fallback={
                         <Show when={sessionGroups().length > 0} fallback={
@@ -453,51 +554,62 @@ function ContentSidebar(props: { directory: string }) {
                         }>
                           <div class="px-1.5 py-1">
                             <For each={sessionGroups()}>
-                              {(group) => (
-                                <>
-                                  <div class="px-1.5 pt-1.5 pb-0.5 text-[12px] font-[600] text-native-muted tracking-wide uppercase">{group.label}</div>
-                                  <For each={group.sessions}>
-                                    {(session) => {
-                                      const isActive = createMemo(() => {
-                                        const active = tabStore.active()
-                                        return active?.kind === "session" && active?.meta?.sessionID === session.id
-                                      })
-                                      return (
-                                        <div
-                                          class="group/s flex items-center gap-2 h-10 px-1.5 text-12-regular rounded-md cursor-pointer transition-colors duration-150"
-                                          classList={{
-                                            "bg-native-primary-soft text-native-foreground": isActive(),
-                                            "text-native-muted hover:bg-native-hover hover:text-native-foreground": !isActive(),
-                                          }}
-                                          onClick={() => openSession(session)}
-                                        >
-                                          <Show
-                                            when={isWorking(session.id)}
-                                          >
+                              {(group) => {
+                                const collapsed = createMemo(() => !!sessionGroupsCollapsed()[group.key])
+                                return (
+                                  <>
+                                    <button
+                                      class="flex items-center gap-1 w-full px-1.5 pt-1.5 pb-0.5 text-[12px] font-[600] text-native-muted tracking-wide uppercase cursor-pointer hover:text-native-foreground transition-colors"
+                                      onClick={() => setSessionGroupsCollapsed((prev) => ({ ...prev, [group.key]: !prev[group.key] }))}
+                                    >
+                                      <Icon name={collapsed() ? "chevron-right" : "chevron-down"} size="small" class="shrink-0" />
+                                      <span class="truncate">{group.label}</span>
+                                    </button>
+                                    <Show when={!collapsed()}>
+                                      <For each={group.sessions}>
+                                        {(session) => {
+                                          const isActive = createMemo(() => {
+                                            const active = tabStore.active()
+                                            return active?.kind === "session" && active?.meta?.sessionID === session.id
+                                          })
+                                          return (
                                             <div
-                                              class="size-3 shrink-0 rounded-full border border-t-transparent animate-spin"
+                                              class="group/s flex items-center gap-1.5 h-9 px-1.5 text-12-regular rounded-md cursor-pointer transition-colors duration-150"
                                               classList={{
-                                                "border-native-primary": isActive(),
-                                                "border-native-dim": !isActive(),
+                                                "bg-native-primary-soft text-native-foreground": isActive(),
+                                                "text-native-muted hover:bg-native-hover hover:text-native-foreground": !isActive(),
                                               }}
-                                            />
-                                          </Show>
-                                          <span class="truncate flex-1 min-w-0">{session.title || language.t("command.session.new")}</span>
-                                          <button
-                                            class="shrink-0 size-5 flex items-center justify-center rounded opacity-0 group-hover/s:opacity-100 transition-opacity duration-150 hover:bg-native-active"
-                                            onClick={(e) => {
-                                              e.stopPropagation()
-                                              archiveSession(session)
-                                            }}
-                                          >
-                                            <Icon name="archive" size="small" class="text-native-dim" />
-                                          </button>
-                                        </div>
-                                      )
-                                    }}
-                                  </For>
-                                </>
-                              )}
+                                              onClick={() => openSession(session)}
+                                            >
+                                              <Show when={hasPendingInteraction(dw.data.session, dw.data.questions, dw.data.permissions, session.id)}>
+                                                <PendingInteractionIcon />
+                                              </Show>
+                                              <Show when={!hasPendingInteraction(dw.data.session, dw.data.questions, dw.data.permissions, session.id) && isWorking(session.id)}>
+                                                <WorkingIcon
+                                                  classList={{
+                                                    "border-native-primary": isActive(),
+                                                    "border-native-dim": !isActive(),
+                                                  }}
+                                                />
+                                              </Show>
+                                              <span class="truncate flex-1 min-w-0">{session.title || language.t("command.session.new")}</span>
+                                              <button
+                                                class="shrink-0 size-5 flex items-center justify-center rounded opacity-0 group-hover/s:opacity-100 transition-[width,opacity] duration-150 w-0 overflow-hidden group-hover/s:w-5 hover:bg-native-active"
+                                                onClick={(e) => {
+                                                  e.stopPropagation()
+                                                  archiveSession(session)
+                                                }}
+                                              >
+                                                <Icon name="archive" size="small" class="text-native-dim" />
+                                              </button>
+                                            </div>
+                                          )
+                                        }}
+                                      </For>
+                                    </Show>
+                                  </>
+                                )
+                              }}
                             </For>
                           </div>
                         </Show>
@@ -513,55 +625,50 @@ function ContentSidebar(props: { directory: string }) {
                       </div>
                     </Show>
                     <Show when={section.key === "diffs"}>
-                      <Show when={!diffLoading()} fallback={
-                        <div class="px-3 py-2 text-12-regular text-text-weak">
-                          {language.t("common.loading")}{language.t("common.loading.ellipsis")}
-                        </div>
-                      }>
-                        <Show when={stagedFiles().length > 0 || unstagedFiles().length > 0} fallback={
+                        <Show when={diff.state().stagedFiles.length > 0 || diff.state().unstagedFiles.length > 0 || diff.state().untrackedFiles.length > 0 || diff.state().loading} fallback={
                           <div class="px-3 py-2 text-12-regular text-text-weak">
                             {language.t("session.review.noChanges")}
                           </div>
                         }>
-                          <div class="px-2 py-1">
-                            <Show when={diffBranch()}>
-                              <div class="px-1 pb-1 text-11-regular text-text-weak flex items-center gap-1">
+                          <div class="px-0 py-0.5">
+                            <Show when={diff.state().branch}>
+                              <div class="px-1.5 pb-1 text-11-regular text-text-weak flex items-center gap-1">
                                 <Icon name="branch" size="small" class="shrink-0" />
-                                <span class="truncate">{diffBranch()}</span>
+                                <span class="truncate">{diff.state().branch}</span>
                               </div>
                             </Show>
-                            <Show when={stagedFiles().length > 0}>
+                            <Show when={diff.state().stagedFiles.length > 0}>
                               <div
                                 class="px-1.5 pt-1.5 pb-0.5 flex items-center gap-1 text-[11px] font-[600] text-native-muted tracking-wide uppercase cursor-pointer hover:text-native-foreground transition-colors"
                                 onClick={() => setDiffGroupsCollapsed((prev) => ({ ...prev, staged: !prev.staged }))}
                               >
                                 <Icon name={diffGroupsCollapsed().staged ? "chevron-right" : "chevron-down"} size="small" class="shrink-0" />
                                 {language.t("workspace.content.diff.staged")}
-                                <span class="ml-auto text-11-regular tabular-nums">{stagedFiles().length}</span>
+                                <span class="ml-auto text-11-regular tabular-nums">{diff.state().stagedFiles.length}</span>
                               </div>
                               <Show when={!diffGroupsCollapsed().staged}>
-                                <For each={stagedFiles()}>
+                                <For each={diff.state().stagedFiles}>
                                   {(file) => (
-                                    <div class="flex items-center gap-1.5 h-10 px-1.5 text-12-regular hover:bg-native-hover rounded-md cursor-pointer transition-colors duration-150 group/diff"
+                                    <div class="flex items-center gap-1.5 h-6 px-1.5 text-12-regular hover:bg-native-hover rounded-md cursor-pointer transition-colors duration-150 group/diff"
                                       onClick={() => {
                                         tabStore.open({
                                           kind: "diff",
                                           key: `staged:${file.path}`,
                                           title: getFilename(file.path),
-                                          icon: statusIcon(file.status) as string,
+                                          icon: "file-tree",
                                           meta: { path: file.path, status: file.status, staged: true },
                                         })
                                       }}
                                     >
-                                      <Icon name={statusIcon(file.status) as any} size="small" class={`shrink-0 ${statusColor(file.status)}`} />
+                                  <span class="shrink-0 w-4 h-4 flex items-center justify-center text-[10px] rounded-[3px]" style={{ ...statusBadgeStyle(file.status), color: "#ffffff", "font-weight": 700 }}>{statusLabel(file.status)}</span>
                                       <span class="truncate flex-1 min-w-0">{file.path}</span>
                                       <Show when={file.additions > 0 || file.deletions > 0}>
                                         <span class="shrink-0 text-11-regular tabular-nums flex items-center gap-0.5">
                                           <Show when={file.additions > 0}>
-                                            <span class="text-success">+{file.additions}</span>
+                                            <span style={{ color: "hsl(160 84% 39%)" }}>+{file.additions}</span>
                                           </Show>
                                           <Show when={file.deletions > 0}>
-                                            <span class="text-danger">-{file.deletions}</span>
+                                            <span style={{ color: "hsl(0 84% 45%)" }}>-{file.deletions}</span>
                                           </Show>
                                         </span>
                                       </Show>
@@ -570,38 +677,78 @@ function ContentSidebar(props: { directory: string }) {
                                 </For>
                               </Show>
                             </Show>
-                            <Show when={unstagedFiles().length > 0}>
+                            <Show when={diff.state().unstagedFiles.length > 0}>
                               <div
                                 class="px-1.5 pt-1.5 pb-0.5 flex items-center gap-1 text-[11px] font-[600] text-native-muted tracking-wide uppercase cursor-pointer hover:text-native-foreground transition-colors"
                                 onClick={() => setDiffGroupsCollapsed((prev) => ({ ...prev, unstaged: !prev.unstaged }))}
                               >
                                 <Icon name={diffGroupsCollapsed().unstaged ? "chevron-right" : "chevron-down"} size="small" class="shrink-0" />
                                 {language.t("workspace.content.diff.unstaged")}
-                                <span class="ml-auto text-11-regular tabular-nums">{unstagedFiles().length}</span>
+                                <span class="ml-auto text-11-regular tabular-nums">{diff.state().unstagedFiles.length}</span>
                               </div>
                               <Show when={!diffGroupsCollapsed().unstaged}>
-                                <For each={unstagedFiles()}>
+                                <For each={diff.state().unstagedFiles}>
                                   {(file) => (
-                                    <div class="flex items-center gap-1.5 h-10 px-1.5 text-12-regular hover:bg-native-hover rounded-md cursor-pointer transition-colors duration-150 group/diff"
+                                    <div class="flex items-center gap-1.5 h-6 px-1.5 text-12-regular hover:bg-native-hover rounded-md cursor-pointer transition-colors duration-150 group/diff"
                                       onClick={() => {
                                         tabStore.open({
                                           kind: "diff",
                                           key: `unstaged:${file.path}`,
                                           title: getFilename(file.path),
-                                          icon: statusIcon(file.status) as string,
+                                          icon: "file-tree",
                                           meta: { path: file.path, status: file.status, staged: false },
                                         })
                                       }}
                                     >
-                                      <Icon name={statusIcon(file.status) as any} size="small" class={`shrink-0 ${statusColor(file.status)}`} />
+                                      <span class="shrink-0 w-4 h-4 flex items-center justify-center text-[10px] rounded-[3px]" style={{ ...statusBadgeStyle(file.status), color: "#ffffff", "font-weight": 700 }}>{statusLabel(file.status)}</span>
                                       <span class="truncate flex-1 min-w-0">{file.path}</span>
                                       <Show when={file.additions > 0 || file.deletions > 0}>
                                         <span class="shrink-0 text-11-regular tabular-nums flex items-center gap-0.5">
                                           <Show when={file.additions > 0}>
-                                            <span class="text-success">+{file.additions}</span>
+                                            <span style={{ color: "hsl(160 84% 39%)" }}>+{file.additions}</span>
                                           </Show>
                                           <Show when={file.deletions > 0}>
-                                            <span class="text-danger">-{file.deletions}</span>
+                                            <span style={{ color: "hsl(0 84% 45%)" }}>-{file.deletions}</span>
+                                          </Show>
+                                        </span>
+                                      </Show>
+                                    </div>
+                                  )}
+                                </For>
+                              </Show>
+                            </Show>
+                            <Show when={diff.state().untrackedFiles.length > 0}>
+                              <div
+                                class="px-1.5 pt-1.5 pb-0.5 flex items-center gap-1 text-[11px] font-[600] text-native-muted tracking-wide uppercase cursor-pointer hover:text-native-foreground transition-colors"
+                                onClick={() => setDiffGroupsCollapsed((prev) => ({ ...prev, untracked: !prev.untracked }))}
+                              >
+                                <Icon name={diffGroupsCollapsed().untracked ? "chevron-right" : "chevron-down"} size="small" class="shrink-0" />
+                                {language.t("workspace.content.diff.untracked")}
+                                <span class="ml-auto text-11-regular tabular-nums">{diff.state().untrackedFiles.length}</span>
+                              </div>
+                              <Show when={!diffGroupsCollapsed().untracked}>
+                                <For each={diff.state().untrackedFiles}>
+                                  {(file) => (
+                                    <div class="flex items-center gap-1.5 h-6 px-1.5 text-12-regular hover:bg-native-hover rounded-md cursor-pointer transition-colors duration-150 group/diff"
+                                      onClick={() => {
+                                        tabStore.open({
+                                          kind: "diff",
+                                          key: `untracked:${file.path}`,
+                                          title: getFilename(file.path),
+                                          icon: "file-tree",
+                                          meta: { path: file.path, status: file.status, staged: false },
+                                        })
+                                      }}
+                                    >
+                                      <span class="shrink-0 w-4 h-4 flex items-center justify-center text-[10px] rounded-[3px]" style={{ ...statusBadgeStyle(file.status), color: "#ffffff", "font-weight": 700 }}>{statusLabel(file.status)}</span>
+                                      <span class="truncate flex-1 min-w-0">{file.path}</span>
+                                      <Show when={file.additions > 0 || file.deletions > 0}>
+                                        <span class="shrink-0 text-11-regular tabular-nums flex items-center gap-0.5">
+                                          <Show when={file.additions > 0}>
+                                            <span style={{ color: "hsl(160 84% 39%)" }}>+{file.additions}</span>
+                                          </Show>
+                                          <Show when={file.deletions > 0}>
+                                            <span style={{ color: "hsl(0 84% 45%)" }}>-{file.deletions}</span>
                                           </Show>
                                         </span>
                                       </Show>
@@ -612,7 +759,6 @@ function ContentSidebar(props: { directory: string }) {
                             </Show>
                           </div>
                         </Show>
-                      </Show>
                     </Show>
                   </div>
                 </Show>
@@ -631,15 +777,68 @@ export function WorkspaceContentLayout(props: { workspaceId: string; directory: 
   const [searchParams, setSearchParams] = useSearchParams<{ session?: string }>()
   const language = useLanguage()
   const tabStore = useContentTabs()
-  const dl = useDeviceLayout()
+  const dl = useLayout()
   const ws = useDeviceWorkspace()
+  const terminal = useDeviceTerminal()
   const active = createMemo(() => params.workspaceID === props.workspaceId)
   const [done, setDone] = createSignal<string | undefined>()
+  const [autoExpandGroup, setAutoExpandGroup] = createSignal<{ group: string; nonce: number }>()
 
   const ready = createMemo(() => !!props.workspaceId && !!props.directory)
   const directory = createMemo(() => {
     if (!props.directory) return ""
     return workspaceKey(props.directory)
+  })
+
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (e.target instanceof HTMLElement && (e.target.isContentEditable || e.target.closest("input, textarea, select"))) return
+    if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return
+    if (e.key === "m") {
+      e.preventDefault()
+      e.stopPropagation()
+      dl.fileTree.toggle()
+    } else if (e.key === "n") {
+      e.preventDefault()
+      e.stopPropagation()
+      newSessionCounter++
+      tabStore.open({
+        kind: "session",
+        key: `new-${newSessionCounter}`,
+        title: language.t("command.session.new"),
+        icon: SESSION_TAB_ICON,
+        meta: { sessionID: undefined },
+      })
+    } else if (e.key === "t") {
+      e.preventDefault()
+      e.stopPropagation()
+      newTerminalCounter++
+      const pendingKey = `pending-${newTerminalCounter}`
+      tabStore.open({
+        kind: "terminal",
+        key: pendingKey,
+        title: language.t("command.terminal.new"),
+        icon: "terminal",
+        meta: { sessionId: undefined },
+      })
+      terminal.new().then((sessionId) => {
+        if (!sessionId) {
+          tabStore.close(tabStore.makeTabId("terminal", pendingKey))
+          return
+        }
+        tabStore.replace(tabStore.makeTabId("terminal", pendingKey), {
+          kind: "terminal",
+          key: sessionId,
+          title: `Terminal`,
+          icon: "terminal",
+          meta: { sessionId },
+        })
+      })
+    }
+  }
+
+  onMount(() => {
+    document.addEventListener("keydown", handleKeyDown, true)
+    onCleanup(() => document.removeEventListener("keydown", handleKeyDown, true))
   })
 
   const syncUrlFromTab = (id: string | undefined) => {
@@ -659,6 +858,8 @@ export function WorkspaceContentLayout(props: { workspaceId: string; directory: 
     const existing = tabStore.tabs().find((t) => t.kind === "session" && t.meta?.sessionID === sid)
     if (existing) {
       tabStore.activate(existing.id)
+      const session = ws.data.session.find((s) => s.id === sid)
+      if (session) setAutoExpandGroup({ group: sessionGroup(session), nonce: Date.now() })
       return
     }
     const session = ws.data.session.find((s) => s.id === sid)
@@ -666,9 +867,10 @@ export function WorkspaceContentLayout(props: { workspaceId: string; directory: 
       kind: "session",
       key: sid,
       title: session?.title || language.t("command.session.new"),
-      icon: "message",
+      icon: SESSION_TAB_ICON,
       meta: { sessionID: sid },
     })
+    if (session) setAutoExpandGroup({ group: sessionGroup(session), nonce: Date.now() })
   }
 
   createEffect(() => {
@@ -696,12 +898,12 @@ export function WorkspaceContentLayout(props: { workspaceId: string; directory: 
       fallback={<div class="size-full" />}
     >
       <div class="flex h-full w-full min-h-0">
-        <Show when={dl.fileTree.opened()}>
-          <div
-            class="shrink-0 h-full relative"
-            style={{ width: `${dl.fileTree.width()}px` }}
-          >
-            <ContentSidebar directory={directory()!} />
+        <div
+          class="shrink-0 h-full overflow-hidden transition-[width] duration-200"
+          style={{ width: dl.fileTree.opened() ? `${dl.fileTree.width()}px` : "0px" }}
+        >
+          <div class="h-full relative" style={{ width: `${dl.fileTree.width()}px` }}>
+            <ContentSidebar directory={directory()!} autoExpandGroup={autoExpandGroup} />
             <ResizeHandle
               direction="horizontal"
               size={dl.fileTree.width()}
@@ -712,7 +914,7 @@ export function WorkspaceContentLayout(props: { workspaceId: string; directory: 
               onCollapse={dl.fileTree.close}
             />
           </div>
-        </Show>
+        </div>
 
         <div class="flex-1 min-w-0 h-full flex flex-col">
           <ContentTabPanel />

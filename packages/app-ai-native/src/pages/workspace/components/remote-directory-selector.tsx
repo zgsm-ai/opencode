@@ -12,6 +12,7 @@ import { useLanguage } from "@/context/language"
 
 export interface RemoteDirectorySelectorProps {
   device: Device
+  initialPath?: string
   onSelect: (directory: string | null) => void
   onCancel?: () => void
 }
@@ -114,7 +115,7 @@ function useDirectoryCache(deviceId: () => string) {
 export function RemoteDirectorySelector(props: RemoteDirectorySelectorProps) {
   const language = useLanguage()
   const t = language.t
-  const [currentPath, setCurrentPath] = createSignal("/")
+  const [currentPath, setCurrentPath] = createSignal(props.initialPath || "/")
   const [selectedPath, setSelectedPath] = createSignal<string | null>(null)
   const [notSupported, setNotSupported] = createSignal<string | null>(null)
   const [loading, setLoading] = createSignal(false)

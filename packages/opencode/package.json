@@ -1,6 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
-  "version": "3.0.28",
+  "version": "3.0.31",
   "name": "@costrict/cs",
   "type": "module",
   "license": "MIT",
@@ -62,6 +62,7 @@
     "@typescript/native-preview": "catalog:",
     "drizzle-kit": "catalog:",
     "drizzle-orm": "catalog:",
+    "prettier": "3.6.2",
     "typescript": "catalog:",
     "vscode-languageserver-types": "3.17.5",
     "why-is-node-running": "3.2.2",

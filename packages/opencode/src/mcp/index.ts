@@ -487,32 +487,18 @@ export namespace MCP {
             defs: {},
           }
 
-          yield* Effect.forEach(
-            Object.entries(config),
-            ([key, mcp]) =>
-              Effect.gen(function* () {
-                if (!isMcpConfigured(mcp)) {
-                  log.error("Ignoring MCP config entry without type", { key })
-                  return
-                }
-
-                if (mcp.enabled === false) {
-                  s.status[key] = { status: "disabled" }
-                  return
-                }
-
-                const result = yield* create(key, mcp).pipe(Effect.catch(() => Effect.succeed(undefined)))
-                if (!result) return
-
-                s.status[key] = result.status
-                if (result.mcpClient) {
-                  s.clients[key] = result.mcpClient
-                  s.defs[key] = result.defs!
-                  watch(s, key, result.mcpClient, mcp.timeout)
-                }
-              }),
-            { concurrency: "unbounded" },
-          )
+          // Validate config entries and mark explicitly disabled ones.
+          // Do NOT auto-connect here — connections are established lazily
+          // via connect() or add() to avoid blocking initialization.
+          for (const [key, mcp] of Object.entries(config)) {
+            if (!isMcpConfigured(mcp)) {
+              log.error("Ignoring MCP config entry without type", { key })
+              continue
+            }
+            if (mcp.enabled === false) {
+              s.status[key] = { status: "disabled" }
+            }
+          }
 
           yield* Effect.addFinalizer(() =>
             Effect.gen(function* () {
@@ -557,7 +543,8 @@ export namespace MCP {
 
         for (const [key, mcp] of Object.entries(config)) {
           if (!isMcpConfigured(mcp)) continue
-          result[key] = s.status[key] ?? { status: "disabled" }
+          const st = s.status[key]
+          if (st) result[key] = st
         }
 
         return result

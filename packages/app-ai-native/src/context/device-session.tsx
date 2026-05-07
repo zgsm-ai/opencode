@@ -60,6 +60,7 @@ export function useDeviceSession() {
 export { DeviceSessionContext }
 
 const MESSAGE_PAGE_SIZE = 50
+const idle: SessionStatus = { type: "idle" }
 
 export function group<T extends { id: string; sessionID: string }>(input: T[]) {
   return input.reduce<Record<string, T[]>>((acc, item) => {
@@ -135,8 +136,12 @@ export function DeviceSessionProvider(props: ParentProps<{ sessionID?: string }>
   })
 
   createEffect(() => {
-    tree()
-    if (sid()) void loadRequests()
+    const id = sid()
+    if (!id) {
+      setStore("status", undefined)
+      return
+    }
+    setStore("status", workspace.data.sessionStatus[id] ?? idle)
   })
 
   const loadMessages = async (limit: number) => {
@@ -162,33 +167,13 @@ export function DeviceSessionProvider(props: ParentProps<{ sessionID?: string }>
     })
   }
 
-  const loadRequests = async () => {
-    const id = sid()
-    if (!id || !workspace.agentAvailable()) return
-    return runInflight("requests", async () => {
-      try {
-        const ids = tree()
-        const [perms, questions] = await Promise.all([
-          device.client.permission.list(),
-          device.client.question.list(),
-        ])
-        const perm = Array.isArray(perms) ? perms : []
-        const question = Array.isArray(questions) ? questions : []
-        batch(() => {
-          setStore("permissions", reconcile(treeItems(perm, ids)))
-          setStore("questions", reconcile(treeItems(question, ids)))
-        })
-      } catch {}
-    })
-  }
-
   const syncSession = async () => {
     const id = sid()
     if (!id || !workspace.agentAvailable()) return
     try {
       const result = await device.client.conversation.get(id)
       if (result) setStore("session", result as Session)
-      await Promise.all([loadMessages(MESSAGE_PAGE_SIZE), loadRequests()])
+      await loadMessages(MESSAGE_PAGE_SIZE)
     } catch {}
   }
 
@@ -298,11 +283,6 @@ export function DeviceSessionProvider(props: ParentProps<{ sessionID?: string }>
           }))
           break
         }
-        case "session.status": {
-          const status = (payload.properties as { status?: SessionStatus })?.status ?? payload.properties as SessionStatus
-          setStore("status", status as SessionStatus)
-          break
-        }
         case "session.diff": {
           const props = payload.properties as { sessionID?: string; diff?: FileDiff[] }
           if (props.diff) setStore("diffs", reconcile(props.diff, { key: "file" }))
@@ -315,61 +295,10 @@ export function DeviceSessionProvider(props: ParentProps<{ sessionID?: string }>
         }
         case "permission.asked": {
           const perm = payload.properties as PermissionRequest
-          if (perm?.id) {
-            const sid = perm.sessionID
-            setStore("permissions", produce((draft: Record<string, PermissionRequest[]>) => {
-              const list = draft[sid] ?? []
-              if (!list.some((p) => p.id === perm.id)) {
-                draft[sid] = [...list, perm]
-              }
-            }))
-            if (permissionStore.autoAccept) {
-              device.client.permission.respond(perm.id, {
-                decision: "once",
-              }).catch(() => {})
-            }
-          }
-          break
-        }
-        case "permission.replied": {
-          const props = payload.properties as { sessionID?: string; requestID?: string }
-          const sid = props?.sessionID
-          const rid = props?.requestID
-          if (sid && rid) {
-            setStore("permissions", produce((draft: Record<string, PermissionRequest[]>) => {
-              const list = draft[sid]
-              if (list) {
-                draft[sid] = list.filter((p) => p.id !== rid)
-              }
-            }))
-          }
-          break
-        }
-        case "question.asked": {
-          const q = payload.properties as QuestionRequest
-          if (q?.id) {
-            const sid = q.sessionID
-            setStore("questions", produce((draft: Record<string, QuestionRequest[]>) => {
-              const list = draft[sid] ?? []
-              if (!list.some((r) => r.id === q.id)) {
-                draft[sid] = [...list, q]
-              }
-            }))
-          }
-          break
-        }
-        case "question.replied":
-        case "question.rejected": {
-          const props = payload.properties as { sessionID?: string; requestID?: string }
-          const sid = props?.sessionID
-          const rid = props?.requestID
-          if (sid && rid) {
-            setStore("questions", produce((draft: Record<string, QuestionRequest[]>) => {
-              const list = draft[sid]
-              if (list) {
-                draft[sid] = list.filter((r) => r.id !== rid)
-              }
-            }))
+          if (perm?.id && permissionStore.autoAccept) {
+            device.client.permission.respond(perm.id, {
+              decision: "once",
+            }).catch(() => {})
           }
           break
         }

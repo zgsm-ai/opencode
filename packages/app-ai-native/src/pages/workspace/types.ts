@@ -137,3 +137,28 @@ export interface ListWorkspaceDevicesResponse {
   pageSize: number
   hasMore: boolean
 }
+
+export interface UpdateCheckResponse {
+  can_update: boolean
+  version: string
+  changelog: string
+  download_url: string
+  sha256: string
+  force: boolean
+  min_client_version: string
+  release_date: string
+  size: number
+}
+
+export interface DeviceCommandRequest {
+  command_id: string
+  type: "upgrade" | "restart" | "reconnect"
+  payload?: Record<string, unknown>
+  timestamp: string
+}
+
+export interface DeviceCommandAck {
+  command_id: string
+  status: "accepted" | "rejected" | "executing"
+  message: string
+}

@@ -29,10 +29,12 @@ export function DialogMessage(props: {
             const msg = message()
             if (!msg) return
 
-            sdk.client.session.revert({
-              sessionID: props.sessionID,
-              messageID: msg.id,
-            })
+            sdk.client.session
+              .revert({
+                sessionID: props.sessionID,
+                messageID: msg.id,
+              })
+              .catch(() => {})
 
             if (props.setPrompt) {
               const parts = sync.data.part[msg.id]
@@ -68,7 +70,7 @@ export function DialogMessage(props: {
               return agg
             }, "")
 
-            await Clipboard.copy(text)
+            await Clipboard.copy(text).catch(() => {})
             dialog.clear()
           },
         },
@@ -96,8 +98,10 @@ export function DialogMessage(props: {
                 { input: "", parts: [] as PromptInfo["parts"] },
               )
             })()
+            const forkedId = result.data?.id
+            if (!forkedId) return
             route.navigate({
-              sessionID: result.data!.id,
+              sessionID: forkedId,
               type: "session",
               initialPrompt,
             })

@@ -19,17 +19,21 @@ export function DialogStatus() {
     const result = list.map((item) => {
       const value = typeof item === "string" ? item : item[0]
       if (value.startsWith("file://")) {
-        const path = fileURLToPath(value)
-        const parts = path.split("/")
-        const filename = parts.pop() || path
-        if (!filename.includes(".")) return { name: filename }
-        const basename = filename.split(".")[0]
-        if (basename === "index") {
-          const dirname = parts.pop()
-          const name = dirname || basename
-          return { name }
+        try {
+          const path = fileURLToPath(value)
+          const parts = path.split("/")
+          const filename = parts.pop() || path
+          if (!filename.includes(".")) return { name: filename }
+          const basename = filename.split(".")[0]
+          if (basename === "index") {
+            const dirname = parts.pop()
+            const name = dirname || basename
+            return { name }
+          }
+          return { name: basename }
+        } catch {
+          return { name: value }
         }
-        return { name: basename }
       }
       const index = value.lastIndexOf("@")
       if (index <= 0) return { name: value, version: "latest" }

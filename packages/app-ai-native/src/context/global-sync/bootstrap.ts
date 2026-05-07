@@ -116,16 +116,16 @@ function legacyProviderToCapability(
                     input: model.cost.input,
                     output: model.cost.output,
                     cache: {
-                      read: model.cost.cache_read ?? 0,
-                      write: model.cost.cache_write ?? 0,
+                      read: model.cost.cache.read ?? 0,
+                      write: model.cost.cache.write ?? 0,
                     },
-                    experimentalOver200K: model.cost.context_over_200k
+                    experimentalOver200K: model.cost.experimentalOver200K
                       ? {
-                          input: model.cost.context_over_200k.input,
-                          output: model.cost.context_over_200k.output,
+                          input: model.cost.experimentalOver200K.input,
+                          output: model.cost.experimentalOver200K.output,
                           cache: {
-                            read: model.cost.context_over_200k.cache_read ?? 0,
-                            write: model.cost.context_over_200k.cache_write ?? 0,
+                            read: model.cost.experimentalOver200K.cache.read ?? 0,
+                            write: model.cost.experimentalOver200K.cache.write ?? 0,
                           },
                         }
                       : undefined,
@@ -137,25 +137,25 @@ function legacyProviderToCapability(
                 output: model.limit.output,
               },
               capabilities: {
-                temperature: model.temperature,
-                reasoning: model.reasoning,
-                attachment: model.attachment,
-                toolcall: model.tool_call,
+                temperature: model.capabilities.temperature,
+                reasoning: model.capabilities.reasoning,
+                attachment: model.capabilities.attachment,
+                toolcall: model.capabilities.toolcall,
                 input: {
-                  text: model.modalities?.input?.includes("text") ?? false,
-                  audio: model.modalities?.input?.includes("audio") ?? false,
-                  image: model.modalities?.input?.includes("image") ?? false,
-                  video: model.modalities?.input?.includes("video") ?? false,
-                  pdf: model.modalities?.input?.includes("pdf") ?? false,
+                  text: model.capabilities.input.text ?? false,
+                  audio: model.capabilities.input.audio ?? false,
+                  image: model.capabilities.input.image ?? false,
+                  video: model.capabilities.input.video ?? false,
+                  pdf: model.capabilities.input.pdf ?? false,
                 },
                 output: {
-                  text: model.modalities?.output?.includes("text") ?? false,
-                  audio: model.modalities?.output?.includes("audio") ?? false,
-                  image: model.modalities?.output?.includes("image") ?? false,
-                  video: model.modalities?.output?.includes("video") ?? false,
-                  pdf: model.modalities?.output?.includes("pdf") ?? false,
+                  text: model.capabilities.output.text ?? false,
+                  audio: model.capabilities.output.audio ?? false,
+                  image: model.capabilities.output.image ?? false,
+                  video: model.capabilities.output.video ?? false,
+                  pdf: model.capabilities.output.pdf ?? false,
                 },
-                interleaved: model.interleaved ?? false,
+                interleaved: model.capabilities.interleaved ?? false,
               },
               status:
                 model.status === "deprecated" || model.status === "alpha" || model.status === "beta"

@@ -45,69 +45,76 @@ export function createDialogProviderOptions() {
         }[provider.id],
         category: provider.id in PROVIDER_PRIORITY ? "Popular" : "Other",
         async onSelect() {
-          const methods = sync.data.provider_auth[provider.id] ?? [
-            {
-              type: "api",
-              label: "API key",
-            },
-          ]
-          let index: number | null = 0
-          if (methods.length > 1) {
-            index = await new Promise<number | null>((resolve) => {
-              dialog.replace(
-                () => (
-                  <DialogSelect
-                    title="Select auth method"
-                    options={methods.map((x, index) => ({
-                      title: x.label,
-                      value: index,
-                    }))}
-                    onSelect={(option) => resolve(option.value)}
-                  />
-                ),
-                () => resolve(null),
-              )
-            })
-          }
-          if (index == null) return
-          const method = methods[index]
-          if (method.type === "oauth") {
-            let inputs: Record<string, string> | undefined
-            if (method.prompts?.length) {
-              const value = await PromptsMethod({
-                dialog,
-                prompts: method.prompts,
+          try {
+            const methods = sync.data.provider_auth[provider.id] ?? [
+              {
+                type: "api",
+                label: "API key",
+              },
+            ]
+            let index: number | null = 0
+            if (methods.length > 1) {
+              index = await new Promise<number | null>((resolve) => {
+                dialog.replace(
+                  () => (
+                    <DialogSelect
+                      title="Select auth method"
+                      options={methods.map((x, index) => ({
+                        title: x.label,
+                        value: index,
+                      }))}
+                      onSelect={(option) => resolve(option.value)}
+                    />
+                  ),
+                  () => resolve(null),
+                )
               })
-              if (!value) return
-              inputs = value
             }
+            if (index == null) return
+            const method = methods[index]
+            if (method.type === "oauth") {
+              let inputs: Record<string, string> | undefined
+              if (method.prompts?.length) {
+                const value = await PromptsMethod({
+                  dialog,
+                  prompts: method.prompts,
+                })
+                if (!value) return
+                inputs = value
+              }
 
-            const result = await sdk.client.provider.oauth.authorize({
-              providerID: provider.id,
-              method: index,
-              inputs,
-            })
-            if (result.error) {
-              toast.show({
-                variant: "error",
-                message: JSON.stringify(result.error),
+              const result = await sdk.client.provider.oauth.authorize({
+                providerID: provider.id,
+                method: index,
+                inputs,
               })
-              dialog.clear()
-              return
+              if (result.error) {
+                toast.show({
+                  variant: "error",
+                  message: JSON.stringify(result.error),
+                })
+                dialog.clear()
+                return
+              }
+              if (result.data?.method === "code") {
+                dialog.replace(() => (
+                  <CodeMethod providerID={provider.id} title={method.label} index={index} authorization={result.data!} />
+                ))
+              }
+              if (result.data?.method === "auto") {
+                dialog.replace(() => (
+                  <AutoMethod providerID={provider.id} title={method.label} index={index} authorization={result.data!} />
+                ))
+              }
             }
-            if (result.data?.method === "code") {
-              dialog.replace(() => (
-                <CodeMethod providerID={provider.id} title={method.label} index={index} authorization={result.data!} />
-              ))
+            if (method.type === "api") {
+              return dialog.replace(() => <ApiMethod providerID={provider.id} title={method.label} />)
             }
-            if (result.data?.method === "auto") {
-              dialog.replace(() => (
-                <AutoMethod providerID={provider.id} title={method.label} index={index} authorization={result.data!} />
-              ))
-            }
-          }
-          if (method.type === "api") {
-            return dialog.replace(() => <ApiMethod providerID={provider.id} title={method.label} />)
+          } catch (e) {
+            toast.show({
+              variant: "error",
+              message: e instanceof Error ? e.message : "Failed to connect provider",
+            })
           }
         },
       })),
@@ -143,18 +150,27 @@ function AutoMethod(props: AutoMethodProps) {
     }
   })
 
-  onMount(async () => {
-    const result = await sdk.client.provider.oauth.callback({
-      providerID: props.providerID,
-      method: props.index,
-    })
-    if (result.error) {
-      dialog.clear()
-      return
-    }
-    await sdk.client.instance.dispose()
-    await sync.bootstrap()
-    dialog.replace(() => <DialogModel providerID={props.providerID} />)
+  onMount(() => {
+    ;(async () => {
+      try {
+        const result = await sdk.client.provider.oauth.callback({
+          providerID: props.providerID,
+          method: props.index,
+        })
+        if (result.error) {
+          dialog.clear()
+          return
+        }
+        await sdk.client.instance.dispose()
+        await sync.bootstrap()
+        dialog.replace(() => <DialogModel providerID={props.providerID} />)
+      } catch (e) {
+        toast.show({
+          variant: "error",
+          message: e instanceof Error ? e.message : "Authorization failed",
+        })
+      }
+    })()
   })
 
   return (
@@ -232,6 +248,7 @@ function ApiMethod(props: ApiMethodProps) {
   const sdk = useSDK()
   const sync = useSync()
   const { theme } = useTheme()
+  const toast = useToast()
 
   return (
     <DialogPrompt
@@ -265,16 +282,23 @@ function ApiMethod(props: ApiMethodProps) {
       }
       onConfirm={async (value) => {
         if (!value) return
-        await sdk.client.auth.set({
-          providerID: props.providerID,
-          auth: {
-            type: "api",
-            key: value,
-          },
-        })
-        await sdk.client.instance.dispose()
-        await sync.bootstrap()
-        dialog.replace(() => <DialogModel providerID={props.providerID} />)
+        try {
+          await sdk.client.auth.set({
+            providerID: props.providerID,
+            auth: {
+              type: "api",
+              key: value,
+            },
+          })
+          await sdk.client.instance.dispose()
+          await sync.bootstrap()
+          dialog.replace(() => <DialogModel providerID={props.providerID} />)
+        } catch (e) {
+          toast.show({
+            variant: "error",
+            message: e instanceof Error ? e.message : "Failed to set API key",
+          })
+        }
       }}
     />
   )

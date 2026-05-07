@@ -8,7 +8,6 @@ import { extractExpiryFromJWT, isCoStrictTokenValid, parseJWT, refreshCoStrictTo
 import { Session } from "@/session"
 import { MessageV2 } from "@/session/message-v2"
 import { SessionID } from "@/session/schema"
-import { SessionSummary } from "@/session/summary"
 import { Instance } from "@/project/instance"
 import { git } from "@/util/git"
 import { getRawDumpEventEnvKey, type RawDumpEventPayload } from "./spawn"
@@ -24,6 +23,12 @@ type RawDumpState = {
 type JwtPayload = {
   sub?: string
   name?: string
+  id?: string
+  universal_id?: string
+  displayName?: string
+  properties?: {
+    oauth_GitHub_username?: string
+  }
 }
 
 function createEmptyState(): RawDumpState {
@@ -171,10 +176,18 @@ function extractRequestMetrics(user: MessageV2.WithParts, assistant: MessageV2.W
   }
 }
 
-function parseUser(payload: JwtPayload) {
+function parseUser(accessPayload: JwtPayload, refreshPayload?: JwtPayload | null) {
+  // 优先从 refresh_token 取（与 costrict 保持一致）
+  if (refreshPayload) {
+    return {
+      user_id: refreshPayload.universal_id ?? refreshPayload.sub ?? refreshPayload.id ?? "",
+      user_name: refreshPayload.properties?.oauth_GitHub_username || refreshPayload.id || "",
+    }
+  }
+  // fallback 到 access_token
   return {
-    user_id: payload.sub ?? "",
-    user_name: payload.name ?? "",
+    user_id: accessPayload.universal_id ?? accessPayload.sub ?? accessPayload.id ?? "",
+    user_name: accessPayload.displayName ?? accessPayload.name ?? "",
   }
 }
 
@@ -217,10 +230,20 @@ async function auth() {
   headers.set("zgsm-client-id", Installation.getInstallationId())
   headers.set("zgsm-client-ide", "cli")
 
+  const accessPayload = parseJWT(creds.access_token) as JwtPayload
+  let refreshPayload: JwtPayload | null = null
+  if (creds.refresh_token) {
+    try {
+      refreshPayload = parseJWT(creds.refresh_token) as JwtPayload
+    } catch {
+      refreshPayload = null
+    }
+  }
+
   return {
     baseUrl: resolveRawDumpBaseUrl(creds.base_url),
     headers,
-    user: parseUser(parseJWT(creds.access_token) as JwtPayload),
+    user: parseUser(accessPayload, refreshPayload),
   }
 }
 
@@ -298,6 +321,45 @@ async function getRepoInfo(workDir: string) {
   }
 }
 
+async function computeRawDiff(messages: MessageV2.WithParts[], workDir: string): Promise<string> {
+  let from: string | undefined
+  let to: string | undefined
+  for (const item of messages) {
+    if (!from) {
+      for (const part of item.parts as any[]) {
+        if (part.type === "step-start" && part.snapshot) {
+          from = part.snapshot
+          break
+        }
+      }
+    }
+    for (const part of item.parts as any[]) {
+      if (part.type === "step-finish" && part.snapshot) {
+        to = part.snapshot
+      }
+    }
+  }
+  if (from && to && from !== to) {
+    return await gitText(["diff", "--no-ext-diff", from, to], workDir)
+  }
+  return ""
+}
+
+async function getConversationRawDiff(
+  session: Session.Info,
+  user: MessageV2.WithParts,
+  assistant: MessageV2.WithParts,
+): Promise<string> {
+  const fromPart = (user.parts as any[]).find((p) => p.type === "step-start" && p.snapshot)
+  const toPart = (assistant.parts as any[]).find((p) => p.type === "step-finish" && p.snapshot)
+  const from = fromPart?.snapshot as string | undefined
+  const to = toPart?.snapshot as string | undefined
+  if (from && to && from !== to) {
+    return await gitText(["diff", "--no-ext-diff", from, to], session.directory)
+  }
+  return ""
+}
+
 function buildConversationKey(taskID: string, requestID: string) {
   return `${taskID}:${requestID}`
 }
@@ -306,6 +368,7 @@ async function uploadConversation(payload: {
   session: Session.Info
   user: MessageV2.WithParts & { info: MessageV2.User }
   assistant: MessageV2.WithParts & { info: MessageV2.Assistant }
+  messages: MessageV2.WithParts[]
   authData: Awaited<ReturnType<typeof auth>>
   state: RawDumpState
 }) {
@@ -321,6 +384,7 @@ async function uploadConversation(payload: {
     return false
   }
 
+  const rawDiff = await getConversationRawDiff(payload.session, payload.user, payload.assistant)
   const request = extractRequestMetrics(payload.user, payload.assistant)
   const body = {
     task_id: payload.session.id,
@@ -339,9 +403,9 @@ async function uploadConversation(payload: {
     request_content: request.request_content,
     response_content: request.response_content,
     user_input: request.sender === "user" ? request.request_content : "",
-    diff: request.diff,
-    diff_lines: request.diff_lines,
-    files: request.files,
+    diff: rawDiff || request.diff,
+    diff_lines: rawDiff ? countDiffLines(rawDiff) : request.diff_lines,
+    files: rawDiff ? extractFilesFromDiff(rawDiff) : request.files,
     ...("error_code" in request ? { error_code: request.error_code } : {}),
     ...("error_reason" in request ? { error_reason: request.error_reason } : {}),
   }
@@ -361,7 +425,7 @@ async function uploadSummary(payload: {
   authData: Awaited<ReturnType<typeof auth>>
 }) {
   const repoInfo = await getRepoInfo(payload.session.directory)
-  const diffs = await SessionSummary.computeDiff({ messages: payload.messages })
+  const rawDiff = await computeRawDiff(payload.messages, payload.session.directory)
   const assistants = payload.messages.filter((item): item is MessageV2.WithParts & { info: MessageV2.Assistant } => item.info.role === "assistant")
 
   const body = {
@@ -379,14 +443,14 @@ async function uploadSummary(payload: {
     repo_branch: repoInfo.repo_branch,
     work_dir: payload.session.directory,
     upstream_tokens: assistants.reduce(
-      (sum, item) => sum + item.info.tokens.input + item.info.tokens.cache.read + item.info.tokens.cache.write,
+      (sum: number, item: MessageV2.WithParts & { info: MessageV2.Assistant }) => sum + item.info.tokens.input + item.info.tokens.cache.read + item.info.tokens.cache.write,
       0,
     ),
-    downstream_tokens: assistants.reduce((sum, item) => sum + item.info.tokens.output, 0),
-    cost: assistants.reduce((sum, item) => sum + item.info.cost, 0),
-    diff: JSON.stringify(diffs),
-    diff_lines: diffs.reduce((sum, item) => sum + item.additions + item.deletions, 0),
-    files: diffs.map((item) => item.file),
+    downstream_tokens: assistants.reduce((sum: number, item: MessageV2.WithParts & { info: MessageV2.Assistant }) => sum + item.info.tokens.output, 0),
+    cost: assistants.reduce((sum: number, item: MessageV2.WithParts & { info: MessageV2.Assistant }) => sum + item.info.cost, 0),
+    diff: rawDiff,
+    diff_lines: rawDiff ? countDiffLines(rawDiff) : 0,
+    files: rawDiff ? extractFilesFromDiff(rawDiff) : [],
   }
 
   await postJson(payload.authData.baseUrl, payload.authData.headers, "/raw-store/task-summary", body)
@@ -526,7 +590,7 @@ export async function runRawDumpWorker() {
         }
 
         const state = await readState()
-        const conversationUploaded = await uploadConversation({ session, user, assistant, authData, state })
+        const conversationUploaded = await uploadConversation({ session, user, assistant, messages, authData, state })
         await uploadSummary({ session, messages, authData })
         const commitCount = await uploadCommits({ workDir: session.directory, authData, state })
         await writeState(state)

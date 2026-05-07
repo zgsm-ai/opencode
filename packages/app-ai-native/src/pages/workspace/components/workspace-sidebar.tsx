@@ -12,6 +12,7 @@ import { useWorkspace } from "../context"
 import { useWorkspaceNavigate } from "@/hooks/use-workspace-navigate"
 import { useActiveWorkspace } from "../active-workspace"
 import { useLanguage } from "@/context/language"
+import { useWorkspaceSummary } from "@/context/workspace-summary-store"
 
 export function WorkspaceSidebar(props: { hide?: () => void } = {}) {
   const language = useLanguage()
@@ -123,8 +124,12 @@ export function WorkspaceSidebar(props: { hide?: () => void } = {}) {
       if (!ws?.deviceId) return undefined
       return devices().find((d) => d.id === ws.deviceId)
     })
+    const summary = useWorkspaceSummary(cardProps.id)
     const [renaming, setRenaming] = createSignal(false)
     const [renameValue, setRenameValue] = createSignal("")
+
+    const isActive = createMemo(() => params.workspaceID === cardProps.id)
+    const useDetailed = createMemo(() => cardProps.isRunning)
 
     const menu = () => (
       <DropdownMenu>
@@ -212,68 +217,145 @@ export function WorkspaceSidebar(props: { hide?: () => void } = {}) {
       return parts.join(" · ") || t("workspace.device.unbound")
     }
 
-    const isActive = createMemo(() => params.workspaceID === cardProps.id)
-
     return (
       <Show when={workspace()}>
         {(ws) => (
-          <div
-            class="group/workspace flex items-center rounded-md transition-all duration-150 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
-            classList={{
-              "bg-[color:color-mix(in_oklab,var(--native-primary)_8%,var(--native-panel))] text-sidebar-foreground shadow-[var(--native-shadow-sm)]": isActive(),
-            }}
+          <Show
+            when={useDetailed()}
+            fallback={
+              <div
+                class="group/workspace flex items-center rounded-md transition-all duration-150 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
+                classList={{
+                  "bg-[color:color-mix(in_oklab,var(--native-primary)_8%,var(--native-panel))] shadow-[var(--native-shadow-sm)]": isActive(),
+                }}
+              >
+                <Tooltip
+                  placement="bottom-end"
+                  value={detail()}
+                  class="flex-1 min-w-0"
+                  contentStyle={{
+                    background: "hsl(var(--sidebar-accent))",
+                    color: "hsl(var(--sidebar-accent-foreground))",
+                    "box-shadow": "var(--shadow-xs)",
+                  }}
+                >
+                  <button
+                    class="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+                    classList={{
+                      "text-sidebar-foreground/75 cursor-pointer": !dot().offline,
+                      "text-sidebar-foreground/40 cursor-not-allowed": dot().offline,
+                    }}
+                    onClick={() => {
+                      if (!dot().offline) handleOpenWorkspace(ws())
+                    }}
+                  >
+                    <div
+                      classList={{
+                        "size-2 rounded-full shrink-0": true,
+                        "bg-icon-success-base": dot().online,
+                        "bg-icon-critical-base": dot().offline,
+                        "bg-sidebar-border": !dot().online && !dot().offline,
+                      }}
+                    />
+                    <Show
+                      when={renaming()}
+                      fallback={
+                        <span
+                          class="text-sm truncate flex-1"
+                          onDblClick={(e: MouseEvent) => {
+                            e.stopPropagation()
+                            startRename()
+                          }}
+                        >
+                          {workspace()?.name}
+                        </span>
+                      }
+                    >
+                      {renameInput()}
+                    </Show>
+                  </button>
+                </Tooltip>
+                <div class="ml-auto flex shrink-0 items-center gap-0.5 pr-1 opacity-0 transition-opacity duration-150 group-hover/workspace:opacity-100 group-focus-within/workspace:opacity-100">
+                  {menu()}
+                </div>
+              </div>
+            }
           >
-            <Tooltip
-              placement="bottom-end"
-              value={detail()}
-              class="flex-1 min-w-0"
-              contentStyle={{
-                background: "hsl(var(--sidebar-accent))",
-                color: "hsl(var(--sidebar-accent-foreground))",
-                "box-shadow": "var(--shadow-xs)",
+            <div
+              class="group/workspace relative flex rounded-md transition-all duration-150 text-sidebar-foreground shadow-[var(--native-shadow-sm)]"
+              classList={{
+                "bg-[color:color-mix(in_oklab,var(--native-primary)_8%,var(--native-panel))]": isActive(),
+                "hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground": !isActive(),
               }}
             >
               <button
-                class="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
-                classList={{
-                  "text-sidebar-foreground font-medium cursor-pointer": isActive(),
-                  "text-sidebar-foreground/75 cursor-pointer": !isActive() && !dot().offline,
-                  "text-sidebar-foreground/40 cursor-not-allowed": dot().offline,
-                }}
+                class="flex min-w-0 flex-1 flex-col gap-0.5 rounded-md px-2.5 py-2 pr-9 text-left text-sm transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
                 onClick={() => {
                   if (!dot().offline) handleOpenWorkspace(ws())
                 }}
               >
-                <div
-                  classList={{
-                    "size-2 rounded-full shrink-0": true,
-                    "bg-icon-success-base": dot().online,
-                    "bg-icon-critical-base": dot().offline,
-                    "bg-sidebar-border": !dot().online && !dot().offline,
-                  }}
-                />
-                <Show
-                  when={renaming()}
-                  fallback={
-                    <span
-                      class="text-sm truncate flex-1"
-                      onDblClick={(e: MouseEvent) => {
-                        e.stopPropagation()
-                        startRename()
-                      }}
-                    >
-                      {workspace()?.name}
+                <div class="flex items-center gap-2">
+                  <div
+                    classList={{
+                      "size-2 rounded-full shrink-0": true,
+                      "bg-icon-success-base": dot().online,
+                      "bg-icon-critical-base": dot().offline,
+                      "bg-sidebar-border": !dot().online && !dot().offline,
+                    }}
+                  />
+                  <Show
+                    when={renaming()}
+                    fallback={
+                      <div class="flex items-center gap-1.5 flex-1 min-w-0">
+                        <Show when={summary()?.hasPendingInteraction}>
+                          <div class="shrink-0 flex items-center justify-center w-4 h-4 animate-bell" style={{ "transform-origin": "top center" }}>
+                            <Icon name="bell" size="small" style={{ color: "#ffa000" }} />
+                          </div>
+                        </Show>
+                        <Show when={!summary()?.hasPendingInteraction && summary()?.hasActiveSession}>
+                          <div class="shrink-0 flex items-center justify-center w-4 h-4">
+                            <div class="size-3 rounded-full border border-[var(--native-primary)] border-t-transparent animate-spin" />
+                          </div>
+                        </Show>
+                        <span
+                          class="text-sm font-medium truncate"
+                          onDblClick={(e: MouseEvent) => {
+                            e.stopPropagation()
+                            startRename()
+                          }}
+                        >
+                          {workspace()?.name}
+                        </span>
+                      </div>
+                    }
+                  >
+                    {renameInput()}
+                  </Show>
+                </div>
+                <Show when={!renaming()}>
+                  <div class="flex items-center gap-2">
+                    <span class="shrink-0 w-2 flex items-center justify-center text-sidebar-foreground/40">
+                      <Icon name="branch" size="small" class="size-3" />
                     </span>
-                  }
-                >
-                  {renameInput()}
+                    <span class="text-sm truncate text-sidebar-foreground/40">
+                      {summary()?.branch || t("workspace.sidebar.notGitRepo")}
+                    </span>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <span class="shrink-0 w-2 flex items-center justify-center text-sidebar-foreground/40">
+                      <Icon name="folder" size="small" class="size-3" />
+                    </span>
+                    <span class="text-sm truncate text-sidebar-foreground/40">
+                      {primaryDir()?.path || ""}
+                    </span>
+                  </div>
                 </Show>
               </button>
-            </Tooltip>
-            <div class="ml-auto flex shrink-0 items-center gap-0.5 pr-1 opacity-0 transition-opacity duration-150 group-hover/workspace:opacity-100 group-focus-within/workspace:opacity-100">
-              {menu()}
+              <div class="absolute right-1 top-1.5 flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity duration-150 group-hover/workspace:opacity-100 group-focus-within/workspace:opacity-100">
+                {menu()}
+              </div>
             </div>
-          </div>
+          </Show>
         )}
       </Show>
     )

@@ -21,46 +21,50 @@ function legacyProvider(input: ReturnType<typeof useSync>["data"]["provider"]): 
       name: provider.name,
       source: provider.source,
       env: [],
+      options: {},
       models: Object.fromEntries(
         Object.entries(provider.models).map(([key, model]) => [
           key,
           {
             id: model.id,
+            providerID: provider.id,
+            api: { id: "", url: "", npm: "" },
             name: model.name,
             ...(model.family ? { family: model.family } : {}),
-            release_date: model.release_date,
-            attachment: model.capabilities.attachment,
-            reasoning: model.capabilities.reasoning,
-            temperature: model.capabilities.temperature,
-            tool_call: model.capabilities.toolcall,
-            interleaved: model.capabilities.interleaved === false ? undefined : model.capabilities.interleaved,
+            capabilities: {
+              temperature: model.capabilities.temperature,
+              reasoning: model.capabilities.reasoning,
+              attachment: model.capabilities.attachment,
+              toolcall: model.capabilities.toolcall,
+              input: model.capabilities.input,
+              output: model.capabilities.output,
+              interleaved: model.capabilities.interleaved,
+            },
             cost: model.cost
               ? {
                   input: model.cost.input,
                   output: model.cost.output,
-                  cache_read: model.cost.cache.read,
-                  cache_write: model.cost.cache.write,
-                  context_over_200k: model.cost.experimentalOver200K
+                  cache: {
+                    read: model.cost.cache.read,
+                    write: model.cost.cache.write,
+                  },
+                  experimentalOver200K: model.cost.experimentalOver200K
                     ? {
                         input: model.cost.experimentalOver200K.input,
                         output: model.cost.experimentalOver200K.output,
-                        cache_read: model.cost.experimentalOver200K.cache.read,
-                        cache_write: model.cost.experimentalOver200K.cache.write,
+                        cache: {
+                          read: model.cost.experimentalOver200K.cache.read,
+                          write: model.cost.experimentalOver200K.cache.write,
+                        },
                       }
                     : undefined,
                 }
-              : undefined,
+              : { input: 0, output: 0, cache: { read: 0, write: 0 } },
             limit: model.limit,
-            modalities: {
-              input: Object.entries(model.capabilities.input)
-                .filter(([, enabled]) => enabled)
-                .map(([name]) => name as "text" | "audio" | "image" | "video" | "pdf"),
-              output: Object.entries(model.capabilities.output)
-                .filter(([, enabled]) => enabled)
-                .map(([name]) => name as "text" | "audio" | "image" | "video" | "pdf"),
-            },
-            status: model.status === "active" ? undefined : model.status,
+            status: model.status,
             options: {},
+            headers: {},
+            release_date: model.release_date,
             variants: model.variants,
           },
         ]),

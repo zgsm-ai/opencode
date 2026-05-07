@@ -1446,11 +1446,18 @@ export type SubtaskPartInput = {
 
 export type Command = {
   name: string
+  aliases?: string[]
+  title?: string
   description?: string
+  scope?: string
+  category?: string
+  keybind?: string
+  source?: string
   agent?: string
   model?: string
-  template: string
+  template?: string
   subtask?: boolean
+  hints?: string[]
 }
 
 export type Model = {

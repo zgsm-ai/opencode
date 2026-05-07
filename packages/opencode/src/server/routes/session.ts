@@ -865,6 +865,43 @@ export const SessionRoutes = lazy(() =>
       },
     )
     .post(
+      "/:sessionID/command_async",
+      describeRoute({
+        summary: "Send async command",
+        description:
+          "Send a command to a session asynchronously, returning immediately while the command executes in the background.",
+        operationId: "session.command_async",
+        responses: {
+          204: {
+            description: "Command accepted",
+          },
+          ...errors(400, 404),
+        },
+      }),
+      validator(
+        "param",
+        z.object({
+          sessionID: SessionID.zod,
+        }),
+      ),
+      validator("json", SessionPrompt.CommandInput.omit({ sessionID: true })),
+      async (c) => {
+        c.status(204)
+        c.header("Content-Type", "application/json")
+        return stream(c, async () => {
+          const sessionID = c.req.valid("param").sessionID
+          const body = c.req.valid("json")
+          SessionPrompt.command({ ...body, sessionID }).catch((err) => {
+            log.error("command_async failed", { sessionID, error: err })
+            Bus.publish(Session.Event.Error, {
+              sessionID,
+              error: new NamedError.Unknown({ message: err instanceof Error ? err.message : String(err) }).toObject(),
+            })
+          })
+        })
+      },
+    )
+    .post(
       "/:sessionID/command",
       describeRoute({
         summary: "Send command",
@@ -912,7 +949,7 @@ export const SessionRoutes = lazy(() =>
             description: "Created message",
             content: {
               "application/json": {
-                schema: resolver(MessageV2.Assistant),
+                schema: resolver(MessageV2.WithParts),
               },
             },
           },

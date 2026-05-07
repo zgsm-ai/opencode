@@ -328,6 +328,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
 
         case "message.part.removed": {
           const parts = store.part[event.properties.messageID]
+          if (!parts) break
           const result = Binary.search(parts, event.properties.partID, (p) => p.id)
           if (result.found)
             setStore(
@@ -341,7 +342,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
         }
 
         case "lsp.updated": {
-          sdk.client.lsp.status().then((x) => setStore("lsp", x.data!))
+          sdk.client.lsp.status().then((x) => setStore("lsp", x.data ?? []))
           break
         }
 
@@ -419,16 +420,16 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
           return Promise.all([
             ...(args.continue ? [] : [sessionListPromise.then((sessions) => setStore("session", reconcile(sessions)))]),
             sdk.client.command.list().then((x) => setStore("command", reconcile(x.data ?? []))),
-            sdk.client.lsp.status().then((x) => setStore("lsp", reconcile(x.data!))),
-            sdk.client.mcp.status().then((x) => setStore("mcp", reconcile(x.data!))),
+            sdk.client.lsp.status().then((x) => setStore("lsp", reconcile(x.data ?? []))),
+            sdk.client.mcp.status().then((x) => setStore("mcp", reconcile(x.data ?? {}))),
             sdk.client.experimental.resource.list().then((x) => setStore("mcp_resource", reconcile(x.data ?? {}))),
-            sdk.client.formatter.status().then((x) => setStore("formatter", reconcile(x.data!))),
+            sdk.client.formatter.status().then((x) => setStore("formatter", reconcile(x.data ?? []))),
             sdk.client.session.status().then((x) => {
-              setStore("session_status", reconcile(x.data!))
+              setStore("session_status", reconcile(x.data ?? {}))
             }),
             sdk.client.provider.auth().then((x) => setStore("provider_auth", reconcile(x.data ?? {}))),
             sdk.client.vcs.get().then((x) => setStore("vcs", reconcile(x.data))),
-            sdk.client.path.get().then((x) => setStore("path", reconcile(x.data!))),
+            sdk.client.path.get().then((x) => x.data && setStore("path", reconcile(x.data))),
             syncWorkspaces(),
           ]).then(() => {
             Log.Default.info("startup.tui.bootstrap.non_blocking_requests", {

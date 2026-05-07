@@ -1,0 +1,206 @@
+.vscode-markdown {
+  color: var(--native-foreground);
+  font-size: 13px;
+  line-height: 1.62;
+  word-break: break-word;
+}
+
+.vscode-markdown > :first-child {
+  margin-top: 0;
+}
+
+.vscode-markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.vscode-markdown h1,
+.vscode-markdown h2,
+.vscode-markdown h3,
+.vscode-markdown h4,
+.vscode-markdown h5,
+.vscode-markdown h6 {
+  margin: 1.35em 0 0.65em;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--native-foreground);
+}
+
+.vscode-markdown h1,
+.vscode-markdown h2 {
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid color-mix(in srgb, var(--native-border) 70%, transparent);
+}
+
+.vscode-markdown h1 { font-size: 2em; }
+.vscode-markdown h2 { font-size: 1.5em; }
+.vscode-markdown h3 { font-size: 1.25em; }
+.vscode-markdown h4 { font-size: 1em; }
+.vscode-markdown h5 { font-size: 0.875em; }
+.vscode-markdown h6 { font-size: 0.85em; color: var(--native-muted); }
+
+.vscode-markdown p,
+.vscode-markdown ul,
+.vscode-markdown ol,
+.vscode-markdown blockquote,
+.vscode-markdown table,
+.vscode-markdown pre,
+.vscode-markdown hr {
+  margin: 0 0 16px;
+}
+
+.vscode-markdown ul,
+.vscode-markdown ol {
+  padding-left: 2em;
+}
+
+.vscode-markdown li {
+  margin-bottom: 0;
+}
+
+.vscode-markdown li + li {
+  margin-top: 0;
+}
+
+.vscode-markdown blockquote {
+  margin-left: 0;
+  padding: 0 1em;
+  color: var(--native-muted);
+  border-left: 4px solid color-mix(in srgb, var(--native-border) 82%, transparent);
+}
+
+.vscode-markdown a {
+  color: #3794ff;
+  text-decoration: none;
+}
+
+.vscode-markdown a:hover {
+  text-decoration: underline;
+}
+
+.vscode-markdown :not(pre) > code {
+  padding: 0.15em 0.35em;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--native-surface-strong) 78%, transparent);
+  font-size: 0.95em;
+  font-family: var(--native-font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+}
+
+.vscode-markdown [data-component="markdown-code"] {
+  position: relative;
+  margin: 0 0 16px;
+}
+
+.vscode-markdown [data-component="markdown-code"] pre {
+  margin: 0;
+  overflow: auto;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--native-surface-strong) 82%, transparent);
+  border: 1px solid color-mix(in srgb, var(--native-border) 68%, transparent);
+}
+
+.vscode-markdown [data-component="markdown-code"] code {
+  font-family: var(--native-font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+}
+
+.vscode-markdown [data-slot="markdown-copy-button"] {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  opacity: 0;
+  transition: opacity 0.16s ease, background-color 0.16s ease;
+}
+
+.vscode-markdown [data-component="markdown-code"]:hover [data-slot="markdown-copy-button"] {
+  opacity: 1;
+}
+
+.vscode-markdown table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.vscode-markdown table th,
+.vscode-markdown table td {
+  padding: 6px 13px;
+  border: 1px solid color-mix(in srgb, var(--native-border) 70%, transparent);
+  text-align: left;
+}
+
+.vscode-markdown table th {
+  font-weight: 600;
+  background: color-mix(in srgb, var(--native-surface-strong) 68%, transparent);
+}
+
+.vscode-markdown hr {
+  border: 0;
+  border-top: 1px solid color-mix(in srgb, var(--native-border) 70%, transparent);
+}
+
+.vscode-markdown img {
+  max-width: 100%;
+}
+
+.vscode-markdown .markdown-frontmatter {
+  margin: 0 0 16px;
+  border: 1px solid color-mix(in srgb, var(--native-border) 70%, transparent);
+  border-radius: 3px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--native-surface-strong) 54%, transparent);
+}
+
+.vscode-markdown .markdown-frontmatter__title {
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--native-muted);
+  border-bottom: 1px solid color-mix(in srgb, var(--native-border) 65%, transparent);
+  background: color-mix(in srgb, var(--native-surface-strong) 78%, transparent);
+}
+
+.vscode-markdown .markdown-frontmatter__body {
+  padding: 6px 0;
+  font-size: 12px;
+  line-height: 1.55;
+  font-family: var(--native-font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+}
+
+.vscode-markdown .markdown-frontmatter__row,
+.vscode-markdown .markdown-frontmatter__line {
+  padding: 3px 12px;
+}
+
+.vscode-markdown .markdown-frontmatter__key {
+  color: var(--native-foreground);
+  font-weight: 600;
+}
+
+.vscode-markdown .markdown-frontmatter__sep {
+  color: var(--native-muted);
+}
+
+.vscode-markdown .markdown-frontmatter__value,
+.vscode-markdown .markdown-frontmatter__line {
+  color: var(--native-muted);
+}
+
+.vscode-markdown ul.contains-task-list,
+.vscode-markdown ul.task-list {
+  padding-left: 1.4em;
+}
+
+.vscode-markdown input[type="checkbox"] {
+  margin-right: 0.45em;
+  transform: translateY(1px);
+}
+
+.vscode-markdown table tr:nth-child(2n) {
+  background: color-mix(in srgb, var(--native-surface-strong) 38%, transparent);
+}
+
+.vscode-markdown strong {
+  font-weight: 600;
+}

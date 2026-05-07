@@ -1,13 +1,18 @@
-import { batch, createEffect, createMemo, onCleanup } from "solid-js"
+import { batch, createContext, createEffect, createMemo, onCleanup, useContext } from "solid-js"
 import { createStore, produce, reconcile } from "solid-js/store"
 import { showToast } from "@opencode-ai/ui/toast"
 import { getFilename } from "@opencode-ai/util/path"
 import type { ParentProps } from "solid-js"
 import { useDeviceSDK } from "./device-sdk"
+import { useDeviceWorkspace } from "./device-workspace"
 import { useLanguage } from "@/context/language"
+import { DeviceHttpError, isBinaryFileError } from "@/client/device-transport"
 import { FileContext } from "./file"
 import { createPathHelpers } from "./file/path"
 import { createFileTreeStore } from "./file/tree-store"
+import { createDiffStore } from "./file/diff-store"
+import { createRefreshScheduler } from "./file/refresh-scheduler"
+import { invalidateFromWatcher } from "./file/watcher"
 import {
   approxBytes,
   evictContentLru,
@@ -40,8 +45,32 @@ function errorMessage(error: unknown) {
   return "Unknown error"
 }
 
+type DiffContextValue = ReturnType<typeof createDiffStore> & {
+  scheduler: ReturnType<typeof createRefreshScheduler>
+}
+
+const DiffContext = createContext<DiffContextValue>()
+
+export function useDiff() {
+  const ctx = useContext(DiffContext)
+  if (!ctx) throw new Error("useDiff must be used within DeviceFileProvider")
+  return ctx
+}
+
+type TreePollingControls = {
+  start: () => void
+  stop: () => void
+}
+
+let treePollingRef: TreePollingControls | undefined
+
+export function useTreePolling(): TreePollingControls {
+  return treePollingRef ?? { start() {}, stop() {} }
+}
+
 export function DeviceFileProvider(props: ParentProps) {
   const device = useDeviceSDK()
+  const workspace = useDeviceWorkspace()
   const language = useLanguage()
 
   const scope = createMemo(() => device.directory)
@@ -67,6 +96,24 @@ export function DeviceFileProvider(props: ParentProps) {
     },
   })
 
+  const diff = createDiffStore({
+    scope,
+    fetch: () => device.client.runtime.diff(),
+  })
+
+  const treeScheduler = createRefreshScheduler({
+    fetch: () => Promise.resolve(tree.refreshExpanded()),
+  })
+
+  const diffScheduler = createRefreshScheduler({
+    fetch: () => diff.load(),
+  })
+
+  treePollingRef = {
+    start: () => treeScheduler.start(),
+    stop: () => treeScheduler.stop(),
+  }
+
   const evictContent = (keep?: Set<string>) => {
     evictContentLru(keep, (target) => {
       if (!store.file[target]) return
@@ -88,7 +135,64 @@ export function DeviceFileProvider(props: ParentProps) {
     batch(() => {
       setStore("file", reconcile({}))
       tree.reset()
+      diff.reset()
+      treeScheduler.stop()
+      diffScheduler.stop()
     })
+  })
+
+  const unsubscribe = workspace.subscribe((payload) => {
+    const type = payload.type as string
+    const props = (typeof payload.properties === "object" && payload.properties
+      ? payload.properties
+      : undefined) as Record<string, unknown> | undefined
+
+    if (type === "file.watcher.updated") {
+      invalidateFromWatcher(
+        { type, properties: props },
+        {
+          normalize: path.normalize,
+          hasFile: (f) => Boolean(store.file[f]),
+          loadFile: (f) => void load(f, { force: true }),
+          node: tree.node,
+          isDirLoaded: tree.isLoaded,
+          refreshDir: (d) => void tree.listDir(d, { force: true }),
+        },
+      )
+      if (!diff.state().loading) {
+        void diff.load()
+        diffScheduler.touch()
+      }
+      treeScheduler.touch()
+      return
+    }
+
+    if (type === "file.edited") {
+      const file = props?.file as string | undefined
+      if (file) {
+        const normalized = path.normalize(file)
+        const parent = normalized.split("/").slice(0, -1).join("/")
+        if (tree.isLoaded(parent)) {
+          void tree.listDir(parent, { force: true })
+        }
+        if (store.file[normalized]) {
+          void load(normalized, { force: true })
+        }
+      }
+      if (!diff.state().loading) {
+        void diff.load()
+        diffScheduler.touch()
+      }
+      treeScheduler.touch()
+      return
+    }
+
+    if (type === "session.diff") {
+      if (!diff.state().loading) {
+        void diff.load()
+        diffScheduler.touch()
+      }
+    }
   })
 
   const viewCache = createFileViewCache()
@@ -204,7 +308,18 @@ export function DeviceFileProvider(props: ParentProps) {
       })
       .catch((e) => {
         if (scope() !== directory) return
-        setLoadError(file, errorMessage(e))
+        if (isBinaryFileError(e)) {
+          setStore(
+            "file",
+            file,
+            produce((draft) => {
+              draft.loading = false
+              draft.errorKey = "file.preview.binaryUnsupported"
+            }),
+          )
+        } else {
+          setLoadError(file, errorMessage(e))
+        }
       })
       .finally(() => {
         inflight.delete(key)
@@ -240,8 +355,17 @@ export function DeviceFileProvider(props: ParentProps) {
     return state
   }
 
+  const diffContextValue: DiffContextValue = {
+    ...diff,
+    scheduler: diffScheduler,
+  }
+
   onCleanup(() => {
     viewCache.clear()
+    unsubscribe()
+    treeScheduler.stop()
+    diffScheduler.stop()
+    treePollingRef = undefined
   })
 
   const value = {
@@ -294,5 +418,9 @@ export function DeviceFileProvider(props: ParentProps) {
     searchFilesAndDirectories: (query: string) => search(query, "true"),
   }
 
-  return <FileContext.Provider value={value}>{props.children}</FileContext.Provider>
+  return (
+    <DiffContext.Provider value={diffContextValue}>
+      <FileContext.Provider value={value}>{props.children}</FileContext.Provider>
+    </DiffContext.Provider>
+  )
 }

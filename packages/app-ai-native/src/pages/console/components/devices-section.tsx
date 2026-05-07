@@ -2,14 +2,40 @@ import { showToast } from "@opencode-ai/ui/toast"
 import { Icon } from "@opencode-ai/ui/icon"
 import { createMemo, createResource, createSignal, For, Show } from "solid-js"
 import { useLanguage } from "@/context/language"
-import type { Device, UpdateDeviceRequest } from "@/pages/workspace/types"
+import type { Device, DeviceCommandAck, DeviceCommandRequest, UpdateCheckResponse, UpdateDeviceRequest } from "@/pages/workspace/types"
 import { DeviceCard } from "./device-card"
 import { deviceManagementService } from "../lib/device-management-service"
 
 export function DevicesSection() {
   const language = useLanguage()
   const [deviceSearch, setDeviceSearch] = createSignal("")
-  const [devices, acts] = createResource(async () => deviceManagementService.list())
+  const [upgrades, setUpgrades] = createSignal<Record<string, UpdateCheckResponse>>({})
+
+  const [devices, acts] = createResource(async () => {
+    const list = await deviceManagementService.list()
+    checkUpdates(list)
+    return list
+  })
+
+  const checkUpdates = (list: Device[]) => {
+    const online = list.filter((d) => d.status === "online" && d.platform && d.version)
+    if (online.length === 0) return
+
+    Promise.allSettled(
+      online.map(async (d) => {
+        const info = await deviceManagementService.checkUpdate(d.platform, d.version)
+        return [d.deviceId, info] as const
+      }),
+    ).then((results) => {
+      const map: Record<string, UpdateCheckResponse> = {}
+      for (const r of results) {
+        if (r.status === "fulfilled" && r.value[1].can_update) {
+          map[r.value[0]] = r.value[1]
+        }
+      }
+      setUpgrades((prev) => ({ ...prev, ...map }))
+    })
+  }
 
   const filteredDevices = createMemo(() => {
     const search = deviceSearch().toLowerCase().trim()
@@ -67,6 +93,57 @@ export function DevicesSection() {
     }
   }
 
+  const handleUpgrade = async (deviceId: string) => {
+    try {
+      await deviceManagementService.sendCommand(deviceId, {
+        command_id: `upgrade-${Date.now()}`,
+        type: "upgrade",
+        timestamp: new Date().toISOString(),
+      })
+      showToast({
+        variant: "success",
+        icon: "circle-check",
+        title: language.t("store.devices.upgrade.toast.sent.title"),
+        description: language.t("store.devices.upgrade.toast.sent.description"),
+      })
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error)
+      const unsupported = /404|not found/i.test(msg)
+      showToast({
+        variant: "error",
+        icon: "circle-x",
+        title: language.t(unsupported ? "store.devices.upgrade.toast.unsupported.title" : "store.devices.upgrade.toast.failed.title"),
+        description: language.t(unsupported ? "store.devices.upgrade.toast.unsupported.description" : "store.devices.upgrade.toast.failed.description"),
+      })
+    }
+  }
+
+  const handleDelete = async (deviceId: string) => {
+    const current = devices() ?? []
+    acts.mutate((items) => (items ?? []).filter((d) => d.deviceId !== deviceId))
+    try {
+      await deviceManagementService.remove(deviceId)
+      setUpgrades((prev) => {
+        const next = { ...prev }
+        delete next[deviceId]
+        return next
+      })
+      showToast({
+        variant: "success",
+        icon: "circle-check",
+        title: language.t("store.devices.deregister.toast.success"),
+      })
+    } catch (error) {
+      acts.mutate(() => current)
+      showToast({
+        variant: "error",
+        icon: "circle-x",
+        title: language.t("store.devices.deregister.toast.failed"),
+        description: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+
   return (
     <section class="rounded-[1.25rem] border border-[color:color-mix(in_oklab,var(--native-border)_42%,transparent)] bg-[color:color-mix(in_oklab,var(--native-panel)_84%,var(--native-bg-subtle))] p-3 shadow-[var(--native-shadow-sm)] sm:p-4">
       <div class="mb-3.5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
@@ -110,7 +187,15 @@ export function DevicesSection() {
         >
           <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <For each={filteredDevices()}>
-              {(device) => <DeviceCard device={device} onUpdate={handleUpdateDevice} />}
+              {(device) => (
+                <DeviceCard
+                  device={device}
+                  updateInfo={upgrades()[device.deviceId]}
+                  onUpgrade={handleUpgrade}
+                  onDelete={handleDelete}
+                  onUpdate={handleUpdateDevice}
+                />
+              )}
             </For>
           </div>
         </Show>

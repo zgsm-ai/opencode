@@ -34,7 +34,7 @@ export default function DashboardRepositories() {
     if (!userId()) return
     setState("loadingRepos", true)
     try {
-      const res = await repoApi.listMy(userId())
+      const res = await repoApi.listMy()
       setState("repos", res.repositories ?? [])
     } finally {
       setState("loadingRepos", false)

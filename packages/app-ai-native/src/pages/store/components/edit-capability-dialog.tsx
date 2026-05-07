@@ -1,12 +1,13 @@
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { showToast } from "@opencode-ai/ui/toast"
+import { useItemFilterOptions } from "@/context/item-filter-options"
 import { useLanguage } from "@/context/language"
-import { createMemo } from "solid-js"
+import { createEffect, createMemo } from "solid-js"
 import { createStore } from "solid-js/store"
 import { itemApi, type CapabilityItem } from "../lib/api"
 import type { ContentMode } from "../lib/content"
 import { canArchive, contentValue, sourceTypeToMode, usableMode } from "../lib/content"
-import { CATEGORIES, typeKey, categoryKey } from "../lib/constants"
+import { typeKey } from "../lib/constants"
 import { ContentField } from "./content-field"
 import { Modal } from "@/components/modal"
 
@@ -18,6 +19,7 @@ type EditCapabilityDialogProps = {
 export function EditCapabilityDialog(props: EditCapabilityDialogProps) {
   const dialog = useDialog()
   const language = useLanguage()
+  const itemFilterOptions = useItemFilterOptions()
   const [store, setStore] = createStore({
     name: props.item.name,
     description: props.item.description || "",
@@ -33,6 +35,19 @@ export function EditCapabilityDialog(props: EditCapabilityDialogProps) {
 
   const archive = canArchive(props.item.itemType)
   const mode = createMemo(() => usableMode(archive, store.contentMode))
+
+  const categoryOptions = createMemo(() => {
+    const options = itemFilterOptions.categories().map((category) => category.slug)
+    if (!store.category || options.includes(store.category)) return options
+    return [...options, store.category]
+  })
+
+  createEffect(() => {
+    const options = itemFilterOptions.categories()
+    if (!options.length) return
+    if (options.some((category) => category.slug === store.category)) return
+    setStore("category", options[0]!.slug)
+  })
 
   async function handleSubmit(e: SubmitEvent) {
     e.preventDefault()
@@ -133,8 +148,8 @@ export function EditCapabilityDialog(props: EditCapabilityDialogProps) {
                 onInput={(e) => setStore("category", e.currentTarget.value)}
                 class="modal-input"
               >
-                {CATEGORIES.map((category) => (
-                  <option value={category}>{language.t(categoryKey(category))}</option>
+                {categoryOptions().map((category) => (
+                  <option value={category}>{itemFilterOptions.categoryLabel(category)}</option>
                 ))}
               </select>
             </div>

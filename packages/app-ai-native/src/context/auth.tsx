@@ -33,53 +33,100 @@ function normalizeAuthUser(raw: any): CasdoorUser | null {
   }
 }
 
+export interface UserPermissions {
+  menus: string[]
+  apis: string[]
+  capabilities: string[]
+}
+
 interface AuthState {
   user: CasdoorUser | null
+  permissions: UserPermissions | null
   loading: boolean
 }
 
 interface AuthContextValue {
   user: () => CasdoorUser | null
+  permissions: () => UserPermissions | null
   loading: () => boolean
   logout: () => Promise<void>
+  canAccessMenu: (code: string) => boolean
+  hasCapability: (cap: string) => boolean
 }
 
 const AuthContext = createContext<AuthContextValue>({
   user: () => null,
+  permissions: () => null,
   loading: () => true,
   logout: async () => {},
+  canAccessMenu: () => false,
+  hasCapability: () => false,
 })
 
 export function AuthProvider(props: ParentProps) {
-  const [state, setState] = createStore<AuthState>({ user: null, loading: true })
+  const [state, setState] = createStore<AuthState>({ user: null, permissions: null, loading: true })
 
   async function fetchUser() {
     try {
       const res = await fetch(`${PREFIX}/api/auth/me`, { credentials: "include" })
-	    if (!res.ok) {
-	      setState("user", null)
-	      return
-	    }
-	    const payload = await res.json()
-	    setState("user", normalizeAuthUser(payload?.user))
+      if (!res.ok) {
+        setState("user", null)
+        return
+      }
+      const payload = await res.json()
+      setState("user", normalizeAuthUser(payload?.user))
     } catch {
       setState("user", null)
     }
   }
 
+  async function fetchPermissions() {
+    try {
+      const res = await fetch(`${PREFIX}/api/auth/permissions`, { credentials: "include" })
+      if (!res.ok) {
+        setState("permissions", null)
+        return
+      }
+      const payload = await res.json()
+      setState("permissions", {
+        menus: payload.menus ?? [],
+        apis: payload.apis ?? [],
+        capabilities: payload.capabilities ?? [],
+      })
+    } catch {
+      setState("permissions", null)
+    }
+  }
+
   onMount(async () => {
     await fetchUser()
+    if (state.user) {
+      await fetchPermissions()
+    }
     setState("loading", false)
   })
 
   const logout = async () => {
     await fetch(`${PREFIX}/api/auth/logout`, { method: "POST", credentials: "include" }).catch(() => {})
     setState("user", null)
+    setState("permissions", null)
     window.location.href = BASE_PATH
   }
 
+  const canAccessMenu = (code: string) => {
+    const perms = state.permissions
+    if (!perms) return false
+    return perms.menus.includes(code)
+  }
+
+  const hasCapability = (cap: string) => {
+    const perms = state.permissions
+    if (!perms) return false
+    return perms.capabilities.includes(cap)
+  }
+
   return (
-    <AuthContext.Provider value={{ user: () => state.user, loading: () => state.loading, logout }}>
+    <AuthContext.Provider value={{ user: () => state.user, permissions: () => state.permissions, loading: () => state.loading, logout, canAccessMenu, hasCapability }}>
       {props.children}
     </AuthContext.Provider>
   )

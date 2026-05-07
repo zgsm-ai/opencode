@@ -144,7 +144,14 @@ function createKnightRiderTrail(options: AdvancedGradientOptions): ColorGenerato
   // Use the provided defaultColor if it's an RGBA instance, otherwise convert/default
   // We use RGBA.fromHex for the fallback to ensure we have an RGBA object.
   // Note: If defaultColor is a string, we convert it once here.
-  const defaultRgba = defaultColor instanceof RGBA ? defaultColor : RGBA.fromHex((defaultColor as string) || "#000000")
+  const defaultRgba = (() => {
+    if (defaultColor instanceof RGBA) return defaultColor
+    try {
+      return RGBA.fromHex((defaultColor as string) || "#000000")
+    } catch {
+      return RGBA.fromHex("#000000")
+    }
+  })()
 
   // Store the base alpha from the inactive factor
   const baseInactiveAlpha = defaultRgba.a
@@ -197,7 +204,14 @@ function createKnightRiderTrail(options: AdvancedGradientOptions): ColorGenerato
  * @returns Array of RGBA colors with alpha-based trail fade (background-independent)
  */
 export function deriveTrailColors(brightColor: ColorInput, steps: number = 6): RGBA[] {
-  const baseRgba = brightColor instanceof RGBA ? brightColor : RGBA.fromHex(brightColor as string)
+  const baseRgba = (() => {
+    if (brightColor instanceof RGBA) return brightColor
+    try {
+      return RGBA.fromHex(brightColor as string)
+    } catch {
+      return RGBA.fromHex("#000000")
+    }
+  })()
 
   const colors: RGBA[] = []
 
@@ -237,7 +251,14 @@ export function deriveTrailColors(brightColor: ColorInput, steps: number = 6): R
  * @returns The same color with reduced alpha for background-independent dimming
  */
 export function deriveInactiveColor(brightColor: ColorInput, factor: number = 0.2): RGBA {
-  const baseRgba = brightColor instanceof RGBA ? brightColor : RGBA.fromHex(brightColor as string)
+  const baseRgba = (() => {
+    if (brightColor instanceof RGBA) return brightColor
+    try {
+      return RGBA.fromHex(brightColor as string)
+    } catch {
+      return RGBA.fromHex("#000000")
+    }
+  })()
 
   // Use the full color brightness but adjust alpha for background-independent dimming
   return RGBA.fromValues(baseRgba.r, baseRgba.g, baseRgba.b, factor)

@@ -388,7 +388,16 @@ export const GlobalRoutes = lazy(() =>
         try {
           switch (action) {
             case "load":
-              await loadFavoriteItem(slug)
+              try {
+                await loadFavoriteItem(slug)
+              } catch (loadErr) {
+                const msg = loadErr instanceof Error ? loadErr.message : String(loadErr)
+                // MCP config format errors: item is already downloaded, but user needs to manually edit the config
+                if (msg.includes("MCP configuration") || msg.includes("Unable to recognize MCP")) {
+                  return c.json({ success: true as const, slug, needsConfig: true, guidance: msg })
+                }
+                throw loadErr
+              }
               break
             case "unload":
               await unloadFavoriteItem(slug)

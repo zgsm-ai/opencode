@@ -33,7 +33,7 @@ import { DialogStatus } from "@tui/component/dialog-status"
 import { DialogCredit } from "@tui/component/dialog-credit"
 import { DialogThemeList } from "@tui/component/dialog-theme-list"
 import { DialogHelp } from "./ui/dialog-help"
-import { CommandProvider, useCommandDialog } from "@tui/component/dialog-command"
+import { CommandProvider, useCommandDialog, type CommandOption } from "@tui/component/dialog-command"
 import { DialogAgent } from "@tui/component/dialog-agent"
 import { DialogFavorite } from "@tui/component/dialog-favorite"
 import { DialogSessionList } from "@tui/component/dialog-session-list"
@@ -448,6 +448,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       keybind: "session_list",
       category: "Session",
       suggested: sync.data.session.length > 0,
+      scope: "shared",
       slash: {
         name: "sessions",
         aliases: ["resume", "continue"],
@@ -463,13 +464,14 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
             value: "workspace.list",
             category: "Workspace",
             suggested: true,
+            scope: "shared" as const,
             slash: {
               name: "workspaces",
             },
             onSelect: () => {
               dialog.replace(() => <DialogWorkspaceList />)
             },
-          },
+          } satisfies CommandOption,
         ]
       : []),
     {
@@ -478,6 +480,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       value: "session.new",
       keybind: "session_new",
       category: "Session",
+      scope: "shared",
       slash: {
         name: "new",
         aliases: ["clear"],
@@ -502,6 +505,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       keybind: "model_list",
       suggested: true,
       category: "Agent",
+      scope: "shared",
       slash: {
         name: "models",
       },
@@ -554,6 +558,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       value: "agent.list",
       keybind: "agent_list",
       category: "Agent",
+      scope: "shared",
       slash: {
         name: "agents",
       },
@@ -565,6 +570,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       title: "Toggle MCPs",
       value: "mcp.list",
       category: "Agent",
+      scope: "shared",
       slash: {
         name: "mcps",
       },
@@ -576,6 +582,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       title: "Manage favorite skills",
       value: "favorite.list",
       category: "Agent",
+      scope: "shared",
       slash: {
         name: "favorites",
         aliases: ["fav"],
@@ -608,6 +615,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       value: "variant.list",
       category: "Agent",
       hidden: local.model.variant.list().length === 0,
+      scope: "shared",
       slash: {
         name: "variants",
       },
@@ -629,6 +637,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       title: "Connect provider",
       value: "provider.connect",
       suggested: !connected(),
+      scope: "shared",
       slash: {
         name: "connect",
       },
@@ -641,6 +650,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       title: "View status",
       keybind: "status_view",
       value: "opencode.status",
+      scope: "shared",
       slash: {
         name: "status",
       },
@@ -652,6 +662,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     {
       title: "View Credit",
       value: "credit.show",
+      scope: "shared",
       slash: {
         name: "credit",
       },
@@ -664,6 +675,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       title: "Switch theme",
       value: "theme.switch",
       keybind: "theme_list",
+      scope: "shared",
       slash: {
         name: "themes",
       },
@@ -673,7 +685,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       category: "System",
     },
     {
-      title: "Toggle Theme Mode",
+      title: "Toggle theme mode",
       value: "theme.switch_mode",
       onSelect: (dialog) => {
         setMode(mode() === "dark" ? "light" : "dark")
@@ -682,7 +694,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       category: "System",
     },
     {
-      title: locked() ? "Unlock Theme Mode" : "Lock Theme Mode",
+      title: locked() ? "Unlock theme mode" : "Lock theme mode",
       value: "theme.mode.lock",
       onSelect: (dialog) => {
         if (locked()) unlock()
@@ -694,6 +706,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     {
       title: "Help",
       value: "help.show",
+      scope: "shared",
       slash: {
         name: "help",
       },
@@ -714,6 +727,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     {
       title: "Exit the app",
       value: "app.exit",
+      scope: "tui-only",
       slash: {
         name: "exit",
         aliases: ["quit", "q"],

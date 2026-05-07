@@ -411,16 +411,24 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
     })
 
     const values = createMemo(() => {
+      const resolve = (theme: ThemeJson) => {
+        try {
+          return resolveTheme(theme, store.mode)
+        } catch {
+          return resolveTheme(store.themes.opencode, store.mode)
+        }
+      }
+
       const active = store.themes[store.active]
-      if (active) return resolveTheme(active, store.mode)
+      if (active) return resolve(active)
 
       const saved = kv.get("theme")
       if (typeof saved === "string") {
         const theme = store.themes[saved]
-        if (theme) return resolveTheme(theme, store.mode)
+        if (theme) return resolve(theme)
       }
 
-      return resolveTheme(store.themes.opencode, store.mode)
+      return resolve(store.themes.opencode)
     })
 
     createEffect(() => {
@@ -496,7 +504,8 @@ async function getCustomThemes() {
       symlink: true,
     })) {
       const name = path.basename(item, ".json")
-      result[name] = await Filesystem.readJson(item)
+      const theme = await Filesystem.readJson(item)
+      if (isTheme(theme)) result[name] = theme
     }
   }
   return result

@@ -23,35 +23,34 @@ const TYPE_LABEL: Record<string, string> = {
   mcp: "MCP",
 }
 
-function Status(props: { status: FavoriteItem["status"]; itemType: string; loading: boolean }) {
+function Status(props: { status: FavoriteItem["status"]; loading: boolean }) {
   const { theme } = useTheme()
   if (props.loading) {
     return <span style={{ fg: theme.textMuted }}>... Loading</span>
   }
-  const typeTag = TYPE_LABEL[props.itemType] ?? props.itemType
   switch (props.status) {
     case "Active":
       return (
         <span style={{ fg: theme.success, attributes: TextAttributes.BOLD }}>
-          ✓ Active · {typeTag}
+          ✓ Active
         </span>
       )
     case "Downloaded":
       return (
         <span style={{ fg: theme.info }}>
-          ↓ Downloaded · {typeTag}
+          ↓ Downloaded
         </span>
       )
     case "Unloaded":
       return (
         <span style={{ fg: theme.textMuted }}>
-          ○ Unloaded · {typeTag}
+          ○ Unloaded
         </span>
       )
     case "Cloud":
       return (
         <span style={{ fg: theme.textMuted }}>
-          ☁ Cloud · {typeTag}
+          ☁ Cloud
         </span>
       )
   }
@@ -92,11 +91,21 @@ export function DialogFavorite() {
         const body = await res.json().catch(() => ({ error: "Request failed" }))
         throw new Error((body as { error?: string }).error || "Request failed")
       }
-      toast.show({
-        variant: "success",
-        message: `${action} ${slug} successfully`,
-        duration: 3000,
-      })
+      const body = (await res.json().catch(() => ({}))) as { needsConfig?: boolean; guidance?: string }
+      if (body.needsConfig && body.guidance) {
+        // MCP downloaded but needs manual config editing — show guidance instead of error
+        toast.show({
+          variant: "info",
+          message: `${action} ${slug}: downloaded, but manual configuration needed.\n\n${body.guidance}`,
+          duration: 15000,
+        })
+      } else {
+        toast.show({
+          variant: "success",
+          message: `${action} ${slug} successfully`,
+          duration: 3000,
+        })
+      }
       await fetchFavorites()
     } catch (e) {
       toast.show({
@@ -135,9 +144,8 @@ export function DialogFavorite() {
     }
     return items().map((item) => ({
       value: item.slug,
-      title: item.name,
-      description: item.description,
-      footer: <Status status={item.status} itemType={item.itemType} loading={loadingSlug === item.slug} />,
+      title: item.slug,
+      footer: <Status status={item.status} loading={loadingSlug === item.slug} />,
       category: TYPE_LABEL[item.itemType] ?? item.itemType,
     }))
   })

@@ -50,7 +50,15 @@ async function openWorkspace(input: {
     return
   }
   let created: Session | undefined
+  let retries = 0
   while (!created) {
+    if (retries++ > 10) {
+      input.toast.show({
+        message: "Failed to open workspace after multiple retries",
+        variant: "error",
+      })
+      return
+    }
     const result = await client.session.create({ workspaceID: input.workspaceID }).catch(() => undefined)
     if (!result) {
       input.toast.show({

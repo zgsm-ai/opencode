@@ -423,6 +423,44 @@ function renderMathExpressions(html: string): string {
     .join("")
 }
 
+function escapeHtml(text: string) {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#39;")
+}
+
+function renderFrontMatterHtml(frontMatter: string) {
+  const lines = frontMatter.split(/\r?\n/)
+  const items = lines
+    .map((line) => {
+      const match = line.match(/^(\s*)([^:#\-][^:]*?):\s*(.*)$/)
+      if (!match) {
+        return `<div class="markdown-frontmatter__line">${escapeHtml(line)}</div>`
+      }
+
+      const [, indent, key, value] = match
+      const depth = Math.floor(indent.length / 2)
+      const padding = 12 + depth * 16
+      return `<div class="markdown-frontmatter__row" style="padding-left:${padding}px"><span class="markdown-frontmatter__key">${escapeHtml(key)}</span><span class="markdown-frontmatter__sep">: </span><span class="markdown-frontmatter__value">${escapeHtml(value)}</span></div>`
+    })
+    .join("")
+
+  return `<section class="markdown-frontmatter" data-component="markdown-frontmatter"><div class="markdown-frontmatter__title">Metadata</div><div class="markdown-frontmatter__body">${items}</div></section>`
+}
+
+async function parseMarkdownWithFrontMatter(parser: { parse: (markdown: string) => string | Promise<string> }, markdown: string) {
+  const match = markdown.match(/^---\s*\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/)
+  if (!match) return parser.parse(markdown)
+
+  const [, frontMatter] = match
+  const rest = markdown.slice(match[0].length)
+  const body = await parser.parse(rest)
+  return `${renderFrontMatterHtml(frontMatter)}${body}`
+}
+
 async function highlightCodeBlocks(html: string): Promise<string> {
   const codeBlockRegex = /<pre><code(?:\s+class="language-([^"]*)")?>([\s\S]*?)<\/code><\/pre>/g
   const matches = [...html.matchAll(codeBlockRegex)]
@@ -507,13 +545,18 @@ export const { use: useMarked, provider: MarkedProvider } = createSimpleContext(
       const nativeParser = props.nativeParser
       return {
         async parse(markdown: string): Promise<string> {
-          const html = await nativeParser(markdown)
+          const html = await parseMarkdownWithFrontMatter({ parse: nativeParser }, markdown)
           const withMath = renderMathExpressions(html)
           return highlightCodeBlocks(withMath)
         },
       }
     }
 
-    return jsParser
+    return {
+      ...jsParser,
+      async parse(markdown: string) {
+        return parseMarkdownWithFrontMatter(jsParser, markdown)
+      },
+    }
   },
 })

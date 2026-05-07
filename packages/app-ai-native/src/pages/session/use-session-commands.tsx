@@ -104,7 +104,6 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
       id: "session.new",
       title: language.t("command.session.new"),
       keybind: "mod+shift+s",
-      slash: "new",
       onSelect: () => navigate(`/workspace/${params.workspaceID}`),
     }),
   ])
@@ -115,7 +114,6 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
       title: language.t("command.file.open"),
       description: language.t("palette.search.placeholder"),
       keybind: "mod+p",
-      slash: "open",
       onSelect: () => dialog.show(() => <DialogSelectFile onOpenFile={showAllFiles} />),
     }),
     fileCommand({
@@ -167,7 +165,6 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
       id: "terminal.toggle",
       title: language.t("command.terminal.toggle"),
       keybind: "ctrl+`",
-      slash: "terminal",
       onSelect: () => view().terminal.toggle(),
     }),
     viewCommand({
@@ -225,7 +222,6 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
       title: language.t("command.model.choose"),
       description: language.t("command.model.choose.description"),
       keybind: "mod+'",
-      slash: "model",
       onSelect: () => dialog.show(() => <DialogSelectModel />),
     }),
     mcpCommand({
@@ -233,7 +229,6 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
       title: language.t("command.mcp.toggle"),
       description: language.t("command.mcp.toggle.description"),
       keybind: "mod+;",
-      slash: "mcp",
       disabled: !hasMcp(),
       onSelect: () => {
         if (!hasMcp()) {
@@ -250,7 +245,6 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
       title: language.t("command.agent.cycle"),
       description: language.t("command.agent.cycle.description"),
       keybind: "mod+.",
-      slash: "agent",
       onSelect: () => local.agent.move(1),
     }),
     agentCommand({
@@ -301,7 +295,6 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
       id: "session.compact",
       title: language.t("command.session.compact"),
       description: language.t("command.session.compact.description"),
-      slash: "compact",
       disabled: !params.id || visibleUserMessages().length === 0,
       onSelect: async () => {
         const sessionID = params.id
@@ -316,7 +309,6 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
       id: "session.fork",
       title: language.t("command.session.fork"),
       description: language.t("command.session.fork.description"),
-      slash: "fork",
       disabled: !params.id || visibleUserMessages().length === 0,
       onSelect: () => dialog.show(() => <DialogFork />),
     }),

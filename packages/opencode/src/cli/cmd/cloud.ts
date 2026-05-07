@@ -239,6 +239,53 @@ async function runCsCloud(args: string[]): Promise<void> {
   process.exit(code ?? 1)
 }
 
+function getCloudRawArgs(): string[] {
+  const argv = process.argv.slice(2)
+  const index = argv.indexOf("cloud")
+  if (index === -1) return []
+  return argv.slice(index + 1)
+}
+
+function parseFavoriteArgs(rawArgs: string[]) {
+  const [command = "", idOrFlag, ...rest] = rawArgs
+  let id = ""
+  let format: "table" | "json" = "table"
+  let type: FavoriteItemType | undefined
+
+  const tokens = [idOrFlag, ...rest].filter((item): item is string => Boolean(item))
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i]
+    if (token === "--help" || token === "-h") {
+      return { command: "help", id: "", format, type }
+    }
+    if (token === "--format" && tokens[i + 1]) {
+      const value = tokens[++i]
+      if (value === "table" || value === "json") format = value
+      continue
+    }
+    if (token.startsWith("--format=")) {
+      const value = token.slice("--format=".length)
+      if (value === "table" || value === "json") format = value
+      continue
+    }
+    if (token === "--type" && tokens[i + 1]) {
+      const value = tokens[++i]
+      if (value === "skill" || value === "agent" || value === "command" || value === "mcp") type = value
+      continue
+    }
+    if (token.startsWith("--type=")) {
+      const value = token.slice("--type=".length)
+      if (value === "skill" || value === "agent" || value === "command" || value === "mcp") type = value
+      continue
+    }
+    if (!id && !token.startsWith("-")) {
+      id = token
+    }
+  }
+
+  return { command, id, format, type }
+}
+
 function pad(value: string, width: number) {
   return value.length >= width ? value : value + " ".repeat(width - value.length)
 }
@@ -329,124 +376,96 @@ State transition rules:
 }
 
 async function runFavoriteAction(action: "download" | "load" | "unload" | "uninstall", id: string) {
-  switch (action) {
-    case "download": {
-      const item = await downloadFavoriteItem(id)
-      console.log(`downloaded ${item.slug}`)
-      return
+  try {
+    switch (action) {
+      case "download": {
+        const item = await downloadFavoriteItem(id)
+        console.log(`downloaded ${item.slug}`)
+        return
+      }
+      case "load": {
+        const item = await loadFavoriteItem(id)
+        console.log(`loaded ${item.slug} as active without restart`)
+        return
+      }
+      case "unload": {
+        const item = await unloadFavoriteItem(id)
+        console.log(`unloaded ${item.slug} without restart`)
+        return
+      }
+      case "uninstall": {
+        const item = await uninstallFavoriteItem(id)
+        console.log(`uninstalled ${item.slug} without restart`)
+        return
+      }
     }
-    case "load": {
-      const item = await loadFavoriteItem(id)
-      console.log(`loaded ${item.slug} as active without restart`)
-      return
-    }
-    case "unload": {
-      const item = await unloadFavoriteItem(id)
-      console.log(`unloaded ${item.slug} without restart`)
-      return
-    }
-    case "uninstall": {
-      const item = await uninstallFavoriteItem(id)
-      console.log(`uninstalled ${item.slug} without restart`)
-      return
-    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error(`\n${action} failed: ${message}\n`)
+    process.exit(1)
   }
 }
 
 export const CloudCommand = cmd({
-  command: "cloud [command]",
+  command: "cloud [command] [args..]",
   describe: "manage cloud daemon (register device and connect via WebSocket tunnel)",
   builder: (yargs) =>
     yargs
-      .command("start", "start cloud daemon", {}, async () => {
-        await runCsCloud(["start"])
+      .parserConfiguration({ "unknown-options-as-args": true, "populate--": true })
+      .positional("command", {
+        type: "string",
+        describe: "cs-cloud command or favorite",
       })
-      .command("stop", "stop cloud daemon", {}, async () => {
-        await runCsCloud(["stop"])
-      })
-      .command("status", "show cloud daemon status", {}, async () => {
-        await runCsCloud(["status"])
-      })
-      .command(
-        "logs",
-        "tail cloud daemon logs",
-        (y) =>
-          y
-            .option("lines", { alias: "n", type: "number", default: 100, describe: "number of lines to show" })
-            .option("follow", { alias: "f", type: "boolean", default: false, describe: "follow log output" }),
-        async (args) => {
-          const pass = ["logs"]
-          if (args.lines) pass.push("-n", String(args.lines))
-          if (args.follow) pass.push("-f")
-          await runCsCloud(pass)
-        },
-      )
-      .command("restart", "restart cloud daemon", {}, async () => {
-        await runCsCloud(["restart"])
-      })
-      .command("upgrade", "check and apply cs-cloud upgrade", {}, async () => {
-        const bin = csCloudBin()
-        if (fs.existsSync(bin)) {
-          await runCsCloud(["upgrade"])
-          return
-        }
-        await ensureCsCloud()
-      })
-      .command(
-        "favorite <command> [id]",
-        "manage costrict-web favorite items (skills, agents, commands, MCPs)",
-        (y) =>
-          y
-            .positional("command", {
-              type: "string",
-              choices: ["list", "view", "download", "load", "unload", "uninstall", "help"],
-            })
-            .positional("id", {
-              type: "string",
-              describe: "favorite item slug or item id",
-            })
-            .option("format", {
-              type: "string",
-              choices: ["table", "json"],
-              default: "table",
-              describe: "output format",
-            })
-            .option("type", {
-              type: "string",
-              choices: ["skill", "agent", "command", "mcp"],
-              describe: "filter by item type",
-            }),
-        async (args) => {
-          const command = String(args.command)
-          const format = (args.format ?? "table") as "table" | "json"
-          const type = args.type as FavoriteItemType | undefined
+      .positional("args", {
+        type: "string",
+        array: true,
+        describe: "arguments passed through to cs-cloud",
+      }),
+  handler: async (args) => {
+    const command = String(args.command ?? "").trim()
+    if (!command) {
+      console.error("specify a subcommand: favorite or any cs-cloud command")
+      process.exit(1)
+    }
 
-          if (command === "help") {
-            printFavoriteHelp()
-            return
-          }
+    if (command === "favorite") {
+      const rawArgs = getCloudRawArgs().slice(1)
+      const parsed = parseFavoriteArgs(rawArgs)
 
-          if (command === "list") {
-            await printFavoriteList(format, type)
-            return
-          }
+      if (parsed.command === "help" || !parsed.command) {
+        printFavoriteHelp()
+        return
+      }
 
-          const id = String(args.id ?? "").trim()
-          if (!id) {
-            console.error("favorite id/slug is required")
-            process.exit(1)
-          }
+      if (parsed.command === "list") {
+        await printFavoriteList(parsed.format, parsed.type)
+        return
+      }
 
-          if (command === "view") {
-            await printFavoriteView(id, format)
-            return
-          }
+      if (!parsed.id) {
+        console.error("favorite id/slug is required")
+        process.exit(1)
+      }
 
-          await runFavoriteAction(command as "download" | "load" | "unload" | "uninstall", id)
-        },
-      ),
-  handler: async () => {
-    console.error("specify a subcommand: start, stop, restart, status, logs, upgrade, favorite")
-    process.exit(1)
+      if (parsed.command === "view") {
+        await printFavoriteView(parsed.id, parsed.format)
+        return
+      }
+
+      await runFavoriteAction(parsed.command as "download" | "load" | "unload" | "uninstall", parsed.id)
+      return
+    }
+
+    if (command === "upgrade") {
+      const bin = csCloudBin()
+      if (fs.existsSync(bin)) {
+        await runCsCloud(getCloudRawArgs())
+        return
+      }
+      await ensureCsCloud()
+      return
+    }
+
+    await runCsCloud(getCloudRawArgs())
   },
 })

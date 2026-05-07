@@ -9,16 +9,23 @@ import { Button } from "@/components/ui/button"
 import { Icon } from "@opencode-ai/ui/icon"
 import { IconButton } from "@opencode-ai/ui/icon-button"
 import { FileIcon } from "@opencode-ai/ui/file-icon"
+import { useDialog } from "@opencode-ai/ui/context/dialog"
+import { useItemFilterOptions } from "@/context/item-filter-options"
 import { useLanguage } from "@/context/language"
 import { useAuth } from "@/pages/store/hooks/use-auth"
 import { Markdown } from "@opencode-ai/ui/markdown"
+import "@/styles/vscode-markdown.css"
 import { ResizeHandle } from "@opencode-ai/ui/resize-handle"
+import { DropdownMenu } from "@opencode-ai/ui/dropdown-menu"
+import { Spinner } from "@opencode-ai/ui/spinner"
 import { showToast } from "@opencode-ai/ui/toast"
 import { createEffect, createMemo, createResource, For, onCleanup, onMount, Show, untrack } from "solid-js"
 import { createStore } from "solid-js/store"
-import { CATEGORIES, TYPE_COLORS, TYPE_CONTENT_PLACEHOLDER, categoryKey, typeKey } from "@/pages/store/lib/constants"
+import { TYPE_COLORS, TYPE_CONTENT_PLACEHOLDER, typeKey } from "@/pages/store/lib/constants"
 import { itemApi, registryApi2, repoApi, type CapabilityItem, type CapabilityItemAsset, type Repository } from "@/pages/store/lib/api"
 import { getInstallCommand } from "@/pages/store/components/item-detail-content"
+import { TagInput } from "@/pages/console/components/tag-input"
+import { ConfirmDialog } from "@/pages/store/components/confirm-dialog"
 
 type ItemType = "skill" | "subagent" | "command" | "mcp"
 
@@ -27,13 +34,6 @@ type NamespaceOption = {
   label: string
   description: string
   visibility: "public" | "private" | "repo"
-}
-
-const TYPE_OPTION_LABELS: Record<ItemType, string> = {
-  skill: "技能（Skill）",
-  subagent: "子智能体（Subagent）",
-  command: "命令（Command）",
-  mcp: "MCP 服务器（MCP Server）",
 }
 
 type VirtualTreeNode = {
@@ -56,6 +56,140 @@ type PendingTreeAction = {
 type DirectoryInputAttributes = HTMLInputElement & {
   webkitdirectory?: boolean
   directory?: boolean
+}
+
+type ImportedDirectoryFiles = {
+  tree: VirtualTreeNode[]
+  contents: FileContentMap
+  firstFile: string
+  hasSkillFile: boolean
+  rootName: string
+  importedCount: number
+  filteredCount: number
+}
+
+const TYPE_DROPDOWN_LABELS_ZH: Record<ItemType, string> = {
+  skill: "技能（Skill）",
+  subagent: "子智能体（Subagent）",
+  command: "命令（Command）",
+  mcp: "MCP 服务器（MCP Server）",
+}
+
+const TEXT_FILE_EXTENSIONS = new Set([
+  ".md",
+  ".mdx",
+  ".txt",
+  ".json",
+  ".jsonc",
+  ".yaml",
+  ".yml",
+  ".toml",
+  ".ini",
+  ".cfg",
+  ".conf",
+  ".env",
+  ".gitignore",
+  ".editorconfig",
+  ".ts",
+  ".tsx",
+  ".js",
+  ".jsx",
+  ".mjs",
+  ".cjs",
+  ".css",
+  ".scss",
+  ".sass",
+  ".less",
+  ".html",
+  ".htm",
+  ".xml",
+  ".svg",
+  ".sh",
+  ".bash",
+  ".zsh",
+  ".ps1",
+  ".bat",
+  ".cmd",
+  ".py",
+  ".rb",
+  ".go",
+  ".rs",
+  ".java",
+  ".kt",
+  ".swift",
+  ".c",
+  ".cc",
+  ".cpp",
+  ".cxx",
+  ".h",
+  ".hpp",
+  ".cs",
+  ".php",
+  ".sql",
+  ".graphql",
+  ".gql",
+  ".vue",
+  ".svelte",
+  ".lock",
+  ".log",
+])
+
+function getExtension(filePath: string) {
+  const fileName = filePath.split("/").pop() || filePath
+  const dotIndex = fileName.lastIndexOf(".")
+  if (dotIndex <= 0) return ""
+  return fileName.slice(dotIndex).toLowerCase()
+}
+
+function isLikelyTextMimeType(mimeType: string) {
+  const value = mimeType.toLowerCase()
+  if (!value) return false
+  return value.startsWith("text/")
+    || value === "application/json"
+    || value === "application/ld+json"
+    || value === "application/xml"
+    || value === "application/x-yaml"
+    || value === "application/yaml"
+    || value === "application/toml"
+    || value === "image/svg+xml"
+    || value.endsWith("+json")
+    || value.endsWith("+xml")
+}
+
+function isLikelyTextBytes(bytes: Uint8Array) {
+  if (bytes.length === 0) return true
+
+  const sample = bytes.subarray(0, Math.min(bytes.length, 8192))
+  let suspicious = 0
+
+  for (const byte of sample) {
+    if (byte === 0) return false
+    const isControl = byte < 32 && byte !== 9 && byte !== 10 && byte !== 13 && byte !== 12
+    if (isControl) suspicious += 1
+  }
+
+  return suspicious / sample.length < 0.02
+}
+
+async function readTextFileIfSupported(file: File, relativePath: string) {
+  const bytes = new Uint8Array(await file.arrayBuffer())
+  const extension = getExtension(relativePath)
+  const likelyText = TEXT_FILE_EXTENSIONS.has(extension)
+    || isLikelyTextMimeType(file.type)
+    || isLikelyTextBytes(bytes)
+
+  if (!likelyText) return null
+
+  try {
+    const decoder = new TextDecoder("utf-8", { fatal: true })
+    return decoder.decode(bytes)
+  } catch {
+    try {
+      return new TextDecoder().decode(bytes)
+    } catch {
+      return null
+    }
+  }
 }
 
 function createDefaultTree(itemType: ItemType, slug: string): VirtualTreeNode[] {
@@ -160,14 +294,14 @@ function buildCapabilityPayloadFromFiles(itemType: ItemType, slug: string, fileC
   return { sourcePath, content, assets }
 }
 
-function buildFileContentsFromItem(item: CapabilityItem): FileContentMap {
+function buildFileContentsFromItem(item: CapabilityItem, assets?: CapabilityItemAsset[]): FileContentMap {
   const itemType = (item.itemType as ItemType) || "skill"
   const sourcePath = item.sourcePath || defaultSourcePathForItemType(itemType, item.slug || "")
   const next: FileContentMap = {
     [sourcePath]: item.content || TYPE_CONTENT_PLACEHOLDER[itemType] || "",
   }
 
-  for (const asset of item.assets ?? []) {
+  for (const asset of assets ?? item.assets ?? []) {
     if (!asset.relPath || typeof asset.textContent !== "string") continue
     next[asset.relPath] = asset.textContent
   }
@@ -331,6 +465,67 @@ function sanitizeIdentifier(value: string) {
   return value.replace(/[^A-Za-z0-9_-]+/g, "")
 }
 
+function formatImportedTitle(value: string) {
+  return value
+    .trim()
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .split(" ")
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ")
+}
+
+function extractImportedSkillDescription(contents: FileContentMap) {
+  const skillPath = Object.keys(contents).find((path) => path.split("/").length === 1 && path.toUpperCase() === "SKILL.MD")
+  if (!skillPath) return ""
+
+  const content = contents[skillPath] ?? ""
+  const frontmatterMatch = /^---\s*\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(content)
+  if (!frontmatterMatch) return ""
+
+  const frontmatter = frontmatterMatch[1]
+  const descriptionLine = frontmatter
+    .split(/\r?\n/)
+    .find((line) => /^description\s*:/i.test(line.trim()))
+  if (!descriptionLine) return ""
+
+  const value = descriptionLine.replace(/^description\s*:\s*/i, "").trim()
+  if (!value) return ""
+
+  const quoted = value.match(/^(['"])([\s\S]*)\1$/)
+  return quoted ? quoted[2].trim() : value
+}
+
+function resetCapabilityDraft(setForm: (setter: unknown, ...args: unknown[]) => void, itemType: ItemType) {
+  setForm({
+    itemType,
+    namespace: "public",
+    name: "",
+    slug: "",
+    slugManual: false,
+    description: "",
+    category: "utilities",
+    tags: [],
+    content: TYPE_CONTENT_PLACEHOLDER[itemType] ?? "",
+    saving: false,
+    importing: false,
+    error: "",
+    loaded: false,
+    cursorLine: 1,
+    cursorColumn: 1,
+    previewScrollRatio: 0,
+    selectedTreePath: defaultSourcePathForItemType(itemType, "") || Object.keys(createDefaultFileContents(itemType, ""))[0] || "",
+    treeExpanded: {},
+    treeNodes: createDefaultTree(itemType, ""),
+    fileContents: createDefaultFileContents(itemType, ""),
+    pendingTreeAction: null,
+    pendingTreeActionLocked: false,
+    installCommandCopied: false,
+    selectedRevision: 0,
+  })
+}
+
 function extractMarkdownTree(content: string) {
   const headings = content
     .split(/\r?\n/)
@@ -442,20 +637,40 @@ function buildTreeFromPaths(paths: string[]): VirtualTreeNode[] {
   return root
 }
 
-async function readDirectoryFiles(files: FileList | File[]) {
+async function readDirectoryFiles(files: FileList | File[]): Promise<ImportedDirectoryFiles> {
   const entries = Array.from(files)
+  const BATCH_SIZE = 24
   const textContents: FileContentMap = {}
   const rawPaths: string[] = []
+  let filteredCount = 0
 
-  for (const file of entries) {
-    const relativePath = ((file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name).replace(/^\/+/, "")
-    if (!relativePath) continue
-    rawPaths.push(relativePath)
+  for (let i = 0; i < entries.length; i += BATCH_SIZE) {
+    const batch = entries.slice(i, i + BATCH_SIZE)
+    const results = await Promise.all(batch.map(async (file) => {
+      const relativePath = ((file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name).replace(/^\/+/, "")
+      if (!relativePath) return null
 
-    try {
-      textContents[relativePath] = await file.text()
-    } catch {
-      textContents[relativePath] = ""
+      try {
+        const content = await readTextFileIfSupported(file, relativePath)
+        if (content === null) return { relativePath, filtered: true as const }
+        return { relativePath, content, filtered: false as const }
+      } catch {
+        return { relativePath, filtered: true as const }
+      }
+    }))
+
+    for (const result of results) {
+      if (!result) continue
+      if (result.filtered) {
+        filteredCount += 1
+        continue
+      }
+      rawPaths.push(result.relativePath)
+      textContents[result.relativePath] = result.content
+    }
+
+    if (i + BATCH_SIZE < entries.length) {
+      await new Promise<void>((resolve) => setTimeout(resolve, 0))
     }
   }
 
@@ -475,6 +690,8 @@ async function readDirectoryFiles(files: FileList | File[]) {
     firstFile: paths.sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }))[0] ?? "",
     hasSkillFile: paths.some((path) => path.split("/").pop()?.toUpperCase() === "SKILL.MD"),
     rootName,
+    importedCount: paths.length,
+    filteredCount,
   }
 }
 
@@ -948,6 +1165,8 @@ function MarkdownCodeEditor(props: {
 
 export default function CapabilityEditorPage() {
   const language = useLanguage()
+  const itemFilterOptions = useItemFilterOptions()
+  const dialog = useDialog()
   const navigate = useNavigate()
   const params = useParams<{ itemId?: string }>()
   const auth = useAuth()
@@ -978,8 +1197,10 @@ export default function CapabilityEditorPage() {
     slugManual: false,
     description: "",
     category: "utilities",
+    tags: [] as string[],
     content: TYPE_CONTENT_PLACEHOLDER.skill,
     saving: false,
+    importing: false,
     error: "",
     loaded: false,
     cursorLine: 1,
@@ -1011,8 +1232,23 @@ export default function CapabilityEditorPage() {
     },
   )
 
+  const [itemAssets, { mutate: mutateItemAssets }] = createResource(
+	() => params.itemId,
+	async (itemId) => {
+	  if (!itemId) return [] as CapabilityItemAsset[]
+	  return itemApi.getAssets(itemId)
+	},
+  )
+
   const [selectedVersion] = createResource(
-    () => (isEdit() && params.itemId && form.selectedRevision > 0 ? { itemId: params.itemId!, revision: form.selectedRevision } : null),
+    () => {
+      if (!isEdit() || !params.itemId || form.selectedRevision <= 0) return null
+      const currentRevision = currentItem()?.currentRevision ?? 0
+      if (currentRevision > 0 && form.selectedRevision === currentRevision) return null
+      const revisions = new Set((versions() ?? []).map((version) => version.revision).filter((revision): revision is number => typeof revision === "number"))
+      if (!revisions.has(form.selectedRevision)) return null
+      return { itemId: params.itemId!, revision: form.selectedRevision }
+    },
     async (args) => {
       if (!args) return null
       return itemApi.getVersion(args.itemId, args.revision)
@@ -1023,12 +1259,13 @@ export default function CapabilityEditorPage() {
     () => auth.user()?.id ?? auth.user()?.subjectId ?? auth.user()?.sub ?? "",
     async (userId) => {
       if (!userId) return [] as Repository[]
-      const result = await repoApi.listMy(userId)
+      const result = await repoApi.listMy()
       return result.repositories ?? []
     },
   )
 
   const typeLabel = createMemo(() => language.t(typeKey(form.itemType)))
+  const typeDropdownLabel = (type: ItemType) => language.locale() === "zh" ? TYPE_DROPDOWN_LABELS_ZH[type] : language.t(typeKey(type))
   const accent = createMemo(() => TYPE_COLORS[form.itemType] ?? TYPE_COLORS.skill)
 
   const namespaceOptions = createMemo<NamespaceOption[]>(() => {
@@ -1057,6 +1294,19 @@ export default function CapabilityEditorPage() {
     () => namespaceOptions().find((option) => option.value === form.namespace) ?? namespaceOptions()[0],
   )
 
+  const categoryOptions = createMemo(() => {
+    const options = itemFilterOptions.categories().map((category) => category.slug)
+    if (!form.category || options.includes(form.category)) return options
+    return [...options, form.category]
+  })
+
+  createEffect(() => {
+    const options = itemFilterOptions.categories()
+    if (!options.length) return
+    if (options.some((category) => category.slug === form.category)) return
+    setForm("category", options[0]!.slug)
+  })
+
   const currentItem = createMemo<CapabilityItem | null>(() => item() ?? null)
   const versionOptions = createMemo(() =>
     [...(versions() ?? [])].sort((a, b) => {
@@ -1066,6 +1316,7 @@ export default function CapabilityEditorPage() {
       return (b.revision ?? 0) - (a.revision ?? 0)
     }),
   )
+  const availableRevisionSet = createMemo(() => new Set(versionOptions().map((version) => version.revision).filter((revision): revision is number => typeof revision === "number")))
   const isViewingHistoricalVersion = createMemo(() => {
     const currentRevision = currentItem()?.currentRevision ?? 0
     return Boolean(isEdit() && form.selectedRevision > 0 && currentRevision > 0 && form.selectedRevision !== currentRevision)
@@ -1142,7 +1393,8 @@ export default function CapabilityEditorPage() {
     if (!isEdit() || !data || form.loaded) return
 
     const itemType = (data.itemType as ItemType) || "skill"
-    const fileContents = buildFileContentsFromItem(data)
+    if (itemAssets.loading) return
+    const fileContents = buildFileContentsFromItem(data, itemAssets() ?? [])
     const filePaths = Object.keys(fileContents)
     const selectedTreePath = data.sourcePath || defaultSourcePathForItemType(itemType, data.slug || "") || filePaths[0] || ""
 
@@ -1153,6 +1405,7 @@ export default function CapabilityEditorPage() {
       slugManual: true,
       description: data.description || "",
       category: data.category || "utilities",
+      tags: (data.tags ?? []).map((tag) => tag.slug).filter(Boolean),
       content: data.content || TYPE_CONTENT_PLACEHOLDER[itemType] || "",
       namespace: data.repoId ? `repo:${data.repoId}` : "public",
       loaded: true,
@@ -1164,8 +1417,28 @@ export default function CapabilityEditorPage() {
       fileContents,
       pendingTreeAction: null,
       pendingTreeActionLocked: false,
-      selectedRevision: data.currentRevision || 0,
+      selectedRevision: 0,
     })
+  })
+
+  createEffect(() => {
+    const data = currentItem()
+    if (!isEdit() || !data || !form.loaded) return
+
+    const currentRevision = data.currentRevision ?? 0
+    const fallbackRevision = versionOptions()[0]?.revision ?? 0
+    const resolvedRevision = currentRevision > 0 && availableRevisionSet().has(currentRevision)
+      ? currentRevision
+      : fallbackRevision
+
+    if (form.selectedRevision <= 0 && resolvedRevision > 0) {
+      setForm("selectedRevision", resolvedRevision)
+      return
+    }
+
+    if (form.selectedRevision > 0 && !availableRevisionSet().has(form.selectedRevision)) {
+      setForm("selectedRevision", resolvedRevision > 0 ? resolvedRevision : 0)
+    }
   })
 
   createEffect(() => {
@@ -1197,7 +1470,8 @@ export default function CapabilityEditorPage() {
     if (!isEdit() || !data || !form.loaded) return
     if (isViewingHistoricalVersion()) return
 
-    const fileContents = buildFileContentsFromItem(data)
+    if (itemAssets.loading) return
+    const fileContents = buildFileContentsFromItem(data, itemAssets() ?? [])
     const filePaths = Object.keys(fileContents)
     const selectedTreePath = data.sourcePath || defaultSourcePathForItemType((data.itemType as ItemType) || "skill", data.slug || "") || filePaths[0] || ""
 
@@ -1379,6 +1653,8 @@ export default function CapabilityEditorPage() {
     const files = input.files
     if (!files || files.length === 0) return
 
+    setForm("importing", true)
+
     try {
       const imported = await readDirectoryFiles(files)
       if (imported.tree.length === 0) return
@@ -1390,19 +1666,45 @@ export default function CapabilityEditorPage() {
         return
       }
 
-      setForm("slug", sanitizeIdentifier(imported.rootName || "skill"))
-      setForm("slugManual", true)
+      const importedName = formatImportedTitle(imported.rootName || "")
+      const importedSlug = sanitizeIdentifier(imported.rootName || "skill")
+      const importedDescription = extractImportedSkillDescription(imported.contents)
+
+      if (!form.slug.trim()) {
+        setForm("slug", importedSlug)
+        setForm("slugManual", true)
+      }
+      if (!form.name.trim() && importedName) {
+        setForm("name", importedName)
+      }
+      if (!form.description.trim() && importedDescription) {
+        setForm("description", importedDescription)
+      }
       setForm("treeNodes", imported.tree)
       setForm("fileContents", imported.contents)
       setForm("selectedTreePath", imported.firstFile || Object.keys(imported.contents)[0] || "")
       setForm("pendingTreeAction", null)
-      showToast({ title: language.t("store.capabilityEditor.uploadArchive"), description: `${files.length} files imported` })
+      showToast({
+        title: language.t("store.capabilityEditor.uploadArchive"),
+        description: language.t("store.capabilityEditor.importedFiles", { count: imported.importedCount }),
+        duration: 3000,
+      })
+      if (imported.filteredCount > 0) {
+        showToast({
+          variant: "error",
+          icon: "warning",
+          title: language.t("store.capabilityEditor.uploadArchive"),
+          description: language.t("store.capabilityEditor.filteredNonTextFiles", { count: imported.filteredCount }),
+          duration: 4000,
+        })
+      }
     } catch (error) {
       showToast({
         title: language.t("store.capabilityEditor.uploadArchive"),
         description: error instanceof Error ? error.message : String(error),
       })
     } finally {
+      setForm("importing", false)
       input.value = ""
     }
   }
@@ -1445,6 +1747,8 @@ export default function CapabilityEditorPage() {
 
       const refreshed = await itemApi.get(params.itemId)
       mutateItem(refreshed)
+      const refreshedAssets = await itemApi.getAssets(params.itemId)
+      mutateItemAssets(refreshedAssets)
       const refreshedVersions = await itemApi.listVersions(params.itemId)
       mutateVersions(refreshedVersions)
       setForm("selectedRevision", refreshed.currentRevision || version.revision)
@@ -1473,14 +1777,26 @@ export default function CapabilityEditorPage() {
       navigate(-1)
       return
     }
-    navigate("/console/capabilities")
+    navigate("/store/manager")
   }
 
   function toggleSidebar() {
     setLayout("sidebarCollapsed", (value) => !value)
   }
 
-  const handleSubmit = async () => {
+  function confirmResetDraft() {
+    dialog.show(() => (
+      <ConfirmDialog
+        title={language.t("store.capabilityEditor.resetTitle")}
+        description={language.t("store.capabilityEditor.resetDescription")}
+        confirm={language.t("common.reset")}
+        variant="normal"
+        onConfirm={() => resetCapabilityDraft(setForm as unknown as (setter: unknown, ...args: unknown[]) => void, form.itemType)}
+      />
+    ))
+  }
+
+  const handleSubmit = async (mode: "return" | "continue" = "return") => {
     if (isViewingHistoricalVersion()) {
       setForm("error", `${language.t("store.capabilityEditor.header.version")} ${form.selectedRevision} ${language.t("store.capabilityEditor.versionCurrent")}`)
       return
@@ -1511,6 +1827,7 @@ export default function CapabilityEditorPage() {
           sourcePath: payload.sourcePath,
           assets: payload.assets,
         })
+        await itemApi.setTags(params.itemId, form.tags)
         showToast({ title: language.t("store.capabilityDialog.toast.updated", { type: typeLabel() }) })
       } else {
         const registryId = await resolveRegistryId()
@@ -1524,11 +1841,16 @@ export default function CapabilityEditorPage() {
           content: payload.content,
           sourcePath: payload.sourcePath,
           assets: payload.assets,
+          tags: form.tags,
           visibility: selectedNamespace()?.visibility,
           registryId,
           createdBy: userId,
         })
         showToast({ title: language.t("store.capabilityDialog.toast.created", { type: typeLabel() }) })
+        if (mode === "continue") {
+          resetCapabilityDraft(setForm as unknown as (setter: unknown, ...args: unknown[]) => void, form.itemType)
+          return
+        }
       }
 
       navigateBackWithFallback()
@@ -1552,7 +1874,7 @@ export default function CapabilityEditorPage() {
     <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
       <Show when={!loading()} fallback={<div class="flex flex-1 items-center justify-center bg-background-base text-sm text-text-weak">{language.t("store.loading")}</div>}>
         <div
-          class="flex min-h-0 flex-1 overflow-hidden"
+          class="relative flex min-h-0 flex-1 overflow-hidden"
           style={{
             background: `color-mix(in srgb, ${accent()} 3%, var(--native-surface))`,
           }}
@@ -1603,7 +1925,7 @@ export default function CapabilityEditorPage() {
                           style={{ border: `1px solid color-mix(in srgb, ${accent()} 18%, var(--native-border))` }}
                         >
                           <For each={["skill", "subagent", "command", "mcp"] as const}>
-                            {(type) => <option value={type}>{TYPE_OPTION_LABELS[type]}</option>}
+                            {(type) => <option value={type}>{typeDropdownLabel(type)}</option>}
                           </For>
                         </select>
                         <div class="pointer-events-none absolute inset-y-0 right-0 flex w-8 items-center justify-center text-[var(--native-muted)]">
@@ -1657,9 +1979,6 @@ export default function CapabilityEditorPage() {
                       >
                         {language.t("store.capabilityEditor.versionReadonlyBadge")}
                       </span>
-                      <div class="text-xs font-medium text-[var(--native-foreground)]">
-                        {language.t("store.capabilityEditor.versionReadonlyTitle")}
-                      </div>
                     </div>
                     <div class="text-xs leading-5 text-[var(--native-muted)]">
                       {language.t("store.capabilityEditor.versionReadonlyDescription")}
@@ -1750,8 +2069,8 @@ export default function CapabilityEditorPage() {
                           class="h-8 min-w-0 w-full appearance-none rounded-[6px] bg-background-base pl-2.5 pr-9 text-xs text-[var(--native-foreground)] disabled:cursor-not-allowed disabled:opacity-60"
                           style={{ border: `1px solid color-mix(in srgb, ${accent()} 18%, var(--native-border))` }}
                         >
-                          <For each={CATEGORIES}>
-                            {(category) => <option value={category}>{language.t(categoryKey(category))}</option>}
+                          <For each={categoryOptions()}>
+                            {(category) => <option value={category}>{itemFilterOptions.categoryLabel(category)}</option>}
                           </For>
                         </select>
                         <div class="pointer-events-none absolute inset-y-0 right-0 flex w-8 items-center justify-center text-[var(--native-muted)]">
@@ -1761,19 +2080,35 @@ export default function CapabilityEditorPage() {
                     </div>
                   </div>
 
-                  <div class="space-y-2">
-                    <label class="mb-1 block text-xs font-medium text-[var(--native-foreground)]">{language.t("store.capabilityDialog.field.description")}</label>
-                    <textarea
-                      value={form.description}
-                      onInput={(e) => setForm("description", e.currentTarget.value)}
-                      disabled={isViewingHistoricalVersion()}
-                      rows={8}
-                      placeholder={language.t("store.capabilityDialog.field.descriptionPlaceholder")}
-                      class="w-full resize-none rounded-[6px] bg-background-base px-3 py-2 text-sm text-[var(--native-foreground)] outline-none disabled:cursor-not-allowed disabled:opacity-60"
-                      style={{ border: `1px solid color-mix(in srgb, ${accent()} 18%, var(--native-border))` }}
-                    />
-                  </div>
-                </section>
+                    <Show when={!isViewingHistoricalVersion()}>
+                      <div class="space-y-2">
+                        <label class="mb-1 block text-xs font-medium text-[var(--native-foreground)]">{language.t("store.capabilityEditor.header.tags")}</label>
+                        <TagInput
+                          value={form.tags}
+                          disabled={isViewingHistoricalVersion()}
+                          placeholder={language.t("store.capabilityEditor.tagsPlaceholder")}
+                          placeholderSecondary={language.t("store.capabilityEditor.tagsPlaceholderSecondary")}
+                          lockedTags={isEdit() ? (currentItem()?.tags ?? []).filter((tag) => tag.tagClass === "system").map((tag) => tag.slug) : []}
+                          class="w-full text-[var(--native-foreground)] disabled:cursor-not-allowed disabled:opacity-60"
+                          style={{ border: `1px solid color-mix(in srgb, ${accent()} 18%, var(--native-border))` }}
+                          onChange={(value) => setForm("tags", value)}
+                        />
+                      </div>
+                    </Show>
+
+                    <div class="space-y-2">
+                      <label class="mb-1 block text-xs font-medium text-[var(--native-foreground)]">{language.t("store.capabilityDialog.field.description")}</label>
+                      <textarea
+                        value={form.description}
+                        onInput={(e) => setForm("description", e.currentTarget.value)}
+                        disabled={isViewingHistoricalVersion()}
+                        rows={8}
+                        placeholder={language.t("store.capabilityDialog.field.descriptionPlaceholder")}
+                        class="w-full resize-none rounded-[6px] bg-background-base px-3 py-2 text-sm text-[var(--native-foreground)] outline-none disabled:cursor-not-allowed disabled:opacity-60"
+                        style={{ border: `1px solid color-mix(in srgb, ${accent()} 18%, var(--native-border))` }}
+                      />
+                    </div>
+                  </section>
 
                 <Show when={form.itemType === "skill"}>
                   <section class="flex min-h-0 flex-1 flex-col space-y-3 border-t border-[color:color-mix(in_oklab,var(--native-border)_18%,transparent)] pt-4">
@@ -1789,13 +2124,13 @@ export default function CapabilityEditorPage() {
                         variant="ghost"
                         size="sm"
                         class="h-7 cursor-pointer border px-2 text-xs transition-colors"
-                        disabled={isViewingHistoricalVersion()}
+                        disabled={isViewingHistoricalVersion() || form.importing}
                         style={{
                           border: `1px solid color-mix(in srgb, ${accent()} 24%, var(--native-border))`,
                           background: "transparent",
                         }}
                         onMouseEnter={(e) => {
-                          if (isViewingHistoricalVersion()) return
+                          if (isViewingHistoricalVersion() || form.importing) return
                           e.currentTarget.style.background = `color-mix(in srgb, ${accent()} 12%, transparent)`
                         }}
                         onMouseLeave={(e) => {
@@ -1803,7 +2138,7 @@ export default function CapabilityEditorPage() {
                         }}
                         onClick={triggerDirectoryUpload}
                       >
-                        {language.t("store.capabilityEditor.uploadArchive")}
+                        {form.importing ? `${language.t("common.loading")}${language.t("common.loading.ellipsis")}` : language.t("store.capabilityEditor.uploadArchive")}
                       </Button>
                     </div>
 
@@ -1885,12 +2220,44 @@ export default function CapabilityEditorPage() {
               </div>
 
               <div class="flex shrink-0 items-center gap-2">
-                <Button type="button" size="sm" variant="outline" class="h-8 px-3" onClick={() => navigate("/console/capabilities")}>
+                <Button type="button" size="sm" variant="outline" class="h-8 px-3" onClick={() => navigate("/store/manager")}>
                   {language.t("store.capabilityEditor.backToManagement")}
                 </Button>
-                <Button type="button" size="sm" class="h-8 px-3" onClick={() => void handleSubmit()} disabled={loading() || form.saving || isViewingHistoricalVersion()}>
-                  {form.saving ? language.t("common.saving") : isEdit() ? language.t("store.capabilityEditor.saveAndReturn") : language.t("store.capabilityEditor.createAction")}
-                </Button>
+                <Show
+                  when={!isEdit()}
+                  fallback={
+                    <Button type="button" size="sm" class="h-8 px-3" onClick={() => void handleSubmit()} disabled={loading() || form.saving || isViewingHistoricalVersion()}>
+                      {form.saving ? language.t("common.saving") : language.t("store.capabilityEditor.saveAndReturn")}
+                    </Button>
+                  }
+                >
+                  <div class="flex items-center gap-2">
+                    <Button type="button" size="sm" variant="outline" class="h-8 px-3" onClick={confirmResetDraft} disabled={loading() || form.saving || isViewingHistoricalVersion()}>
+                      {language.t("common.reset")}
+                    </Button>
+                    <div class="flex items-center overflow-hidden rounded-[8px]">
+                    <Button type="button" size="sm" class="h-8 rounded-r-none px-3" onClick={() => void handleSubmit("return")} disabled={loading() || form.saving || isViewingHistoricalVersion()}>
+                      {form.saving ? language.t("common.saving") : language.t("store.capabilityEditor.createAction")}
+                    </Button>
+                    <DropdownMenu placement="bottom-end" gutter={4}>
+                      <DropdownMenu.Trigger
+                        class="inline-flex h-8 items-center justify-center border-l border-[color:color-mix(in_srgb,var(--native-border)_28%,transparent)] bg-[var(--native-primary)] px-2 text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={loading() || form.saving || isViewingHistoricalVersion()}
+                        aria-label={language.t("store.capabilityEditor.createOptions")}
+                      >
+                        <Icon name="chevron-down" size="small" style={{ color: "white", "stroke-width": 2.2 }} />
+                      </DropdownMenu.Trigger>
+                      <DropdownMenu.Portal>
+                        <DropdownMenu.Content class="min-w-[180px]">
+                          <DropdownMenu.Item onSelect={() => void handleSubmit("continue")}>
+                            <DropdownMenu.ItemLabel>{language.t("store.capabilityEditor.createAndContinue")}</DropdownMenu.ItemLabel>
+                          </DropdownMenu.Item>
+                        </DropdownMenu.Content>
+                      </DropdownMenu.Portal>
+                    </DropdownMenu>
+                    </div>
+                  </div>
+                </Show>
               </div>
 
             </div>
@@ -1932,7 +2299,7 @@ export default function CapabilityEditorPage() {
                       when={selectedFileContent().trim()}
                       fallback={<div class="rounded-[var(--native-radius-md)] border border-dashed border-border-weak-base px-4 py-6 text-sm text-[var(--native-muted)]">{language.t("store.capabilityEditor.previewEmpty")}</div>}
                     >
-                      <Markdown text={selectedFileContent()} class="text-14-regular" />
+                      <Markdown text={selectedFileContent()} class="vscode-markdown text-14-regular" />
                     </Show>
                   </div>
                 </section>
@@ -1948,6 +2315,15 @@ export default function CapabilityEditorPage() {
                 <span>{currentLanguageLabel()}</span>
               </div>
             </div>
+
+            <Show when={form.saving}>
+              <div class="absolute inset-0 z-[120] flex items-center justify-center bg-black/16 backdrop-blur-[1.5px]">
+                <div class="flex items-center gap-3 px-4 py-3">
+                  <Spinner class="size-4 text-[var(--native-primary)]" />
+                  <span class="text-sm text-[var(--native-foreground)]">{language.t("common.loading")}{language.t("common.loading.ellipsis")}</span>
+                </div>
+              </div>
+            </Show>
 
           </div>
         </div>

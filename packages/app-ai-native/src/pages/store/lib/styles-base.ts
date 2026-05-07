@@ -1,5 +1,5 @@
 export const base = {
-  section: "min-w-0",
+  section: "w-full min-w-0",
   head: "mb-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4",
   title: "m-0 font-[var(--native-font-display)] text-[1.0625rem] font-semibold tracking-[-0.04em] text-[var(--native-foreground)]",
   sub: "mt-0.5 max-w-[64ch] text-[0.8125rem] leading-[1.6] text-[var(--native-muted)]",

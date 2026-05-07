@@ -6,6 +6,7 @@ import { Icon } from "@opencode-ai/ui/icon"
 import type { Device } from "../types"
 import { RemoteDirectorySelector } from "./remote-directory-selector"
 import { useLanguage } from "@/context/language"
+import { deviceFileApi } from "../lib/cloud-device-api"
 
 export type CreateWorkspaceDialogProps = {
   device: Device
@@ -16,9 +17,15 @@ export function CreateWorkspaceDialogContent(props: CreateWorkspaceDialogProps) 
   const language = useLanguage()
   const t = language.t
   const dialog = useDialog()
+  const [homePath, setHomePath] = createSignal("/")
   const [path, setPath] = createSignal("")
   const [browse, setBrowse] = createSignal(false)
   const [submitting, setSubmitting] = createSignal(false)
+
+  deviceFileApi.getDefaultPath(props.device.deviceId).then((p) => {
+    setHomePath(p)
+    setPath(p)
+  })
 
   const valid = () => {
     const v = path().trim()
@@ -73,6 +80,7 @@ export function CreateWorkspaceDialogContent(props: CreateWorkspaceDialogProps) 
           fallback={
             <RemoteDirectorySelector
               device={props.device}
+              initialPath={homePath()}
               onSelect={handleBrowseSelect}
               onCancel={() => setBrowse(false)}
             />
@@ -86,7 +94,7 @@ export function CreateWorkspaceDialogContent(props: CreateWorkspaceDialogProps) 
                 <Icon name="folder" class="size-4 text-text-weak shrink-0" />
                 <input
                   type="text"
-                  placeholder={t("workspace.directory.pathPlaceholder")}
+                  placeholder={homePath() !== "/" ? homePath() : t("workspace.directory.pathPlaceholder")}
                   value={path()}
                   onInput={(e) => setPath((e.target as HTMLInputElement).value)}
                   onKeyDown={(e) => {

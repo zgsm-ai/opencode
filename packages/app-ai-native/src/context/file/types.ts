@@ -39,6 +39,7 @@ export type FileState = {
   loaded?: boolean
   loading?: boolean
   error?: string
+  errorKey?: string
   meta?: FileMeta
   content?: FileContent
   chunk?: FileContentChunk

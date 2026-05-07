@@ -244,7 +244,7 @@ export function Autocomplete(props: {
           return a.localeCompare(b)
         })
 
-        const width = props.anchor().width - 4
+        const width = props.anchor()?.width ? props.anchor().width - 4 : 0
         options.push(
           ...sortedFiles.map((item): AutocompleteOption => {
             const baseDir = (sync.data.path.directory || process.cwd()).replace(/\/+$/, "")

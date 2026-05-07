@@ -1,8 +1,7 @@
-import { createEffect, createMemo, createSignal, Match, onCleanup, Show, Switch } from "solid-js"
-import { Dynamic } from "solid-js/web"
+import { createEffect, createMemo, createSignal, Match, onCleanup, onMount, Show, Switch } from "solid-js"
 import { ScrollView } from "@opencode-ai/ui/scroll-view"
-import { useFileComponent } from "@opencode-ai/ui/context/file"
 import { Markdown } from "@opencode-ai/ui/markdown"
+import "@/styles/vscode-markdown.css"
 import { Icon } from "@opencode-ai/ui/icon"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { Button } from "@/components/ui/button"
@@ -11,18 +10,195 @@ import { useLanguage } from "@/context/language"
 import { useDirectory } from "@/context/directory"
 import type { ContentTab } from "@/context/content-tabs"
 import { filePreviewConfig } from "../lib/file-preview-config"
+import { LanguageDescription, LanguageSupport, defaultHighlightStyle, syntaxHighlighting } from "@codemirror/language"
+import { languages } from "@codemirror/language-data"
+import { markdown } from "@codemirror/lang-markdown"
+import { highlightActiveLine, highlightActiveLineGutter, lineNumbers } from "@codemirror/view"
+import { Compartment, EditorState } from "@codemirror/state"
+import { EditorView } from "@codemirror/view"
 
 function isMarkdownFile(path: string | undefined) {
   if (!path) return false
   return path.endsWith(".md") || path.endsWith(".markdown") || path.endsWith(".mdx")
 }
 
+function languageExtensionForPath(path: string) {
+  if (!path) return markdown()
+  const match = LanguageDescription.matchFilename(languages, path)
+  if (!match) return markdown()
+  return match.support ?? markdown()
+}
+
+async function loadLanguageExtensionForPath(path: string) {
+  if (!path) return markdown()
+  const match = LanguageDescription.matchFilename(languages, path)
+  if (!match) return markdown()
+  if (match.support instanceof LanguageSupport) return match.support
+  try {
+    const loaded = await match.load()
+    return loaded instanceof LanguageSupport ? loaded : markdown()
+  } catch {
+    return markdown()
+  }
+}
+
+function languageLabelForPath(path: string) {
+  if (!path) return "Markdown"
+  const match = LanguageDescription.matchFilename(languages, path)
+  return match?.name ?? (isMarkdownFile(path) ? "Markdown" : "Plain Text")
+}
+
+function ReadOnlyCodeMirror(props: {
+  source: string
+  path: string
+  onScrollToBottom?: () => void
+  onCursorChange?: (payload: { line: number; column: number }) => void
+  onLineCountChange?: (count: number) => void
+}) {
+  let root!: HTMLDivElement
+  let view: EditorView | undefined
+  const languageCompartment = new Compartment()
+  const themeCompartment = new Compartment()
+  const scrollCompartment = new Compartment()
+
+  const theme = () =>
+    EditorView.theme({
+      "&": {
+        height: "100%",
+        "font-size": "14px",
+        "background-color": "transparent",
+        color: "var(--native-foreground)",
+        outline: "none",
+      },
+      "&:focus, &:focus-visible, &:focus-within": {
+        outline: "none !important",
+        "box-shadow": "none !important",
+      },
+      ".cm-scroller": {
+        "font-family": "var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace)",
+        "line-height": "1.65",
+        overflow: "auto",
+      },
+      ".cm-content": {
+        padding: "16px",
+        "min-height": "100%",
+        "caret-color": "transparent",
+      },
+      ".cm-gutters": {
+        background: "color-mix(in srgb, var(--native-panel) 88%, var(--native-bg-subtle))",
+        color: "var(--native-muted)",
+        border: "none",
+        "border-right": "1px solid color-mix(in srgb, var(--native-border) 18%, transparent)",
+      },
+      ".cm-activeLine": {
+        background: "color-mix(in srgb, var(--native-foreground) 3%, transparent)",
+      },
+      ".cm-activeLineGutter": {
+        background: "color-mix(in srgb, var(--native-foreground) 4%, transparent)",
+      },
+      ".cm-selectionBackground, &.cm-focused .cm-selectionBackground, ::selection": {
+        background: "color-mix(in srgb, var(--native-primary) 18%, transparent) !important",
+      },
+      ".cm-cursor, .cm-dropCursor": {
+        display: "none",
+      },
+      ".cm-focused": {
+        outline: "none",
+      },
+      "&.cm-focused": {
+        outline: "none !important",
+        "box-shadow": "none !important",
+      },
+      ".cm-scroller:focus, .cm-scroller:focus-visible, .cm-content:focus, .cm-content:focus-visible, .cm-lineNumbers:focus": {
+        outline: "none !important",
+        "box-shadow": "none !important",
+      },
+    })
+
+  onMount(() => {
+    view = new EditorView({
+      state: EditorState.create({
+        doc: props.source,
+        extensions: [
+          lineNumbers(),
+          highlightActiveLineGutter(),
+          highlightActiveLine(),
+          EditorState.readOnly.of(true),
+          EditorView.editable.of(false),
+          languageCompartment.of(languageExtensionForPath(props.path)),
+          syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+          themeCompartment.of(theme()),
+          scrollCompartment.of(EditorView.updateListener.of((update) => {
+            if (update.viewportChanged || update.geometryChanged) {
+              const scroller = update.view.scrollDOM
+              const remaining = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight
+              if (remaining < 50) {
+                props.onScrollToBottom?.()
+              }
+            }
+            if (update.selectionSet) {
+              const head = update.state.selection.main.head
+              const line = update.state.doc.lineAt(head)
+              props.onCursorChange?.({ line: line.number, column: head - line.from + 1 })
+            }
+          })),
+        ],
+      }),
+      parent: root,
+    })
+
+    props.onLineCountChange?.(view.state.doc.lines)
+
+    void loadLanguageExtensionForPath(props.path).then((extension) => {
+      if (!view) return
+      view.dispatch({ effects: languageCompartment.reconfigure(extension) })
+    })
+  })
+
+  createEffect(() => {
+    const next = props.source
+    if (!view) return
+    const current = view.state.doc.toString()
+    if (current === next) return
+    const scrollTop = view.scrollDOM.scrollTop
+    view.dispatch({
+      changes: { from: 0, to: current.length, insert: next },
+      selection: { anchor: 0 },
+    })
+    requestAnimationFrame(() => {
+      if (!view) return
+      view.scrollDOM.scrollTop = scrollTop
+    })
+    props.onLineCountChange?.(view.state.doc.lines)
+  })
+
+  createEffect(() => {
+    if (!view) return
+    view.dispatch({
+      effects: [
+        languageCompartment.reconfigure(languageExtensionForPath(props.path)),
+        themeCompartment.reconfigure(theme()),
+      ],
+    })
+    void loadLanguageExtensionForPath(props.path).then((extension) => {
+      if (!view) return
+      view.dispatch({ effects: languageCompartment.reconfigure(extension) })
+    })
+  })
+
+  onCleanup(() => view?.destroy())
+
+  return <div ref={root} class="min-h-0 flex-1 select-text" />
+}
+
 export function FilePreviewTab(props: { tab: ContentTab }) {
   const file = useFile()
   const language = useLanguage()
-  const fileComponent = useFileComponent()
   const directory = useDirectory()
   const [preview, setPreview] = createSignal(true)
+  const [cursorLine, setCursorLine] = createSignal(1)
+  const [cursorCol, setCursorCol] = createSignal(1)
+  const [totalLines, setTotalLines] = createSignal(0)
 
   const path = createMemo(() => props.tab.meta.path as string | undefined)
   const md = createMemo(() => isMarkdownFile(path()))
@@ -149,31 +325,11 @@ export function FilePreviewTab(props: { tab: ContentTab }) {
   const hasPreviewStatus = createMemo(() => md() && !markdownPreviewEnabled())
   const showFooter = createMemo(() => hasMore() || hasPreviewStatus())
 
-  const renderFile = (source: string) => (
-    <div class="relative overflow-hidden pb-40">
-      <Dynamic
-        component={fileComponent}
-        mode="text"
-        file={{
-          name: path() ?? "",
-          contents: source,
-        }}
-        overflow="scroll"
-        class="select-text"
-        media={{
-          mode: "auto",
-          path: path(),
-          current: state()?.content,
-          onError: () => {},
-        }}
-        onRendered={restoreScrollPosition}
-      />
-    </div>
-  )
+  const languageLabel = createMemo(() => languageLabelForPath(path() ?? ""))
 
   const renderMarkdown = (source: string) => (
     <div class="px-6 py-4 max-w-none">
-      <Markdown text={source} class="text-14-regular" />
+      <Markdown text={source} class="vscode-markdown text-14-regular" />
     </div>
   )
 
@@ -208,7 +364,28 @@ export function FilePreviewTab(props: { tab: ContentTab }) {
       <Switch>
         <Match when={state()?.loaded}>
           <ScrollView class="flex-1 min-h-0" viewportRef={(el) => { viewportEl = el }}>
-            <Show when={md() && preview() && markdownPreviewEnabled()} fallback={renderFile(contents())}>
+            <Show
+              when={md() && preview() && markdownPreviewEnabled()}
+              fallback={
+                <ReadOnlyCodeMirror
+                  source={contents()}
+                  path={path() ?? ""}
+                  onScrollToBottom={() => {
+                    if (canAutoLoadMore() && !loadingMore()) {
+                      const now = Date.now()
+                      if (now - lastAutoLoadAt < filePreviewConfig.autoLoadMoreCooldownMs) return
+                      lastAutoLoadAt = now
+                      void loadMore("auto")
+                    }
+                  }}
+                  onCursorChange={({ line, column }) => {
+                    setCursorLine(line)
+                    setCursorCol(column)
+                  }}
+                  onLineCountChange={(count) => setTotalLines(count)}
+                />
+              }
+            >
               {renderMarkdown(contents())}
             </Show>
             <Show when={chunk() && showFooter()}>
@@ -244,15 +421,28 @@ export function FilePreviewTab(props: { tab: ContentTab }) {
               </div>
             </Show>
           </ScrollView>
+          <div class="shrink-0 flex items-center justify-between border-t bg-background-base px-4 py-1.5 text-12-medium text-text-weak">
+            <div class="min-w-0 truncate font-mono">{relativePath()}</div>
+            <div class="flex shrink-0 items-center gap-4">
+              <span>Ln {cursorLine()}, Col {cursorCol()}</span>
+              <Show when={totalLines() > 0}>
+                <span>{totalLines().toLocaleString()} lines</span>
+              </Show>
+              <Show when={loadedSizeLabel()}>
+                <span>{loadedSizeLabel()}</span>
+              </Show>
+              <span>{languageLabel()}</span>
+            </div>
+          </div>
         </Match>
         <Match when={state()?.loading}>
           <div class="flex-1 flex items-center justify-center text-text-weak text-14-regular">
             {language.t("common.loading")}...
           </div>
         </Match>
-        <Match when={state()?.error}>
+        <Match when={state()?.errorKey || state()?.error}>
           <div class="flex-1 flex items-center justify-center text-text-weak text-14-regular">
-            {state()?.error}
+            {state()?.errorKey ? language.t(state()!.errorKey!) : state()?.error}
           </div>
         </Match>
       </Switch>

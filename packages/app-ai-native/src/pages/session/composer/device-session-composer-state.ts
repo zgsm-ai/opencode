@@ -18,12 +18,12 @@ export function createDeviceSessionComposerState(options?: { closeMs?: number | 
 
   const questionRequest = createMemo((): QuestionRequest | undefined => {
     const sid = session.sessionID()
-    return sessionQuestionRequest(workspace.data.session, session.data.questions, sid)
+    return sessionQuestionRequest(workspace.data.session, workspace.data.questions, sid)
   })
 
   const permissionRequest = createMemo((): PermissionRequest | undefined => {
     const sid = session.sessionID()
-    return sessionPermissionRequest(workspace.data.session, session.data.permissions, sid, (item) => {
+    return sessionPermissionRequest(workspace.data.session, workspace.data.permissions, sid, (item) => {
       return !session.permission.isAutoAccepting()
     })
   })
