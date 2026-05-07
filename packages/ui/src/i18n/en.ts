@@ -74,6 +74,8 @@ export const dict: Record<string, string> = {
   "ui.messagePart.context.list.one": "{{count}} list",
   "ui.messagePart.context.list.other": "{{count}} lists",
 
+  "ui.messagePart.reasoning.label": "Thought for a few seconds",
+
   "ui.list.loading": "Loading",
   "ui.list.empty": "No results",
   "ui.list.clearFilter": "Clear filter",

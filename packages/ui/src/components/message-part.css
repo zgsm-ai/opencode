@@ -209,7 +209,7 @@
 
 [data-component="text-part"] {
   width: 100%;
-  margin-top: 24px;
+  /* margin-top: 24px; */
 
   [data-slot="text-part-body"] {
     margin-top: 0;
@@ -279,14 +279,24 @@
 
 [data-component="reasoning-part"] {
   width: 100%;
-  color: var(--text-base);
   line-height: var(--line-height-normal);
 
+  [data-slot="reasoning-trigger"] {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  [data-slot="reasoning-content"] {
+    padding-top: 8px;
+  }
+
   [data-component="markdown"] {
-    margin-top: 24px;
     font-style: normal;
-    font-size: var(--font-size-base);
+    font-size: var(--font-size-small);
     color: var(--text-weak);
+    opacity: 0.75;
 
     strong,
     b {

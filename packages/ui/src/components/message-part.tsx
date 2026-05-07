@@ -1433,17 +1433,33 @@ PART_MAPPING["text"] = function TextPartDisplay(props) {
 }
 
 PART_MAPPING["reasoning"] = function ReasoningPartDisplay(props) {
+  const i18n = useI18n()
   const part = () => props.part as ReasoningPart
   const streaming = createMemo(
     () => props.message.role === "assistant" && typeof (props.message as AssistantMessage).time.completed !== "number",
   )
   const text = () => part().text.trim()
   const throttledText = createPacedValue(text, streaming)
+  const [manual, setManual] = createSignal(false)
+  const open = createMemo(() => streaming() || manual())
 
   return (
     <Show when={throttledText()}>
       <div data-component="reasoning-part">
-        <Markdown text={throttledText()} cacheKey={part().id} streaming={streaming()} />
+        <Collapsible open={open()} onOpenChange={setManual} variant="ghost">
+          <Collapsible.Trigger>
+            <div data-slot="reasoning-trigger" class="flex items-center gap-2 text-12-medium text-text-weak">
+              <Icon name="brain" size="small" />
+              <span>{i18n.t("ui.messagePart.reasoning.label")}</span>
+              <Collapsible.Arrow />
+            </div>
+          </Collapsible.Trigger>
+          <Collapsible.Content>
+            <div data-slot="reasoning-content">
+              <Markdown text={throttledText()} cacheKey={part().id} streaming={streaming()} />
+            </div>
+          </Collapsible.Content>
+        </Collapsible>
       </div>
     </Show>
   )
