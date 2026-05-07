@@ -871,6 +871,14 @@ export function DeviceSessionTab(props: { tabId: string }) {
                             hideAttachButton
                             hidePrompt={!!viewingSessionID()}
                           />
+                          <Show when={workspace.data.vcs?.branch}>
+                            <div class="w-full px-3 pb-2 md:max-w-200 md:mx-auto 2xl:max-w-[1000px]">
+                              <div class="flex items-center gap-1 text-11-regular text-text-weak">
+                                <Icon name="branch" size="small" class="shrink-0" />
+                                <span class="truncate">{workspace.data.vcs?.branch}</span>
+                              </div>
+                            </div>
+                          </Show>
                         </Show>
                         <Show when={!workspace.agentAvailable()}>
                           <div class="shrink-0 w-full pb-3 flex justify-center items-center">
