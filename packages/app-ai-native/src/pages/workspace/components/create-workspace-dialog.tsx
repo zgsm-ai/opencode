@@ -1,4 +1,4 @@
-import { createSignal, Show } from "solid-js"
+import { createSignal, createMemo, Show } from "solid-js"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { Dialog } from "@opencode-ai/ui/dialog"
 import { Button } from "@opencode-ai/ui/button"
@@ -10,7 +10,7 @@ import { deviceFileApi } from "../lib/cloud-device-api"
 
 export type CreateWorkspaceDialogProps = {
   device: Device
-  onCreate: (directory: string) => Promise<void> | void
+  onCreate: (directory: string, name: string) => Promise<void> | void
 }
 
 export function CreateWorkspaceDialogContent(props: CreateWorkspaceDialogProps) {
@@ -20,7 +20,14 @@ export function CreateWorkspaceDialogContent(props: CreateWorkspaceDialogProps) 
   const [homePath, setHomePath] = createSignal("/")
   const [path, setPath] = createSignal("")
   const [browse, setBrowse] = createSignal(false)
+  const [name, setName] = createSignal("")
   const [submitting, setSubmitting] = createSignal(false)
+
+  const suggested = createMemo(() => {
+    const p = path().trim().replace(/\\/g, "/").replace(/\/+$/, "")
+    if (!p) return props.device.displayName
+    return p.split("/").pop() || props.device.displayName
+  })
 
   deviceFileApi.getDefaultPath(props.device.deviceId).then((p) => {
     setHomePath(p)
@@ -41,7 +48,7 @@ export function CreateWorkspaceDialogContent(props: CreateWorkspaceDialogProps) 
     if (!v) return
     setSubmitting(true)
     try {
-      await props.onCreate(v)
+      await props.onCreate(v, name().trim() || suggested())
     } finally {
       setSubmitting(false)
     }
@@ -116,6 +123,26 @@ export function CreateWorkspaceDialogContent(props: CreateWorkspaceDialogProps) 
             <Show when={path().trim() && !valid()}>
               <span class="text-11-regular text-text-critical-base">{t("workspace.directory.pathRequired")}</span>
             </Show>
+          </div>
+
+          {/* Name input */}
+          <div class="flex flex-col gap-2">
+            <label class="text-12-medium text-text-weak">{t("workspace.directory.nameLabel")}</label>
+            <div class="flex items-center gap-2 h-9 px-3 bg-surface-base rounded-lg border border-border-weak-base focus-within:border-border-strong-base transition-colors">
+              <Icon name="edit" class="size-4 text-text-weak shrink-0" />
+              <input
+                type="text"
+                placeholder={t("workspace.directory.namePlaceholder")}
+                value={name() || suggested()}
+                onInput={(e) => {
+                  setName((e.target as HTMLInputElement).value)
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") submit()
+                }}
+                class="flex-1 text-13-regular bg-transparent placeholder:text-text-weaker focus:outline-none text-text-strong"
+              />
+            </div>
           </div>
 
           {/* Actions */}

@@ -1477,6 +1477,8 @@ export const dict = {
   "workspace.init.prewarm.failed": "缓存预热：失败",
 
   "workspace.directory.title": "选择工作目录",
+  "workspace.directory.nameLabel": "工作空间名称",
+  "workspace.directory.namePlaceholder": "输入工作空间名称",
   "workspace.directory.pathLabel": "工作目录路径",
   "workspace.directory.pathPlaceholder": "输入路径，如 /home/user/project 或 D:/project",
   "workspace.directory.browse": "浏览",

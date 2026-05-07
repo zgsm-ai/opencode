@@ -105,8 +105,8 @@ export function WorkspaceSidebar(props: { hide?: () => void } = {}) {
     dialog.show(() => (
       <CreateWorkspaceDialogContent
         device={device}
-        onCreate={async (directory: string) => {
-          await createWorkspace(device.id, directory)
+        onCreate={async (directory: string, name: string) => {
+          await createWorkspace(device.id, directory, name)
         }}
       />
     ))

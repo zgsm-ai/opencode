@@ -176,7 +176,7 @@ export default function WorkspaceLayout(props: ParentProps) {
     }
   }
 
-  const handleCreateWorkspace = async (deviceId: string, directory: string) => {
+  const handleCreateWorkspace = async (deviceId: string, directory: string, name: string) => {
     const device = devices.find((d) => d.id === deviceId)
     if (!device) {
       showToast({ title: t("workspace.create.failed"), description: t("workspace.create.deviceNotFound") })
@@ -187,7 +187,6 @@ export default function WorkspaceLayout(props: ParentProps) {
       return
     }
     try {
-      const name = directory.split("/").pop() || "New Workspace"
       const request: CreateWorkspaceRequest = {
         name,
         deviceId,

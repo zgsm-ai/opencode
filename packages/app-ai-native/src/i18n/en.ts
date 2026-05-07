@@ -1705,6 +1705,8 @@ export const dict = {
   "workspace.init.prewarm.failed": "Cache warming: failed",
 
   "workspace.directory.title": "Select Working Directory",
+  "workspace.directory.nameLabel": "Workspace name",
+  "workspace.directory.namePlaceholder": "Enter workspace name",
   "workspace.directory.pathLabel": "Directory path",
   "workspace.directory.pathPlaceholder": "Enter path, e.g. /home/user/project or D:/project",
   "workspace.directory.browse": "Browse",
