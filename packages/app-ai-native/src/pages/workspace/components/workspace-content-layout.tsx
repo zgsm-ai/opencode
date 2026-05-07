@@ -621,12 +621,6 @@ function ContentSidebar(props: { directory: string; autoExpandGroup?: () => { gr
                 </div>
               }>
                 <div class="px-0 py-0.5">
-                  <Show when={diff.state().branch}>
-                    <div class="px-1.5 pb-1 text-11-regular text-text-weak flex items-center gap-1">
-                      <Icon name="branch" size="small" class="shrink-0" />
-                      <span class="truncate">{diff.state().branch}</span>
-                    </div>
-                  </Show>
                   <Show when={diff.state().stagedFiles.length > 0}>
                     <div
                       class="px-1.5 pt-1.5 pb-0.5 flex items-center gap-1 text-[11px] font-[600] text-native-muted tracking-wide uppercase cursor-pointer hover:text-native-foreground transition-colors"
