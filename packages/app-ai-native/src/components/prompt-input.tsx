@@ -1319,47 +1319,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
             </div>
           </div>
 
-          <div class="pointer-events-none absolute bottom-2 left-2">
-            <div class="pointer-events-auto">
-              <TooltipKeybind
-                placement="top"
-                gutter={8}
-                title={language.t(
-                  accepting() ? "command.permissions.autoaccept.disable" : "command.permissions.autoaccept.enable",
-                )}
-                keybind={command.keybind("permissions.autoaccept")}
-              >
-                <Button
-                  data-action="prompt-permissions"
-                  variant="ghost"
-                  onClick={() => {
-                    if (!params.id) {
-                      setStore("pendingAutoAccept", (value) => !value)
-                      return
-                    }
-                    permission.toggleAutoAccept(params.id, sdk.directory)
-                  }}
-                  classList={{
-                    "size-6 flex items-center justify-center": true,
-                    "text-text-base": !accepting(),
-                    "hover:bg-surface-success-base": accepting(),
-                  }}
-                  aria-label={
-                    accepting()
-                      ? language.t("command.permissions.autoaccept.disable")
-                      : language.t("command.permissions.autoaccept.enable")
-                  }
-                  aria-pressed={accepting()}
-                >
-                  <Icon
-                    name="chevron-double-right"
-                    size="small"
-                    classList={{ "text-icon-success-base": accepting() }}
-                  />
-                </Button>
-              </TooltipKeybind>
-            </div>
-          </div>
+
         </div>
       </DockShellForm>
       <Show when={store.mode === "normal" || store.mode === "shell"}>
@@ -1500,6 +1460,44 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                       }}
                       variant="ghost"
                     />
+                  </TooltipKeybind>
+                </Show>
+                <Show when={store.mode === "normal"}>
+                  <TooltipKeybind
+                    placement="top"
+                    gutter={4}
+                    title={language.t(
+                      accepting()
+                        ? "command.permissions.autoaccept.disable"
+                        : "command.permissions.autoaccept.enable",
+                    )}
+                    keybind={command.keybind("permissions.autoaccept")}
+                  >
+                    <label
+                      class="flex items-center gap-1.5 shrink-0 cursor-pointer select-none h-7"
+                      style={{
+                        opacity: buttonsSpring(),
+                        transform: `scale(${0.95 + buttonsSpring() * 0.05})`,
+                        filter: `blur(${(1 - buttonsSpring()) * 2}px)`,
+                        "pointer-events": buttonsSpring() > 0.5 ? "auto" : "none",
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        class="size-3.5 accent-[var(--native-primary)] cursor-pointer"
+                        checked={accepting()}
+                        onChange={() => {
+                          if (!params.id) {
+                            setStore("pendingAutoAccept", (value) => !value)
+                            return
+                          }
+                          permission.toggleAutoAccept(params.id, sdk.directory)
+                        }}
+                      />
+                      <span class="text-12-regular text-text-weak truncate">
+                        {language.t("command.permissions.autoaccept.enable")}
+                      </span>
+                    </label>
                   </TooltipKeybind>
                 </Show>
               </div>
