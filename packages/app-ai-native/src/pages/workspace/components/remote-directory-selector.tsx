@@ -121,6 +121,7 @@ export function RemoteDirectorySelector(props: RemoteDirectorySelectorProps) {
   const [loading, setLoading] = createSignal(false)
   const [directories, setDirectories] = createSignal<FileEntry[]>([])
   let list: ListRef | undefined
+  let debounce: ReturnType<typeof setTimeout> | undefined
 
   const dirCache = useDirectoryCache(() => props.device.deviceId)
 
@@ -148,6 +149,8 @@ export function RemoteDirectorySelector(props: RemoteDirectorySelectorProps) {
   }
 
   checkSupport()
+
+  onCleanup(() => clearTimeout(debounce))
 
   const items = async (query: string): Promise<Row[]> => {
     const dirs = directories()
@@ -186,11 +189,11 @@ export function RemoteDirectorySelector(props: RemoteDirectorySelectorProps) {
     }))
   }
 
-  const navigateTo = (path: string) => {
+  const navigateTo = (path: string, clear = true) => {
     batch(() => {
       setCurrentPath(path)
       setSelectedPath(path)
-      list?.setFilter("")
+      if (clear) list?.setFilter("")
     })
     loadPath(path)
   }
@@ -221,9 +224,11 @@ export function RemoteDirectorySelector(props: RemoteDirectorySelectorProps) {
 
   const handleFilterChange = (value: string) => {
     const normalizedValue = normalizeWindowsPath(value).trim()
-    if (normalizedValue && isAbsolutePath(normalizedValue)) {
-      navigateTo(normalizeWindowsPath(normalizedValue))
-    }
+    if (!normalizedValue || !isAbsolutePath(normalizedValue)) return
+    clearTimeout(debounce)
+    debounce = setTimeout(() => {
+      navigateTo(normalizeWindowsPath(normalizedValue), false)
+    }, 300)
   }
 
   return (
@@ -257,7 +262,7 @@ export function RemoteDirectorySelector(props: RemoteDirectorySelectorProps) {
       </Show>
 
       {/* Directory list */}
-      <div class="flex-1 min-h-0 overflow-hidden">
+      <div class="flex-1 min-h-0 overflow-hidden pt-2">
         <List
           search={{
             placeholder: notSupported() ? t("workspace.directory.notSupported") : t("workspace.directory.search"),

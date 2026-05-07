@@ -80,7 +80,7 @@ export function CreateWorkspaceDialogContent(props: CreateWorkspaceDialogProps) 
           fallback={
             <RemoteDirectorySelector
               device={props.device}
-              initialPath={homePath()}
+              initialPath={path() || homePath()}
               onSelect={handleBrowseSelect}
               onCancel={() => setBrowse(false)}
             />
