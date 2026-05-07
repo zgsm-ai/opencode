@@ -32,6 +32,8 @@ export const CloudTeamPlanConfirmation: Component = () => {
           dependencies: t.dependencies ?? [],
           assignedMemberId: t.assignedMemberId ?? "",
           priority: t.priority ?? 5,
+          model: t.model,
+          metadata: t.metadata,
         })),
       )
       setConfirmError("")

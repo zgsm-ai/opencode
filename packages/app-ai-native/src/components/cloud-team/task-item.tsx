@@ -87,7 +87,7 @@ export const TaskItem: Component<{
       <Show when={hasResult()}>
         <div class="mt-1.5">
           <div class="flex items-center gap-1">
-            <span class="text-11-regular text-text-weak truncate flex-1">
+            <span class="text-11-regular text-text-weak break-words flex-1 min-w-0">
               {props.result!.summary}
             </span>
             <Show when={(props.result?.filesChanged?.length ?? 0) > 0}>

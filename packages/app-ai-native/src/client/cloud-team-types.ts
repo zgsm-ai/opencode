@@ -58,6 +58,11 @@ export interface TaskResult {
   artifacts?: unknown
 }
 
+export interface ModelRef {
+  providerID: string
+  modelID: string
+}
+
 export interface Task {
   id: string
   sessionId: string
@@ -77,6 +82,8 @@ export interface Task {
   startedAt: string | null
   completedAt: string | null
   updatedAt: string
+  model?: ModelRef
+  metadata?: Record<string, unknown>
 }
 
 export interface SubTask {
@@ -88,6 +95,8 @@ export interface SubTask {
   dependencies: string[]
   assignedMemberId?: string | null
   priority?: number
+  model?: ModelRef
+  metadata?: Record<string, unknown>
 }
 
 // ─── Message ──────────────────────────────────────────────

@@ -16,6 +16,18 @@ import type {
 const PREFIX = env.API_PREFIX
 const API_BASE = env.API_URL || PREFIX
 
+function normalizeTask(t: Task): Task {
+  if (t.model) return t
+  const meta = t.metadata
+  if (meta && typeof meta === "object" && "model" in meta) {
+    const m = meta.model as Record<string, string> | undefined
+    if (m && typeof m.providerID === "string" && typeof m.modelID === "string") {
+      return { ...t, model: { providerID: m.providerID, modelID: m.modelID } }
+    }
+  }
+  return t
+}
+
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const headers =
     options?.body instanceof FormData ? options.headers : { "Content-Type": "application/json", ...options?.headers }
@@ -100,25 +112,25 @@ type TerminateTaskBody = {
 
 const task = {
   submitPlan(sessionId: string, body: TaskPlanBody) {
-    return apiFetch<{ tasks: Task[] }>(`/api/team/sessions/${sessionId}/tasks`, { method: "POST", body: JSON.stringify(body) }).then((r) => r.tasks)
+    return apiFetch<{ tasks: Task[] }>(`/api/team/sessions/${sessionId}/tasks`, { method: "POST", body: JSON.stringify(body) }).then((r) => r.tasks.map(normalizeTask))
   },
   list(sessionId: string) {
-    return apiFetch<{ tasks: Task[] }>(`/api/team/sessions/${sessionId}/tasks`).then((r) => r.tasks)
+    return apiFetch<{ tasks: Task[] }>(`/api/team/sessions/${sessionId}/tasks`).then((r) => r.tasks.map(normalizeTask))
   },
   get(taskId: string) {
-    return apiFetch<Task>(`/api/team/tasks/${taskId}`)
+    return apiFetch<Task>(`/api/team/tasks/${taskId}`).then(normalizeTask)
   },
   update(taskId: string, body: UpdateTaskBody) {
     return apiFetch<Task>(`/api/team/tasks/${taskId}`, {
       method: "PATCH",
       body: JSON.stringify(body),
-    })
+    }).then(normalizeTask)
   },
   terminate(sessionId: string, taskId: string, body?: TerminateTaskBody) {
     return apiFetch<Task>(`/api/team/sessions/${sessionId}/tasks/${taskId}/terminate`, {
       method: "POST",
       body: JSON.stringify(body ?? {}),
-    })
+    }).then(normalizeTask)
   },
 }
 
@@ -227,13 +239,13 @@ const prompt = {
     return apiFetch<DecomposeResponse>(`/api/team/sessions/${sessionId}/decompose`, {
       method: "POST",
       body: JSON.stringify(body),
-    })
+    }).then((r) => ({ ...r, tasks: r.tasks.map(normalizeTask) }))
   },
   orchestrate(sessionId: string, body: { prompt: string; fencingToken?: number; model?: { providerID: string; modelID: string } }) {
     return apiFetch<OrchestrateResponse>(`/api/team/sessions/${sessionId}/orchestrate`, {
       method: "POST",
       body: JSON.stringify(body),
-    })
+    }).then((r) => ({ ...r, tasks: r.tasks.map(normalizeTask) }))
   },
 }
 

@@ -42,6 +42,18 @@ type CloudTeamStore = {
 
 type SetStore = (fn: (state: CloudTeamStore) => void) => void
 
+function normalizeTaskFromMeta(t: Task): Task {
+  if (t.model) return t
+  const meta = t.metadata
+  if (meta && typeof meta === "object" && "model" in meta) {
+    const m = meta.model as Record<string, string> | undefined
+    if (m && typeof m.providerID === "string" && typeof m.modelID === "string") {
+      return { ...t, model: { providerID: m.providerID, modelID: m.modelID } }
+    }
+  }
+  return t
+}
+
 /**
  * Apply a CloudEvent to the store, returning mutations via setStore.
  * All store updates go through this reducer to ensure single source of truth.
@@ -114,7 +126,7 @@ export function applyCloudEvent(store: CloudTeamStore, setStore: SetStore, event
     }
 
     case "task.plan.submit": {
-      const tasks = (p.tasks as Task[]) ?? []
+      const tasks = (p.tasks as Task[]).map(normalizeTaskFromMeta) ?? []
       batch(() => {
         setStore((s) => {
           s.tasks = tasks
@@ -126,17 +138,21 @@ export function applyCloudEvent(store: CloudTeamStore, setStore: SetStore, event
     case "task.assigned": {
       const taskId = p.taskId as string
       const task = p.task as Task | undefined
+      const model = p.model as Task["model"] | undefined
       batch(() => {
         setStore((s) => {
           const id = task?.id ?? taskId
           const idx = s.tasks.findIndex((t) => t.id === id)
-          if (idx >= 0 && task) {
-            s.tasks[idx] = task
-          } else if (task) {
-            s.tasks.push(task)
+          const normalized = task ? normalizeTaskFromMeta(task) : undefined
+          if (idx >= 0 && normalized) {
+            s.tasks[idx] = normalized
+            if (model) s.tasks[idx].model = model
+          } else if (normalized) {
+            const taskWithModel = model ? { ...normalized, model } : normalized
+            s.tasks.push(taskWithModel)
           }
           // Sync teammate.currentTaskId
-          const assignedMemberId = task?.assignedMemberId ?? (p.assignedMemberId as string | undefined)
+          const assignedMemberId = normalized?.assignedMemberId ?? (p.assignedMemberId as string | undefined)
           if (assignedMemberId) {
             const ti = s.teammates.findIndex((t) => t.id === assignedMemberId)
             if (ti >= 0) s.teammates[ti].currentTaskId = id
@@ -295,7 +311,7 @@ export function applyCloudEvent(store: CloudTeamStore, setStore: SetStore, event
     }
 
     case "decompose.result": {
-      const tasks = (p.tasks as Task[]) ?? []
+      const tasks = ((p.tasks as Task[]) ?? []).map(normalizeTaskFromMeta)
       batch(() => {
         setStore((s) => {
           s.decomposing = false
@@ -400,7 +416,7 @@ export function applyCloudEvent(store: CloudTeamStore, setStore: SetStore, event
     case "leader.snapshot": {
       batch(() => {
         setStore((s) => {
-          if (Array.isArray(p.tasks)) s.tasks = p.tasks as Task[]
+          if (Array.isArray(p.tasks)) s.tasks = (p.tasks as Task[]).map(normalizeTaskFromMeta)
           if (Array.isArray(p.approvals)) s.approvals = p.approvals as ApprovalRequest[]
           if (Array.isArray(p.teammates)) s.teammates = p.teammates as TeammateRegistration[]
         })
