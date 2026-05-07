@@ -6,10 +6,28 @@ import { useLanguage } from "@/context/language"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Persist, persisted } from "@/utils/persist"
-import { behaviorApi, itemApi, userApi, type CapabilityItem, type ItemOrder, type ItemSort, type SecurityRiskGroup } from "../lib/api"
+import {
+  behaviorApi,
+  itemApi,
+  userApi,
+  type CapabilityItem,
+  type ItemOrder,
+  type ItemSort,
+  type SecurityRiskGroup,
+} from "../lib/api"
 import ItemDetailContent, { getInstallCommand } from "../components/item-detail-content"
 import { ItemDetailLoadingSkeleton } from "../components/item-detail-loading-skeleton"
-import { buildStoreTableColumnOptions, DEFAULT_VISIBLE_COLUMNS, formatCompact, formatSourceMetric, formatStoreDate, formatStoreTablePaginationSummary, StoreCapabilityTable, StoreTableFooter, type TableColumnKey } from "../components/store-capability-table"
+import {
+  buildStoreTableColumnOptions,
+  DEFAULT_VISIBLE_COLUMNS,
+  formatCompact,
+  formatSourceMetric,
+  formatStoreDate,
+  formatStoreTablePaginationSummary,
+  StoreCapabilityTable,
+  StoreTableFooter,
+  type TableColumnKey,
+} from "../components/store-capability-table"
 import { Icon, type IconProps } from "@opencode-ai/ui/icon"
 import { LocalIcon } from "@/components/local-icon"
 import { useAuth } from "../hooks/use-auth"
@@ -18,10 +36,38 @@ import { typeKey } from "../lib/constants"
 import { sx } from "../lib/styles"
 
 const STORE_TYPES = [
-  { value: "skill", labelKey: "store.sidebar.nav.skills", descKey: "store.home.type.skill.description", icon: "sparkles" as IconProps["name"], color: "#ffa000", bg: "#FEF3C7" },
-  { value: "subagent", labelKey: "store.sidebar.nav.subagents", descKey: "store.home.type.subagent.description", icon: "brain" as IconProps["name"], color: "#1670ff", bg: "#DBEAFE" },
-  { value: "command", labelKey: "store.sidebar.nav.commands", descKey: "store.home.type.command.description", icon: "console" as IconProps["name"], color: "#09b179", bg: "#D1FAE5" },
-  { value: "mcp", labelKey: "store.sidebar.nav.mcpServers", descKey: "store.home.type.mcp.description", icon: "mcp" as IconProps["name"], color: "#7338f9", bg: "#EDE9FE" },
+  {
+    value: "skill",
+    labelKey: "store.sidebar.nav.skills",
+    descKey: "store.home.type.skill.description",
+    icon: "sparkles" as IconProps["name"],
+    color: "#ffa000",
+    bg: "#FEF3C7",
+  },
+  {
+    value: "subagent",
+    labelKey: "store.sidebar.nav.subagents",
+    descKey: "store.home.type.subagent.description",
+    icon: "brain" as IconProps["name"],
+    color: "#1670ff",
+    bg: "#DBEAFE",
+  },
+  {
+    value: "command",
+    labelKey: "store.sidebar.nav.commands",
+    descKey: "store.home.type.command.description",
+    icon: "console" as IconProps["name"],
+    color: "#09b179",
+    bg: "#D1FAE5",
+  },
+  {
+    value: "mcp",
+    labelKey: "store.sidebar.nav.mcpServers",
+    descKey: "store.home.type.mcp.description",
+    icon: "mcp" as IconProps["name"],
+    color: "#7338f9",
+    bg: "#EDE9FE",
+  },
 ] as const
 
 type StoreType = (typeof STORE_TYPES)[number]["value"]
@@ -162,14 +208,17 @@ export default function Home() {
 
   const listKey = createMemo(() => JSON.stringify(listParams()))
   const listSrc = createMemo(() => ({ key: listKey(), params: listParams() }))
-  const [list, { mutate: mutateList }] = createResource(listSrc, async (src) => ({ key: src.key, data: await itemApi.list(src.params) }))
+  const [list, { mutate: mutateList }] = createResource(listSrc, async (src) => ({
+    key: src.key,
+    data: await itemApi.list(src.params),
+  }))
   const typeMeta = createMemo(() => STORE_TYPES.find((entry) => entry.value === activeType()) ?? STORE_TYPES[0])
   const isTypeListMode = createMemo(() => !!searchParams.type && STORE_TYPES.some((e) => e.value === searchParams.type))
   const currentUserId = createMemo(() => auth.user()?.id ?? auth.user()?.subjectId ?? auth.user()?.sub ?? "")
 
   // Popular items for type-list mode (top 3 by installCount)
-  const popularParams = createMemo(() => isTypeListMode() ? { type: activeType(), page: 1, pageSize: 20 } : null)
-  const [popularRaw] = createResource(popularParams, (params) => params ? itemApi.list(params) : null)
+  const popularParams = createMemo(() => (isTypeListMode() ? { type: activeType(), page: 1, pageSize: 20 } : null))
+  const [popularRaw] = createResource(popularParams, (params) => (params ? itemApi.list(params) : null))
   const popularItems = createMemo(() => {
     const items = popularRaw()?.items ?? []
     return [...items].sort((a, b) => (b.installCount ?? 0) - (a.installCount ?? 0)).slice(0, 3)
@@ -237,9 +286,7 @@ export default function Home() {
 
     setFavoriteActionItemId(item.id)
     try {
-      const result = item.favorited
-        ? await behaviorApi.unfavorite(item.id)
-        : await behaviorApi.favorite(item.id)
+      const result = item.favorited ? await behaviorApi.unfavorite(item.id) : await behaviorApi.favorite(item.id)
 
       patchListItem(item.id, (current) => ({
         ...current,
@@ -248,7 +295,9 @@ export default function Home() {
       }))
 
       if (detailItem()?.id === item.id) {
-        setDetailItem((current) => current ? { ...current, favorited: result.favorited, favoriteCount: result.favoriteCount } : current)
+        setDetailItem((current) =>
+          current ? { ...current, favorited: result.favorited, favoriteCount: result.favoriteCount } : current,
+        )
         setFavorited(result.favorited)
         setFavoriteCount(result.favoriteCount)
       }
@@ -294,26 +343,45 @@ export default function Home() {
   const sourceFilterActive = createMemo(() => appliedSourceFilters().length > 0)
   const securityFilterActive = createMemo(() => appliedSecurityFilters().length > 0)
   const tagFilterActive = createMemo(() => appliedTagFilters().length > 0)
-  const columnOptions = createMemo(() => buildStoreTableColumnOptions(language.t).filter((column) => column.key !== "type"))
+  const columnOptions = createMemo(() =>
+    buildStoreTableColumnOptions(language.t).filter((column) => column.key !== "type"),
+  )
   const filteredCategoryOptions = createMemo(() => {
     const query = categoryFilterQuery().trim().toLowerCase()
     if (!query) return categories()
-    return categories().filter((cat) => itemFilterOptions.categoryLabel(cat.slug, cat).toLowerCase().includes(query) || cat.slug.toLowerCase().includes(query))
+    return categories().filter(
+      (cat) =>
+        itemFilterOptions.categoryLabel(cat.slug, cat).toLowerCase().includes(query) ||
+        cat.slug.toLowerCase().includes(query),
+    )
   })
   const filteredSourceOptions = createMemo(() => {
     const query = sourceFilterQuery().trim().toLowerCase()
     if (!query) return sourceOptions()
-    return sourceOptions().filter((source) => (itemFilterOptions.sourceLabel(source.value, source) || source.value).toLowerCase().includes(query) || source.value.toLowerCase().includes(query))
+    return sourceOptions().filter(
+      (source) =>
+        (itemFilterOptions.sourceLabel(source.value, source) || source.value).toLowerCase().includes(query) ||
+        source.value.toLowerCase().includes(query),
+    )
   })
   const filteredSecurityOptions = createMemo(() => {
     const query = securityFilterQuery().trim().toLowerCase()
     if (!query) return securityOptions()
-    return securityOptions().filter((option) => itemFilterOptions.securityRiskGroupLabel(option.value as SecurityFilterValue, option).toLowerCase().includes(query) || option.value.toLowerCase().includes(query))
+    return securityOptions().filter(
+      (option) =>
+        itemFilterOptions
+          .securityRiskGroupLabel(option.value as SecurityFilterValue, option)
+          .toLowerCase()
+          .includes(query) || option.value.toLowerCase().includes(query),
+    )
   })
   const rows = createMemo(() => listData()?.items ?? [])
   const totalItems = createMemo(() => listData()?.total ?? 0)
   const [creatorInfoMap] = createResource(
-    () => rows().map((item) => item.createdBy).filter(Boolean),
+    () =>
+      rows()
+        .map((item) => item.createdBy)
+        .filter(Boolean),
     (ids) => userApi.getInfo(ids),
   )
   const totalPages = createMemo(() => Math.max(1, Math.ceil(totalItems() / PAGE_SIZE)))
@@ -397,15 +465,21 @@ export default function Home() {
   }
 
   const togglePendingCategoryFilter = (slug: string) => {
-    setPendingCategoryFilters((current) => current.includes(slug) ? current.filter((item) => item !== slug) : [...current, slug])
+    setPendingCategoryFilters((current) =>
+      current.includes(slug) ? current.filter((item) => item !== slug) : [...current, slug],
+    )
   }
 
   const togglePendingSourceFilter = (source: string) => {
-    setPendingSourceFilters((current) => current.includes(source) ? current.filter((item) => item !== source) : [...current, source])
+    setPendingSourceFilters((current) =>
+      current.includes(source) ? current.filter((item) => item !== source) : [...current, source],
+    )
   }
 
   const togglePendingSecurityFilter = (status: SecurityFilterValue) => {
-    setPendingSecurityFilters((current) => current.includes(status) ? current.filter((item) => item !== status) : [...current, status])
+    setPendingSecurityFilters((current) =>
+      current.includes(status) ? current.filter((item) => item !== status) : [...current, status],
+    )
   }
 
   const applyCategoryFilters = () => {
@@ -460,13 +534,16 @@ export default function Home() {
   }
 
   const toggleAppliedTagFilter = (slug: string) => {
-    setAppliedTagFilters((current) => current.includes(slug) ? current.filter((item) => item !== slug) : [...current, slug])
+    setAppliedTagFilters((current) =>
+      current.includes(slug) ? current.filter((item) => item !== slug) : [...current, slug],
+    )
     setPage(1)
     setSelectedItemId(null)
   }
 
   const creatorInfo = (userId: string) => creatorInfoMap()?.[userId]
-  const favoriteIconColor = (favorited?: boolean) => favorited ? (typeMeta().color ?? "var(--native-primary)") : "var(--native-muted)"
+  const favoriteIconColor = (favorited?: boolean) =>
+    favorited ? (typeMeta().color ?? "var(--native-primary)") : "var(--native-muted)"
   const typeLabel = (value: string) => language.t(typeKey(value))
 
   const copyInstall = async (item: CapabilityItem) => {
@@ -496,50 +573,63 @@ export default function Home() {
             <header class="relative overflow-hidden bg-[linear-gradient(135deg,color-mix(in_srgb,var(--native-primary)_2%,white),color-mix(in_srgb,var(--native-primary)_10%,var(--native-panel))_62%,color-mix(in_srgb,var(--native-primary)_14%,var(--native-panel)))] before:pointer-events-none before:absolute before:right-[-10%] before:top-[-60%] before:h-[340px] before:w-[340px] before:rounded-full before:bg-[radial-gradient(circle,color-mix(in_srgb,var(--native-primary)_8%,transparent),transparent_70%)] before:content-['']">
               <div class="relative flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-4 px-4 md:px-5 py-3 lg:gap-6">
                 <div class="min-w-0 flex flex-col md:flex-row md:flex-1 md:items-center gap-0.5 md:gap-4">
-                  <h1 class="relative m-0 shrink-0 text-[1.625rem] leading-[1.15] font-extrabold tracking-[-0.035em] text-[var(--native-foreground)]">{language.t("store.home.hero.title")}</h1>
-                  <p class="relative m-0 hidden min-w-0 max-w-none lg:block lg:max-w-[38rem] text-[0.8125rem] leading-6 text-[var(--native-muted)]">{language.t("store.home.hero.description")}</p>
+                  <h1 class="relative m-0 shrink-0 text-[1.625rem] leading-[1.15] font-extrabold tracking-[-0.035em] text-[var(--native-foreground)]">
+                    {language.t("store.home.hero.title")}
+                  </h1>
+                  <p class="relative m-0 hidden min-w-0 max-w-none lg:block lg:max-w-[38rem] text-[0.8125rem] leading-6 text-[var(--native-muted)]">
+                    {language.t("store.home.hero.description")}
+                  </p>
                 </div>
 
                 <div class="flex flex-wrap sm:flex-nowrap shrink-0 items-center justify-start md:justify-end gap-2 md:gap-3 w-full md:w-auto pb-1 md:pb-0">
                   <div class="flex flex-nowrap items-stretch justify-start md:justify-end gap-2">
-                  <For each={statCards()}>
-                    {(entry) => (
-                      <button
-                        type="button"
-                        class={cn(
-                          "group flex shrink-0 items-center gap-1.5 rounded-[0.375rem] border border-transparent bg-transparent px-2 md:px-3 py-0.5 text-left cursor-pointer transition-[background-color,border-color,color,transform,box-shadow]",
-                          entry.value === activeType() && "border-transparent bg-[var(--stat-accent)] text-white",
-                          hoveredType() === entry.value && entry.value !== activeType() && "bg-[color:color-mix(in_oklab,var(--stat-accent)_70%,white)] text-white",
-                        )}
-                        style={{ "--stat-accent": entry.color, "--stat-bg": entry.bg }}
-                        onClick={() => handleTypeChange(entry.value)}
-                        onMouseEnter={() => setHoveredType(entry.value)}
-                        onMouseLeave={() => setHoveredType((current) => (current === entry.value ? null : current))}
-                        aria-pressed={entry.value === activeType()}
-                      >
-                        <div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-none bg-transparent">
-                          <Icon
-                            name={entry.icon}
-                            class={cn(
-                              "type-icon transition-colors",
-                              entry.value === activeType() && "!text-white",
-                            )}
-                            style={{ color: entry.value === activeType() || hoveredType() === entry.value ? "#ffffff" : entry.color }}
-                          />
-                        </div>
-                        <div class="min-w-0">
-                          <div class={cn(
-                            "type-label text-[12px] uppercase tracking-[0.05em] text-[var(--native-foreground)]",
-                            entry.value === activeType() ? "font-bold !text-white" : "font-medium",
+                    <For each={statCards()}>
+                      {(entry) => (
+                        <button
+                          type="button"
+                          class={cn(
+                            "group flex shrink-0 items-center gap-1.5 rounded-[0.375rem] border border-transparent bg-transparent px-2 md:px-3 py-0.5 text-left cursor-pointer transition-[background-color,border-color,color,transform,box-shadow]",
+                            entry.value === activeType() && "border-transparent bg-[var(--stat-accent)] text-white",
+                            hoveredType() === entry.value &&
+                              entry.value !== activeType() &&
+                              "bg-[color:color-mix(in_oklab,var(--stat-accent)_70%,white)] text-white",
                           )}
-                          style={entry.value === activeType() || hoveredType() === entry.value ? { color: "#ffffff", "font-weight": entry.value === activeType() ? 700 : 500 } : undefined}
+                          style={{ "--stat-accent": entry.color, "--stat-bg": entry.bg }}
+                          onClick={() => handleTypeChange(entry.value)}
+                          onMouseEnter={() => setHoveredType(entry.value)}
+                          onMouseLeave={() => setHoveredType((current) => (current === entry.value ? null : current))}
+                          aria-pressed={entry.value === activeType()}
                         >
-                            {language.t(entry.labelKey)}
+                          <div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-none bg-transparent">
+                            <Icon
+                              name={entry.icon}
+                              class={cn("type-icon transition-colors", entry.value === activeType() && "!text-white")}
+                              style={{
+                                color:
+                                  entry.value === activeType() || hoveredType() === entry.value
+                                    ? "#ffffff"
+                                    : entry.color,
+                              }}
+                            />
                           </div>
-                        </div>
-                      </button>
-                    )}
-                  </For>
+                          <div class="min-w-0">
+                            <div
+                              class={cn(
+                                "type-label text-[12px] uppercase tracking-[0.05em] text-[var(--native-foreground)]",
+                                entry.value === activeType() ? "font-bold !text-white" : "font-medium",
+                              )}
+                              style={
+                                entry.value === activeType() || hoveredType() === entry.value
+                                  ? { color: "#ffffff", "font-weight": entry.value === activeType() ? 700 : 500 }
+                                  : undefined
+                              }
+                            >
+                              {language.t(entry.labelKey)}
+                            </div>
+                          </div>
+                        </button>
+                      )}
+                    </For>
                   </div>
                   <div class="flex w-full sm:w-auto items-center justify-start sm:justify-end gap-2">
                     <Tooltip value={language.t("store.console.capabilities.title")} placement="bottom">
@@ -551,7 +641,12 @@ export default function Home() {
                         onClick={() => navigate("/store/manager")}
                       >
                         <Icon name="sliders" class="size-4" style={{ color: "#ffffff" }} />
-                        <span class="text-sm font-medium leading-none !text-white hidden sm:inline" style={{ color: "#ffffff" }}>{language.t("store.console.capabilities.manage")}</span>
+                        <span
+                          class="text-sm font-medium leading-none !text-white hidden sm:inline"
+                          style={{ color: "#ffffff" }}
+                        >
+                          {language.t("store.console.capabilities.manage")}
+                        </span>
                       </button>
                     </Tooltip>
                     <Tooltip value={language.t("store.console.capabilities.create")} placement="bottom">
@@ -583,7 +678,7 @@ export default function Home() {
             </header>
 
             <div class="flex min-h-0 min-w-0 flex-1 flex-col">
-              <div class="flex w-full flex-1 items-center justify-center">
+              <div class="flex w-full py-4">
                 <SearchControls />
               </div>
 
@@ -595,22 +690,37 @@ export default function Home() {
         {/* ═══ TYPE LIST MODE ═══ */}
         <div class="flex min-h-0 min-w-0 flex-1 flex-col gap-4 max-[1280px]:gap-3">
           {/* Type Hero Header */}
-          <header class="relative flex flex-col gap-4 lg:gap-5 overflow-hidden rounded-[1.25rem] border border-[color:color-mix(in_srgb,var(--native-border)_12%,transparent)] bg-[linear-gradient(135deg,var(--native-panel),color-mix(in_srgb,var(--tp-accent)_5%,var(--native-panel)))] px-4 py-4 lg:px-7 lg:py-6 before:pointer-events-none before:absolute before:right-[-5%] before:top-[-40%] before:h-[280px] before:w-[280px] before:rounded-full before:bg-[radial-gradient(circle,color-mix(in_srgb,var(--tp-accent)_8%,transparent),transparent_70%)] before:content-[''] lg:flex-row lg:items-center lg:justify-between" style={{ "--tp-accent": typeMeta().color }}>
+          <header
+            class="relative flex flex-col gap-4 lg:gap-5 overflow-hidden rounded-[1.25rem] border border-[color:color-mix(in_srgb,var(--native-border)_12%,transparent)] bg-[linear-gradient(135deg,var(--native-panel),color-mix(in_srgb,var(--tp-accent)_5%,var(--native-panel)))] px-4 py-4 lg:px-7 lg:py-6 before:pointer-events-none before:absolute before:right-[-5%] before:top-[-40%] before:h-[280px] before:w-[280px] before:rounded-full before:bg-[radial-gradient(circle,color-mix(in_srgb,var(--tp-accent)_8%,transparent),transparent_70%)] before:content-[''] lg:flex-row lg:items-center lg:justify-between"
+            style={{ "--tp-accent": typeMeta().color }}
+          >
             <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-[var(--native-radius-lg)] bg-[color-mix(in_srgb,var(--tp-accent)_10%,transparent)]">
               <Icon name={typeMeta().icon} />
             </div>
             <div class="relative min-w-0 flex-1">
-              <h1 class="m-0 text-[1.375rem] leading-[1.2] font-extrabold tracking-[-0.03em] text-[var(--native-foreground)]">{language.t(typeMeta().labelKey)}</h1>
-              <p class="mt-1 text-[0.8125rem] leading-[1.5] text-[var(--native-muted)]">{language.t(typeMeta().descKey)}</p>
+              <h1 class="m-0 text-[1.375rem] leading-[1.2] font-extrabold tracking-[-0.03em] text-[var(--native-foreground)]">
+                {language.t(typeMeta().labelKey)}
+              </h1>
+              <p class="mt-1 text-[0.8125rem] leading-[1.5] text-[var(--native-muted)]">
+                {language.t(typeMeta().descKey)}
+              </p>
             </div>
             <div class="relative grid w-full grid-cols-2 gap-2.5 lg:w-auto lg:min-w-[14rem]">
               <div class="rounded-[var(--native-radius-md)] border border-[color:color-mix(in_srgb,var(--native-border)_8%,transparent)] bg-[color-mix(in_srgb,var(--tp-accent)_4%,var(--native-panel))] px-3.5 py-2 text-center">
-                <div class="text-[1.125rem] leading-[1.3] font-extrabold text-[var(--native-foreground)] [font-variant-numeric:tabular-nums]">{typeAggregate().total.toLocaleString()}</div>
-                <div class="text-[12px] uppercase tracking-[0.04em] text-[var(--native-muted)]">{language.t("store.typeList.stat.total")}</div>
+                <div class="text-[1.125rem] leading-[1.3] font-extrabold text-[var(--native-foreground)] [font-variant-numeric:tabular-nums]">
+                  {typeAggregate().total.toLocaleString()}
+                </div>
+                <div class="text-[12px] uppercase tracking-[0.04em] text-[var(--native-muted)]">
+                  {language.t("store.typeList.stat.total")}
+                </div>
               </div>
               <div class="rounded-[var(--native-radius-md)] border border-[color:color-mix(in_srgb,var(--native-border)_8%,transparent)] bg-[color-mix(in_srgb,var(--tp-accent)_4%,var(--native-panel))] px-3.5 py-2 text-center">
-                <div class="text-[1.125rem] leading-[1.3] font-extrabold text-[var(--native-foreground)] [font-variant-numeric:tabular-nums]">{formatCompact(typeAggregate().installs)}</div>
-                <div class="text-[12px] uppercase tracking-[0.04em] text-[var(--native-muted)]">{language.t("store.typeList.stat.installs")}</div>
+                <div class="text-[1.125rem] leading-[1.3] font-extrabold text-[var(--native-foreground)] [font-variant-numeric:tabular-nums]">
+                  {formatCompact(typeAggregate().installs)}
+                </div>
+                <div class="text-[12px] uppercase tracking-[0.04em] text-[var(--native-muted)]">
+                  {language.t("store.typeList.stat.installs")}
+                </div>
               </div>
             </div>
           </header>
@@ -619,27 +729,42 @@ export default function Home() {
           <section class={sx.section}>
             <div class={sx.head}>
               <div>
-                <h2 class={sx.title}>{language.t("store.typeList.popular", { type: language.t(typeMeta().labelKey) })}</h2>
+                <h2 class={sx.title}>
+                  {language.t("store.typeList.popular", { type: language.t(typeMeta().labelKey) })}
+                </h2>
                 <p class={sx.sub}>{language.t("store.typeList.popularSub")}</p>
               </div>
             </div>
             <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3" style={{ "--tp-accent": typeMeta().color }}>
               <For each={popularItems()}>
                 {(item, idx) => (
-                   <article class="relative flex cursor-pointer items-center gap-3 overflow-hidden rounded-[var(--native-radius-lg)] border border-[color:color-mix(in_srgb,var(--native-border)_12%,transparent)] bg-[var(--native-panel)] py-3.5 pr-4 pl-8 shadow-[var(--native-shadow-sm)] transition-all hover:-translate-y-px hover:border-[color:color-mix(in_srgb,var(--tp-accent)_20%,transparent)] hover:shadow-[var(--native-shadow-md)]" onClick={() => openItemDetail(item)}>
-                    <span class="absolute left-0 top-0 flex h-[1.375rem] w-[1.375rem] items-center justify-center rounded-br-[var(--native-radius-sm)] bg-[var(--tp-accent)] text-[12px] font-extrabold text-white">#{idx() + 1}</span>
+                  <article
+                    class="relative flex cursor-pointer items-center gap-3 overflow-hidden rounded-[var(--native-radius-lg)] border border-[color:color-mix(in_srgb,var(--native-border)_12%,transparent)] bg-[var(--native-panel)] py-3.5 pr-4 pl-8 shadow-[var(--native-shadow-sm)] transition-all hover:-translate-y-px hover:border-[color:color-mix(in_srgb,var(--tp-accent)_20%,transparent)] hover:shadow-[var(--native-shadow-md)]"
+                    onClick={() => openItemDetail(item)}
+                  >
+                    <span class="absolute left-0 top-0 flex h-[1.375rem] w-[1.375rem] items-center justify-center rounded-br-[var(--native-radius-sm)] bg-[var(--tp-accent)] text-[12px] font-extrabold text-white">
+                      #{idx() + 1}
+                    </span>
                     <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--native-radius-md)] bg-[color-mix(in_srgb,var(--tp-accent)_8%,transparent)]">
                       <Icon name={typeMeta().icon} />
                     </div>
                     <div class="min-w-0 flex-1">
                       <div class="truncate text-[0.8125rem] font-bold text-[var(--native-foreground)]">{item.name}</div>
                       <div class="mt-0.5 flex gap-2.5 text-[12px] text-[var(--native-muted)] [font-variant-numeric:tabular-nums]">
-                        <span class="inline-flex items-center gap-0.5"><LocalIcon name="star" size="small" />{(item.favoriteCount ?? 0).toLocaleString()}</span>
-                        <span class="inline-flex items-center gap-0.5"><LocalIcon name="download" size="small" />{(item.installCount ?? 0).toLocaleString()}</span>
+                        <span class="inline-flex items-center gap-0.5">
+                          <LocalIcon name="star" size="small" />
+                          {(item.favoriteCount ?? 0).toLocaleString()}
+                        </span>
+                        <span class="inline-flex items-center gap-0.5">
+                          <LocalIcon name="download" size="small" />
+                          {(item.installCount ?? 0).toLocaleString()}
+                        </span>
                       </div>
                     </div>
                     <Show when={item.category}>
-                      <span class="shrink-0 whitespace-nowrap rounded-[var(--native-radius-full)] bg-[color-mix(in_srgb,var(--tp-accent)_8%,transparent)] px-1.5 py-px text-[12px] text-[var(--tp-accent)]">{itemFilterOptions.categoryLabel(item.category) || item.category}</span>
+                      <span class="shrink-0 whitespace-nowrap rounded-[var(--native-radius-full)] bg-[color-mix(in_srgb,var(--tp-accent)_8%,transparent)] px-1.5 py-px text-[12px] text-[var(--tp-accent)]">
+                        {itemFilterOptions.categoryLabel(item.category) || item.category}
+                      </span>
                     </Show>
                   </article>
                 )}
@@ -655,18 +780,23 @@ export default function Home() {
       </Show>
 
       <Sheet open={detailOpen()} onOpenChange={(open) => !open && setSelectedItemId(null)} modal={false}>
-          <SheetContent position="right" class={cn(sx.sheet, "w-[min(68rem,94vw)] sm:max-w-none")} style={{ "background-color": "var(--st-surface-lowest, #ffffff)" }}>
+        <SheetContent
+          position="right"
+          class={cn(sx.sheet, "w-[min(68rem,94vw)] sm:max-w-none")}
+          style={{ "background-color": "var(--st-surface-lowest, #ffffff)" }}
+        >
           <SheetHeader class="sr-only">
             <SheetTitle>{language.t("store.home.detail.title")}</SheetTitle>
             <SheetDescription>{language.t("store.home.detail.description")}</SheetDescription>
           </SheetHeader>
           <Show when={detailRenderItemId()}>
             {(itemId) => (
-              <Show
-                when={detailContentReady()}
-                fallback={<ItemDetailLoadingSkeleton class={sx.sheetBody} />}
-              >
-                <Suspense fallback={<div class="flex justify-center py-16 text-muted-foreground">{language.t("store.loading")}</div>}>
+              <Show when={detailContentReady()} fallback={<ItemDetailLoadingSkeleton class={sx.sheetBody} />}>
+                <Suspense
+                  fallback={
+                    <div class="flex justify-center py-16 text-muted-foreground">{language.t("store.loading")}</div>
+                  }
+                >
                   <ItemDetailContent
                     itemId={itemId()}
                     class={cn(sx.sheetBody, "thin-scrollbar")}
@@ -758,14 +888,12 @@ export default function Home() {
 
   function ContentShell() {
     return (
-      <section class={cn(sx.section, "flex min-h-0 flex-col px-2 sm:px-3")} >
+      <section class={cn(sx.section, "flex min-h-0 flex-1 flex-col px-2 sm:px-3")}>
         <div class={cn(sx.tableShell, "flex min-h-0 flex-1 flex-col")}>
           <Show
             when={!showError()}
             fallback={
-              <div class={sx.state}>
-                {listError() || language.t("store.console.capabilities.toast.loadFailed")}
-              </div>
+              <div class={sx.state}>{listError() || language.t("store.console.capabilities.toast.loadFailed")}</div>
             }
           >
             <Show
@@ -788,9 +916,16 @@ export default function Home() {
                 creatorInfo={creatorInfo}
                 typeLabel={typeLabel}
                 categoryLabel={(slug, category) => itemFilterOptions.categoryLabel(slug, category)}
-                sourceLabel={(value, source) => itemFilterOptions.sourceLabel(value, source as Parameters<typeof itemFilterOptions.sourceLabel>[1])}
+                sourceLabel={(value, source) =>
+                  itemFilterOptions.sourceLabel(value, source as Parameters<typeof itemFilterOptions.sourceLabel>[1])
+                }
                 sourceUrl={(value) => itemFilterOptions.sourceUrl(value)}
-                securityLabel={(value, option) => itemFilterOptions.securityRiskGroupLabel(value, option as Parameters<typeof itemFilterOptions.securityRiskGroupLabel>[1])}
+                securityLabel={(value, option) =>
+                  itemFilterOptions.securityRiskGroupLabel(
+                    value,
+                    option as Parameters<typeof itemFilterOptions.securityRiskGroupLabel>[1],
+                  )
+                }
                 favoriteIconColor={favoriteIconColor}
                 onToggleFavorite={(item) => void toggleRowFavorite(item)}
                 formatDate={formatDate}
@@ -870,12 +1005,12 @@ export default function Home() {
                     onTagClick: toggleAppliedTagFilter,
                   },
                 }}
-          labels={{
-            title: language.t("store.home.table.title"),
-            description: language.t("store.home.table.description"),
-            type: language.t("store.console.capabilities.type"),
-            category: language.t("store.console.capabilities.category"),
-            security: language.t("store.security.riskLevel"),
+                labels={{
+                  title: language.t("store.home.table.title"),
+                  description: language.t("store.home.table.description"),
+                  type: language.t("store.console.capabilities.type"),
+                  category: language.t("store.console.capabilities.category"),
+                  security: language.t("store.security.riskLevel"),
                   tag: language.t("store.home.table.tag"),
                   source: language.t("store.home.table.source"),
                   experienceScore: language.t("store.home.table.experienceScore"),
@@ -915,10 +1050,20 @@ export default function Home() {
                       type="button"
                       disabled={!auth.user() || auth.loading() || favoriteActionItemId() === item.id}
                       class="inline-flex size-8 min-w-8 items-center justify-center rounded-full bg-transparent text-[var(--native-foreground)] transition-colors hover:bg-[color:color-mix(in_oklab,var(--native-foreground)_10%,transparent)] disabled:cursor-not-allowed disabled:opacity-60"
-                      title={auth.user() ? (item.favorited ? language.t("store.detail.unfavoriteTooltip") : language.t("store.detail.favoriteTooltip")) : language.t("store.detail.favoriteSignInTooltip")}
+                      title={
+                        auth.user()
+                          ? item.favorited
+                            ? language.t("store.detail.unfavoriteTooltip")
+                            : language.t("store.detail.favoriteTooltip")
+                          : language.t("store.detail.favoriteSignInTooltip")
+                      }
                       onClick={() => void toggleRowFavorite(item)}
                     >
-                      <LocalIcon name={item.favorited ? "star-filled" : "star"} size="small" style={{ color: favoriteIconColor(item.favorited) }} />
+                      <LocalIcon
+                        name={item.favorited ? "star-filled" : "star"}
+                        size="small"
+                        style={{ color: favoriteIconColor(item.favorited) }}
+                      />
                     </button>
                   </div>
                 )}
