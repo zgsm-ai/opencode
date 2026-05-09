@@ -13,7 +13,8 @@ import { useTableFilters } from "../hooks/use-table-filters"
 import { estimateTaskAncient, queryTaskRows } from "../lib/api"
 import { defaultWideRange, parseQueryRange, rangeQuery, readQueryRange, searchQuery, sameRange } from "../lib/date-range"
 import { applyClientFilters } from "../lib/filter-utils"
-import { formatDuration, formatLocalTime, formatPercent, shortId } from "../lib/formatters"
+import { RatioPill } from "../components/ratio-pill"
+import { formatDuration, formatLocalTime, shortId } from "../lib/formatters"
 import type { DateRangeValue, KanbanColumn, OrgCascadeValue, TaskRow } from "../lib/types"
 
 function parseOrg(search: { org1?: string; org2?: string; org3?: string; org4?: string }) {
@@ -194,7 +195,7 @@ export default function KanbanTaskList() {
     { prop: "diff_lines", label: language.t("kanban.table.codeLines"), minWidth: 90, align: "left", filter: { type: "number", shortcuts: [{ label: "> 0", value: { min: 1 } }, { label: "> 50", value: { min: 50 } }, { label: "> 200", value: { min: 200 } }] } },
     { prop: "task_real_minutes", label: language.t("kanban.table.actualTime"), minWidth: 110, align: "left", display: (row) => formatDuration(row.task_real_minutes_manual ?? row.task_real_minutes, language.t), filter: { type: "number", valueGetter: (row) => (row.task_real_minutes_manual ?? row.task_real_minutes ?? 0) / 480, shortcuts: [{ label: "> 0", value: { min: 0.1 } }, { label: "> 30d", value: { min: 30 } }, { label: "> 50d", value: { min: 50 } }] } },
     { prop: "task_ancient_minutes", label: language.t("kanban.table.traditionalEst"), minWidth: 160, align: "left", display: (row) => formatDuration(row.task_ancient_minutes_manual ?? row.task_ancient_minutes, language.t), filter: { type: "number", valueGetter: (row) => (row.task_ancient_minutes_manual ?? row.task_ancient_minutes ?? 0) / 480, shortcuts: [{ label: "> 0", value: { min: 0.1 } }, { label: "> 30d", value: { min: 30 } }, { label: "> 50d", value: { min: 50 } }] } },
-    { prop: "efficiency_ratio", label: language.t("kanban.table.efficiencyRatio"), minWidth: 100, align: "left", display: (row) => formatPercent(row.efficiency_ratio), filter: { type: "number", shortcuts: [{ label: "> 100%", value: { min: 100 } }, { label: "> 200%", value: { min: 200 } }, { label: "> 300%", value: { min: 300 } }] } },
+    { prop: "efficiency_ratio", label: language.t("kanban.table.efficiencyRatio"), minWidth: 100, align: "left", render: (row) => <RatioPill value={row.efficiency_ratio} />, filter: { type: "number", shortcuts: [{ label: "> 100%", value: { min: 100 } }, { label: "> 200%", value: { min: 200 } }, { label: "> 300%", value: { min: 300 } }] } },
     { prop: "_tokens", label: language.t("kanban.table.tokensConsumed"), minWidth: 120, align: "left", display: (row) => ((row.upstream_tokens ?? 0) + (row.downstream_tokens ?? 0)) > 0 ? ((row.upstream_tokens ?? 0) + (row.downstream_tokens ?? 0)).toLocaleString() : "-", filter: { type: "number", valueGetter: (row) => (row.upstream_tokens ?? 0) + (row.downstream_tokens ?? 0), shortcuts: [{ label: "> 0", value: { min: 1 } }, { label: "> 10k", value: { min: 10000 } }, { label: "> 100k", value: { min: 100000 } }] } },
     { prop: "cost", label: language.t("kanban.table.cost"), minWidth: 100, align: "left", display: (row) => fmtCost(row.cost), filter: { type: "number", shortcuts: [{ label: "> 0", value: { min: 0.001 } }, { label: "> 0.01", value: { min: 0.01 } }, { label: "> 0.1", value: { min: 0.1 } }] } }
   ])

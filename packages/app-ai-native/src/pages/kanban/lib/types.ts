@@ -536,6 +536,7 @@ export type RepoCommitRow = EfficiencyRow & {
   cost?: number | null
   upstream_tokens?: number
   downstream_tokens?: number
+  efficiency_ratio: number | null
 }
 
 export type RepoTaskRow = EfficiencyRow & {

@@ -17,7 +17,8 @@ import {
   updateTaskSilicaInProject,
   getGlobalConfig,
 } from "../lib/api"
-import { formatDuration, formatLocalTime, formatPercent, shortId } from "../lib/formatters"
+import { RatioPill } from "../components/ratio-pill"
+import { formatDuration, formatLocalTime, shortId } from "../lib/formatters"
 import type {
   ProjectDetailResult,
   ProjectManualPayload,
@@ -404,7 +405,7 @@ export default function KanbanProjectDetail() {
                                   <TableCell class="text-left tabular-nums">{row.commit_diff_lines.toLocaleString()}</TableCell>
                                   <TableCell class="text-left">{formatDuration(row.task_ancient_minutes, language.t)}</TableCell>
                                   <TableCell class="text-left">{formatDuration(row.task_real_minutes, language.t)}</TableCell>
-                                  <TableCell class="text-left">{row.task_efficiency_ratio > 0 ? formatPercent(row.task_efficiency_ratio) : "-"}</TableCell>
+                                  <TableCell class="text-left"><RatioPill value={row.task_efficiency_ratio} /></TableCell>
                                   <TableCell class="text-left tabular-nums">{row.cost > 0 ? fmtCost(row.cost) : "-"}</TableCell>
                                 </TableRow>
                               )}

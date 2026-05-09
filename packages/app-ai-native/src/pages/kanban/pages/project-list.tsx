@@ -13,6 +13,7 @@ import { FilterTable } from "../components/table/filter-table"
 import { useTableFilters } from "../hooks/use-table-filters"
 import { createProjectOptionV2, deleteProject, getProjects } from "../lib/api"
 import { applyClientFilters } from "../lib/filter-utils"
+import { RatioPill } from "../components/ratio-pill"
 import { formatDuration, formatLocalTime, formatPercent } from "../lib/formatters"
 import type { KanbanColumn, ProjectRow } from "../lib/types"
 
@@ -270,26 +271,7 @@ export default function KanbanProjectList() {
       display: (row) => formatDuration(row.project_real_process_minutes_manual ?? row.project_real_process_minutes, language.t),
       filter: { type: "number", valueGetter: (row) => ((row.project_real_process_minutes_manual ?? row.project_real_process_minutes) ?? 0) / 480, shortcuts: [{ label: "> 0", value: { min: 0.1 } }, { label: "> 30d", value: { min: 30 } }, { label: "> 50d", value: { min: 50 } }] },
     },
-    {
-      prop: "efficiency_ratio",
-      label: language.t("kanban.table.efficiencyRatio"),
-      minWidth: 110,
-      align: "left",
-      render: (row) =>
-        row.efficiency_ratio != null
-          ? (
-            <span class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-              row.efficiency_ratio >= 300
-                ? "bg-[color:color-mix(in_oklab,var(--native-success)_16%,transparent)] text-[var(--native-success)]"
-                : row.efficiency_ratio >= 150
-                  ? "bg-[color:color-mix(in_oklab,var(--native-primary)_16%,transparent)] text-[var(--native-primary)]"
-                  : "bg-[color:color-mix(in_oklab,var(--native-dim)_16%,transparent)] text-[var(--native-muted)]"
-            }`}>
-              {formatPercent(row.efficiency_ratio)}
-            </span>
-          )
-          : <span class="text-[var(--native-muted)]">-</span>,
-    },
+    { prop: "efficiency_ratio", label: language.t("kanban.table.efficiencyRatio"), minWidth: 110, align: "left", render: (row) => <RatioPill value={row.efficiency_ratio} /> },
     {
       prop: "_actions",
       label: language.t("kanban.table.action"),
