@@ -149,6 +149,7 @@ export interface MessagePartProps {
   message: MessageType
   hideDetails?: boolean
   defaultOpen?: boolean
+  copy?: boolean
   showAssistantCopyPartID?: string | null
   turnDurationMs?: number
 }
@@ -557,8 +558,15 @@ export function AssistantParts(props: {
 
   return (
     <Index each={grouped()}>
-      {(entryAccessor) => {
+      {(entryAccessor, index) => {
         const entryType = createMemo(() => entryAccessor().type)
+        const copy = createMemo(() => {
+          const entry = entryAccessor()
+          if (entry.type !== "part") return true
+          const item = part().get(entry.ref.messageID)?.get(entry.ref.partID)
+          if (item?.type !== "text") return true
+          return grouped()[index + 1]?.type !== "context"
+        })
 
         return (
           <Switch>
@@ -606,6 +614,7 @@ export function AssistantParts(props: {
                         showAssistantCopyPartID={props.showAssistantCopyPartID}
                         turnDurationMs={props.turnDurationMs}
                         defaultOpen={partDefaultOpen(item()!, props.shellToolDefaultOpen, props.editToolDefaultOpen)}
+                        copy={copy()}
                       />
                     </Show>
                   </Show>
@@ -769,8 +778,15 @@ export function AssistantMessageDisplay(props: {
 
   return (
     <Index each={grouped()}>
-      {(entryAccessor) => {
+      {(entryAccessor, index) => {
         const entryType = createMemo(() => entryAccessor().type)
+        const copy = createMemo(() => {
+          const entry = entryAccessor()
+          if (entry.type !== "part") return true
+          const item = part().get(entry.ref.partID)
+          if (item?.type !== "text") return true
+          return grouped()[index + 1]?.type !== "context"
+        })
 
         return (
           <Switch>
@@ -809,6 +825,7 @@ export function AssistantMessageDisplay(props: {
                       part={item()!}
                       message={props.message}
                       showAssistantCopyPartID={props.showAssistantCopyPartID}
+                      copy={copy()}
                     />
                   </Show>
                 )
@@ -1163,6 +1180,7 @@ export function Part(props: MessagePartProps) {
         defaultOpen={props.defaultOpen}
         showAssistantCopyPartID={props.showAssistantCopyPartID}
         turnDurationMs={props.turnDurationMs}
+        copy={props.copy}
       />
     </Show>
   )
@@ -1402,6 +1420,7 @@ PART_MAPPING["text"] = function TextPartDisplay(props) {
     return last?.id === part().id
   })
   const showCopy = createMemo(() => {
+    if (props.copy === false) return false
     if (props.message.role !== "assistant") return isLastTextPart()
     if (props.showAssistantCopyPartID === null) return false
     if (typeof props.showAssistantCopyPartID === "string") return props.showAssistantCopyPartID === part().id

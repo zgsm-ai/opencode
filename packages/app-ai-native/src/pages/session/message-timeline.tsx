@@ -640,7 +640,7 @@ export function MessageTimeline(props: {
 
             <div
               role="log"
-              class="flex flex-col gap-12 items-start justify-start pt-4 pb-16 transition-[margin]"
+              class="flex flex-col gap-3 items-start justify-start pt-4 pb-16 transition-[margin]"
               classList={{
                 "w-full": true,
                 "md:max-w-200 md:mx-auto 2xl:max-w-[1000px]": props.centered,
