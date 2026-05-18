@@ -656,6 +656,18 @@
     flex-shrink: 0;
   }
 
+  [data-slot="context-tool-group-label"] {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0;
+  }
+
+  [data-slot="context-tool-group-compact"] {
+    display: inline;
+    white-space: nowrap;
+    margin-left: 0.3em;
+  }
+
   [data-slot="collapsible-arrow"] {
     color: var(--icon-weaker);
     cursor: pointer;

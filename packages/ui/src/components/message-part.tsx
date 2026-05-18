@@ -51,7 +51,6 @@ import { Tooltip } from "./tooltip"
 import { IconButton } from "./icon-button"
 import { TextShimmer } from "./text-shimmer"
 import { AnimatedCountList } from "./tool-count-summary"
-import { ToolStatusTitle } from "./tool-status-title"
 import { patchFiles } from "./apply-patch-file"
 import { animate } from "motion"
 import { useLocation } from "@solidjs/router"
@@ -850,6 +849,10 @@ function ContextToolGroup(props: { parts: ToolPart[]; busy?: boolean }) {
       !!props.busy || props.parts.some((part) => part.state.status === "pending" || part.state.status === "running"),
   )
   const summary = createMemo(() => contextToolSummary(props.parts))
+  const hasSummary = createMemo(() => {
+    const s = summary()
+    return s.read > 0 || s.search > 0 || s.list > 0
+  })
 
   return (
     <Collapsible open={open()} onOpenChange={setOpen} variant="ghost" class="tool-collapsible">
@@ -857,46 +860,45 @@ function ContextToolGroup(props: { parts: ToolPart[]; busy?: boolean }) {
         <div data-component="context-tool-group-trigger">
           <span
             data-slot="context-tool-group-title"
-            class="min-w-0 flex items-center gap-2 text-14-medium text-text-strong"
+            class="min-w-0 flex items-center gap-1 text-14-medium text-text-base"
           >
             <span data-slot="context-tool-group-icon">
               <Icon name="magnifying-glass" size="small" />
             </span>
             <span data-slot="context-tool-group-label" class="shrink-0">
-              <ToolStatusTitle
+              <TextShimmer
+                text={pending() ? i18n.t("ui.sessionTurn.status.gatheringContext") : i18n.t("ui.sessionTurn.status.gatheredContext")}
                 active={pending()}
-                activeText={i18n.t("ui.sessionTurn.status.gatheringContext")}
-                doneText={i18n.t("ui.sessionTurn.status.gatheredContext")}
-                split={false}
               />
-            </span>
-            <span
-              data-slot="context-tool-group-summary"
-              class="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap font-normal text-text-base"
-            >
-              <AnimatedCountList
-                items={[
-                  {
-                    key: "read",
-                    count: summary().read,
-                    one: i18n.t("ui.messagePart.context.read.one"),
-                    other: i18n.t("ui.messagePart.context.read.other"),
-                  },
-                  {
-                    key: "search",
-                    count: summary().search,
-                    one: i18n.t("ui.messagePart.context.search.one"),
-                    other: i18n.t("ui.messagePart.context.search.other"),
-                  },
-                  {
-                    key: "list",
-                    count: summary().list,
-                    one: i18n.t("ui.messagePart.context.list.one"),
-                    other: i18n.t("ui.messagePart.context.list.other"),
-                  },
-                ]}
-                fallback=""
-              />
+              <Show when={hasSummary()}>
+                <span data-slot="context-tool-group-compact" class="font-normal text-text-weak">
+                  <span data-slot="context-tool-group-bracket">(</span>
+                  <AnimatedCountList
+                    items={[
+                      {
+                        key: "read",
+                        count: summary().read,
+                        one: i18n.t("ui.messagePart.context.read.one"),
+                        other: i18n.t("ui.messagePart.context.read.other"),
+                      },
+                      {
+                        key: "search",
+                        count: summary().search,
+                        one: i18n.t("ui.messagePart.context.search.one"),
+                        other: i18n.t("ui.messagePart.context.search.other"),
+                      },
+                      {
+                        key: "list",
+                        count: summary().list,
+                        one: i18n.t("ui.messagePart.context.list.one"),
+                        other: i18n.t("ui.messagePart.context.list.other"),
+                      },
+                    ]}
+                    fallback=""
+                  />
+                  <span data-slot="context-tool-group-bracket">)</span>
+                </span>
+              </Show>
             </span>
           </span>
           <Collapsible.Arrow />
