@@ -483,7 +483,6 @@
   [data-slot="message-part-title-text"] {
     flex-shrink: 0;
     text-transform: capitalize;
-    color: var(--text-strong);
   }
 
   [data-slot="message-part-title-filename"] {
@@ -646,6 +645,15 @@
   [data-slot="context-tool-group-title"] {
     flex-shrink: 1;
     min-width: 0;
+  }
+
+  [data-slot="context-tool-group-icon"] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
   }
 
   [data-slot="collapsible-arrow"] {

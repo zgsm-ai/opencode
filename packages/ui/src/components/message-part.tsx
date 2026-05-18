@@ -651,6 +651,7 @@ function contextToolTrigger(part: ToolPart, i18n: ReturnType<typeof useI18n>) {
   const include = typeof input.include === "string" ? input.include : undefined
   const offset = typeof input.offset === "number" ? input.offset : undefined
   const limit = typeof input.limit === "number" ? input.limit : undefined
+  const info = getToolInfo(part.tool.toLowerCase(), input)
 
   switch (part.tool.toLowerCase()) {
     case "read": {
@@ -658,6 +659,7 @@ function contextToolTrigger(part: ToolPart, i18n: ReturnType<typeof useI18n>) {
       if (offset !== undefined) args.push("offset=" + offset)
       if (limit !== undefined) args.push("limit=" + limit)
       return {
+        icon: info.icon,
         title: i18n.t("ui.tool.read"),
         subtitle: filePath ? getFilename(filePath) : "",
         args,
@@ -665,11 +667,13 @@ function contextToolTrigger(part: ToolPart, i18n: ReturnType<typeof useI18n>) {
     }
     case "list":
       return {
+        icon: info.icon,
         title: i18n.t("ui.tool.list"),
         subtitle: getDirectory(path),
       }
     case "glob":
       return {
+        icon: info.icon,
         title: i18n.t("ui.tool.glob"),
         subtitle: getDirectory(path),
         args: pattern ? ["pattern=" + pattern] : [],
@@ -679,19 +683,19 @@ function contextToolTrigger(part: ToolPart, i18n: ReturnType<typeof useI18n>) {
       if (pattern) args.push("pattern=" + pattern)
       if (include) args.push("include=" + include)
       return {
+        icon: info.icon,
         title: i18n.t("ui.tool.grep"),
         subtitle: getDirectory(path),
         args,
       }
     }
-    default: {
-      const info = getToolInfo(part.tool.toLowerCase(), input)
+    default:
       return {
+        icon: info.icon,
         title: info.title,
         subtitle: info.subtitle || contextToolDetail(part),
         args: [],
       }
-    }
   }
 }
 
@@ -855,6 +859,9 @@ function ContextToolGroup(props: { parts: ToolPart[]; busy?: boolean }) {
             data-slot="context-tool-group-title"
             class="min-w-0 flex items-center gap-2 text-14-medium text-text-strong"
           >
+            <span data-slot="context-tool-group-icon">
+              <Icon name="magnifying-glass" size="small" />
+            </span>
             <span data-slot="context-tool-group-label" class="shrink-0">
               <ToolStatusTitle
                 active={pending()}
@@ -907,6 +914,9 @@ function ContextToolGroup(props: { parts: ToolPart[]; busy?: boolean }) {
                 <div data-slot="context-tool-group-item">
                   <div data-component="tool-trigger">
                     <div data-slot="basic-tool-tool-trigger-content">
+                      <span data-slot="basic-tool-tool-indicator">
+                        <Icon name={trigger().icon} size="small" />
+                      </span>
                       <div data-slot="basic-tool-tool-info">
                         <div data-slot="basic-tool-tool-info-structured">
                           <div data-slot="basic-tool-tool-info-main">
