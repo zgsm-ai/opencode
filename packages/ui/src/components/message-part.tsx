@@ -291,13 +291,13 @@ export function getToolInfo(tool: string, input: any = {}): ToolInfo {
       }
     case "webfetch":
       return {
-        icon: "window-cursor",
+        icon: "download",
         title: i18n.t("ui.tool.webfetch"),
         subtitle: input.url,
       }
     case "websearch":
       return {
-        icon: "window-cursor",
+        icon: "globe",
         title: i18n.t("ui.tool.websearch"),
         subtitle: input.query,
       }
@@ -338,13 +338,13 @@ export function getToolInfo(tool: string, input: any = {}): ToolInfo {
       }
     case "write":
       return {
-        icon: "code-lines",
+        icon: "file-plus",
         title: i18n.t("ui.messagePart.title.write"),
         subtitle: input.filePath ? getFilename(input.filePath) : undefined,
       }
     case "apply_patch":
       return {
-        icon: "code-lines",
+        icon: "square-pen",
         title: i18n.t("ui.tool.patch"),
         subtitle: input.files?.length
           ? `${input.files.length} ${i18n.t(input.files.length > 1 ? "ui.common.file.other" : "ui.common.file.one")}`
@@ -1653,7 +1653,7 @@ ToolRegistry.register({
       <BasicTool
         {...props}
         hideDetails
-        icon="window-cursor"
+        icon="download"
         trigger={
           <div data-slot="basic-tool-tool-info-structured">
             <div data-slot="basic-tool-tool-info-main">
@@ -1698,7 +1698,7 @@ ToolRegistry.register({
     return (
       <BasicTool
         {...props}
-        icon="window-cursor"
+        icon="globe"
         trigger={{
           title: i18n.t("ui.tool.websearch"),
           subtitle: query(),
@@ -1949,7 +1949,7 @@ ToolRegistry.register({
       <div data-component="write-tool">
         <BasicTool
           {...props}
-          icon="code-lines"
+          icon="file-plus"
           defer
           trigger={
             <div data-component="write-trigger">
@@ -2123,7 +2123,7 @@ ToolRegistry.register({
         <div data-component="apply-patch-tool">
           <BasicTool
             {...props}
-            icon="code-lines"
+            icon="square-pen"
             defer
             trigger={
               <div data-component="edit-trigger">
