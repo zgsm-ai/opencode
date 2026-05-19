@@ -461,7 +461,7 @@
     font-weight: var(--font-weight-medium);
     line-height: var(--line-height-large);
     letter-spacing: var(--letter-spacing-normal);
-    color: var(--text-base);
+    color: var(--text-weak);
   }
 
   [data-slot="message-part-title-spinner"] {
@@ -492,6 +492,7 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     font-weight: var(--font-weight-regular);
+    color: var(--text-weaker);
   }
 
   [data-slot="message-part-path"] {
@@ -502,7 +503,7 @@
   }
 
   [data-slot="message-part-directory"] {
-    color: var(--text-weak);
+    color: var(--text-weaker);
     text-overflow: ellipsis;
     overflow: hidden;
     white-space: nowrap;

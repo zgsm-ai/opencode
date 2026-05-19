@@ -40,7 +40,7 @@ import { Card } from "./card"
 import { Collapsible } from "./collapsible"
 import { FileIcon } from "./file-icon"
 import { Icon } from "./icon"
-import { ToolErrorCard } from "./tool-error-card"
+
 import { Checkbox } from "./checkbox"
 import { DiffChanges } from "./diff-changes"
 import { Markdown } from "./markdown"
@@ -319,6 +319,11 @@ export function getToolInfo(tool: string, input: any = {}): ToolInfo {
       }
     }
     case "bash":
+      return {
+        icon: "console",
+        title: i18n.t("ui.tool.bash"),
+        subtitle: input.description,
+      }
     case "shell":
       return {
         icon: "console",
@@ -498,7 +503,8 @@ function index<T extends { id: string }>(items: readonly T[]) {
 function renderable(part: PartType, showReasoningSummaries = true) {
   if (part.type === "tool") {
     if (HIDDEN_TOOLS.has(part.tool.toLowerCase())) return false
-    if (part.tool.toLowerCase() === "question") return part.state.status !== "pending" && part.state.status !== "running"
+    if (part.tool.toLowerCase() === "question")
+      return part.state.status !== "pending" && part.state.status !== "running"
     return true
   }
   if (part.type === "text") return !!part.text?.trim()
@@ -860,14 +866,18 @@ function ContextToolGroup(props: { parts: ToolPart[]; busy?: boolean }) {
         <div data-component="context-tool-group-trigger">
           <span
             data-slot="context-tool-group-title"
-            class="min-w-0 flex items-center gap-1 text-14-medium text-text-base"
+            class="min-w-0 flex items-center gap-2 text-14-medium text-text-weak"
           >
             <span data-slot="context-tool-group-icon">
               <Icon name="magnifying-glass" size="small" />
             </span>
             <span data-slot="context-tool-group-label" class="shrink-0">
               <TextShimmer
-                text={pending() ? i18n.t("ui.sessionTurn.status.gatheringContext") : i18n.t("ui.sessionTurn.status.gatheredContext")}
+                text={
+                  pending()
+                    ? i18n.t("ui.sessionTurn.status.gatheringContext")
+                    : i18n.t("ui.sessionTurn.status.gatheredContext")
+                }
                 active={pending()}
               />
               <Show when={hasSummary()}>
@@ -1322,12 +1332,15 @@ PART_MAPPING["tool"] = function ToolPartDisplay(props) {
                 )
               }
               return (
-                <ToolErrorCard
+                <Dynamic
+                  component={render()}
+                  input={input()}
                   tool={tool()}
-                  error={error()}
+                  metadata={partMetadata()}
+                  output={error()}
+                  status={part().state.status}
+                  hideDetails={props.hideDetails}
                   defaultOpen={props.defaultOpen}
-                  subtitle={taskSubtitle()}
-                  href={taskHref()}
                 />
               )
             }}
@@ -1808,7 +1821,7 @@ ToolRegistry.register({
           <div data-slot="basic-tool-tool-info-structured">
             <div data-slot="basic-tool-tool-info-main">
               <span data-slot="basic-tool-tool-title">
-                <TextShimmer text={i18n.t("ui.tool.shell")} active={pending()} />
+                <TextShimmer text={i18n.t("ui.tool.bash")} active={pending()} />
               </span>
               <Show when={!pending() && props.input.description}>
                 <ShellSubmessage text={props.input.description} animate={sawPending} />

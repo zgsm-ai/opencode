@@ -85,14 +85,14 @@
     font-weight: var(--font-weight-medium);
     line-height: var(--line-height-large);
     letter-spacing: var(--letter-spacing-normal);
-    color: var(--text-strong);
+    color: var(--text-weak);
 
     &.capitalize {
       text-transform: capitalize;
     }
 
     &.agent-title {
-      color: var(--text-strong);
+      color: var(--text-weak);
       font-weight: var(--font-weight-medium);
     }
   }
@@ -110,7 +110,7 @@
     font-weight: var(--font-weight-regular);
     line-height: var(--line-height-large);
     letter-spacing: var(--letter-spacing-normal);
-    color: var(--text-base);
+    color: var(--text-weaker);
 
     &.clickable {
       cursor: pointer;
@@ -156,7 +156,7 @@
     font-weight: var(--font-weight-regular);
     line-height: var(--line-height-large);
     letter-spacing: var(--letter-spacing-normal);
-    color: var(--text-base);
+    color: var(--text-weaker);
   }
 
   [data-slot="basic-tool-tool-action"] {

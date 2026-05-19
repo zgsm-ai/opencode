@@ -273,6 +273,11 @@ export function GenericTool(props: {
           </For>
         </div>
       </Show>
+      <Show when={props.output}>
+        <div data-component="tool-output" data-scrollable>
+          <pre data-slot="generic-tool-output-value">{props.output}</pre>
+        </div>
+      </Show>
     </BasicTool>
   )
 }
