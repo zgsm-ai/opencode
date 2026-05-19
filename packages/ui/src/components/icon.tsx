@@ -40,7 +40,7 @@ const icons = {
   "file-tree": `<path d="M18 18V5H9.5L7.5 2H2L2 18H5M18 18H5M18 18V8.5H5V18" stroke="currentColor" stroke-linecap="square"/>`,
   "file-tree-active": `<path d="M2 2L2 18H5L6.5 8.5H18V5H9.5L7.5 2H2Z" fill="currentColor" fill-opacity="0.1"/>
 <path d="M5 18H18L19.5 8.5H18M5 18H2L2 2H7.5L9.5 5H18V8.5M5 18L6.5 8.5H18" stroke="currentColor" stroke-linecap="square"/>`,
-  "magnifying-glass": `<path d="M13 13L10.6418 10.6418M11.9552 7.47761C11.9552 9.95053 9.95053 11.9552 7.47761 11.9552C5.0047 11.9552 3 9.95053 3 7.47761C3 5.0047 5.0047 3 7.47761 3C9.95053 3 11.9552 5.0047 11.9552 7.47761Z" stroke="currentColor" stroke-linecap="square" vector-effect="non-scaling-stroke"/>`,
+  "magnifying-glass": `<g transform="scale(0.833333)"><path d="m21 21-4.34-4.34" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><circle cx="11" cy="11" r="8" stroke="currentColor"/></g>`,
   "plus-small": `<path d="M9.99984 5.41699V10.0003M9.99984 10.0003V14.5837M9.99984 10.0003H5.4165M9.99984 10.0003H14.5832" stroke="currentColor" stroke-linecap="square"/>`,
   plus: `<path d="M9.9987 2.20703V9.9987M9.9987 9.9987V17.7904M9.9987 9.9987H2.20703M9.9987 9.9987H17.7904" stroke="currentColor" stroke-linecap="square"/>`,
   "new-session": `<path d="M12 2H2V18H18V8M6 11.3818V14H8.61818L18 4.61818L15.3818 2L6 11.3818Z" stroke="currentColor"/>`,
@@ -112,7 +112,12 @@ const icons = {
     <path d="M8.73047 21.499C10.0226 19.276 12.9819 19.0139 14.6673 20.7126C15.0441 21.0924 15.2325 21.2824 15.3996 21.3051C15.5667 21.3278 16.6152 20.7265 16.9874 20.5131C17.3668 20.2956 18.4187 19.6922 18.4848 19.5344C18.5509 19.3765 18.4817 19.1074 18.3433 18.5692C17.8399 16.6121 19.0606 14.5524 21.011 14.0212C21.5329 13.879 21.7938 13.8079 21.8969 13.672C22 13.5361 22 12.3409 22 11.9036C22 11.4664 22 10.2711 21.8969 10.1352C21.7938 9.9993 21.5329 9.92819 21.011 9.78607C19.0603 9.25481 17.8386 7.19517 18.3418 5.23798C18.4801 4.69968 18.5493 4.43053 18.4832 4.27271C18.4171 4.1149 17.3652 3.51159 16.9859 3.29406C16.6136 3.0806 15.5651 2.47932 15.3981 2.50204C15.231 2.52478 15.0426 2.71467 14.6657 3.09447C13.2064 4.56489 10.792 4.56495 9.33276 3.09456C8.95585 2.71477 8.76739 2.52487 8.60035 2.50215C8.4333 2.47942 7.38483 3.08071 7.0126 3.29418C6.63327 3.51172 5.58126 4.11501 5.51516 4.27285C5.44907 4.43069 5.51829 4.6998 5.65672 5.23805C6.16008 7.19518 4.9394 9.25477 2.98902 9.78605C2.46711 9.92819 2.20615 9.9993 2.10308 10.1353C2 10.2711 2 11.4664 2 11.9036C2 12.3409 2 13.5361 2.10308 13.6721C2.20617 13.808 2.467 13.879 2.98866 14.0211C2.99478 14.0228 3.00089 14.0245 3.007 14.0261" />
     <path d="M2.48891 18.1828C3.56891 17.1033 7.24091 13.4688 7.60091 13.0489C7.98148 12.6051 7.67291 12.0054 7.85651 10.1461C7.94535 9.24652 8.13895 8.57254 8.69291 8.071C9.35291 7.44726 9.89291 7.44726 11.7529 7.40527C13.3729 7.44726 13.5649 7.26733 13.7329 7.68716C13.8529 7.98704 13.4929 8.16696 13.0609 8.64677C12.1009 9.60637 11.5369 10.0862 11.4829 10.3861C11.0929 11.7055 12.6289 12.4852 13.4689 11.6455C13.7866 11.328 15.2569 9.84627 15.4009 9.72632C15.5089 9.63036 15.7674 9.635 15.8929 9.78629C16.0009 9.89235 16.0129 9.90624 16.0009 10.386C15.9898 10.8302 15.9948 11.4678 15.9961 12.1253C15.9979 12.9773 15.9529 13.9246 15.5929 14.4044C14.8729 15.4839 13.6729 15.5439 12.5929 15.5919C11.5729 15.6519 10.7329 15.5439 10.4689 15.7358C10.2529 15.8438 9.11291 17.0433 7.73291 18.4227L5.27291 20.8817C3.23291 22.5011 0.988911 19.9821 2.48891 18.1828Z" />
   </g>`,
-  bell: `<path d="M10.8333 3.75V2.5H9.16667V3.75C6.09167 4.3 4.16667 6.9 4.16667 10V14.1667L2.5 15.8333V16.6667H17.5V15.8333L15.8333 14.1667V10C15.8333 6.9 13.9083 4.3 10.8333 3.75Z" fill="currentColor"/><path d="M10 17.9167C10.9167 17.9167 11.6667 17.1667 11.6667 16.25H8.33333C8.33333 17.1667 9.08333 17.9167 10 17.9167Z" fill="currentColor"/>`
+  bell: `<path d="M10.8333 3.75V2.5H9.16667V3.75C6.09167 4.3 4.16667 6.9 4.16667 10V14.1667L2.5 15.8333V16.6667H17.5V15.8333L15.8333 14.1667V10C15.8333 6.9 13.9083 4.3 10.8333 3.75Z" fill="currentColor"/><path d="M10 17.9167C10.9167 17.9167 11.6667 17.1667 11.6667 16.25H8.33333C8.33333 17.1667 9.08333 17.9167 10 17.9167Z" fill="currentColor"/>`,
+  "file-text": `<g transform="scale(0.833333)"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M14 2v5a1 1 0 0 0 1 1h5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 9H8" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 13H8" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 17H8" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></g>`,
+  "square-pen": `<g transform="scale(0.833333)"><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g>`,
+  "file-plus": `<g transform="scale(0.833333)"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M14 2v5a1 1 0 0 0 1 1h5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 15h6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 18v-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g>`,
+  regex: `<g transform="scale(0.833333)"><path d="M17 3v10" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="m12.67 5.5 8.66 5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="m12.67 10.5 8.66-5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 17a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2v-2z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></g>`,
+  "file-search-corner": `<g transform="scale(0.833333)"><path d="M11.1 22H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.706.706l3.589 3.588A2.4 2.4 0 0 1 20 8v3.25" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M14 2v5a1 1 0 0 0 1 1h5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="m21 22-2.88-2.88" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><circle cx="16" cy="17" r="3" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></g>`
 }
 
 export interface IconProps extends ComponentProps<"svg"> {
@@ -122,7 +127,7 @@ export interface IconProps extends ComponentProps<"svg"> {
 
 export function Icon(props: IconProps) {
   const [local, others] = splitProps(props, ["name", "size", "class", "classList"])
-  const viewBox = () => (local.name === "magnifying-glass" ? "0 0 16 16" : "0 0 20 20")
+  const viewBox = () => "0 0 20 20"
   return (
     <div data-component="icon" data-size={local.size || "normal"}>
       <svg
@@ -132,7 +137,7 @@ export function Icon(props: IconProps) {
           [local.class ?? ""]: !!local.class,
         }}
         fill="none"
-        viewBox={viewBox()}
+        viewBox="0 0 20 20"
         innerHTML={icons[local.name as keyof typeof icons]}
         aria-hidden="true"
         {...others}

@@ -267,7 +267,7 @@ export function getToolInfo(tool: string, input: any = {}): ToolInfo {
   switch (tool.toLowerCase()) {
     case "read":
       return {
-        icon: "glasses",
+        icon: "file-text",
         title: i18n.t("ui.tool.read"),
         subtitle: input.filePath ? getFilename(input.filePath) : undefined,
       }
@@ -279,13 +279,13 @@ export function getToolInfo(tool: string, input: any = {}): ToolInfo {
       }
     case "glob":
       return {
-        icon: "magnifying-glass-menu",
+        icon: "file-search-corner",
         title: i18n.t("ui.tool.glob"),
         subtitle: input.pattern,
       }
     case "grep":
       return {
-        icon: "magnifying-glass-menu",
+        icon: "regex",
         title: i18n.t("ui.tool.grep"),
         subtitle: input.pattern,
       }
@@ -332,7 +332,7 @@ export function getToolInfo(tool: string, input: any = {}): ToolInfo {
       }
     case "edit":
       return {
-        icon: "code-lines",
+        icon: "square-pen",
         title: i18n.t("ui.messagePart.title.edit"),
         subtitle: input.filePath ? getFilename(input.filePath) : undefined,
       }
@@ -1546,7 +1546,7 @@ ToolRegistry.register({
       <>
         <BasicTool
           {...props}
-          icon="glasses"
+          icon="file-text"
           trigger={{
             title: i18n.t("ui.tool.read"),
             subtitle: props.input.filePath ? getFilename(props.input.filePath) : "",
@@ -1595,7 +1595,7 @@ ToolRegistry.register({
     return (
       <BasicTool
         {...props}
-        icon="magnifying-glass-menu"
+        icon="file-search-corner"
         trigger={{
           title: i18n.t("ui.tool.glob"),
           subtitle: getDirectory(props.input.path || "/"),
@@ -1622,7 +1622,7 @@ ToolRegistry.register({
     return (
       <BasicTool
         {...props}
-        icon="magnifying-glass-menu"
+        icon="regex"
         trigger={{
           title: i18n.t("ui.tool.grep"),
           subtitle: getDirectory(props.input.path || "/"),
@@ -1877,7 +1877,7 @@ ToolRegistry.register({
       <div data-component="edit-tool">
         <BasicTool
           {...props}
-          icon="code-lines"
+          icon="square-pen"
           defer
           trigger={
             <div data-component="edit-trigger">
