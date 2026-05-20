@@ -339,7 +339,7 @@ export default function DashboardCapabilities() {
 
           <Show when={state.filtersShown || state.items.length > 0 || state.totalItems > 0}>
             <div class={sx.filterBar}>
-              <For each={["all", "skill", "subagent", "command", "mcp"]}>
+              <For each={["all", "skill", "subagent", "command", "mcp", "plugin"]}>
                 {(type) => (
                   <Button
                     variant={state.itemTypeFilter === type ? "default" : "outline"}

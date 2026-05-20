@@ -27,7 +27,7 @@ import { getInstallCommand } from "@/pages/store/components/item-detail-content"
 import { TagInput } from "@/pages/console/components/tag-input"
 import { ConfirmDialog } from "@/pages/store/components/confirm-dialog"
 
-type ItemType = "skill" | "subagent" | "command" | "mcp"
+type ItemType = "skill" | "subagent" | "command" | "mcp" | "plugin"
 
 type NamespaceOption = {
   value: string
@@ -73,6 +73,7 @@ const TYPE_DROPDOWN_LABELS_ZH: Record<ItemType, string> = {
   subagent: "子智能体（Subagent）",
   command: "命令（Command）",
   mcp: "MCP 服务器（MCP Server）",
+  plugin: "插件（Plugin）",
 }
 
 const TEXT_FILE_EXTENSIONS = new Set([
@@ -1932,7 +1933,7 @@ export default function CapabilityEditorPage() {
                           class="h-8 min-w-0 w-full appearance-none rounded-[6px] bg-background-base pl-2.5 pr-9 text-xs text-[var(--native-foreground)] disabled:cursor-not-allowed disabled:opacity-60"
                           style={{ border: `1px solid color-mix(in srgb, ${accent()} 18%, var(--native-border))` }}
                         >
-                          <For each={["skill", "subagent", "command", "mcp"] as const}>
+                          <For each={["skill", "subagent", "command", "mcp", "plugin"] as const}>
                             {(type) => <option value={type}>{typeDropdownLabel(type)}</option>}
                           </For>
                         </select>

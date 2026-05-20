@@ -37,7 +37,7 @@ export function CreateCapabilityDialog(props: CreateCapabilityDialogProps) {
   const language = useLanguage()
   const itemFilterOptions = useItemFilterOptions()
   const [store, setStore] = createStore({
-    itemType: "skill" as "skill" | "subagent" | "command" | "mcp",
+    itemType: "skill" as "skill" | "subagent" | "command" | "mcp" | "plugin",
     namespace: "public",
     name: "",
     slug: "",
@@ -108,7 +108,7 @@ export function CreateCapabilityDialog(props: CreateCapabilityDialogProps) {
     setStore("category", options[0]!.slug)
   })
 
-  function setItemType(value: "skill" | "subagent" | "command" | "mcp") {
+  function setItemType(value: "skill" | "subagent" | "command" | "mcp" | "plugin") {
     setStore("itemType", value)
     setStore("content", TYPE_CONTENT_PLACEHOLDER[value] ?? "")
     if (!store.slugManual) setStore("slug", slugify(store.name))
@@ -206,9 +206,9 @@ export function CreateCapabilityDialog(props: CreateCapabilityDialogProps) {
             <select
               class="modal-input"
               value={store.itemType}
-              onInput={(e) => setItemType(e.currentTarget.value as "skill" | "subagent" | "command" | "mcp")}
+              onInput={(e) => setItemType(e.currentTarget.value as "skill" | "subagent" | "command" | "mcp" | "plugin")}
             >
-              {(["skill", "subagent", "command", "mcp"] as const).map((type) => (
+              {(["skill", "subagent", "command", "mcp", "plugin"] as const).map((type) => (
                 <option value={type}>{language.t(typeKey(type))}</option>
               ))}
             </select>

@@ -29,6 +29,7 @@ const STORE_TYPES = [
   { value: "subagent", labelKey: "store.sidebar.nav.subagents", icon: "brain" as const, color: "#1670ff", bg: "#DBEAFE" },
   { value: "command", labelKey: "store.sidebar.nav.commands", icon: "console" as const, color: "#09b179", bg: "#D1FAE5" },
   { value: "mcp", labelKey: "store.sidebar.nav.mcpServers", icon: "mcp" as const, color: "#7338f9", bg: "#EDE9FE" },
+  { value: "plugin", labelKey: "store.sidebar.nav.plugins", icon: "plugin" as const, color: "#e11d48", bg: "#FFE4E6" },
 ] as const
 
 type TabKey = "created" | "favorited"

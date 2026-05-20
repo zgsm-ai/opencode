@@ -7,6 +7,7 @@ export const TYPE_PREFIX: Record<string, string> = {
   subagent: "agent-",
   command: "cmd-",
   mcp: "mcp-",
+  plugin: "plugin-",
 }
 
 export const TYPE_COLORS: Record<string, string> = {
@@ -14,6 +15,7 @@ export const TYPE_COLORS: Record<string, string> = {
   subagent: "#3B82F6",
   command: "#10B981",
   mcp: "#8B5CF6",
+  plugin: "#e11d48",
 }
 
 export const TYPE_CONTENT_PLACEHOLDER: Record<string, string> = {
@@ -21,6 +23,7 @@ export const TYPE_CONTENT_PLACEHOLDER: Record<string, string> = {
   subagent: "# Subagent\n\nDescribe the subagent behavior...",
   command: "# Command\n\nDescribe the command behavior...",
   mcp: "{\n  \"mcpServers\": {\n      \n  }\n}",
+  plugin: "{\n  \"name\": \"My Plugin\",\n  \"version\": \"1.0.0\"\n}",
 }
 
 export function typeKey(type: string) {

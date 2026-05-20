@@ -15,12 +15,13 @@ import "@/styles/vscode-markdown.css"
 
 const TYPE_META: Record<
   string,
-  { accent: string; bg: string; label: string; icon: "sparkles" | "brain" | "console" | "mcp" }
+  { accent: string; bg: string; label: string; icon: "sparkles" | "brain" | "console" | "mcp" | "plugin" }
 > = {
   skill: { accent: "#ffa000", bg: "color-mix(in srgb, #ffa000 12%, var(--native-panel))", label: "store.sidebar.nav.skills", icon: "sparkles" },
   subagent: { accent: "#1670ff", bg: "color-mix(in srgb, #1670ff 12%, var(--native-panel))", label: "store.sidebar.nav.subagents", icon: "brain" },
   command: { accent: "#09b179", bg: "color-mix(in srgb, #09b179 12%, var(--native-panel))", label: "store.sidebar.nav.commands", icon: "console" },
   mcp: { accent: "#7338f9", bg: "color-mix(in srgb, #7338f9 12%, var(--native-panel))", label: "store.sidebar.nav.mcpServers", icon: "mcp" },
+  plugin: { accent: "#e11d48", bg: "color-mix(in srgb, #e11d48 12%, var(--native-panel))", label: "store.sidebar.nav.plugins", icon: "plugin" },
 }
 
 const THEMES = { light: "light-plus", dark: "dark-plus" } as const
