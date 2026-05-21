@@ -1544,7 +1544,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                         as="div"
                         variant="ghost"
                         size="normal"
-                        class="min-w-0 max-w-[120px] shrink text-13-regular group"
+                        class="min-w-0 max-w-[120px] sm:max-w-none shrink text-13-regular group"
                         style={{
                           height: "28px",
                           opacity: buttonsSpring(),
@@ -1587,7 +1587,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                           filter: `blur(${(1 - buttonsSpring()) * 2}px)`,
                           "pointer-events": buttonsSpring() > 0.5 ? "auto" : "none",
                         },
-                        class: "min-w-0 max-w-[120px] shrink text-13-regular group",
+                        class: "min-w-0 max-w-[120px] sm:max-w-none shrink text-13-regular group",
                       }}
                     >
                       <Show when={local.model.current()?.provider?.id}>
