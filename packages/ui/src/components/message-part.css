@@ -157,7 +157,7 @@
     right: 0;
     z-index: 1;
     min-height: 24px;
-    margin-top: 4px;
+    padding-top: 4px;
     display: flex;
     align-items: center;
     justify-content: flex-end;
