@@ -109,6 +109,7 @@ export const dict = {
   "store.received.toast.dismissFailed": "Failed to dismiss",
   "store.received.toast.markReadFailed": "Failed to mark as read",
   "store.toast.unfavoriteReadonlyFailed": "This skill is required and cannot be unsubscribed",
+  "store.toast.favoriteSuccessHub": "Subscribed successfully. You can view and use it via the /hub command.",
 
   "store.sidebar.manage": "Manage",
   "store.sidebar.nav.received": "Received",

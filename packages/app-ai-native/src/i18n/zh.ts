@@ -1020,6 +1020,7 @@ export const dict = {
   "store.received.toast.dismissFailed": "忽略失败",
   "store.received.toast.markReadFailed": "标记已读失败",
   "store.toast.unfavoriteReadonlyFailed": "该技能为强制推送，无法取消订阅",
+  "store.toast.favoriteSuccessHub": "订阅成功，可在 /hub 命令中查看并使用",
 
   "store.sidebar.manage": "管理",
   "store.sidebar.nav.received": "收到的推送",

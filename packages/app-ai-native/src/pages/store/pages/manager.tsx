@@ -455,6 +455,15 @@ export default function StoreManagerPage() {
       setDetailState("favoriteCount", result.favoriteCount)
       patchItemEverywhere(data.id, (item) => ({ ...item, favorited: result.favorited, favoriteCount: result.favoriteCount }))
       refreshBothTabs()
+      console.log("[DEBUG toggleFavorite] result.favorited =", result.favorited, "typeof =", typeof result.favorited)
+      if (result.favorited) {
+        const toastId = showToast({
+          variant: "success",
+          icon: "circle-check",
+          title: language.t("store.toast.favoriteSuccessHub"),
+        })
+        console.log("[DEBUG toggleFavorite] showToast returned:", toastId)
+      }
     } catch (err) {
       if (detailState.favorited) {
         showToast({
@@ -496,6 +505,16 @@ export default function StoreManagerPage() {
       }
 
       if (state.favoritedLoaded || state.tab === "favorited") void loadFavorited()
+
+      console.log("[DEBUG toggleRowFavorite] result.favorited =", result.favorited, "typeof =", typeof result.favorited)
+      if (result.favorited) {
+        const toastId = showToast({
+          variant: "success",
+          icon: "circle-check",
+          title: language.t("store.toast.favoriteSuccessHub"),
+        })
+        console.log("[DEBUG toggleRowFavorite] showToast returned:", toastId)
+      }
     } catch (err) {
       if (item.favorited) {
         showToast({
