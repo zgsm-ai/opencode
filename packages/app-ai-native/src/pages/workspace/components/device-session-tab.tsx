@@ -43,6 +43,9 @@ import type { Message, Part, Session, SessionStatus, FileDiff, Todo, Command, Ag
 import type { Project, Path } from "@opencode-ai/sdk/v2/client"
 import type { ProviderCapability, ProviderCapabilitiesResponse } from "@/context/global-sync/types"
 
+import { SessionQrCodeContent } from "./session-qrcode-dialog"
+import { env } from "@/lib/env"
+
 const emptyMessages: Message[] = []
 const idle: SessionStatus = { type: "idle" }
 const busySinceMap = new Map<string, number>()
@@ -170,6 +173,16 @@ export function DeviceSessionTab(props: { tabId: string }) {
   const isNew = createMemo(() => !createdSessionID() && !session.sessionID())
 
   const rootSessionID = createMemo(() => createdSessionID() ?? session.sessionID())
+  const isMobile = createMemo(() => location.pathname.startsWith("/m"))
+
+  const mobileUrl = createMemo(() => {
+    const host = env.MOBILE_HOST
+    if (!host) return ""
+    const wsId = workspace.workspaceId
+    const sid = rootSessionID()
+    if (!wsId || !sid) return ""
+    return `${host}/m/workspace/${wsId}?session=${sid}`
+  })
   const viewingSessionID = createMemo(() => {
     const stack = viewingStack()
     return stack.length > 0 ? stack[stack.length - 1].id : undefined
@@ -923,6 +936,25 @@ export function DeviceSessionTab(props: { tabId: string }) {
                             </Tooltip>
                           </Show>
                           <Show when={!viewingSessionID()}>
+                            <Show when={mobileUrl() && !isMobile()}>
+                              <Tooltip value={language.t("session.qrcode.title")} placement="bottom">
+                                <IconButton
+                                  icon="qr-code"
+                                  variant="ghost"
+                                  iconSize="small"
+                                  class="size-6 rounded-md"
+                                  aria-label={language.t("session.qrcode.title")}
+                                  onClick={() => {
+                                    dialog.show(() => (
+                                      <SessionQrCodeContent
+                                        url={mobileUrl()!}
+                                        sessionTitle={tabStore.tabs().find((t) => t.id === props.tabId)?.title ?? language.t("command.session.new")}
+                                      />
+                                    ))
+                                  }}
+                                />
+                              </Tooltip>
+                            </Show>
                           <DropdownMenu gutter={4} placement="bottom-end">
                             <DropdownMenu.Trigger
                               as={IconButton}

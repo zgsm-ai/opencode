@@ -176,7 +176,8 @@ export const dict = {
   "kanban.view.commit": "Commit",
   "store.capabilityEditor.createTitle": "Create {{type}}",
   "store.capabilityEditor.editTitle": "Edit {{type}}",
-  "store.capabilityEditor.createDescription": "Use a workspace-style split layout to edit capability content and preview Markdown live.",
+  "store.capabilityEditor.createDescription":
+    "Use a workspace-style split layout to edit capability content and preview Markdown live.",
   "store.capabilityEditor.editDescription": "Update capability metadata and Markdown content in one place.",
   "store.capabilityEditor.createBreadcrumb": "New",
   "store.capabilityEditor.editBreadcrumb": "Edit",
@@ -184,7 +185,8 @@ export const dict = {
   "store.capabilityEditor.createAndContinue": "Create and continue",
   "store.capabilityEditor.createOptions": "Create options",
   "store.capabilityEditor.resetTitle": "Reset draft",
-  "store.capabilityEditor.resetDescription": "This will clear the current input and restore a fresh draft state. Continue?",
+  "store.capabilityEditor.resetDescription":
+    "This will clear the current input and restore a fresh draft state. Continue?",
   "store.capabilityEditor.backToManagement": "Back to Capabilities",
   "store.capabilityEditor.uploadArchive": "Upload Skill Directory",
   "store.capabilityEditor.skillFileRequired": "The selected directory must contain a SKILL.md file",
@@ -200,7 +202,8 @@ export const dict = {
   "store.capabilityEditor.header.version": "Version",
   "store.capabilityEditor.versionCurrent": "Current",
   "store.capabilityEditor.versionReadonlyTitle": "Viewing a historical version",
-  "store.capabilityEditor.versionReadonlyDescription": "This view is read-only. Switch back to the current version to edit, save, or change the file tree.",
+  "store.capabilityEditor.versionReadonlyDescription":
+    "This view is read-only. Switch back to the current version to edit, save, or change the file tree.",
   "store.capabilityEditor.versionReadonlyBadge": "Read-only",
   "store.capabilityEditor.restoreVersion": "View Current Version",
   "store.capabilityEditor.restoreVersionSuccess": "Created a new version from the selected historical version",
@@ -327,7 +330,8 @@ export const dict = {
   "store.devices.upgrade.badge": "New version",
   "store.devices.upgrade.button": "Upgrade",
   "store.devices.upgrade.confirmTitle": "Confirm Device Upgrade",
-  "store.devices.upgrade.confirmDescription": "Upgrade {{device}} from v{{current}} to v{{target}}. The device will go offline briefly during the upgrade.",
+  "store.devices.upgrade.confirmDescription":
+    "Upgrade {{device}} from v{{current}} to v{{target}}. The device will go offline briefly during the upgrade.",
   "store.devices.upgrade.changelog": "Changelog",
   "store.devices.upgrade.size": "Package size",
   "store.devices.upgrade.confirm": "Confirm Upgrade",
@@ -345,7 +349,8 @@ export const dict = {
   "store.devices.upgrade.status": "Upgrading",
   "store.devices.deregister.button": "Deregister",
   "store.devices.deregister.dialog.title": "Deregister Device",
-  "store.devices.deregister.dialog.description": "Are you sure you want to deregister {{device}}? This action cannot be undone.",
+  "store.devices.deregister.dialog.description":
+    "Are you sure you want to deregister {{device}}? This action cannot be undone.",
   "store.devices.deregister.toast.success": "Device deregistered",
   "store.devices.deregister.toast.failed": "Failed to deregister device",
   "store.notificationChannels.title": "Notification Channels",
@@ -398,7 +403,7 @@ export const dict = {
   "channels.enable": "Enable",
   "channels.disable": "Disable",
   "channels.lastActive": "Last active",
-  "channels.confirmDelete": "Delete channel \"{{name}}\"?",
+  "channels.confirmDelete": 'Delete channel "{{name}}"?',
   "channels.toast.saved": "Channel saved",
   "channels.toast.deleted": "Channel deleted",
   "channels.toast.deleteFailed": "Failed to delete channel",
@@ -578,8 +583,8 @@ export const dict = {
   "command.model.variant.cycle.description": "Switch to the next effort level",
   "command.prompt.mode.shell": "Shell",
   "command.prompt.mode.normal": "Prompt",
-  "command.permissions.autoaccept.enable": "Auto-accept permissions",
-  "command.permissions.autoaccept.disable": "Stop auto-accepting permissions",
+  "command.permissions.autoaccept.enable": "Auto-Accept permissions",
+  "command.permissions.autoaccept.disable": "Stop Auto-Accepting permissions",
   "command.workspace.toggle": "Toggle workspaces",
   "command.workspace.toggle.description": "Enable or disable multiple workspaces in the sidebar",
   "command.session.undo": "Undo",
@@ -995,9 +1000,9 @@ export const dict = {
   "toast.workspace.disabled.title": "Workspaces disabled",
   "toast.workspace.disabled.description": "Only the main worktree is shown in the sidebar",
 
-  "toast.permissions.autoaccept.on.title": "Auto-accepting permissions",
+  "toast.permissions.autoaccept.on.title": "Auto-Accepting permissions",
   "toast.permissions.autoaccept.on.description": "Permission requests will be automatically approved",
-  "toast.permissions.autoaccept.off.title": "Stopped auto-accepting permissions",
+  "toast.permissions.autoaccept.off.title": "Stopped Auto-Accepting permissions",
   "toast.permissions.autoaccept.off.description": "Permission requests will require approval",
 
   "toast.model.none.title": "No model selected",
@@ -1209,7 +1214,8 @@ export const dict = {
 
   "projects.nav.title": "Projects",
   "projects.home.hero.title": "Projects",
-  "projects.home.hero.description": "Organize teammates, repositories, invitations, and repository activity in one shared workspace.",
+  "projects.home.hero.description":
+    "Organize teammates, repositories, invitations, and repository activity in one shared workspace.",
   "projects.home.createButton": "Create project",
   "projects.home.pinned.title": "Pinned projects",
   "projects.home.pinned.description": "Keep your key projects visible for quick access.",
@@ -1220,15 +1226,20 @@ export const dict = {
   "projects.home.stats.totalRepos": "Repositories",
   "projects.home.stats.pendingInvites": "Pending invites",
   "projects.home.guide.title": "Project operations",
-  "projects.home.guide.description": "Use projects to coordinate people and codebases with a Store-inspired management experience.",
+  "projects.home.guide.description":
+    "Use projects to coordinate people and codebases with a Store-inspired management experience.",
   "projects.home.guide.card1.title": "Create shared ownership",
-  "projects.home.guide.card1.description": "Group members, repositories, and responsibility into a single project context.",
+  "projects.home.guide.card1.description":
+    "Group members, repositories, and responsibility into a single project context.",
   "projects.home.guide.card2.title": "Invite collaborators",
-  "projects.home.guide.card2.description": "Track invitation status from pending to accepted without leaving the project space.",
+  "projects.home.guide.card2.description":
+    "Track invitation status from pending to accepted without leaving the project space.",
   "projects.home.guide.card3.title": "Bind repositories",
-  "projects.home.guide.card3.description": "Associate one or more repositories to each project and review ownership clearly.",
+  "projects.home.guide.card3.description":
+    "Associate one or more repositories to each project and review ownership clearly.",
   "projects.home.guide.card4.title": "Review activity",
-  "projects.home.guide.card4.description": "See which members are active on each repository to understand momentum and coverage.",
+  "projects.home.guide.card4.description":
+    "See which members are active on each repository to understand momentum and coverage.",
   "projects.home.searchPlaceholder": "Search projects...",
   "projects.home.table.name": "Project",
   "projects.home.table.description": "Description",
@@ -1253,15 +1264,19 @@ export const dict = {
   "projects.detail.about": "About this project",
   "projects.detail.latestActivity": "Latest activity",
   "projects.detail.archivedBadge": "Archived",
-  "projects.detail.archivedActionHint": "Archived projects cannot invite members or change active collaboration settings.",
+  "projects.detail.archivedActionHint":
+    "Archived projects cannot invite members or change active collaboration settings.",
   "projects.detail.currentRoleLabel": "Your role",
   "projects.detail.pendingInvitations": "Pending invitations",
   "projects.detail.overviewSectionTitle": "Project overview",
-  "projects.detail.overviewSectionDescription": "Key project information, membership summary, and timeline at a glance.",
+  "projects.detail.overviewSectionDescription":
+    "Key project information, membership summary, and timeline at a glance.",
   "projects.detail.activitySectionTitle": "Repository activity",
-  "projects.detail.activitySectionDescription": "Track repository usage and manage project repository bindings in one place.",
+  "projects.detail.activitySectionDescription":
+    "Track repository usage and manage project repository bindings in one place.",
   "projects.detail.contentSectionTitle": "Project collaboration",
-  "projects.detail.contentSectionDescription": "View activity for repositories bound to this project, then switch to members and invitation history when needed.",
+  "projects.detail.contentSectionDescription":
+    "View activity for repositories bound to this project, then switch to members and invitation history when needed.",
   "projects.detail.tab.activity": "Activity",
   "projects.detail.tab.members": "Members",
   "projects.detail.tab.invitations": "Invitations",
@@ -1270,7 +1285,8 @@ export const dict = {
   "projects.detail.teamSectionTitle": "Team directory",
   "projects.detail.teamSectionDescription": "Review current members and switch to invitation history when needed.",
   "projects.detail.boundRepositoriesTitle": "Bound repository activity",
-  "projects.detail.boundRepositoriesDescription": "This section shows activity for repositories currently bound to this project.",
+  "projects.detail.boundRepositoriesDescription":
+    "This section shows activity for repositories currently bound to this project.",
   "projects.detail.repositoryUrl": "Repository URL",
   "projects.detail.repositoryInfo": "Repository info",
   "projects.detail.sharedUsers": "Contributors",
@@ -1284,7 +1300,8 @@ export const dict = {
   "projects.detail.invitedBy": "Invited by",
   "projects.detail.status": "Status",
   "projects.detail.emptyRepositories": "No repositories have been bound yet.",
-  "projects.detail.emptyActivityGuide": "There is no bound repository activity to show yet. Please use the top-right button to bind repositories first.",
+  "projects.detail.emptyActivityGuide":
+    "There is no bound repository activity to show yet. Please use the top-right button to bind repositories first.",
   "projects.detail.emptyActivity": "No activity records found.",
   "projects.detail.emptyMembers": "No members found.",
   "projects.detail.emptyInvitations": "No invitations found.",
@@ -1300,7 +1317,8 @@ export const dict = {
   "projects.actions.manageRepositoryBindings": "Manage repository bindings",
   "projects.actions.hideRepositoryBindings": "Hide repository bindings",
   "projects.bindingsDrawer.title": "Manage repository bindings",
-  "projects.bindingsDrawer.description": "Manually bind repositories to this project and remove bindings you no longer need.",
+  "projects.bindingsDrawer.description":
+    "Manually bind repositories to this project and remove bindings you no longer need.",
   "projects.bindingsDrawer.tab.bound": "Bound repositories",
   "projects.bindingsDrawer.tab.available": "Available repositories",
   "projects.bindingsDrawer.field.gitRepoUrl": "Repository URL",
@@ -1309,21 +1327,25 @@ export const dict = {
   "projects.bindingsDrawer.field.displayNamePlaceholder": "opencode",
   "projects.bindingsDrawer.bind": "Bind repository",
   "projects.bindingsDrawer.candidatesTitle": "Available repositories",
-  "projects.bindingsDrawer.candidatesDescription": "Repositories used by project members in the last 30 days and not yet bound to this project.",
+  "projects.bindingsDrawer.candidatesDescription":
+    "Repositories used by project members in the last 30 days and not yet bound to this project.",
   "projects.bindingsDrawer.candidateBind": "Bind",
   "projects.bindingsDrawer.preview.open": "Preview",
   "projects.bindingsDrawer.preview.title": "Usage repository preview",
-  "projects.bindingsDrawer.preview.description": "Repositories with usage records from current project members in the last 30 days and not yet bound to this project.",
+  "projects.bindingsDrawer.preview.description":
+    "Repositories with usage records from current project members in the last 30 days and not yet bound to this project.",
   "projects.bindingsDrawer.preview.empty": "No repository candidates found.",
   "projects.bindingsDrawer.preview.searchPlaceholder": "Search repository candidates...",
   "projects.bindingsDrawer.preview.use": "Use",
   "projects.bindingsDrawer.preview.toast.failed": "Failed to load repository preview",
   "projects.bindingsDrawer.validation.gitRepoUrl": "Enter a valid git repository address or owner/repo format.",
-  "projects.bindingsDrawer.validation.gitRepoUrlHint": "Supports https://..., git@host:owner/repo.git, or owner/repo input that the backend can normalize.",
+  "projects.bindingsDrawer.validation.gitRepoUrlHint":
+    "Supports https://..., git@host:owner/repo.git, or owner/repo input that the backend can normalize.",
   "projects.bindingsDrawer.listTitle": "Bound repositories",
   "projects.bindingsDrawer.empty.title": "No repositories bound yet",
   "projects.bindingsDrawer.empty.description": "This project does not currently have any bound repositories.",
-  "projects.bindingsDrawer.empty.hint": "Switch to the available repositories tab or manually enter a repository address to create the first binding.",
+  "projects.bindingsDrawer.empty.hint":
+    "Switch to the available repositories tab or manually enter a repository address to create the first binding.",
   "projects.bindingsDrawer.unbind": "Unbind",
   "projects.bindingsDrawer.toast.bound": "Repository bound",
   "projects.bindingsDrawer.toast.bindFailed": "Failed to bind repository",
@@ -1342,7 +1364,8 @@ export const dict = {
   "projects.invitationPanel.toast.rejected": "Invitation rejected",
   "projects.createDialog.title": "Create project",
   "projects.createDialog.info": "Project basics",
-  "projects.createDialog.infoDescription": "Create a project space to organize members, repository bindings, and collaboration activity.",
+  "projects.createDialog.infoDescription":
+    "Create a project space to organize members, repository bindings, and collaboration activity.",
   "projects.createDialog.field.name": "Project name",
   "projects.createDialog.field.namePlaceholder": "Platform Core",
   "projects.createDialog.field.description": "Description",
@@ -1364,7 +1387,8 @@ export const dict = {
   "projects.editDialog.field.name": "Project name",
   "projects.editDialog.field.description": "Description",
   "projects.editDialog.field.enabledAt": "Enabled at",
-  "projects.editDialog.field.enabledAtHint": "Optional project activation time. Archived projects cannot change this field.",
+  "projects.editDialog.field.enabledAtHint":
+    "Optional project activation time. Archived projects cannot change this field.",
   "projects.editDialog.submit": "Save changes",
   "projects.editDialog.toast.success": "Project updated",
   "projects.editDialog.toast.failed": "Failed to update project",
@@ -1375,15 +1399,18 @@ export const dict = {
   "projects.editDialog.toast.deleted": "Project deleted",
   "projects.editDialog.toast.deleteFailed": "Failed to delete project",
   "projects.editDialog.archive.title": "Archive status",
-  "projects.editDialog.archive.activeDescription": "Archiving hides the project from active workflows until it is restored.",
-  "projects.editDialog.archive.archivedDescription": "This project is archived. You can restore it to resume normal collaboration.",
+  "projects.editDialog.archive.activeDescription":
+    "Archiving hides the project from active workflows until it is restored.",
+  "projects.editDialog.archive.archivedDescription":
+    "This project is archived. You can restore it to resume normal collaboration.",
   "projects.editDialog.archive.active": "This project is active.",
   "projects.editDialog.archive.archivedAt": "Archived at {{date}}",
   "projects.editDialog.archive.archive": "Archive project",
   "projects.editDialog.archive.unarchive": "Restore project",
   "projects.editDialog.permissionHint": "Only project owners or admins can change project settings.",
   "projects.editDialog.danger.title": "Danger zone",
-  "projects.editDialog.danger.description": "Delete this project permanently from active use. This action cannot be easily undone.",
+  "projects.editDialog.danger.description":
+    "Delete this project permanently from active use. This action cannot be easily undone.",
   "projects.editDialog.danger.deleteHint": "Deleting a project removes it from the current workspace and project list.",
   "projects.editDialog.danger.delete": "Delete project",
   "projects.inviteDialog.title": "Invite member",
@@ -1628,6 +1655,9 @@ export const dict = {
   "session.delete.title": "Delete session",
   "session.delete.confirm": 'Delete session "{{name}}"?',
   "session.delete.button": "Delete session",
+  "session.qrcode.title": "Mobile Access",
+  "session.qrcode.description": "Scan the QR code to open this session on mobile",
+  "session.qrcode.error": "Failed to generate QR code",
 
   "workspace.new": "New workspace",
   "workspace.type.local": "local",
@@ -1690,7 +1720,6 @@ export const dict = {
   "workspace.session.group.thisWeek": "Last 7 Days",
   "workspace.session.group.older": "Older",
   "workspace.content.closeAll": "Close All",
-
 
   "workspace.device.list": "Device List",
   "workspace.device.search": "Search devices...",
@@ -1774,12 +1803,13 @@ export const dict = {
   "workspace.home.step3.cmd": "csc cloud login",
   "workspace.home.step3.shenma.title": "Set Environment Variable",
   "workspace.home.step3.shenma.description": "Set Environment Variable",
-  "workspace.home.step3.shenma.cmd": "Example: export COSTRICT_BASE_URL=\"{{url}}\"",
+  "workspace.home.step3.shenma.cmd": 'Example: export COSTRICT_BASE_URL="{{url}}"',
   "workspace.home.step4.title": "Start Service",
   "workspace.home.step4.description": "Start the cloud service on your device.",
   "workspace.home.step4.cmd": "csc cloud start",
   "workspace.home.step5.title": "Create Workspace",
-  "workspace.home.step5.description": "Find your device in the sidebar, click \"+\" to pick a project directory and start coding.",
+  "workspace.home.step5.description":
+    'Find your device in the sidebar, click "+" to pick a project directory and start coding.',
   "workspace.home.quickActions": "Quick Actions",
   "workspace.home.browseStore": "Browse Store",
   "workspace.home.viewDocs": "View Documentation",
@@ -2005,7 +2035,7 @@ export const dict = {
   "kanban.table.endTimeDisplay": "End Time",
   "kanban.confirm.deleteRepo": "Delete this repo configuration?",
   "kanban.confirm.deleteTask": "Delete this task?",
-  "kanban.confirm.deleteProject": "Delete project \"{{name}}\"?",
+  "kanban.confirm.deleteProject": 'Delete project "{{name}}"?',
   "kanban.prompt.silicaWeight": "Enter silica weight:",
   "kanban.status.ongoing": "Ongoing",
   "kanban.chart.efficiencyByProject": "Efficiency Ratio (by project)",
@@ -2049,7 +2079,8 @@ export const dict = {
   "kanban.form.rawValue": "Raw Value",
   "kanban.form.correctedValue": "Corrected Value",
   "kanban.dialog.correctionHistory": "Correction History",
-  "kanban.dialog.correctionHistoryDesc": "Correction history for the current dimension is automatically loaded when the dialog opens.",
+  "kanban.dialog.correctionHistoryDesc":
+    "Correction history for the current dimension is automatically loaded when the dialog opens.",
   "kanban.table.field": "Field",
   "kanban.table.oldValue": "Old Value",
   "kanban.table.newValue": "New Value",
@@ -2203,9 +2234,11 @@ export const dict = {
   "kanban.chart.series.taskEff": "Task Eff",
   "kanban.chart.series.commitEff": "Commit Eff",
 
-  "kanban.hint.efficiencyCalculation": "Manual values override automatic ones; efficiency is calculated from valid actual time and traditional estimate.",
+  "kanban.hint.efficiencyCalculation":
+    "Manual values override automatic ones; efficiency is calculated from valid actual time and traditional estimate.",
   "kanban.hint.timeSegments": "Gap indicators are shown between continuous work segments.",
-  "kanban.hint.silicaExplanation": "Percentage of AI Task-generated code in commit, weighted by related Task diff lines.",
+  "kanban.hint.silicaExplanation":
+    "Percentage of AI Task-generated code in commit, weighted by related Task diff lines.",
 
   "kanban.confirm.deleteVirtualGroup": "Delete this virtual group? This cannot be undone.",
 

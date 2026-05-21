@@ -32,6 +32,7 @@ import { Tooltip, TooltipKeybind } from "@opencode-ai/ui/tooltip"
 import { IconButton } from "@opencode-ai/ui/icon-button"
 import { Select } from "@opencode-ai/ui/select"
 import { RadioGroup } from "@opencode-ai/ui/radio-group"
+import { Switch as UiSwitch } from "@opencode-ai/ui/switch"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { ModelSelectorPopover } from "@/components/dialog-select-model"
 import { DialogSelectModelUnpaid } from "@/components/dialog-select-model-unpaid"
@@ -1660,25 +1661,33 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                         {language.t("command.permissions.autoaccept.enable")}
                       </span>
                     </label>
-                    {/* Icon-only (smaller screens) */}
-                    <IconButton
-                      class="sm:hidden"
-                      icon="check"
-                      variant={accepting() ? "primary" : "ghost"}
-                      size="small"
+                    {/* Icon + switch (smaller screens) */}
+                    <div
+                      class="sm:hidden flex items-center gap-1 shrink-0"
                       style={{
                         opacity: buttonsSpring(),
                         transform: `scale(${0.95 + buttonsSpring() * 0.05})`,
                         filter: `blur(${(1 - buttonsSpring()) * 2}px)`,
                         "pointer-events": buttonsSpring() > 0.5 ? "auto" : "none",
                       }}
-                      onClick={() => permission.toggleAutoAccept(sid(), sdk.directory)}
-                      aria-label={language.t(
-                        accepting()
-                          ? "command.permissions.autoaccept.disable"
-                          : "command.permissions.autoaccept.enable",
-                      )}
-                    />
+                    >
+                      <Icon
+                        name={accepting() ? "shield" : "shield-2"}
+                        size="small"
+                        classList={{ "text-icon-success-base": accepting() }}
+                      />
+                      <UiSwitch
+                        checked={accepting()}
+                        onChange={(checked) => {
+                          if (checked) permission.enableAutoAccept(sid(), sdk.directory)
+                          else permission.disableAutoAccept(sid())
+                        }}
+                        data-variant="quiet"
+                        hideLabel
+                      >
+                        {language.t("command.permissions.autoaccept.enable")}
+                      </UiSwitch>
+                    </div>
                   </TooltipKeybind>
                 </Show>
               </div>

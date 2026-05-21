@@ -487,9 +487,9 @@ export const dict = {
   "toast.workspace.enabled.description": "侧边栏现在显示多个工作树",
   "toast.workspace.disabled.title": "工作区已禁用",
   "toast.workspace.disabled.description": "侧边栏只显示主工作树",
-  "toast.permissions.autoaccept.on.title": "正在自动接受权限",
+  "toast.permissions.autoaccept.on.title": "自动接受",
   "toast.permissions.autoaccept.on.description": "权限请求将被自动批准",
-  "toast.permissions.autoaccept.off.title": "已停止自动接受权限",
+  "toast.permissions.autoaccept.off.title": "已停止自动接受",
   "toast.permissions.autoaccept.off.description": "权限请求将需要批准",
   "toast.model.none.title": "未选择模型",
   "toast.model.none.description": "请先连接提供商以总结此会话",
@@ -885,6 +885,9 @@ export const dict = {
   "session.delete.title": "删除会话",
   "session.delete.confirm": '删除会话 "{{name}}"？',
   "session.delete.button": "删除会话",
+  "session.qrcode.title": "移动端访问",
+  "session.qrcode.description": "扫描二维码在移动端打开此会话",
+  "session.qrcode.error": "二维码生成失败",
 
   "workspace.new": "新建工作区",
   "workspace.type.local": "本地",
@@ -1108,7 +1111,8 @@ export const dict = {
   "store.capabilityEditor.header.version": "版本",
   "store.capabilityEditor.versionCurrent": "当前版本",
   "store.capabilityEditor.versionReadonlyTitle": "正在查看历史版本",
-  "store.capabilityEditor.versionReadonlyDescription": "当前为只读模式。切换回当前版本后，才可继续编辑、保存或调整文件树。",
+  "store.capabilityEditor.versionReadonlyDescription":
+    "当前为只读模式。切换回当前版本后，才可继续编辑、保存或调整文件树。",
   "store.capabilityEditor.versionReadonlyBadge": "只读",
   "store.capabilityEditor.restoreVersion": "查看当前版本",
   "store.capabilityEditor.restoreVersionSuccess": "已基于历史版本恢复出新版本",
@@ -1234,7 +1238,8 @@ export const dict = {
   "store.devices.upgrade.badge": "有新版本",
   "store.devices.upgrade.button": "升级",
   "store.devices.upgrade.confirmTitle": "确认升级设备",
-  "store.devices.upgrade.confirmDescription": "将 {{device}} 从 v{{current}} 升级到 v{{target}}，升级过程中设备将短暂离线。",
+  "store.devices.upgrade.confirmDescription":
+    "将 {{device}} 从 v{{current}} 升级到 v{{target}}，升级过程中设备将短暂离线。",
   "store.devices.upgrade.changelog": "更新日志",
   "store.devices.upgrade.size": "包大小",
   "store.devices.upgrade.confirm": "确认升级",
@@ -1463,7 +1468,6 @@ export const dict = {
   "workspace.session.group.older": "更早",
   "workspace.content.closeAll": "关闭全部",
 
-
   "workspace.device.list": "设备列表",
   "workspace.device.search": "搜索设备...",
   "workspace.device.notFound": "未找到设备",
@@ -1544,12 +1548,12 @@ export const dict = {
   "workspace.home.step3.cmd": "csc cloud login",
   "workspace.home.step3.shenma.title": "设置环境变量",
   "workspace.home.step3.shenma.description": "设置环境变量",
-  "workspace.home.step3.shenma.cmd": "示例：export COSTRICT_BASE_URL=\"{{url}}\"",
+  "workspace.home.step3.shenma.cmd": '示例：export COSTRICT_BASE_URL="{{url}}"',
   "workspace.home.step4.title": "启动服务",
   "workspace.home.step4.description": "在你的设备上启动云服务。",
   "workspace.home.step4.cmd": "csc cloud start",
   "workspace.home.step5.title": "创建工作空间",
-  "workspace.home.step5.description": "在侧边栏设备列表中找到已注册的设备，点击 \"+\" 按钮选择项目目录并开始编码。",
+  "workspace.home.step5.description": '在侧边栏设备列表中找到已注册的设备，点击 "+" 按钮选择项目目录并开始编码。',
   "workspace.home.quickActions": "快速操作",
   "workspace.home.browseStore": "浏览商店",
   "workspace.home.viewDocs": "查看文档",
@@ -1613,7 +1617,8 @@ export const dict = {
   "projects.detail.activitySectionTitle": "仓库活跃度",
   "projects.detail.activitySectionDescription": "查看仓库活跃情况，并在同一区域管理项目仓库绑定。",
   "projects.detail.contentSectionTitle": "项目协作",
-  "projects.detail.contentSectionDescription": "当前页面展示的是该项目已关联仓库的活跃情况，也可以切换查看成员与邀请记录。",
+  "projects.detail.contentSectionDescription":
+    "当前页面展示的是该项目已关联仓库的活跃情况，也可以切换查看成员与邀请记录。",
   "projects.detail.tab.activity": "活跃度",
   "projects.detail.tab.members": "成员",
   "projects.detail.tab.invitations": "邀请记录",
@@ -1671,7 +1676,8 @@ export const dict = {
   "projects.bindingsDrawer.preview.use": "使用",
   "projects.bindingsDrawer.preview.toast.failed": "加载仓库预览失败",
   "projects.bindingsDrawer.validation.gitRepoUrl": "请输入有效的 git 仓库地址或 owner/repo 格式。",
-  "projects.bindingsDrawer.validation.gitRepoUrlHint": "支持 https://...、git@host:owner/repo.git，或可由后端规范化的 owner/repo 输入。",
+  "projects.bindingsDrawer.validation.gitRepoUrlHint":
+    "支持 https://...、git@host:owner/repo.git，或可由后端规范化的 owner/repo 输入。",
   "projects.bindingsDrawer.listTitle": "已绑定仓库",
   "projects.bindingsDrawer.empty.title": "当前还没有已绑定仓库",
   "projects.bindingsDrawer.empty.description": "该项目当前尚未绑定任何仓库。",
@@ -2256,4 +2262,15 @@ export const dict = {
   "console.usage.pagination.summary": "显示 {{from}} - {{to}}，共 {{total}} 条",
   "console.usage.pagination.empty": "暂无数据",
   "console.usage.pagination.page": "页",
-} satisfies Partial<Record<Keys | "store.home.filters.searchTag" | "store.home.filters.tagLimitHint" | "store.home.table.toggleColumns" | "store.console.capabilities.backToHome" | "store.console.capabilities.searchPlaceholder" | "store.security.riskLevel", string>>
+} satisfies Partial<
+  Record<
+    | Keys
+    | "store.home.filters.searchTag"
+    | "store.home.filters.tagLimitHint"
+    | "store.home.table.toggleColumns"
+    | "store.console.capabilities.backToHome"
+    | "store.console.capabilities.searchPlaceholder"
+    | "store.security.riskLevel",
+    string
+  >
+>

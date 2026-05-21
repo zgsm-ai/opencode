@@ -73,8 +73,8 @@ export const dict = {
   "command.model.variant.cycle.description": "Switch to the next effort level",
   "command.prompt.mode.shell": "Shell",
   "command.prompt.mode.normal": "Prompt",
-  "command.permissions.autoaccept.enable": "Auto-accept permissions",
-  "command.permissions.autoaccept.disable": "Stop auto-accepting permissions",
+  "command.permissions.autoaccept.enable": "Auto-Accept",
+  "command.permissions.autoaccept.disable": "Stop Auto-Accept",
   "command.workspace.toggle": "Toggle workspaces",
   "command.workspace.toggle.description": "Enable or disable multiple workspaces in the sidebar",
   "command.session.undo": "Undo",
@@ -426,9 +426,9 @@ export const dict = {
   "toast.workspace.disabled.title": "Workspaces disabled",
   "toast.workspace.disabled.description": "Only the main worktree is shown in the sidebar",
 
-  "toast.permissions.autoaccept.on.title": "Auto-accepting permissions",
+  "toast.permissions.autoaccept.on.title": "Auto-Accept",
   "toast.permissions.autoaccept.on.description": "Permission requests will be automatically approved",
-  "toast.permissions.autoaccept.off.title": "Stopped auto-accepting permissions",
+  "toast.permissions.autoaccept.off.title": "Auto-Accept off",
   "toast.permissions.autoaccept.off.description": "Permission requests will require approval",
 
   "toast.model.none.title": "No model selected",

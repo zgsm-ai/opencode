@@ -93,6 +93,15 @@ export const env = {
     return getEnv("VITE_STORE_URL", "")
   },
 
+  // Mobile host for mobile workspace URL (e.g., "https://mobile.example.com:3000")
+  // Falls back to current page origin when not configured
+  get MOBILE_HOST() {
+    const configured = getEnv("VITE_MOBILE_HOST", "")
+    if (configured) return configured
+    if (typeof window !== "undefined") return window.location.origin
+    return ""
+  },
+
   // OpenCode cloud device
   get OPENCODE_CLOUD_DEVICE_ID() {
     return getEnv("VITE_OPENCODE_CLOUD_DEVICE_ID", "")

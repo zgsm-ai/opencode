@@ -86,9 +86,14 @@
     background-color: var(--surface-hover);
   }
 
-  &:not([data-readonly]) [data-slot="switch-input"]:focus-visible ~ [data-slot="switch-control"] {
+  &:not([data-readonly],[data-checked]) [data-slot="switch-input"]:focus-visible ~ [data-slot="switch-control"] {
     border-color: var(--border-focus);
     box-shadow: var(--shadow-xs-border-focus);
+  }
+
+  &[data-variant="quiet"]:not([data-readonly]) [data-slot="switch-input"]:focus-visible ~ [data-slot="switch-control"] {
+    border-color: var(--border-weak-base);
+    box-shadow: none;
   }
 
   &[data-checked] [data-slot="switch-control"] {
@@ -104,8 +109,8 @@
   }
 
   &[data-checked]:hover:not([data-disabled], [data-readonly]) [data-slot="switch-control"] {
-    border-color: var(--border-hover);
-    background-color: var(--surface-hover);
+    border-color: var(--icon-strong-base);
+    background-color: var(--icon-strong-base);
   }
 
   &[data-disabled] {
