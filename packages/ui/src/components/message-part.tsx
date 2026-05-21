@@ -313,7 +313,7 @@ export function getToolInfo(tool: string, input: any = {}): ToolInfo {
           ? input.subagent_type[0]!.toUpperCase() + input.subagent_type.slice(1)
           : undefined
       return {
-        icon: "task",
+        icon: "bot",
         title: agentTitle(i18n, type),
         subtitle: input.description,
       }
@@ -1808,12 +1808,16 @@ ToolRegistry.register({
     const showProgress = createMemo(() => running() && progress().length > 0)
     return (
       <>
-        <BasicTool icon="task" status={props.status} trigger={trigger()} hideDetails />
+        <BasicTool icon="bot" status={props.status} trigger={trigger()} hideDetails />
         <Show when={showProgress()}>
           <div data-component="task-progress" style={{ "margin-left": "24px" }}>
             <For each={progress()}>
               {(item) => (
-                <div data-slot="task-progress-item" class="text-12-regular text-text-weak" style={{ "padding-left": "8px" }}>
+                <div
+                  data-slot="task-progress-item"
+                  class="text-12-regular text-text-weak"
+                  style={{ "padding-left": "8px" }}
+                >
                   {item}
                 </div>
               )}
