@@ -127,8 +127,8 @@ export function BasicTool(props: BasicToolProps) {
         <div data-component="tool-trigger">
           <div data-slot="basic-tool-tool-trigger-content">
             <Show when={props.icon}>
-              <span data-slot="basic-tool-tool-indicator">
-                <Icon name={props.icon!} size="small" />
+              <span data-slot="basic-tool-tool-indicator" data-status={props.status === "error" ? "error" : undefined}>
+                <Icon name={props.status === "error" ? "circle-x" : props.icon!} size="small" />
               </span>
             </Show>
             <div data-slot="basic-tool-tool-info">

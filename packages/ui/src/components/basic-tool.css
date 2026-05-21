@@ -30,6 +30,10 @@
       width: 16px;
       height: 16px;
     }
+
+    &[data-status="error"] {
+      color: var(--text-error);
+    }
   }
 
   [data-slot="basic-tool-tool-spinner"] {
