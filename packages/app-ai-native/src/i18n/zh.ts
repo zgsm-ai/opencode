@@ -1355,7 +1355,7 @@ export const dict = {
   "store.home.table.tag": "标签",
   "store.home.table.source": "来源平台",
   "store.home.table.experienceScore": "来源分值",
-  "store.home.table.favoriteCount": "Subscribe",
+  "store.home.table.favoriteCount": "订阅",
   "store.home.table.installCount": "安装量",
   "store.home.table.previewCount": "预览量",
   "store.home.emptyCategory": "当前分类下暂无条目。",

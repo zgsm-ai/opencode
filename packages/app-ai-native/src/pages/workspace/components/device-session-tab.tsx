@@ -201,7 +201,7 @@ export function DeviceSessionTab(props: { tabId: string }) {
   const isMobile = createMemo(() => location.pathname.startsWith("/m"))
 
   const mobileUrl = createMemo(() => {
-    const host = `${env.MOBILE_HOST}${env.API_PREFIX ? `/${env.API_PREFIX}` : ""}`
+    const host = `${env.MOBILE_HOST}${env.BASE_PATH ? `/${env.BASE_PATH}` : ""}`
     if (!host) return ""
     const wsId = workspace.workspaceId
     const sid = rootSessionID()
