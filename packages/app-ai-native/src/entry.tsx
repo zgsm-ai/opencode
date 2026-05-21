@@ -113,7 +113,45 @@ const platform: Platform = {
   setDefaultServerUrl: writeDefaultServerUrl,
 }
 
+const pwa = () => {
+  if (!("serviceWorker" in navigator)) return
+
+  const hour = 60 * 60 * 1000
+  const scope = (env.BASE_PATH || "/").replace(/\/?$/, "/")
+  const skip = (sw?: ServiceWorker | null) => {
+    if (!sw || !navigator.serviceWorker.controller) return
+    sw.postMessage({ type: "SKIP_WAITING" })
+  }
+  const state = { refresh: false }
+
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (state.refresh) return
+    state.refresh = true
+    window.location.reload()
+  })
+
+  window.addEventListener("load", () => {
+    navigator.serviceWorker
+      .register(scope + "sw.js", { scope })
+      .then((reg) => {
+        skip(reg.waiting)
+        reg.addEventListener("updatefound", () => {
+          const next = reg.installing
+          if (!next) return
+          next.addEventListener("statechange", () => {
+            if (next.state === "installed") skip(next)
+          })
+        })
+        reg.update().catch(() => {})
+        window.setInterval(() => reg.update().catch(() => {}), hour)
+      })
+      .catch(() => {})
+  })
+}
+
 if (root instanceof HTMLElement) {
+  pwa()
+
   render(
     () => (
       <PlatformProvider value={platform}>
