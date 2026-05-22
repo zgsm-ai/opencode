@@ -9,7 +9,7 @@ export default function AuthGuard(props: ParentProps) {
 
   createEffect(() => {
     if (auth.loading()) return
-    if (!auth.user()) window.location.href = getLoginUrl(location.pathname)
+    if (!auth.user()) window.location.href = getLoginUrl(location.pathname + location.search + location.hash)
   })
 
   return <Show when={!auth.loading() && auth.user()}>{props.children}</Show>
