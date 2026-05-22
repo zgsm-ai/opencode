@@ -155,3 +155,27 @@ export async function createSquad(body: Partial<Squad>): Promise<Squad> {
   const data = await res.json()
   return data.squad
 }
+
+// Projects
+
+export interface Project {
+  id: string
+  name: string
+  description?: string
+  creatorId: string
+  spaceId?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export async function listSpaceProjects(): Promise<Project[]> {
+  const slug = await ensureSpaceSlug()
+  if (!slug) return []
+  const res = await fetch(`${PREFIX}/api/spaces/${slug}/projects`, {
+    credentials: "include",
+    headers: { "X-Space-Slug": slug },
+  })
+  if (!res.ok) throw new Error("Failed to list projects")
+  const data = await res.json()
+  return data.projects ?? []
+}
