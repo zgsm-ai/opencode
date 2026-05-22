@@ -264,6 +264,15 @@ function getDirectory(path: string | undefined) {
   return relativizeProjectPath(_getDirectory(path), data.directory)
 }
 
+function normalizeToolInput(input: Record<string, any>): Record<string, any> {
+  return {
+    ...input,
+    filePath: input.filePath ?? input.file_path,
+    oldString: input.oldString ?? input.old_string,
+    newString: input.newString ?? input.new_string,
+  }
+}
+
 import type { IconProps } from "./icon"
 
 export type ToolInfo = {
@@ -279,6 +288,7 @@ function agentTitle(i18n: UiI18n, type?: string) {
 
 export function getToolInfo(tool: string, input: any = {}): ToolInfo {
   const i18n = useI18n()
+  input = normalizeToolInput(input)
   switch (tool.toLowerCase()) {
     case "read":
       return {
@@ -664,7 +674,7 @@ function contextToolDetail(part: ToolPart): string | undefined {
 }
 
 function contextToolTrigger(part: ToolPart, i18n: ReturnType<typeof useI18n>) {
-  const input = (part.state.input ?? {}) as Record<string, unknown>
+  const input = normalizeToolInput((part.state.input ?? {}) as Record<string, unknown>) as Record<string, unknown>
   const path = typeof input.path === "string" ? input.path : "/"
   const filePath = typeof input.filePath === "string" ? input.filePath : undefined
   const pattern = typeof input.pattern === "string" ? input.pattern : undefined
@@ -1310,7 +1320,7 @@ PART_MAPPING["tool"] = function ToolPartDisplay(props) {
   const emptyInput: Record<string, any> = {}
   const emptyMetadata: Record<string, any> = {}
 
-  const input = () => part().state?.input ?? emptyInput
+  const input = () => normalizeToolInput(part().state?.input ?? emptyInput)
   // @ts-expect-error
   const partMetadata = () => part().state?.metadata ?? emptyMetadata
   const taskId = createMemo(() => {
