@@ -49,6 +49,11 @@ const ConsoleDevicesRoute: Component = () => <ConsoleDevices />
 const ConsoleNotificationsRoute: Component = () => <ConsoleNotifications />
 const ConsoleKanbanRoute: Component = () => <ConsoleKanban />
 
+const CollaborationLayout = lazy(() => import("@/pages/collaboration/collaboration-layout"))
+const CollaborationIssuesPage = lazy(() => import("@/pages/collaboration/pages/issues-page"))
+const CollaborationProjectsPage = lazy(() => import("@/pages/collaboration/pages/projects-page"))
+const CollaborationSquadsPage = lazy(() => import("@/pages/collaboration/pages/squads-page"))
+
 
 const wrap = (Component: Component<{ children?: JSX.Element }>) => (props: { children?: JSX.Element }) => (
   <Suspense fallback={<Loading />}>
@@ -174,6 +179,18 @@ export const routeConfig: RouteConfig[] = [
       { path: "/devices", component: ConsoleDevicesRoute },
       { path: "/notifications", component: ConsoleNotificationsRoute },
       { path: "/usage", component: ConsoleUsage },
+    ],
+  },
+  {
+    path: "/collaboration",
+    component: CollaborationLayout,
+    auth: true,
+    menu: "collaboration",
+    children: [
+      { path: "/issues", component: CollaborationIssuesPage },
+      { path: "/projects", component: CollaborationProjectsPage },
+      { path: "/squads", component: CollaborationSquadsPage },
+      { path: "/", component: () => <Navigate href="/collaboration/issues" /> },
     ],
   },
   {

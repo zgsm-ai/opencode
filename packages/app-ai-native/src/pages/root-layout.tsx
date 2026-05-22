@@ -1,6 +1,6 @@
 import { type JSX, type ParentProps, Show, createEffect, createMemo } from "solid-js"
 import { useLocation, useNavigate } from "@solidjs/router"
-import { Gauge, Sun, Moon } from "lucide-solid"
+import { Gauge, Sun, Moon, Users } from "lucide-solid"
 import { Icon } from "@opencode-ai/ui/icon"
 import { IconButton } from "@opencode-ai/ui/icon-button"
 import { RadioGroup } from "@opencode-ai/ui/radio-group"
@@ -212,6 +212,11 @@ export default function RootLayout(props: ParentProps) {
     return path === "/console" || path.startsWith("/console/")
   }
 
+  const isCollaboration = () => {
+    const path = appPathname()
+    return path === "/collaboration" || path.startsWith("/collaboration/")
+  }
+
   return (
     <div class="flex h-full w-full overflow-hidden">
       <Show when={!isMobileWorkspace()}>
@@ -238,6 +243,14 @@ export default function RootLayout(props: ParentProps) {
                 active={isKanban()}
                 onClick={() => navigate("/kanban")}
                 node={<Gauge size={18} strokeWidth={1.75} aria-hidden="true" />}
+              />
+            </Show>
+            <Show when={auth.canAccessMenu("collaboration")}>
+              <NavButton
+                label={language.t("sidebar.collaboration")}
+                active={isCollaboration()}
+                onClick={() => navigate("/collaboration/issues")}
+                node={<Users size={18} strokeWidth={1.75} aria-hidden="true" />}
               />
             </Show>
           </nav>
