@@ -34,6 +34,8 @@ const WorkspaceHome = lazy(() => import("@/pages/workspace").then((m) => ({ defa
 const MobileWorkspaceLayout = lazy(() => import("@/pages/workspace").then((m) => ({ default: m.MobileWorkspaceLayout })))
 const MobileWorkspaceHome = lazy(() => import("@/pages/workspace").then((m) => ({ default: m.MobileWorkspaceHome })))
 const MobileWorkspaceDetail = lazy(() => import("@/pages/workspace").then((m) => ({ default: m.MobileWorkspaceDetail })))
+const MobileStoreLayout = lazy(() => import("@/pages/store").then((m) => ({ default: m.MobileStoreLayout })))
+const MobileStoreDetail = lazy(() => import("@/pages/store").then((m) => ({ default: m.MobileStoreDetail })))
 const CapabilityEditorLayout = lazy(() => import("@/pages/capability-editor-layout"))
 const consoleImport = import("@/pages/console")
 const ConsoleLayout = lazy(() => consoleImport.then((m) => ({ default: m.ConsoleLayout })))
@@ -111,6 +113,14 @@ export const routeConfig: RouteConfig[] = [
     children: [
       { path: "/", component: WorkspaceHome },
       { path: "/:workspaceID", component: WorkspaceLayout },
+    ],
+  },
+  {
+    path: "/m/store",
+    component: MobileStoreLayout,
+    auth: true,
+    children: [
+      { path: "/:itemId", component: MobileStoreDetail },
     ],
   },
   {

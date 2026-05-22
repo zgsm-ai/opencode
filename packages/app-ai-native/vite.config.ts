@@ -25,7 +25,6 @@ export default defineConfig(({ mode }) => {
       authToken = `Bearer ${match[1]}`
     }
   }
-
   return {
     base: basePath,
     plugins: [desktopPlugin] as any,
@@ -72,7 +71,7 @@ export default defineConfig(({ mode }) => {
               return path.replace(new RegExp(`^${prefix}`), "/cloud-dashboard")
             }
 
-            return path
+            return path.replace(new RegExp(`^${prefix}`), "/cloud-api")
           },
         },
         [`${quotaPrefix}/quota-manager`]: {

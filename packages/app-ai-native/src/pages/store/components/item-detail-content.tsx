@@ -1,14 +1,17 @@
 import { createResource, createSignal, createEffect, Show, For } from "solid-js"
 import { createHighlighter } from "shiki"
+import QRCode from "qrcode"
 import { useTheme } from "@opencode-ai/ui/theme"
 import { Icon } from "@opencode-ai/ui/icon"
 import { Markdown } from "@opencode-ai/ui/markdown"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { LocalIcon } from "@/components/local-icon"
 import AvatarDisplay from "@/components/avatar-display"
 import { useItemFilterOptions } from "@/context/item-filter-options"
 import { useAuth } from "@/context/auth"
 import { useNavigate } from "@solidjs/router"
+import { env } from "@/lib/env"
 import { itemApi, userApi, type CapabilityItem } from "../lib/api"
 import { useLanguage } from "@/context/language"
 import SecurityTag from "./security-tag"
@@ -156,6 +159,58 @@ function tryJson(raw: string): string | null {
 async function highlight(json: string, mode: "light" | "dark") {
   if (!highlighter) highlighter = await createHighlighter({ themes: [THEMES.light, THEMES.dark], langs: ["json"] })
   return highlighter.codeToHtml(json, { lang: "json", theme: THEMES[mode] })
+}
+
+function ShareButton(props: { itemId: string; itemName: string }) {
+  const language = useLanguage()
+  const [qrDataUrl, setQrDataUrl] = createSignal("")
+  const [copied, setCopied] = createSignal(false)
+
+  const shareUrl = () => {
+    const base = env.MOBILE_HOST.replace(/\/+$/, "")
+    const path = (env.BASE_PATH || "").replace(/\/+$/, "")
+    return `${base}${path}/m/store/${props.itemId}`
+  }
+
+  createEffect(() => {
+    QRCode.toDataURL(shareUrl(), { width: 160, margin: 1, color: { dark: "#1e293b" } })
+      .then(setQrDataUrl)
+      .catch(() => setQrDataUrl(""))
+  })
+
+  const copy = async () => {
+    await navigator.clipboard.writeText(shareUrl())
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  return (
+    <Popover>
+      <PopoverTrigger
+        as="button"
+        class="inline-flex items-center gap-1.5 rounded-lg border border-border-weak-base px-3 py-1.5 text-12-regular text-text-weak transition-colors duration-150 hover:bg-bg-muted hover:text-text-strong"
+        title={language.t("store.detail.share")}
+      >
+        <Icon name="share" size="small" />
+        <span>{language.t("store.detail.share")}</span>
+      </PopoverTrigger>
+      <PopoverContent class="w-[240px] rounded-xl border border-border-weak-base bg-[var(--native-panel)] p-4 shadow-lg">
+        <div class="flex flex-col items-center gap-3">
+          <Show when={qrDataUrl()}>
+            <img src={qrDataUrl()} alt="QR Code" class="h-[140px] w-[140px] rounded-lg" />
+          </Show>
+          <span class="text-xs text-text-weak">{language.t("store.detail.share.qrcode")}</span>
+          <button
+            onClick={() => void copy()}
+            class="flex w-full items-center justify-center gap-1.5 rounded-lg border border-border-weak-base px-3 py-2 text-12-regular text-text-weak transition-colors duration-150 hover:bg-bg-muted hover:text-text-strong"
+          >
+            <Icon name={copied() ? "check" : "link"} size="small" />
+            <span>{copied() ? language.t("store.detail.share.copied") : language.t("store.detail.share.copyLink")}</span>
+          </button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  )
 }
 
 interface ItemDetailContentProps {
@@ -351,6 +406,7 @@ export default function ItemDetailContent(props: ItemDetailContentProps) {
                         </span>
                       </button>
                     </Show>
+                    <ShareButton itemId={data().id} itemName={data().name} />
                   </div>
                 </div>
               </div>

@@ -183,6 +183,13 @@ export default function RootLayout(props: ParentProps) {
     return path === "/m/workspace" || path.startsWith("/m/workspace/")
   }
 
+  const isMobileStore = () => {
+    const path = appPathname()
+    return path === "/m/store" || path.startsWith("/m/store/")
+  }
+
+  const isMobile = () => isMobileWorkspace() || isMobileStore()
+
   const isWorkspace = () => {
     const path = appPathname()
     return path === "/workspace" || path.startsWith("/workspace/")
@@ -214,7 +221,7 @@ export default function RootLayout(props: ParentProps) {
 
   return (
     <div class="flex h-full w-full overflow-hidden">
-      <Show when={!isMobileWorkspace()}>
+      <Show when={!isMobile()}>
         <aside
           data-component="root-layout-nav"
           class="fixed inset-y-0 left-0 z-40 flex w-12 flex-col items-center border-r border-[color:color-mix(in_srgb,var(--native-border)_20%,transparent)] bg-[var(--native-panel)] py-4 transition-opacity duration-200"
@@ -262,7 +269,7 @@ export default function RootLayout(props: ParentProps) {
           </div>
         </aside>
       </Show>
-      <div class="flex-1 min-w-0 h-full overflow-hidden flex flex-col" classList={{ "ml-[48px]": !isMobileWorkspace() }}>{props.children}</div>
+      <div class="flex-1 min-w-0 h-full overflow-hidden flex flex-col" classList={{ "ml-[48px]": !isMobile() }}>{props.children}</div>
     </div>
   )
 }
