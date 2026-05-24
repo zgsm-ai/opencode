@@ -2,7 +2,18 @@ import { useFilteredList } from "@opencode-ai/ui/hooks"
 import { useSpring } from "@opencode-ai/ui/motion-spring"
 import { useWorkspaceVisible } from "@/pages/workspace/components/layout"
 import { WorkspaceContext } from "@/pages/workspace/context"
-import { createEffect, on, Component, Show, onCleanup, Switch, Match, createMemo, createSignal, useContext } from "solid-js"
+import {
+  createEffect,
+  on,
+  Component,
+  Show,
+  onCleanup,
+  Switch,
+  Match,
+  createMemo,
+  createSignal,
+  useContext,
+} from "solid-js"
 import { createStore } from "solid-js/store"
 import { createFocusSignal } from "@solid-primitives/active-element"
 import { useLocal } from "@/context/local"
@@ -270,7 +281,11 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   })
 
   const visible = useWorkspaceVisible()
-  const buttonsSpring = useSpring(() => (store.mode === "normal" ? 1 : 0), { visualDuration: 0.2, bounce: 0 }, () => !visible())
+  const buttonsSpring = useSpring(
+    () => (store.mode === "normal" ? 1 : 0),
+    { visualDuration: 0.2, bounce: 0 },
+    () => !visible(),
+  )
 
   const commentCount = createMemo(() => {
     if (store.mode === "shell") return 0
@@ -535,7 +550,15 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     if (option.type === "agent") {
       addPart({ type: "agent", name: option.name, content: "@" + option.name, start: 0, end: 0 })
     } else if (option.type === "workspace") {
-      addPart({ type: "workspace", workspaceId: option.id, workspaceName: option.name, directory: option.directory, content: "@" + option.name, start: 0, end: 0 })
+      addPart({
+        type: "workspace",
+        workspaceId: option.id,
+        workspaceName: option.name,
+        directory: option.directory,
+        content: "@" + option.name,
+        start: 0,
+        end: 0,
+      })
     } else {
       addPart({ type: "file", path: option.path, content: "@" + option.path, start: 0, end: 0 })
     }
@@ -1423,29 +1446,29 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
               }}
             >
               <Show when={!props.hideAttachButton}>
-              <TooltipKeybind
-                placement="top"
-                title={language.t("prompt.action.attachFile")}
-                keybind={command.keybind("file.attach")}
-              >
-                <Button
-                  data-action="prompt-attach"
-                  type="button"
-                  variant="ghost"
-                  class="size-8 p-0"
-                  style={{
-                    opacity: buttonsSpring(),
-                    transform: `scale(${0.95 + buttonsSpring() * 0.05})`,
-                    filter: `blur(${(1 - buttonsSpring()) * 2}px)`,
-                  }}
-                  onClick={pick}
-                  disabled={store.mode !== "normal"}
-                  tabIndex={store.mode === "normal" ? undefined : -1}
-                  aria-label={language.t("prompt.action.attachFile")}
+                <TooltipKeybind
+                  placement="top"
+                  title={language.t("prompt.action.attachFile")}
+                  keybind={command.keybind("file.attach")}
                 >
-                  <Icon name="plus" class="size-4.5" />
-                </Button>
-              </TooltipKeybind>
+                  <Button
+                    data-action="prompt-attach"
+                    type="button"
+                    variant="ghost"
+                    class="size-8 p-0"
+                    style={{
+                      opacity: buttonsSpring(),
+                      transform: `scale(${0.95 + buttonsSpring() * 0.05})`,
+                      filter: `blur(${(1 - buttonsSpring()) * 2}px)`,
+                    }}
+                    onClick={pick}
+                    disabled={store.mode !== "normal"}
+                    tabIndex={store.mode === "normal" ? undefined : -1}
+                    aria-label={language.t("prompt.action.attachFile")}
+                  >
+                    <Icon name="plus" class="size-4.5" />
+                  </Button>
+                </TooltipKeybind>
               </Show>
 
               <Tooltip
@@ -1486,8 +1509,6 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
               </Tooltip>
             </div>
           </div>
-
-
         </div>
       </DockShellForm>
       <Show when={store.mode === "normal" || store.mode === "shell"}>
@@ -1519,7 +1540,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                     options={agentNames()}
                     current={local.agent.current()?.name ?? ""}
                     onSelect={local.agent.set}
-                    class="capitalize max-w-[72px] min-w-0 shrink"
+                    class="capitalize max-w-24 sm:max-w-32 min-w-0 shrink"
                     valueClass="truncate text-13-regular"
                     triggerStyle={{
                       height: "28px",
@@ -1617,7 +1638,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                       current={local.model.variant.current() ?? "default"}
                       label={(x) => (x === "default" ? language.t("common.default") : x)}
                       onSelect={(x) => local.model.variant.set(x === "default" ? undefined : x)}
-                      class="capitalize max-w-[72px] min-w-0 shrink"
+                      class="capitalize max-w-30 sm:max-w-none min-w-0 shrink"
                       valueClass="truncate text-13-regular"
                       triggerStyle={{
                         height: "28px",
@@ -1635,9 +1656,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                     placement="top"
                     gutter={4}
                     title={language.t(
-                      accepting()
-                        ? "command.permissions.autoaccept.disable"
-                        : "command.permissions.autoaccept.enable",
+                      accepting() ? "command.permissions.autoaccept.disable" : "command.permissions.autoaccept.enable",
                     )}
                     keybind={command.keybind("permissions.autoaccept")}
                   >
