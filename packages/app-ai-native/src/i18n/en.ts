@@ -712,6 +712,12 @@ export const dict = {
   "store.browse.hero.title": "Discover AI Capabilities",
   "store.browse.hero.placeholder": "Search skills, subagents, commands...",
 
+  "store.browse.type.skills": "Skills",
+  "store.browse.type.subagents": "Subagents",
+  "store.browse.type.commands": "Commands",
+  "store.browse.type.mcp": "MCP Servers",
+  "store.browse.type.plugins": "Plugins",
+
   "theme.scheme.system": "System",
   "theme.scheme.light": "Light",
   "theme.scheme.dark": "Dark",

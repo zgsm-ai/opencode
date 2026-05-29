@@ -1621,6 +1621,12 @@ export const dict = {
   "store.browse.hero.title": "发现 AI 能力",
   "store.browse.hero.placeholder": "搜索技能、子代理、命令...",
 
+  "store.browse.type.skills": "技能",
+  "store.browse.type.subagents": "子代理",
+  "store.browse.type.commands": "命令",
+  "store.browse.type.mcp": "MCP 服务器",
+  "store.browse.type.plugins": "插件",
+
   "workspace.loading.dataFailed": "无法加载工作空间或设备数据",
   "workspace.page.title": "工作空间",
   "workspace.device.selected": "已选择设备",
