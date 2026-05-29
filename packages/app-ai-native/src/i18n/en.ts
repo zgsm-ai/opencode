@@ -709,6 +709,9 @@ export const dict = {
   "store.security.permissionNeeds": "Permission Needs",
   "store.security.suggestions": "Suggestions",
 
+  "store.browse.title": "Skills Store",
+  "store.browse.admin": "Manage",
+
   "store.browse.hero.title": "Discover AI Capabilities",
   "store.browse.hero.placeholder": "Search skills, subagents, commands...",
 

@@ -1618,6 +1618,9 @@ export const dict = {
   "store.security.permissionNeeds": "权限需求",
   "store.security.suggestions": "修改建议",
 
+  "store.browse.title": "技能商店",
+  "store.browse.admin": "管理",
+
   "store.browse.hero.title": "发现 AI 能力",
   "store.browse.hero.placeholder": "搜索技能、子代理、命令...",
 
