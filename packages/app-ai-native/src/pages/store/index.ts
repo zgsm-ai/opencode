@@ -1,5 +1,6 @@
 export { default as StoreLayout } from "./components/browse-layout"
 export { default as StoreHome } from "./pages/home"
+export { default as StoreSearch } from "./pages/search"
 export { default as StoreManager } from "./pages/manager"
 export { default as MobileStoreLayout } from "./mobile/layout"
 export { default as MobileStoreDetail } from "./mobile/detail"
