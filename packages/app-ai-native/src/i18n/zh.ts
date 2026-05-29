@@ -1618,6 +1618,9 @@ export const dict = {
   "store.security.permissionNeeds": "权限需求",
   "store.security.suggestions": "修改建议",
 
+  "store.browse.hero.title": "发现 AI 能力",
+  "store.browse.hero.placeholder": "搜索技能、子代理、命令...",
+
   "workspace.loading.dataFailed": "无法加载工作空间或设备数据",
   "workspace.page.title": "工作空间",
   "workspace.device.selected": "已选择设备",
