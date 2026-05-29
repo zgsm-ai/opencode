@@ -1621,6 +1621,9 @@ export const dict = {
   "store.browse.hero.title": "发现 AI 能力",
   "store.browse.hero.placeholder": "搜索技能、子代理、命令...",
 
+  "store.browse.featured": "精选推荐",
+  "store.browse.seeAll": "查看全部",
+
   "store.browse.type.skills": "技能",
   "store.browse.type.subagents": "子代理",
   "store.browse.type.commands": "命令",
