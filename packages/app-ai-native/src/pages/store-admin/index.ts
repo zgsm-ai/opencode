@@ -1,0 +1,6 @@
+export { default as AdminLayout } from "./components/admin-layout"
+export { default as Dashboard } from "./pages/dashboard"
+export { default as MyCapabilities } from "./pages/my-capabilities"
+export { default as Favorites } from "./pages/favorites"
+export { default as Received } from "./pages/received"
+export { default as Sent } from "./pages/sent"
