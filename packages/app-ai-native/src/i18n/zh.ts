@@ -1623,6 +1623,7 @@ export const dict = {
 
   "store.browse.featured": "精选推荐",
   "store.browse.seeAll": "查看全部",
+  "store.browse.categories": "分类",
 
   "store.browse.type.skills": "技能",
   "store.browse.type.subagents": "子代理",
