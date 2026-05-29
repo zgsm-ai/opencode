@@ -10,6 +10,7 @@ const RootLayout = lazy(() => import("@/pages/root-layout"))
 const StoreLayout = lazy(() => import("@/pages/store").then((m) => ({ default: m.StoreLayout })))
 const StoreHome = lazy(() => import("@/pages/store").then((m) => ({ default: m.StoreHome })))
 const StoreSearch = lazy(() => import("@/pages/store").then((m) => ({ default: m.StoreSearch })))
+const StoreDetail = lazy(() => import("@/pages/store").then((m) => ({ default: m.StoreDetail })))
 const StoreManager = lazy(() => import("@/pages/store").then((m) => ({ default: m.StoreManager })))
 const AdminLayout = lazy(() => import("@/pages/store-admin").then((m) => ({ default: m.AdminLayout })))
 const AdminDashboard = lazy(() => import("@/pages/store-admin").then((m) => ({ default: m.Dashboard })))
@@ -202,6 +203,7 @@ export const routeConfig: RouteConfig[] = [
     children: [
       { path: "/", component: StoreHome },
       { path: "/search", component: StoreSearch },
+      { path: "/:slug", component: StoreDetail },
       { path: "/manager", component: StoreManager },
     ],
   },

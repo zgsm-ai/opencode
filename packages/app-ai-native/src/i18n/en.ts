@@ -719,6 +719,8 @@ export const dict = {
   "store.browse.seeAll": "See all",
   "store.browse.categories": "Categories",
 
+  "store.browse.back": "Back",
+
   "store.browse.filter.all": "All",
   "store.browse.filter.type": "Type",
   "store.browse.filter.category": "Category",

@@ -1628,6 +1628,8 @@ export const dict = {
   "store.browse.seeAll": "查看全部",
   "store.browse.categories": "分类",
 
+  "store.browse.back": "返回",
+
   "store.browse.filter.all": "全部",
   "store.browse.filter.type": "类型",
   "store.browse.filter.category": "分类",
