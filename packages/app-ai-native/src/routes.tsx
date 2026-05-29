@@ -10,6 +10,12 @@ const RootLayout = lazy(() => import("@/pages/root-layout"))
 const StoreLayout = lazy(() => import("@/pages/store").then((m) => ({ default: m.StoreLayout })))
 const StoreHome = lazy(() => import("@/pages/store").then((m) => ({ default: m.StoreHome })))
 const StoreManager = lazy(() => import("@/pages/store").then((m) => ({ default: m.StoreManager })))
+const AdminLayout = lazy(() => import("@/pages/store-admin").then((m) => ({ default: m.AdminLayout })))
+const AdminDashboard = lazy(() => import("@/pages/store-admin").then((m) => ({ default: m.Dashboard })))
+const AdminMyCapabilities = lazy(() => import("@/pages/store-admin").then((m) => ({ default: m.MyCapabilities })))
+const AdminFavorites = lazy(() => import("@/pages/store-admin").then((m) => ({ default: m.Favorites })))
+const AdminReceived = lazy(() => import("@/pages/store-admin").then((m) => ({ default: m.Received })))
+const AdminSent = lazy(() => import("@/pages/store-admin").then((m) => ({ default: m.Sent })))
 const ProjectsLayout = lazy(() => import("@/pages/projects").then((m) => ({ default: m.ProjectsLayout })))
 const ProjectsHome = lazy(() => import("@/pages/projects").then((m) => ({ default: m.ProjectsHome })))
 const ProjectDetail = lazy(() => import("@/pages/projects").then((m) => ({ default: m.ProjectDetail })))
@@ -195,6 +201,18 @@ export const routeConfig: RouteConfig[] = [
     children: [
       { path: "/", component: StoreHome },
       { path: "/manager", component: StoreManager },
+    ],
+  },
+  {
+    path: "/store-admin",
+    component: AdminLayout,
+    auth: true,
+    children: [
+      { path: "/", component: AdminDashboard },
+      { path: "/capabilities", component: AdminMyCapabilities },
+      { path: "/favorites", component: AdminFavorites },
+      { path: "/received", component: AdminReceived },
+      { path: "/sent", component: AdminSent },
     ],
   },
 ]
