@@ -12,6 +12,7 @@
     "typecheck": "tsgo -b",
     "start": "bun run script/server.ts",
     "dev": "vite",
+    "dev:demo": "vite --mode demo",
     "build": "vite build && bun run script/gzip.ts",
     "serve": "vite preview",
     "test": "bun run test:unit",

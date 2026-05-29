@@ -14,7 +14,23 @@ import type {
 const PREFIX = env.API_PREFIX
 const API_BASE = env.API_URL || PREFIX
 
+// Lazy import to avoid bundling mock data in production builds
+let _mockApiFetch: typeof import("./mock-api").mockApiFetch | undefined
+async function getMockApiFetch() {
+  if (!_mockApiFetch) {
+    const mod = await import("./mock-api")
+    _mockApiFetch = mod.mockApiFetch
+  }
+  return _mockApiFetch
+}
+
 export async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
+  // In demo mode, intercept all API calls and return mock data
+  if (env.DEMO_MODE) {
+    const mockFetch = await getMockApiFetch()
+    return mockFetch<T>(`${API_BASE}${path}`, options)
+  }
+
   const headers =
     options?.body instanceof FormData ? options.headers : { "Content-Type": "application/json", ...options?.headers }
   const res = await fetch(`${API_BASE}${path}`, {

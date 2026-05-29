@@ -6,6 +6,28 @@ import { createStore } from "solid-js/store"
 import { onMount } from "solid-js"
 import type { CasdoorUser } from "@/pages/store/lib/auth"
 
+// Demo mode mock user
+const DEMO_USER: CasdoorUser = {
+  id: "demo-user-001",
+  subjectId: "demo-user-001",
+  username: "demo_user",
+  avatarUrl: "",
+  casdoorUniversalId: "demo-casdoor-001",
+  systemRoles: ["admin"],
+  sub: "demo-user-001",
+  name: "Demo User",
+  preferred_username: "demo_user",
+  email: "demo@example.com",
+  picture: "",
+  owner: "demo-org",
+}
+
+const DEMO_PERMISSIONS: UserPermissions = {
+  menus: ["kanban", "console"],
+  apis: ["*"],
+  capabilities: ["*"],
+}
+
 function normalizeAuthUser(raw: any): CasdoorUser | null {
   if (!raw || typeof raw !== "object") return null
 
@@ -102,6 +124,14 @@ export function AuthProvider(props: ParentProps) {
   }
 
   onMount(async () => {
+    // In demo mode, immediately set mock user without API calls
+    if (env.DEMO_MODE) {
+      setState("user", DEMO_USER)
+      setState("permissions", DEMO_PERMISSIONS)
+      setState("loading", false)
+      return
+    }
+
     await fetchUser()
     if (state.user) {
       await fetchPermissions()
@@ -110,6 +140,12 @@ export function AuthProvider(props: ParentProps) {
   })
 
   const logout = async () => {
+    if (env.DEMO_MODE) {
+      // In demo mode, just reset to demo user
+      setState("user", DEMO_USER)
+      setState("permissions", DEMO_PERMISSIONS)
+      return
+    }
     await fetch(`${PREFIX}/api/auth/logout`, { method: "POST", credentials: "include" }).catch(() => {})
     setState("user", null)
     setState("permissions", null)

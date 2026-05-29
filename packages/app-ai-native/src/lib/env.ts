@@ -112,4 +112,9 @@ export const env = {
   get OPENCODE_SERVER_PORT() {
     return getEnv("VITE_OPENCODE_SERVER_PORT", "8080")
   },
+
+  // Demo mode: use mock data instead of real API calls
+  get DEMO_MODE() {
+    return getEnv("VITE_DEMO_MODE", "false") === "true"
+  },
 }
