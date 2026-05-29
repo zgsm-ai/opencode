@@ -1625,6 +1625,11 @@ export const dict = {
   "store.browse.seeAll": "查看全部",
   "store.browse.categories": "分类",
 
+  "store.browse.filter.all": "全部",
+  "store.browse.filter.type": "类型",
+  "store.browse.filter.category": "分类",
+  "store.browse.filter.security": "安全",
+
   "store.browse.type.skills": "技能",
   "store.browse.type.subagents": "子代理",
   "store.browse.type.commands": "命令",

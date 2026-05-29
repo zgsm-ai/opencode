@@ -716,6 +716,11 @@ export const dict = {
   "store.browse.seeAll": "See all",
   "store.browse.categories": "Categories",
 
+  "store.browse.filter.all": "All",
+  "store.browse.filter.type": "Type",
+  "store.browse.filter.category": "Category",
+  "store.browse.filter.security": "Security",
+
   "store.browse.type.skills": "Skills",
   "store.browse.type.subagents": "Subagents",
   "store.browse.type.commands": "Commands",
