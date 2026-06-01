@@ -53,6 +53,7 @@ const ConsoleIdentity = lazy(() => consoleImport.then((m) => ({ default: m.Ident
 const ConsoleDevicesRoute: Component = () => <ConsoleDevices />
 const ConsoleNotificationsRoute: Component = () => <ConsoleNotifications />
 const ConsoleKanbanRoute: Component = () => <ConsoleKanban />
+const MulticaPage = lazy(() => import("@/pages/multica").then((m) => ({ default: m.MulticaPage })))
 
 
 const wrap = (Component: Component<{ children?: JSX.Element }>) => (props: { children?: JSX.Element }) => (
@@ -200,5 +201,10 @@ export const routeConfig: RouteConfig[] = [
       { path: "/", component: StoreHome },
       { path: "/manager", component: StoreManager },
     ],
+  },
+  {
+    path: "/multica",
+    component: MulticaPage,
+    auth: true,
   },
 ]
