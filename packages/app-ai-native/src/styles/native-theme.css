@@ -44,17 +44,17 @@
   --native-font-body: "Aptos", "Segoe UI Variable Text", "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
   --native-font-mono: var(--font-family-mono, "Cascadia Mono", "SF Mono", "Consolas", monospace);
 
-  --native-bg: oklch(98.2% 0.007 255);
-  --native-bg-subtle: oklch(96.8% 0.01 255);
-  --native-surface: oklch(95.2% 0.013 255);
-  --native-surface-strong: oklch(92.7% 0.017 255);
-  --native-panel: oklch(99.3% 0.003 255);
+  --native-bg: #f8f9fb;
+  --native-bg-subtle: #f2f4f7;
+  --native-surface: #eceff3;
+  --native-surface-strong: #e2e6ec;
+  --native-panel: #ffffff;
   --native-panel-soft: color-mix(in oklab, var(--native-panel) 90%, var(--native-bg-subtle));
-  --native-foreground: oklch(27.4% 0.031 258);
-  --native-muted: oklch(38% 0.018 255);
-  --native-dim: oklch(59.6% 0.014 255);
-  --native-border: oklch(82.8% 0.014 255);
-  --native-border-strong: oklch(65.5% 0.022 256);
+  --native-foreground: #111827;
+  --native-muted: #4b5563;
+  --native-dim: #6b7280;
+  --native-border: #d1d5db;
+  --native-border-strong: #9ca3af;
   --native-input: oklch(99.7% 0.002 255);
   --native-primary: #0053dc;
   --native-primary-hover: #0045b9;
