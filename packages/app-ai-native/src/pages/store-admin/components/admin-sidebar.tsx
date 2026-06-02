@@ -3,7 +3,6 @@ import { useLanguage } from "@/context/language"
 import { Icon } from "@opencode-ai/ui/icon"
 
 const NAV_ITEMS = [
-  { href: "/store-admin", labelKey: "store.admin.dashboard", icon: "store", exact: true },
   { href: "/store-admin/capabilities", labelKey: "store.admin.myCapabilities", icon: "archive" },
   { href: "/store-admin/favorites", labelKey: "store.admin.favorites", icon: "check" },
   { href: "/store-admin/received", labelKey: "store.admin.received", icon: "inbox" },
@@ -26,7 +25,7 @@ export default function AdminSidebar() {
           <A
             href={item.href}
             class={`flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors ${
-              isActive(item.href, "exact" in item ? item.exact : false)
+              isActive(item.href, false)
                 ? "bg-[var(--native-surface)] text-[var(--native-foreground)]"
                 : "text-[var(--native-muted)] hover:bg-[var(--native-surface)] hover:text-[var(--native-foreground)]"
             }`}
