@@ -104,7 +104,7 @@ export default function CategoryGrid() {
             const meta = CAT_META[cat.slug] ?? CAT_META["code-generation"]
             return (
               <div
-                class="group relative flex flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white transition-all duration-300 hover:-translate-y-1 hover:border-gray-300 hover:shadow-xl"
+                class="group relative flex flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-gray-300 hover:shadow-xl"
               >
                 {/* Top color bar */}
                 <div
@@ -113,7 +113,7 @@ export default function CategoryGrid() {
                 />
 
                 {/* Header */}
-                <div class={`bg-gradient-to-br ${meta.gradient} px-5 pb-4 pt-5`}>
+                <div class={`bg-gradient-to-br ${meta.gradient} px-5 pb-5 pt-6`}>
                   <div class="flex items-start justify-between">
                     <div
                       class="flex size-10 items-center justify-center rounded-xl border border-white/60 shadow-sm"
@@ -136,19 +136,19 @@ export default function CategoryGrid() {
                   </div>
 
                   <h3
-                    class="mt-3 text-base font-bold"
+                    class="mt-4 text-base font-bold"
                     style={{ color: '#000000' }}
                   >
                     {cat.names?.[language.locale()] ?? cat.slug}
                   </h3>
-                  <p class="mt-1 line-clamp-2 text-xs leading-relaxed text-gray-500">
+                  <p class="mt-2 line-clamp-2 text-xs leading-relaxed text-gray-500">
                     {cat.descriptions?.[language.locale()] ?? ""}
                   </p>
                 </div>
 
                 {/* Item list */}
-                <div class="flex-1 px-5 pb-2 pt-3">
-                  <div class="space-y-2.5">
+                <div class="flex-1 px-5 pb-3 pt-4">
+                  <div class="space-y-3">
                     <For each={cat.items.slice(0, 3)}>
                       {(item) => {
                         const t = TYPE_META[item.itemType] ?? TYPE_META.skill
@@ -156,7 +156,7 @@ export default function CategoryGrid() {
                           <button
                             type="button"
                             onClick={() => navigate(`/store/${item.slug}`)}
-                            class="flex w-full items-center gap-2.5 rounded-lg p-2 text-left transition-colors hover:bg-gray-50"
+                            class="flex w-full items-center gap-3 rounded-lg p-3 text-left transition-colors hover:bg-gray-50"
                           >
                             <div
                               class="flex size-7 shrink-0 items-center justify-center rounded-md"
@@ -189,7 +189,7 @@ export default function CategoryGrid() {
                 </div>
 
                 {/* Footer */}
-                <div class="px-5 pb-4 pt-1">
+                <div class="px-5 pb-5 pt-2">
                   <button
                     type="button"
                     onClick={() =>
