@@ -124,6 +124,14 @@ export const dict = {
   "store.sent.toast.revokeSuccess": "Revoked",
   "store.sent.toast.revokeFailed": "Failed to revoke",
 
+  "store.admin.dashboardTitle": "Dashboard",
+  "store.admin.stats.capabilities": "My Capabilities",
+  "store.admin.stats.favorites": "Favorites",
+  "store.admin.stats.received": "Received",
+  "store.admin.stats.sent": "Sent",
+  "store.admin.recentActivity": "Recent Activity",
+  "store.admin.noActivity": "No recent activity",
+
   "store.sidebar.manage": "Manage",
   "store.sidebar.nav.received": "Received",
   "store.sidebar.nav.sent": "Sent",

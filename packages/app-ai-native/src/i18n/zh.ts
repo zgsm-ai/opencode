@@ -1039,6 +1039,14 @@ export const dict = {
   "store.sent.toast.revokeSuccess": "已收回",
   "store.sent.toast.revokeFailed": "收回失败",
 
+  "store.admin.dashboardTitle": "仪表盘",
+  "store.admin.stats.capabilities": "我的能力",
+  "store.admin.stats.favorites": "收藏",
+  "store.admin.stats.received": "收到",
+  "store.admin.stats.sent": "发出",
+  "store.admin.recentActivity": "最近活动",
+  "store.admin.noActivity": "暂无活动",
+
   "store.sidebar.manage": "管理",
   "store.sidebar.nav.received": "收到的推送",
   "store.sidebar.nav.sent": "我下发的",
