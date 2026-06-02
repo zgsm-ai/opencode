@@ -51,7 +51,7 @@
   --native-panel: oklch(99.3% 0.003 255);
   --native-panel-soft: color-mix(in oklab, var(--native-panel) 90%, var(--native-bg-subtle));
   --native-foreground: oklch(27.4% 0.031 258);
-  --native-muted: oklch(44.9% 0.018 255);
+  --native-muted: oklch(38% 0.018 255);
   --native-dim: oklch(59.6% 0.014 255);
   --native-border: oklch(82.8% 0.014 255);
   --native-border-strong: oklch(65.5% 0.022 256);
