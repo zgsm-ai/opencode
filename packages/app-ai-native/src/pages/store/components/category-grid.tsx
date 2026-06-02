@@ -43,7 +43,7 @@ export default function CategoryGrid() {
         <For each={categories()}>
           {(cat) => (
             <div class="rounded-xl border border-[var(--native-border)] bg-[var(--native-panel)] p-4">
-              <h3 class="mb-3 text-base font-semibold text-[var(--native-foreground)]">
+              <h3 class="mb-3 text-base font-semibold text-gray-900">
                 {cat.names?.[language.locale()] ?? cat.slug}
               </h3>
               <div class="space-y-2">
