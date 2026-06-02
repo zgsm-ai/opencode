@@ -63,7 +63,7 @@ export default function CapabilityListItem(props: {
           <Icon name={meta().icon as any} class="size-4" />
         </div>
         <div class="min-w-0 flex-1">
-          <h3 class="truncate text-base font-black" style={{ color: '#000000' }}>
+          <h3 class="truncate text-base font-bold" style={{ color: '#000000', '-webkit-text-stroke': '0.4px #000000' }}>
             {props.item.name}
           </h3>
           <p class="text-xs text-gray-500">
