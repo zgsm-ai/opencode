@@ -63,10 +63,10 @@ export default function CapabilityListItem(props: {
           <Icon name={meta().icon as any} class="size-4" />
         </div>
         <div class="min-w-0 flex-1">
-          <h3 class="truncate text-base font-semibold text-[var(--native-foreground)]">
+          <h3 class="truncate text-base font-semibold text-gray-900">
             {props.item.name}
           </h3>
-          <p class="text-xs text-[var(--native-muted)]">
+          <p class="text-xs text-gray-500">
             {props.item.itemType} · {props.item.category} · by {props.item.createdBy}
           </p>
         </div>
@@ -74,7 +74,7 @@ export default function CapabilityListItem(props: {
       </div>
 
       {/* Description */}
-      <p class="line-clamp-2 text-sm text-[var(--native-muted)]">
+      <p class="line-clamp-2 text-sm text-gray-500">
         {description()}
       </p>
 
@@ -82,7 +82,7 @@ export default function CapabilityListItem(props: {
       <Show when={props.item.tags && props.item.tags.length > 0}>
         <div class="flex flex-wrap gap-1.5">
           {props.item.tags?.slice(0, 3).map((tag) => (
-            <span class="rounded-full bg-[var(--native-surface)] px-2 py-0.5 text-xs text-[var(--native-muted)]">
+            <span class="rounded-full bg-[var(--native-surface)] px-2 py-0.5 text-xs text-gray-500">
               #{tag.slug}
             </span>
           ))}
@@ -90,7 +90,7 @@ export default function CapabilityListItem(props: {
       </Show>
 
       {/* Footer stats */}
-      <div class="flex items-center justify-between text-xs text-[var(--native-muted)]">
+      <div class="flex items-center justify-between text-xs text-gray-500">
         <div class="flex items-center gap-3">
           <span class="flex items-center gap-1">
             <LocalIcon name="star" size="small" />

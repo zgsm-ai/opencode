@@ -50,17 +50,17 @@ export default function CapabilityCard(props: {
           <Icon name={meta().icon as any} class="size-5" />
         </div>
         <div class="min-w-0 flex-1">
-          <h3 class="truncate text-base font-semibold text-[var(--native-foreground)]">
+          <h3 class="truncate text-base font-semibold text-gray-900">
             {props.item.name}
           </h3>
-          <p class="text-xs text-[var(--native-muted)]">
+          <p class="text-xs text-gray-500">
             {props.item.itemType} · by {props.item.createdBy}
           </p>
         </div>
       </div>
 
       {/* Description */}
-      <p class="mt-3 line-clamp-2 text-sm text-[var(--native-muted)]">
+      <p class="mt-3 line-clamp-2 text-sm text-gray-500">
         {description()}
       </p>
 
@@ -68,12 +68,12 @@ export default function CapabilityCard(props: {
       <Show when={props.item.tags && props.item.tags.length > 0}>
         <div class="mt-3 flex flex-wrap gap-1.5">
           {props.item.tags?.slice(0, 2).map((tag) => (
-            <span class="rounded-full bg-[var(--native-surface)] px-2 py-0.5 text-xs text-[var(--native-muted)]">
+            <span class="rounded-full bg-[var(--native-surface)] px-2 py-0.5 text-xs text-gray-500">
               #{tag.slug}
             </span>
           ))}
           <Show when={(props.item.tags?.length ?? 0) > 2}>
-            <span class="text-xs text-[var(--native-muted)]">
+            <span class="text-xs text-gray-500">
               +{(props.item.tags?.length ?? 0) - 2}
             </span>
           </Show>
@@ -81,7 +81,7 @@ export default function CapabilityCard(props: {
       </Show>
 
       {/* Footer stats */}
-      <div class="mt-auto flex items-center justify-between pt-3 text-xs text-[var(--native-muted)]">
+      <div class="mt-auto flex items-center justify-between pt-3 text-xs text-gray-500">
         <div class="flex items-center gap-3">
           <span class="flex items-center gap-1">
             <LocalIcon name="star" size="small" />
