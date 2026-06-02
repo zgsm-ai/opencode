@@ -1635,6 +1635,7 @@ export const dict = {
   "store.browse.filter.category": "分类",
   "store.browse.filter.security": "安全",
 
+  "store.browse.type.all": "全部",
   "store.browse.type.skills": "技能",
   "store.browse.type.subagents": "子代理",
   "store.browse.type.commands": "命令",

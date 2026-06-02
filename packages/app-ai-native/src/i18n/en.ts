@@ -726,6 +726,7 @@ export const dict = {
   "store.browse.filter.category": "Category",
   "store.browse.filter.security": "Security",
 
+  "store.browse.type.all": "All",
   "store.browse.type.skills": "Skills",
   "store.browse.type.subagents": "Subagents",
   "store.browse.type.commands": "Commands",
