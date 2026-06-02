@@ -1,12 +1,13 @@
 import { A, useLocation } from "@solidjs/router"
 import { useLanguage } from "@/context/language"
+import { Icon } from "@opencode-ai/ui/icon"
 
 const NAV_ITEMS = [
-  { href: "/store-admin", labelKey: "store.admin.dashboard", icon: "home", exact: true },
-  { href: "/store-admin/capabilities", labelKey: "store.admin.myCapabilities", icon: "package" },
-  { href: "/store-admin/favorites", labelKey: "store.admin.favorites", icon: "star" },
+  { href: "/store-admin", labelKey: "store.admin.dashboard", icon: "store", exact: true },
+  { href: "/store-admin/capabilities", labelKey: "store.admin.myCapabilities", icon: "archive" },
+  { href: "/store-admin/favorites", labelKey: "store.admin.favorites", icon: "check" },
   { href: "/store-admin/received", labelKey: "store.admin.received", icon: "inbox" },
-  { href: "/store-admin/sent", labelKey: "store.admin.sent", icon: "send" },
+  { href: "/store-admin/sent", labelKey: "store.admin.sent", icon: "share" },
 ] as const
 
 export default function AdminSidebar() {
@@ -30,7 +31,7 @@ export default function AdminSidebar() {
                 : "text-[var(--native-muted)] hover:bg-[var(--native-surface)] hover:text-[var(--native-foreground)]"
             }`}
           >
-            <span class="size-4">{/* Icon placeholder */}</span>
+            <Icon name={item.icon as any} class="size-4 shrink-0" />
             <span>{language.t(item.labelKey as Parameters<typeof language.t>[0])}</span>
           </A>
         ))}
