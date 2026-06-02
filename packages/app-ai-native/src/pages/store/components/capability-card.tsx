@@ -50,7 +50,7 @@ export default function CapabilityCard(props: {
           <Icon name={meta().icon as any} class="size-5" />
         </div>
         <div class="min-w-0 flex-1">
-          <h3 class="truncate text-base font-semibold text-gray-900">
+          <h3 class="truncate text-base font-bold" style={{ color: '#000000' }}>
             {props.item.name}
           </h3>
           <p class="text-xs text-gray-500">
