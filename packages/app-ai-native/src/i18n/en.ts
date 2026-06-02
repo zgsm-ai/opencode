@@ -761,6 +761,8 @@ export const dict = {
   "store.browse.featured": "Featured",
   "store.browse.seeAll": "See all",
   "store.browse.categories": "Categories",
+  "store.browse.categoriesDesc": "Explore capabilities by category",
+  "store.browse.viewCategory": "View all",
 
   "store.browse.back": "Back",
 

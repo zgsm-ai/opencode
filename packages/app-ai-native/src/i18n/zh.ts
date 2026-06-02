@@ -1670,6 +1670,8 @@ export const dict = {
   "store.browse.featured": "精选推荐",
   "store.browse.seeAll": "查看全部",
   "store.browse.categories": "分类",
+  "store.browse.categoriesDesc": "按分类探索能力",
+  "store.browse.viewCategory": "查看全部",
 
   "store.browse.back": "返回",
 
