@@ -144,6 +144,10 @@ export const dict = {
   "store.admin.table.updated": "Updated",
   "store.admin.table.actions": "Actions",
   "store.admin.action.view": "View",
+  "store.admin.favoritesTitle": "My Favorites",
+  "store.admin.searchFavorites": "Search favorites...",
+  "store.admin.noFavorites": "No favorites yet",
+  "store.admin.unfavorite": "Remove from favorites",
 
   "store.sidebar.manage": "Manage",
   "store.sidebar.nav.received": "Received",

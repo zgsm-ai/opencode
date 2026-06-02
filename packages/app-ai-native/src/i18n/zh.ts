@@ -1059,6 +1059,10 @@ export const dict = {
   "store.admin.table.updated": "更新日期",
   "store.admin.table.actions": "操作",
   "store.admin.action.view": "查看",
+  "store.admin.favoritesTitle": "我的收藏",
+  "store.admin.searchFavorites": "搜索收藏...",
+  "store.admin.noFavorites": "暂无收藏",
+  "store.admin.unfavorite": "取消收藏",
 
   "store.sidebar.manage": "管理",
   "store.sidebar.nav.received": "收到的推送",
