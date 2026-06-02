@@ -5,6 +5,8 @@ import { useLanguage } from "@/context/language"
 import { Icon } from "@opencode-ai/ui/icon"
 import { itemApi } from "../lib/api"
 
+const ALL_TYPE = { value: "", labelKey: "store.browse.type.all", icon: "dot-grid", color: "#64748B" } as const
+
 const TYPES = [
   { value: "skill", labelKey: "store.browse.type.skills", icon: "sparkles", color: "#F59E0B" },
   { value: "subagent", labelKey: "store.browse.type.subagents", icon: "brain", color: "#3B82F6" },
@@ -17,21 +19,24 @@ export default function TypeTabs() {
   const language = useLanguage()
 
   const [stats] = createResource(async () => {
+    const allResult = await itemApi.list({ page: 1, pageSize: 1 })
     const counts = await Promise.all(
       TYPES.map(async (type) => {
         const result = await itemApi.list({ type: type.value, page: 1, pageSize: 1 })
         return [type.value, result.total] as const
       })
     )
-    return Object.fromEntries(counts)
+    return Object.fromEntries([["", allResult.total], ...counts])
   })
+
+  const allTypes = () => [ALL_TYPE, ...TYPES]
 
   return (
     <div class="flex flex-wrap justify-center gap-3">
-      <For each={TYPES}>
+      <For each={allTypes()}>
         {(type) => (
           <A
-            href={`/store/search?type=${type.value}`}
+            href={type.value ? `/store/search?type=${type.value}` : "/store/search"}
             class="flex items-center gap-2 rounded-lg border border-[var(--native-border)] bg-[var(--native-panel)] px-4 py-2 text-sm font-medium text-[var(--native-foreground)] transition-all hover:border-[color:var(--type-color)] hover:shadow-md"
             style={{ "--type-color": type.color }}
           >
