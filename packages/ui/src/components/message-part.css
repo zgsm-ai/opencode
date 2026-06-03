@@ -231,8 +231,8 @@
     align-items: center;
     justify-content: flex-start;
     gap: 10px;
-    opacity: 0;
-    pointer-events: none;
+    opacity: 1;
+    pointer-events: auto;
     transition: opacity 0.15s ease;
     will-change: opacity;
 
