@@ -22,7 +22,6 @@ export function UploadPluginDialog(props: Props) {
     progress: 0,
     error: "",
     dragOver: false,
-    isBuiltIn: false,
   })
 
   const validateFile = (file: File): string | null => {
@@ -63,7 +62,7 @@ export function UploadPluginDialog(props: Props) {
     setStore("progress", 0)
 
     try {
-      const item = await pluginApi.upload(store.repoId, store.file, store.isBuiltIn, (p) => {
+      const item = await pluginApi.upload(store.repoId, store.file, (p) => {
         setStore("progress", p)
       })
       showToast({
@@ -157,17 +156,6 @@ export function UploadPluginDialog(props: Props) {
               </div>
             </Show>
           </div>
-
-          {/* Built-in checkbox */}
-          <label class="flex cursor-pointer items-center gap-2 text-sm text-[var(--native-foreground)]">
-            <input
-              type="checkbox"
-              checked={store.isBuiltIn}
-              onChange={(e) => setStore("isBuiltIn", e.currentTarget.checked)}
-              class="accent-[var(--native-primary)]"
-            />
-            {language.t("store.uploadPlugin.isBuiltIn") || "内置 Plugin"}
-          </label>
 
           {/* Progress bar */}
           <Show when={store.uploading}>

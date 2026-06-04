@@ -23,8 +23,8 @@ import { behaviorApi, distributionApi, itemApi, repoApi, userApi, type Capabilit
 import { getLoginUrl } from "@/pages/store/lib/auth"
 import { sx } from "@/pages/store/lib/styles"
 import { typeKey } from "@/pages/store/lib/constants"
-import { UploadPluginDialog } from "@/pages/store/components/upload-plugin-dialog"
-import { CreateRepoDialog } from "@/pages/store/components/create-repo-dialog"
+// import { UploadPluginDialog } from "@/pages/store/components/upload-plugin-dialog"
+// import { CreateRepoDialog } from "@/pages/store/components/create-repo-dialog"
 
 const PAGE_SIZE = 10
 const STORE_TYPES = [
@@ -1009,7 +1009,8 @@ export default function StoreManagerPage() {
                     <Icon name="plus" class="size-4" style={{ color: "#ffffff" }} />
                     {language.t("store.console.capabilities.create")}
                   </Button>
-                  <Button
+                  {/* Plugin upload hidden — see PR #112 */}
+                  {/* <Button
                     type="button"
                     variant="outline"
                     size="sm"
@@ -1051,7 +1052,7 @@ export default function StoreManagerPage() {
                   >
                     <Icon name="cloud-upload" size="small" />
                     {language.t("store.uploadPlugin.title") || "上传 Plugin"}
-                  </Button>
+                  </Button> */}
                 </div>
               </div>
             </header>

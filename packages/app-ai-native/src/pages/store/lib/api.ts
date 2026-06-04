@@ -283,6 +283,7 @@ export interface CapabilityItem {
   createdBy: string
   forkedFromItemId?: string
   forkedFromOwnerId?: string
+  isBuiltIn?: boolean
   forkCount?: number
   myForkItemId?: string
   createdAt: string
@@ -1282,14 +1283,11 @@ export const updateApi = {
 }
 
 export const pluginApi = {
-  upload: (repoId: string, file: File, isBuiltIn?: boolean, onProgress?: (p: number) => void) => {
+  upload: (repoId: string, file: File, onProgress?: (p: number) => void) => {
     return new Promise<CapabilityItem>((resolve, reject) => {
       const form = new FormData()
       form.append("repo_id", repoId)
       form.append("file", file)
-      if (isBuiltIn) {
-        form.append("is_builtin", "true")
-      }
 
       const xhr = new XMLHttpRequest()
       xhr.open("POST", `${API_BASE}/api/plugins/upload`)
