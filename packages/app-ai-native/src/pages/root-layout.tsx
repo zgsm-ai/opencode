@@ -1,6 +1,6 @@
-import { type JSX, type ParentProps, Show, createEffect, createMemo } from "solid-js"
+import { type JSX, type ParentProps, Show, createEffect, createMemo, createSignal } from "solid-js"
 import { useLocation, useNavigate } from "@solidjs/router"
-import { Gauge, Sun, Moon } from "lucide-solid"
+import { Gauge, Shield, Sun, Moon } from "lucide-solid"
 import { Icon } from "@opencode-ai/ui/icon"
 import { IconButton } from "@opencode-ai/ui/icon-button"
 import { RadioGroup } from "@opencode-ai/ui/radio-group"
@@ -13,6 +13,7 @@ import { usePlatform } from "@/context/platform"
 import { type Locale, useLanguage } from "@/context/language"
 import { useAuth } from "@/context/auth"
 import { appPath } from "@/lib/router"
+import { getCasdoorToken, buildSecurityUrl } from "@/lib/security-jump"
 import { isMobile, useSyncMobile } from "@/lib/mobile"
 import { getLoginUrl } from "@/pages/store/lib/auth"
 
@@ -220,6 +221,23 @@ export default function RootLayout(props: ParentProps) {
     return path === "/console" || path.startsWith("/console/")
   }
 
+  const [securityJumping, setSecurityJumping] = createSignal(false)
+
+  async function handleSecurityJump() {
+    if (securityJumping()) return
+    setSecurityJumping(true)
+    try {
+      const token = await getCasdoorToken()
+      window.location.href = buildSecurityUrl(token)
+    } catch {
+      showToast({
+        title: language.t("sidebar.codeReview.jumpFailed"),
+        variant: "error",
+      })
+      setSecurityJumping(false)
+    }
+  }
+
   const isMultica = () => {
     const path = appPathname()
     return path === "/multica"
@@ -244,6 +262,12 @@ export default function RootLayout(props: ParentProps) {
               label={language.t("sidebar.workspace")}
               active={isWorkspace()}
               onClick={() => navigate(lastWorkspace)}
+            />
+            <NavButton
+              label={language.t("sidebar.codeReview")}
+              active={false}
+              onClick={handleSecurityJump}
+              node={<Shield size={18} strokeWidth={1.75} aria-hidden="true" />}
             />
             <Show when={true}>
               <NavButton

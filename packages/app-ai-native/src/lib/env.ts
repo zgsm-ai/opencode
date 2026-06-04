@@ -113,6 +113,11 @@ export const env = {
     return getEnv("VITE_OPENCODE_SERVER_PORT", "8080")
   },
 
+  // Security frontend URL for cross-app navigation (same domain, e.g. "/llm_sast")
+  get SECURITY_FRONTEND_URL() {
+    return getEnv("VITE_SECURITY_FRONTEND_URL", "/llm_sast")
+  },
+
   // Demo mode: use mock data instead of real API calls
   get DEMO_MODE() {
     return getEnv("VITE_DEMO_MODE", "false") === "true"

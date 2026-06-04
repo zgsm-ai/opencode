@@ -1418,6 +1418,8 @@ export const dict = {
   "sidebar.user.console": "Console",
   "sidebar.store": "Skill Store",
   "sidebar.kanban": "Kanban",
+  "sidebar.codeReview": "CodeReview",
+  "sidebar.codeReview.jumpFailed": "Failed to jump to CodeReview",
   "sidebar.projects": "Projects",
   "sidebar.workspace": "Workspace",
 

@@ -1769,6 +1769,8 @@ export const dict = {
   "workspace.home.proTip.status": "查看服务状态",
   "workspace.home.proTip.stop": "关闭服务",
   "sidebar.kanban": "指标看板",
+  "sidebar.codeReview": "代码审查",
+  "sidebar.codeReview.jumpFailed": "跳转代码审查平台失败",
   "sidebar.projects": "项目",
 
   "projects.nav.title": "项目",
