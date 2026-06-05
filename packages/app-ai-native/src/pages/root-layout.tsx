@@ -13,7 +13,7 @@ import { usePlatform } from "@/context/platform"
 import { type Locale, useLanguage } from "@/context/language"
 import { useAuth } from "@/context/auth"
 import { appPath } from "@/lib/router"
-import { getCasdoorToken, buildSecurityUrl } from "@/lib/security-jump"
+import { buildSecurityUrl } from "@/lib/security-jump"
 import { isMobile, useSyncMobile } from "@/lib/mobile"
 import { getLoginUrl } from "@/pages/store/lib/auth"
 
@@ -227,8 +227,7 @@ export default function RootLayout(props: ParentProps) {
     if (securityJumping()) return
     setSecurityJumping(true)
     try {
-      const token = await getCasdoorToken()
-      window.location.href = buildSecurityUrl(token)
+      window.location.href = buildSecurityUrl()
     } catch {
       showToast({
         title: language.t("sidebar.codeReview.jumpFailed"),
