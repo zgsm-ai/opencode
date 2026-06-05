@@ -227,12 +227,13 @@ export default function RootLayout(props: ParentProps) {
     if (securityJumping()) return
     setSecurityJumping(true)
     try {
-      window.location.href = buildSecurityUrl()
+      window.open(buildSecurityUrl(), "_blank")
     } catch {
       showToast({
         title: language.t("sidebar.codeReview.jumpFailed"),
         variant: "error",
       })
+    } finally {
       setSecurityJumping(false)
     }
   }
