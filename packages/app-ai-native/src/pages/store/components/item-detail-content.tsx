@@ -746,13 +746,13 @@ export default function ItemDetailContent(props: ItemDetailContentProps) {
                       <Show
                         when={highlighted()}
                         fallback={
-                          <div class="thin-scrollbar min-h-[28rem] overflow-y-auto rounded-lg border border-border-weak-base bg-bg-muted/50 px-5 py-4">
+                          <div class="thin-scrollbar max-h-[50vh] min-h-[12rem] overflow-y-auto rounded-lg border border-border-weak-base bg-bg-muted/50 px-5 py-4">
                             <Markdown text={data().content} class="vscode-markdown text-14-regular" />
                           </div>
                         }
                       >
                         <div
-                          class="thin-scrollbar min-h-[28rem] overflow-x-auto overflow-y-auto rounded-lg border border-border-weak-base bg-bg-muted/50 p-4 text-12-mono leading-6 [&_pre]:!m-0 [&_pre]:!bg-transparent [&_pre]:!p-0"
+                          class="thin-scrollbar max-h-[50vh] min-h-[12rem] overflow-x-auto overflow-y-auto rounded-lg border border-border-weak-base bg-bg-muted/50 p-4 text-12-mono leading-6 [&_pre]:!m-0 [&_pre]:!bg-transparent [&_pre]:!p-0"
                           innerHTML={highlighted()}
                         />
                       </Show>
