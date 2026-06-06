@@ -254,13 +254,13 @@ describe("prompt submit worktree selection", () => {
     expect(enabledAutoAccept).toEqual([1])
   })
 
-  test("blocks attachments unsupported by selected model", async () => {
+  test("blocks image attachments while native upload is unsupported", async () => {
     model = {
       id: "model",
       provider: { id: "provider" },
       capabilities: {
         attachment: true,
-        input: { image: false, pdf: true },
+        input: { image: true, pdf: true },
       },
     }
     let history = 0
@@ -301,8 +301,8 @@ describe("prompt submit worktree selection", () => {
     expect(createdSessions).toEqual([])
     expect(toasts).toEqual([
       {
-        title: "prompt.toast.attachmentUnsupported.title",
-        description: "prompt.toast.attachmentUnsupported.description",
+        title: "prompt.toast.imageUnsupported.title",
+        description: "prompt.toast.imageUnsupported.description",
       },
     ])
   })

@@ -137,6 +137,15 @@ export function createPromptSubmit(input: PromptSubmitInput) {
       return
     }
 
+    const image = images.some((file) => file.mime.startsWith("image/"))
+    if (image) {
+      showToast({
+        title: language.t("prompt.toast.imageUnsupported.title"),
+        description: language.t("prompt.toast.imageUnsupported.description"),
+      })
+      return
+    }
+
     const cap = currentModel.capabilities
     const bad = images.some((file) => {
       if (!cap) return false

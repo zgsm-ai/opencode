@@ -1065,6 +1065,8 @@ export const dict = {
 
   "prompt.toast.pasteUnsupported.title": "Unsupported paste",
   "prompt.toast.pasteUnsupported.description": "Only images or PDFs can be pasted here.",
+  "prompt.toast.imageUnsupported.title": "Images are not supported yet",
+  "prompt.toast.imageUnsupported.description": "Remove the image and send text instead. Image upload support will be enabled later.",
   "prompt.toast.attachmentUnsupported.title": "Unsupported attachment",
   "prompt.toast.attachmentUnsupported.description": "The selected model cannot read this attachment. Remove it or choose a model that supports images or PDFs.",
   "prompt.toast.modelAgentRequired.title": "Select an agent and model",

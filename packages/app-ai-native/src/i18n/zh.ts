@@ -365,6 +365,8 @@ export const dict = {
   "prompt.action.stop": "停止",
   "prompt.toast.pasteUnsupported.title": "不支持的粘贴",
   "prompt.toast.pasteUnsupported.description": "这里只能粘贴图片或 PDF 文件。",
+  "prompt.toast.imageUnsupported.title": "暂不支持图片",
+  "prompt.toast.imageUnsupported.description": "请移除图片后发送文本。图片上传功能后续支持后会开放。",
   "prompt.toast.attachmentUnsupported.title": "不支持的附件",
   "prompt.toast.attachmentUnsupported.description": "当前模型无法读取该附件。请移除附件，或切换到支持图片或 PDF 的模型。",
   "prompt.toast.modelAgentRequired.title": "请选择智能体和模型",
