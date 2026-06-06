@@ -461,6 +461,7 @@ export function DeviceSessionProvider(props: ParentProps<{ sessionID?: string }>
         case "session.error": {
           const props = payload.properties as { sessionID?: string; error?: SessionError }
           if (props.error) setStore("error", props.error)
+          setStore("status", idle)
           break
         }
         case "message.removed": {

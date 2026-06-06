@@ -501,9 +501,24 @@ export function DeviceWorkspaceProvider(props: ParentProps<{ workspaceId?: strin
   }
 
   let streamAbort: AbortController | undefined
+  let streamRetry: ReturnType<typeof setTimeout> | undefined
+  let streamDisposed = false
+  const STREAM_RETRY_MS = 1500
+
+  const scheduleStreamRestart = () => {
+    if (streamDisposed || streamRetry || streamAbort?.signal.aborted) return
+    streamRetry = setTimeout(() => {
+      streamRetry = undefined
+      void startEventStream()
+    }, STREAM_RETRY_MS)
+  }
 
   const startEventStream = async () => {
     streamAbort?.abort()
+    if (streamRetry) {
+      clearTimeout(streamRetry)
+      streamRetry = undefined
+    }
     clearDebounceTimers()
     streamAbort = new AbortController()
     const signal = streamAbort.signal
@@ -627,6 +642,20 @@ export function DeviceWorkspaceProvider(props: ParentProps<{ workspaceId?: strin
                   summaryChanged = true
                   break
                 }
+                case "session.error": {
+                  const p = payload.properties as { sessionID?: string }
+                  const id = p?.sessionID ?? payload.sessionID
+                  if (!id) break
+                  const timer = statusTimers.get(id)
+                  if (timer) {
+                    clearTimeout(timer)
+                    statusTimers.delete(id)
+                  }
+                  pendingStatus.delete(id)
+                  setSessionStatus(id, { type: "idle" })
+                  summaryChanged = true
+                  break
+                }
                 // ── git events: no debounce on handler, refreshVcs already debounced ──
                 case "host.git.branch.changed": {
                   const p = payload.properties as { new_branch?: string; old_branch?: string; repo_path?: string }
@@ -674,19 +703,29 @@ export function DeviceWorkspaceProvider(props: ParentProps<{ workspaceId?: strin
               dispatch(payload)
             })
           }
+          if (!signal.aborted) {
+            scheduleStreamRestart()
+          }
         } catch (e) {
           if ((e as any)?.name === "AbortError") return
+          scheduleStreamRestart()
         }
       }
       void readLoop()
     } catch (e) {
       if ((e as any)?.name === "AbortError") return
+      scheduleStreamRestart()
     }
   }
 
   onCleanup(() => {
+    streamDisposed = true
     streamAbort?.abort()
     streamAbort = undefined
+    if (streamRetry) {
+      clearTimeout(streamRetry)
+      streamRetry = undefined
+    }
     clearDebounceTimers()
     if (props.workspaceId) clearSummary(props.workspaceId)
   })

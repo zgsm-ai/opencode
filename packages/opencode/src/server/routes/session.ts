@@ -854,7 +854,8 @@ export const SessionRoutes = lazy(() =>
         return stream(c, async () => {
           const sessionID = c.req.valid("param").sessionID
           const body = c.req.valid("json")
-          SessionPrompt.prompt({ ...body, sessionID }).catch((err) => {
+          SessionPrompt.prompt({ ...body, sessionID }).catch(async (err) => {
+            await SessionStatus.set(sessionID, { type: "idle" }).catch(() => {})
             log.error("prompt_async failed", { sessionID, error: err })
             Bus.publish(Session.Event.Error, {
               sessionID,
@@ -891,7 +892,8 @@ export const SessionRoutes = lazy(() =>
         return stream(c, async () => {
           const sessionID = c.req.valid("param").sessionID
           const body = c.req.valid("json")
-          SessionPrompt.command({ ...body, sessionID }).catch((err) => {
+          SessionPrompt.command({ ...body, sessionID }).catch(async (err) => {
+            await SessionStatus.set(sessionID, { type: "idle" }).catch(() => {})
             log.error("command_async failed", { sessionID, error: err })
             Bus.publish(Session.Event.Error, {
               sessionID,

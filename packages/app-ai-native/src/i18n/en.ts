@@ -1065,6 +1065,8 @@ export const dict = {
 
   "prompt.toast.pasteUnsupported.title": "Unsupported paste",
   "prompt.toast.pasteUnsupported.description": "Only images or PDFs can be pasted here.",
+  "prompt.toast.attachmentUnsupported.title": "Unsupported attachment",
+  "prompt.toast.attachmentUnsupported.description": "The selected model cannot read this attachment. Remove it or choose a model that supports images or PDFs.",
   "prompt.toast.modelAgentRequired.title": "Select an agent and model",
   "prompt.toast.modelAgentRequired.description": "Choose an agent and model before sending a prompt.",
   "prompt.toast.worktreeCreateFailed.title": "Failed to create worktree",

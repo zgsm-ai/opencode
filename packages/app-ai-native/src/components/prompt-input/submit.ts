@@ -137,6 +137,22 @@ export function createPromptSubmit(input: PromptSubmitInput) {
       return
     }
 
+    const cap = currentModel.capabilities
+    const bad = images.some((file) => {
+      if (!cap) return false
+      if (!cap.attachment) return true
+      if (file.mime === "application/pdf") return !cap.input.pdf
+      if (file.mime.startsWith("image/")) return !cap.input.image
+      return true
+    })
+    if (bad) {
+      showToast({
+        title: language.t("prompt.toast.attachmentUnsupported.title"),
+        description: language.t("prompt.toast.attachmentUnsupported.description"),
+      })
+      return
+    }
+
     input.addToHistory(currentPrompt, mode)
     input.resetHistoryNavigation()
 

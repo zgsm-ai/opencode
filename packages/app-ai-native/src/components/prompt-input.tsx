@@ -248,7 +248,11 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
 
     return paths
   })
-  const info = createMemo(() => (sid() ? sync.session.get(sid()!) : undefined))
+  const info = createMemo(() => {
+    const id = sid()
+    if (!id) return undefined
+    return sync.session.get(id) ?? { id }
+  })
   const status = createMemo(
     () =>
       sync.data.session_status[sid() ?? ""] ?? {
