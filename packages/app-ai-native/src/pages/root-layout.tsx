@@ -264,6 +264,12 @@ export default function RootLayout(props: ParentProps) {
               onClick={() => navigate(lastWorkspace)}
             />
             <NavButton
+              icon="task"
+              label="Multica"
+              active={isMultica()}
+              onClick={() => navigate("/multica")}
+            />
+            <NavButton
               label={language.t("sidebar.codeReview")}
               active={false}
               onClick={handleSecurityJump}
