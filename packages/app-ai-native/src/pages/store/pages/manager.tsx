@@ -1398,6 +1398,10 @@ export default function StoreManagerPage() {
                         itemId={itemId()}
                         class={cn(sx.sheetBody, "thin-scrollbar")}
                         onItemLoaded={(item) => setDetailState("item", item)}
+                        onDeleted={() => {
+                          setSelectedItemId("value", null)
+                          refreshBothTabs()
+                        }}
                         favorited={detailState.favorited}
                         favoriteCount={detailState.favoriteCount}
                         previewCount={detailState.previewCount}

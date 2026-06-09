@@ -24,7 +24,7 @@ import { useFile } from "@/context/file"
 import { SyncContext } from "@/context/sync"
 import { LocalContext } from "@/context/local"
 import { SDKContext } from "@/context/sdk"
-import { PromptProvider } from "@/context/prompt"
+import { PromptProvider, usePrompt } from "@/context/prompt"
 import { CommentsContext } from "@/context/comments"
 import { PermissionContext } from "@/context/permission"
 import { CommandContext } from "@/context/command"
@@ -63,6 +63,14 @@ import { env } from "@/lib/env"
 const emptyMessages: Message[] = []
 const idle: SessionStatus = { type: "idle" }
 const busySinceMap = new Map<string, number>()
+
+const mergeMessages = (base: Message[], extra: Message[] | undefined) => {
+  if (!extra?.length) return base
+  if (base.length === 0) return extra
+  return [...new Map([...base, ...extra].map((msg) => [msg.id, msg])).values()].sort(
+    (a, b) => (a.time?.created ?? 0) - (b.time?.created ?? 0),
+  )
+}
 
 function legacyProvider(input: ProviderCapabilitiesResponse): ProviderListResponse {
   return {
@@ -127,7 +135,32 @@ function legacyProvider(input: ProviderCapabilitiesResponse): ProviderListRespon
   }
 }
 
-export function DeviceSessionTab(props: { tabId: string }) {
+// One-shot prompt seeder: prefills the composer with a fixed prefix (e.g.
+// `/skill-writer `) once the device's model + agent are ready, placing the
+// cursor at the end so the user just types their request and presses Enter.
+// Opt-in via `DeviceSessionTab`'s `promptSeed` prop; never auto-sends, so it
+// does not affect ordinary workspace sessions.
+function PromptSeeder(props: { seed?: string }) {
+  const prompt = usePrompt()
+  const local = useDeviceLocal()
+  let seeded = false
+  createEffect(() => {
+    if (seeded) return
+    const seed = props.seed
+    if (!seed) return
+    if (!prompt.ready()) return
+    if (!local.model.current() || !local.agent.current()) return
+    if (prompt.dirty()) {
+      seeded = true
+      return
+    }
+    seeded = true
+    prompt.set([{ type: "text", content: seed, start: 0, end: seed.length }], seed.length)
+  })
+  return null
+}
+
+export function DeviceSessionTab(props: { tabId: string; promptSeed?: string; hiddenSeed?: string }) {
   const device = useDeviceSDK()
   const workspace = useDeviceWorkspace()
   const session = useDeviceSession()
@@ -238,11 +271,7 @@ export function DeviceSessionTab(props: { tabId: string }) {
     if (viewingSessionID()) {
       return loadedMessages[cid] ?? ([] as Message[])
     }
-    const fromSession = session.data.messages
-    if (fromSession.length > 0) return fromSession
-    const fromLoaded = loadedMessages[cid]
-    if (fromLoaded && fromLoaded.length > 0) return fromLoaded
-    return fromSession
+    return mergeMessages(session.data.messages, loadedMessages[cid])
   })
 
   const effectiveStatus = createMemo(() => {
@@ -277,9 +306,10 @@ export function DeviceSessionTab(props: { tabId: string }) {
 
   const effectiveParts = createMemo(() => {
     if (viewingSessionID()) return loadedParts as Record<string, Part[]>
-    const fromSession = session.data.parts
-    if (Object.keys(fromSession).length > 0) return fromSession
-    return loadedParts as Record<string, Part[]>
+    const parts = loadedParts as Record<string, Part[]>
+    if (Object.keys(parts).length === 0) return session.data.parts
+    if (Object.keys(session.data.parts).length === 0) return parts
+    return { ...session.data.parts, ...parts }
   })
 
   const effectiveDiffs = createMemo(() => {
@@ -368,8 +398,6 @@ export function DeviceSessionTab(props: { tabId: string }) {
       }
     }
 
-    if (!viewingSessionID()) return
-
     const cid = currentSessionID()
     if (!cid) return
 
@@ -386,12 +414,32 @@ export function DeviceSessionTab(props: { tabId: string }) {
         case "message.updated": {
           const info = (payload.properties as { info?: Message })?.info
           if (!info?.id) break
+          if (!loadedMessages[cid]) {
+            setLoadedMessages(cid, [])
+          }
           setLoadedMessages(
             cid,
             produce((draft: Message[]) => {
               const idx = draft.findIndex((m) => m.id === info.id)
               if (idx !== -1) draft[idx] = info
               else draft.push(info)
+            }),
+          )
+          break
+        }
+        case "message.removed": {
+          const props = payload.properties as { messageID?: string }
+          if (!props.messageID || !loadedMessages[cid]) break
+          setLoadedMessages(
+            cid,
+            produce((draft: Message[]) => {
+              const idx = draft.findIndex((m) => m.id === props.messageID)
+              if (idx !== -1) draft.splice(idx, 1)
+            }),
+          )
+          setLoadedParts(
+            produce((draft: Record<string, Part[]>) => {
+              delete draft[props.messageID!]
             }),
           )
           break
@@ -619,6 +667,9 @@ export function DeviceSessionTab(props: { tabId: string }) {
       optimistic: {
         add(input: { directory?: string; sessionID: string; message: Message; parts: Part[] }) {
           session.optimistic.add({ message: input.message, parts: input.parts })
+          if (!createdSessionID() && !session.sessionID()) {
+            setCreatedSessionID(input.sessionID)
+          }
           const cid = currentSessionID() ?? input.sessionID
           if (!loadedMessages[cid]) {
             setLoadedMessages(cid, [])
@@ -703,6 +754,9 @@ export function DeviceSessionTab(props: { tabId: string }) {
         )
       },
       replaceTab(input: { sessionID: string; title?: string }) {
+        if (!createdSessionID() && !session.sessionID()) {
+          setCreatedSessionID(input.sessionID)
+        }
         const current = tabStore.tabs().find((t) => t.id === props.tabId)
         if (current && !(current.meta as any)?.sessionID) {
           tabStore.updateMeta(props.tabId, { sessionID: input.sessionID })
@@ -1022,6 +1076,7 @@ export function DeviceSessionTab(props: { tabId: string }) {
           <SyncContext.Provider value={syncValue as any}>
             <LocalContext.Provider value={localValue as any}>
               <PromptProvider>
+                <PromptSeeder seed={props.promptSeed} />
                 <CommentsContext.Provider value={commentsValue as any}>
                   <PermissionContext.Provider value={permissionValue as any}>
                     <CommandContext.Provider value={commandValue as any}>
@@ -1221,6 +1276,7 @@ export function DeviceSessionTab(props: { tabId: string }) {
                                         el.addEventListener("pointerdown", handler)
                                       }}
                                       newSessionWorktree="main"
+                                      hiddenSeed={() => props.hiddenSeed}
                                       onNewSessionWorktreeReset={() => {}}
                                       onSubmit={() => {
                                         resumeScroll()

@@ -24,8 +24,10 @@ import { createStore } from "solid-js/store"
 import { TYPE_COLORS, TYPE_CONTENT_PLACEHOLDER, typeKey } from "@/pages/store/lib/constants"
 import { itemApi, registryApi2, repoApi, type CapabilityItem, type CapabilityItemAsset, type Repository } from "@/pages/store/lib/api"
 import { getInstallCommand } from "@/pages/store/components/item-detail-content"
-import { TagInput } from "@/pages/console/components/tag-input"
+import { TagInput, normalizeTag } from "@/pages/console/components/tag-input"
 import { ConfirmDialog } from "@/pages/store/components/confirm-dialog"
+import { SkillWriterChatPanel } from "@/pages/console/skill-writer-chat-panel"
+import { deviceApi } from "@/pages/workspace/lib/api"
 
 type ItemType = "skill" | "subagent" | "command" | "mcp" | "plugin"
 
@@ -507,6 +509,224 @@ function extractImportedSkillDescription(contents: FileContentMap) {
 
   const quoted = value.match(/^(['"])([\s\S]*)\1$/)
   return quoted ? quoted[2].trim() : value
+}
+
+// Serialize a single scalar frontmatter value. Quote it only when it contains
+// YAML-significant characters so simple values stay clean/diff-friendly.
+function serializeFrontmatterScalar(value: string): string {
+  if (value === "") return '""'
+  if (/^[\w./@-][\w .,/@()+-]*$/.test(value) && !/^\s|\s$/.test(value)) return value
+  return JSON.stringify(value)
+}
+
+// One-way upsert of `name` / `description` / `tags` into a SKILL.md's YAML
+// frontmatter, preserving the body and any other frontmatter keys. The left
+// form is the single source of truth for these three fields; everything else in
+// the document is left untouched. Returns the (possibly unchanged) full content.
+function upsertFrontmatter(content: string, fields: { name?: string; description?: string; tags?: string[] }): string {
+  const match = /^---\s*\r?\n([\s\S]*?)\r?\n---(\r?\n|$)/.exec(content)
+  const eol = content.includes("\r\n") ? "\r\n" : "\n"
+
+  const renderTags = (tags: string[]): string[] => {
+    if (tags.length === 0) return []
+    return ["tags:", ...tags.map((tag) => `  - ${serializeFrontmatterScalar(tag)}`)]
+  }
+
+  // Whether a managed field carries an actual value. Empty/blank name &
+  // description (after trim) and an empty tags array count as "no value": we
+  // never write `name: ""` / `description: ""` / an empty `tags:` block, and we
+  // drop any such key that was previously present.
+  const hasName = fields.name !== undefined && fields.name.trim() !== ""
+  const hasDescription = fields.description !== undefined && fields.description.trim() !== ""
+  const hasTags = fields.tags !== undefined && fields.tags.length > 0
+
+  // The keys this call "owns" and may rewrite/remove from existing frontmatter.
+  // A field is managed whenever it was provided (even if empty), so emptying a
+  // form field removes a previously-written key (handles list items belonging to
+  // `tags:` too, so we can drop the whole block cleanly).
+  const managedKeys = new Set<string>()
+  if (fields.name !== undefined) managedKeys.add("name")
+  if (fields.description !== undefined) managedKeys.add("description")
+  if (fields.tags !== undefined) managedKeys.add("tags")
+
+  // Only emit lines for fields that actually have a value; empty values are
+  // simply absent (and stripped via managedKeys above).
+  const buildManagedLines = (): string[] => {
+    const lines: string[] = []
+    if (hasName) lines.push(`name: ${serializeFrontmatterScalar(fields.name as string)}`)
+    if (hasDescription) lines.push(`description: ${serializeFrontmatterScalar(fields.description as string)}`)
+    if (hasTags) lines.push(...renderTags(fields.tags as string[]))
+    return lines
+  }
+
+  if (!match) {
+    // No frontmatter yet: prepend one only if there's at least one non-empty
+    // managed value. Otherwise leave the content untouched (no empty block).
+    const managed = buildManagedLines()
+    if (managed.length === 0) return content
+    const block = ["---", ...managed, "---"].join(eol)
+    return content.length === 0 ? `${block}${eol}` : `${block}${eol}${content}`
+  }
+
+  const frontmatter = match[1]
+  const existing = frontmatter.split(/\r?\n/)
+  const preserved: string[] = []
+  let skippingManagedBlock = false
+  for (const line of existing) {
+    const keyMatch = /^([A-Za-z0-9_-]+)\s*:/.exec(line)
+    if (keyMatch) {
+      // A new top-level key resets any managed-block skipping (e.g. tags list).
+      skippingManagedBlock = managedKeys.has(keyMatch[1].toLowerCase())
+      if (skippingManagedBlock) continue
+      preserved.push(line)
+      continue
+    }
+    // Continuation lines (list items / indented values): drop them only while
+    // we're inside a managed key's block (i.e. an old `tags:` list).
+    if (skippingManagedBlock) continue
+    preserved.push(line)
+  }
+
+  const nextFrontmatter = [...preserved, ...buildManagedLines()].filter((line, idx, arr) => !(line === "" && idx === arr.length - 1))
+  const before = content.slice(0, match.index)
+  const after = content.slice(match.index + match[0].length)
+  // If nothing remains (all managed keys removed and no other keys existed),
+  // drop the frontmatter block entirely instead of leaving an empty `---\n---`.
+  if (nextFrontmatter.every((line) => line.trim() === "")) {
+    return `${before}${after}`
+  }
+  const closingEol = match[2] || eol
+  const rebuilt = `${before}---${eol}${nextFrontmatter.join(eol)}${eol}---${closingEol}${after}`
+  return rebuilt
+}
+
+// Normalize a skill's SKILL.md frontmatter to the canonical shape the
+// form→frontmatter effect produces (managed name/description/tags upserted).
+// Applied on BOTH edit-load effects so the effect's post-load rewrite is a no-op
+// and opening an unedited skill doesn't trigger a spurious version bump on save.
+// Non-skill types / missing SKILL.md pass through unchanged.
+function withNormalizedSkillFrontmatter(
+  fileContents: FileContentMap,
+  itemType: ItemType,
+  fields: { name?: string; description?: string; tags?: string[] },
+): FileContentMap {
+  if (itemType !== "skill" || fileContents["SKILL.md"] === undefined) return fileContents
+  return {
+    ...fileContents,
+    "SKILL.md": upsertFrontmatter(fileContents["SKILL.md"], {
+      name: fields.name || "",
+      description: fields.description || "",
+      tags: fields.tags ?? [],
+    }),
+  }
+}
+
+// Matches a single leading YAML frontmatter block (the opening `---`, the keys,
+// and the closing `---` plus its trailing newline / EOF). Shares its shape with
+// `upsertFrontmatter`'s matcher: non-greedy `[\s\S]*?` so it stops at the FIRST
+// closing `---`, which means a body that itself contains a `---` line is left
+// intact in the body.
+const LEADING_FRONTMATTER_RE = /^---\s*\r?\n[\s\S]*?\r?\n---(\r?\n|$)/
+
+// Return the document body with any leading frontmatter block removed. If there
+// is no leading frontmatter the content is returned unchanged.
+function stripLeadingFrontmatter(content: string): string {
+  const match = LEADING_FRONTMATTER_RE.exec(content)
+  if (!match) return content
+  return content.slice(match[0].length)
+}
+
+// Return the leading frontmatter block verbatim (the two `---` fences, the keys,
+// and the trailing newline). Empty string when there is no leading frontmatter.
+function extractLeadingFrontmatter(content: string): string {
+  const match = LEADING_FRONTMATTER_RE.exec(content)
+  if (!match) return ""
+  return match[0]
+}
+
+// Parse the managed metadata (name / description / tags) out of a SKILL.md's
+// leading YAML frontmatter, tolerant of the shapes the device agent actually
+// emits. Unlike the single-line `extractImportedSkillDescription`, this also
+// handles a `description` written as a YAML block scalar (`>` / `|`) and `tags`
+// written either inline (`[a, b]`) or as a block sequence (`- a` lines). It is
+// best-effort and never throws; only the keys it finds are returned.
+function parseSkillFrontmatter(content: string): { name?: string; description?: string; tags?: string[] } {
+  const block = extractLeadingFrontmatter(content)
+  if (!block) return {}
+  const inner = block.replace(/^---\s*\r?\n/, "").replace(/\r?\n---(\r?\n|$)$/, "")
+  const lines = inner.split(/\r?\n/)
+
+  const unquote = (value: string): string => {
+    const trimmed = value.trim()
+    const quoted = /^(['"])([\s\S]*)\1$/.exec(trimmed)
+    return quoted ? (quoted[2] ?? "") : trimmed
+  }
+
+  const result: { name?: string; description?: string; tags?: string[] } = {}
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i] ?? ""
+    const keyMatch = /^([A-Za-z0-9_-]+)\s*:(.*)$/.exec(line)
+    if (!keyMatch) continue
+    const key = (keyMatch[1] ?? "").toLowerCase()
+    const rest = keyMatch[2] ?? ""
+
+    if (key === "name") {
+      const value = unquote(rest)
+      if (value) result.name = value
+    } else if (key === "description") {
+      const marker = rest.trim()
+      if (/^[|>][+-]?\s*$/.test(marker)) {
+        // YAML block scalar: collect indented continuation lines (blank lines
+        // are part of the block; trailing ones are trimmed off below).
+        const collected: string[] = []
+        let j = i + 1
+        for (; j < lines.length; j += 1) {
+          const next = lines[j] ?? ""
+          if (next.trim() === "") {
+            collected.push("")
+            continue
+          }
+          if (!/^\s/.test(next)) break
+          collected.push(next.replace(/^\s+/, ""))
+        }
+        i = j - 1
+        const folded = marker.startsWith(">")
+          ? collected.join(" ").replace(/\s+/g, " ").trim()
+          : collected.join("\n").trim()
+        if (folded) result.description = folded
+      } else {
+        const value = unquote(rest)
+        if (value) result.description = value
+      }
+    } else if (key === "tags") {
+      const marker = rest.trim()
+      if (marker.startsWith("[")) {
+        // Inline flow array: [a, b, c]
+        const body = marker.replace(/^\[/, "").replace(/\]\s*$/, "")
+        const items = body.split(",").map((t) => unquote(t)).filter(Boolean)
+        if (items.length) result.tags = items
+      } else if (marker === "") {
+        // Block sequence: subsequent `- item` lines.
+        const collected: string[] = []
+        let j = i + 1
+        for (; j < lines.length; j += 1) {
+          const itemMatch = /^\s*-\s+(.*)$/.exec(lines[j] ?? "")
+          if (!itemMatch) break
+          const item = unquote(itemMatch[1] ?? "")
+          if (item) collected.push(item)
+        }
+        i = j - 1
+        if (collected.length) result.tags = collected
+      } else {
+        // Rare: tags on one line, space/comma separated.
+        const items = marker.split(/[\s,]+/).map((t) => unquote(t)).filter(Boolean)
+        if (items.length) result.tags = items
+      }
+    }
+  }
+
+  return result
 }
 
 function resetCapabilityDraft(setForm: (setter: unknown, ...args: unknown[]) => void, itemType: ItemType) {
@@ -1188,6 +1408,53 @@ export default function CapabilityEditorPage() {
   const [layout, setLayout] = createStore({
     sidebarWidth: 300,
     sidebarCollapsed: false,
+    chatWidth: 420,
+    // The AI-create chat panel starts collapsed so the editor is the focus; the
+    // user opens it on demand from the "Create with AI" toolbar toggle.
+    chatCollapsed: true,
+  })
+
+  // Keep-alive flag for the chat panel: once it has been opened the first time
+  // we keep the device-session stack mounted and merely hide it with CSS when
+  // collapsed. Unmounting (via <Show>) would tear down the device session and
+  // abort an in-flight generation, so we never flip this back to false.
+  const [chatMounted, setChatMounted] = createSignal(false)
+  const openChat = () => {
+    setChatMounted(true)
+    setLayout("chatCollapsed", false)
+  }
+  const collapseChat = () => setLayout("chatCollapsed", true)
+
+  // No online device: the AI-create panel can't run (all authoring compute lives
+  // on the device, the web side has no LLM). Instead of hiding the button, we
+  // explain how to bring a device online and offer to jump to the workspace,
+  // where the start-service / device-pairing steps live.
+  const promptConnectDevice = () => {
+    dialog.show(() => (
+      <ConfirmDialog
+        title={language.t("store.skillWriter.noDevice.title")}
+        description={language.t("store.skillWriter.noDevice.description")}
+        confirm={language.t("store.skillWriter.noDevice.confirm")}
+        variant="normal"
+        onConfirm={() => navigate("/workspace")}
+      />
+    ))
+  }
+
+  // Online devices gate the in-page "AI create" chat panel. The actual
+  // authoring runs on the device (the web side provides no LLM); when no device
+  // is online the panel is hidden and the editor works normally.
+  const [hasOnlineDevice, setHasOnlineDevice] = createSignal(false)
+  const [onlineDevices] = createResource(async () => {
+    try {
+      const res = await deviceApi.list()
+      return (res.devices ?? []).filter((d) => d.status === "online")
+    } catch {
+      return []
+    }
+  })
+  createEffect(() => {
+    setHasOnlineDevice((onlineDevices() ?? []).length > 0)
   })
 
   let previewScrollEl: HTMLDivElement | undefined
@@ -1226,6 +1493,65 @@ export default function CapabilityEditorPage() {
     pendingTreeActionLocked: false,
     installCommandCopied: false,
     selectedRevision: 0,
+  })
+
+  // Fill the editor with a device-generated SKILL.md for human review, then the
+  // user clicks the existing "create" button to publish through the normal flow.
+  const handleSkillReady = (skillMdText: string, name: string) => {
+    setForm("fileContents", "SKILL.md", skillMdText)
+    setForm("selectedTreePath", "SKILL.md")
+    // Mirror what the device agent authored into the left form's
+    // name/description/tags. Fill-when-empty only: a field the user already
+    // typed is never overwritten, and the form -> frontmatter effect keeps the
+    // user's value as the single source of truth.
+    const meta = parseSkillFrontmatter(skillMdText)
+    const skillName = name || meta.name || ""
+    if (!form.name && skillName) setForm("name", formatImportedTitle(skillName))
+    if (!form.slug && skillName) {
+      setForm("slug", sanitizeIdentifier(skillName))
+      setForm("slugManual", true)
+    }
+    // Prefer the robust frontmatter parse (handles multi-line / block scalars);
+    // fall back to the single-line extractor for older shapes.
+    const description = meta.description || extractImportedSkillDescription({ "SKILL.md": skillMdText })
+    if (!form.description && description) setForm("description", description)
+    // Normalize AI-authored tags to the same slug shape TagInput stores, dedupe,
+    // and fill only when the user hasn't added any tags yet.
+    if (form.tags.length === 0 && meta.tags?.length) {
+      const seen = new Set<string>()
+      const tags: string[] = []
+      for (const raw of meta.tags) {
+        const slug = normalizeTag(raw)
+        if (!slug || seen.has(slug)) continue
+        seen.add(slug)
+        tags.push(slug)
+      }
+      if (tags.length) setForm("tags", tags)
+    }
+  }
+
+  // One-way sync: the left form's name/description/tags are the single source of
+  // truth for the skill's metadata, so we mirror them into the SKILL.md YAML
+  // frontmatter (the "Metadata" block in the preview). The body and any other
+  // frontmatter keys the user edits in the editor are preserved.
+  //
+  // Loop prevention: this is strictly form -> content. We compute the next
+  // content and only write it back when it actually differs from the current
+  // SKILL.md; an identical result is a no-op, so the import/read-back path
+  // (content -> form, fill-when-empty) settles to a fixed point instead of
+  // oscillating. Reading the current content via untrack keeps this effect
+  // keyed only on the form fields, not on the content it writes.
+  createEffect(() => {
+    if (form.itemType !== "skill") return
+    const name = form.name
+    const description = form.description
+    const tags = [...form.tags]
+    untrack(() => {
+      const current = form.fileContents["SKILL.md"]
+      if (current === undefined) return
+      const next = upsertFrontmatter(current, { name, description, tags })
+      if (next !== current) setForm("fileContents", "SKILL.md", next)
+    })
   })
 
   // Snapshot of the editor file contents as loaded from the server. Used to skip
@@ -1368,6 +1694,14 @@ export default function CapabilityEditorPage() {
 
   const selectedFileContent = createMemo(() => form.fileContents[form.selectedTreePath] ?? "")
   const activeFilePath = createMemo(() => form.selectedTreePath || Object.keys(form.fileContents)[0] || "")
+  // True only when the editor is showing a skill's SKILL.md. In that case the
+  // middle editor edits the BODY only (frontmatter is managed by the left form
+  // and stays out of the editor); every other type / attached file edits the
+  // whole document as before.
+  const isSkillSourceFile = createMemo(() => form.itemType === "skill" && activeFilePath() === "SKILL.md")
+  // The value bound to the editor: body-only for a skill SKILL.md, the full file
+  // content otherwise. The preview still renders the full content (see JSX).
+  const editorValue = createMemo(() => isSkillSourceFile() ? stripLeadingFrontmatter(selectedFileContent()) : selectedFileContent())
   const showPreview = createMemo(() => isMarkdownPath(activeFilePath()))
   const currentLanguageLabel = createMemo(() => languageLabelForPath(activeFilePath()))
 
@@ -1410,7 +1744,16 @@ export default function CapabilityEditorPage() {
 
     const itemType = (data.itemType as ItemType) || "skill"
     if (itemAssets.loading) return
-    const fileContents = buildFileContentsFromItem(data, itemAssets() ?? [])
+    const loadedTags = (data.tags ?? []).map((tag) => tag.slug).filter(Boolean)
+    // Pre-normalize the skill's SKILL.md frontmatter to the canonical shape the
+    // form→frontmatter effect produces, so its post-load rewrite is a no-op and an
+    // unedited skill doesn't diverge from initialContentSnapshot (spurious version
+    // bump on save). The second (form.loaded) re-sync effect below does the same.
+    const fileContents = withNormalizedSkillFrontmatter(
+      buildFileContentsFromItem(data, itemAssets() ?? []),
+      itemType,
+      { name: data.name || "", description: data.description || "", tags: loadedTags },
+    )
     const filePaths = Object.keys(fileContents)
     const selectedTreePath = data.sourcePath || defaultSourcePathForItemType(itemType, data.slug || "") || filePaths[0] || ""
 
@@ -1421,7 +1764,7 @@ export default function CapabilityEditorPage() {
       slugManual: true,
       description: data.description || "",
       category: data.category || "utilities",
-      tags: (data.tags ?? []).map((tag) => tag.slug).filter(Boolean),
+      tags: loadedTags,
       content: data.content || TYPE_CONTENT_PLACEHOLDER[itemType] || "",
       namespace: data.repoId ? `repo:${data.repoId}` : "public",
       loaded: true,
@@ -1488,7 +1831,14 @@ export default function CapabilityEditorPage() {
     if (isViewingHistoricalVersion()) return
 
     if (itemAssets.loading) return
-    const fileContents = buildFileContentsFromItem(data, itemAssets() ?? [])
+    // Same pre-normalization as the initial edit-load effect, so this re-sync
+    // (fires on data/asset changes after load) doesn't reset the snapshot back to
+    // un-normalized content and reintroduce the spurious version bump.
+    const fileContents = withNormalizedSkillFrontmatter(
+      buildFileContentsFromItem(data, itemAssets() ?? []),
+      (data.itemType as ItemType) || "skill",
+      { name: data.name || "", description: data.description || "", tags: (data.tags ?? []).map((tag) => tag.slug).filter(Boolean) },
+    )
     const filePaths = Object.keys(fileContents)
     const selectedTreePath = data.sourcePath || defaultSourcePathForItemType((data.itemType as ItemType) || "skill", data.slug || "") || filePaths[0] || ""
 
@@ -1503,13 +1853,15 @@ export default function CapabilityEditorPage() {
     setInitialContentSnapshot(JSON.stringify(fileContents))
   })
 
+  // Word/char counts reflect what's actually in the editor (the body for a skill
+  // SKILL.md, the full file otherwise) so the status bar matches the visible doc.
   const wordCount = createMemo(() => {
-    const text = selectedFileContent().trim()
+    const text = editorValue().trim()
     if (!text) return 0
     return text.split(/\s+/).filter(Boolean).length
   })
 
-  const charCount = createMemo(() => selectedFileContent().length)
+  const charCount = createMemo(() => editorValue().length)
 
   createEffect(() => {
     const el = previewScrollEl
@@ -2247,6 +2599,31 @@ export default function CapabilityEditorPage() {
                 <Button type="button" size="sm" variant="outline" class="h-8 px-3" onClick={() => navigate("/store/manager")}>
                   {language.t("store.capabilityEditor.backToManagement")}
                 </Button>
+                {/* AI-create toolbar toggle: always shown. With an online device
+                    it opens/collapses the in-page chat panel; without one it
+                    explains how to bring a device online and offers to jump to the
+                    workspace. */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!hasOnlineDevice()) {
+                      promptConnectDevice()
+                      return
+                    }
+                    if (layout.chatCollapsed) openChat()
+                    else collapseChat()
+                  }}
+                  title={language.t("store.skillWriter.expand")}
+                  aria-pressed={hasOnlineDevice() && !layout.chatCollapsed}
+                  classList={{
+                    "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border px-3 text-sm font-medium transition-all duration-150": true,
+                    "border-[color:color-mix(in_srgb,var(--native-primary)_60%,transparent)] bg-[color:color-mix(in_srgb,var(--native-primary)_14%,transparent)] text-[var(--native-primary)]": hasOnlineDevice() && !layout.chatCollapsed,
+                    "border-[color:color-mix(in_srgb,var(--native-border)_48%,transparent)] text-[var(--native-muted)] hover:bg-[var(--native-hover)] hover:text-[var(--native-foreground)]": !hasOnlineDevice() || layout.chatCollapsed,
+                  }}
+                >
+                  <Icon name="sparkles" size="small" class="shrink-0" />
+                  {language.t("store.skillWriter.expand")}
+                </button>
                 <Show
                   when={!isEdit()}
                   fallback={
@@ -2299,10 +2676,17 @@ export default function CapabilityEditorPage() {
               >
                 <MarkdownCodeEditor
                   path={activeFilePath()}
-                  value={selectedFileContent()}
+                  value={editorValue()}
                   editable={!isViewingHistoricalVersion()}
                   onChange={(value) => {
                     if (isViewingHistoricalVersion()) return
+                    if (isSkillSourceFile()) {
+                      // The editor holds the body only; preserve the current
+                      // frontmatter (owned by the left form) and replace the body.
+                      const current = form.fileContents["SKILL.md"] ?? ""
+                      setForm("fileContents", "SKILL.md", `${extractLeadingFrontmatter(current)}${value}`)
+                      return
+                    }
                     setForm("fileContents", form.selectedTreePath, value)
                   }}
                   onCursorChange={({ line, column }) => {
@@ -2349,6 +2733,72 @@ export default function CapabilityEditorPage() {
             </Show>
 
           </div>
+
+          {/* Expanded panel column. Once opened it stays mounted (chatMounted)
+              and is hidden via CSS when collapsed so an in-flight generation is
+              never torn down by an unmount.
+
+              Layout note: the chat ResizeHandle is absolutely positioned and
+              anchors to its nearest positioned ancestor. It MUST live inside a
+              `position: relative` wrapper sized to chatWidth (mirroring the
+              workspace file-tree layout) so it pins to the chat panel's own LEFT
+              edge instead of the root container's far-left edge. The relative
+              wrapper itself is NOT clipped (the handle straddles the edge via
+              translateX(-50%)); the inner content keeps overflow-hidden. */}
+          <Show when={hasOnlineDevice() && chatMounted()}>
+            <aside
+              class="relative flex min-h-0 shrink-0 flex-col border-l border-[color:color-mix(in_srgb,var(--native-border)_24%,transparent)]"
+              classList={{ hidden: layout.chatCollapsed }}
+              style={{
+                width: `${layout.chatWidth}px`,
+                background: `color-mix(in srgb, ${accent()} 4%, var(--native-panel))`,
+              }}
+            >
+              <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
+                <div class="flex shrink-0 items-center justify-between gap-2 border-b border-[color:color-mix(in_srgb,var(--native-border)_18%,transparent)] px-4 py-2.5">
+                  <div class="flex min-w-0 flex-col gap-1">
+                    <div class="flex min-w-0 items-center gap-2">
+                      <span class="shrink-0 text-sm font-medium text-[var(--native-foreground)]">{language.t("store.skillWriter.title")}</span>
+                      <span
+                        class="inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium leading-none"
+                        style={{
+                          background: "color-mix(in srgb, var(--native-primary) 16%, transparent)",
+                          color: "var(--native-primary)",
+                        }}
+                        title={language.t("store.skillWriter.activeSkillTooltip")}
+                      >
+                        <Icon name="sparkles" size="small" />
+                        <span>skill-writer</span>
+                      </span>
+                    </div>
+                    <span class="truncate text-xs text-[var(--native-muted)]">{language.t("store.skillWriter.subtitle")}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={collapseChat}
+                    title={language.t("store.skillWriter.collapse")}
+                    class="inline-flex size-6 shrink-0 items-center justify-center rounded-md border border-[color:color-mix(in_srgb,var(--native-border)_48%,transparent)] text-[var(--native-muted)] transition-all duration-150 hover:bg-[var(--native-hover)] hover:text-[var(--native-foreground)]"
+                  >
+                    <Icon name="chevron-right" size="small" />
+                  </button>
+                </div>
+                <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
+                  <SkillWriterChatPanel onSkillReady={handleSkillReady} />
+                </div>
+              </div>
+              <Show when={!layout.chatCollapsed}>
+                <ResizeHandle
+                  direction="horizontal"
+                  edge="start"
+                  class="[&::after]:bg-[color:color-mix(in_srgb,var(--native-primary)_60%,transparent)]"
+                  size={layout.chatWidth}
+                  min={320}
+                  max={900}
+                  onResize={(size) => setLayout("chatWidth", size)}
+                />
+              </Show>
+            </aside>
+          </Show>
         </div>
       </Show>
     </div>

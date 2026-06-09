@@ -43,6 +43,7 @@ export function SessionComposerRegion(props: {
   hidePrompt?: boolean
   working?: boolean
   busySince?: number
+  hiddenSeed?: () => string | undefined
 }) {
   const prompt = usePrompt()
   const language = useLanguage()
@@ -235,6 +236,7 @@ export function SessionComposerRegion(props: {
                 onSubmit={props.onSubmit}
                 hideAttachButton={props.hideAttachButton}
                 busySince={props.busySince}
+                hiddenSeed={props.hiddenSeed}
               />
             </div>
           </Show>

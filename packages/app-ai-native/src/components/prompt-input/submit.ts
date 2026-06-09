@@ -1,6 +1,7 @@
 import type { Message, Session } from "@opencode-ai/sdk/v2/client"
 import { showToast } from "@opencode-ai/ui/toast"
 import { base64Encode } from "@opencode-ai/util/encode"
+import { withPromptSeed } from "@opencode-ai/util/prompt-seed"
 import { useNavigate } from "@solidjs/router"
 import type { Accessor } from "solid-js"
 import { createMemo } from "solid-js"
@@ -43,6 +44,10 @@ type PromptSubmitInput = {
   newSessionWorktree?: Accessor<string | undefined>
   onNewSessionWorktreeReset?: () => void
   onSubmit?: () => void
+  // Optional hidden instruction injected (as a leading synthetic part) into the
+  // first user message of a new session only. Opt-in: when absent, behavior is
+  // unchanged.
+  hiddenSeed?: Accessor<string | undefined>
 }
 
 type CommentItem = {
@@ -133,6 +138,31 @@ export function createPromptSubmit(input: PromptSubmitInput) {
       showToast({
         title: language.t("prompt.toast.modelAgentRequired.title"),
         description: language.t("prompt.toast.modelAgentRequired.description"),
+      })
+      return
+    }
+
+    const image = images.some((file) => file.mime.startsWith("image/"))
+    if (image) {
+      showToast({
+        title: language.t("prompt.toast.imageUnsupported.title"),
+        description: language.t("prompt.toast.imageUnsupported.description"),
+      })
+      return
+    }
+
+    const cap = currentModel.capabilities
+    const bad = images.some((file) => {
+      if (!cap) return false
+      if (!cap.attachment) return true
+      if (file.mime === "application/pdf") return !cap.input.pdf
+      if (file.mime.startsWith("image/")) return !cap.input.image
+      return true
+    })
+    if (bad) {
+      showToast({
+        title: language.t("prompt.toast.attachmentUnsupported.title"),
+        description: language.t("prompt.toast.attachmentUnsupported.description"),
       })
       return
     }
@@ -308,11 +338,21 @@ export function createPromptSubmit(input: PromptSubmitInput) {
     const commentItems = context.filter((item) => item.type === "file" && !!item.comment?.trim())
 
     const messageID = Identifier.ascending("message")
+    // Opt-in hidden instruction seeding (e.g. the in-page skill-writer). The
+    // instruction must live INSIDE the user message text so the model obeys it
+    // (the device merges multiple text parts into one and drops `synthetic`).
+    // We separate it from the user's text with a unique sentinel; the UI leaf
+    // strips everything up to the sentinel so the bubble shows only the user's
+    // words. Only seed on the first message of a new session; later messages
+    // already carry it in history. History/optimistic messageID and the prompt
+    // history keep the user's ORIGINAL `text` untouched.
+    const seed = isNewSession ? input.hiddenSeed?.() : undefined
+    const sendText = seed ? withPromptSeed(seed, text) : text
     const { requestParts, optimisticParts } = buildRequestParts({
       prompt: currentPrompt,
       context,
       images,
-      text,
+      text: sendText,
       sessionID: session.id,
       messageID,
       sessionDirectory,

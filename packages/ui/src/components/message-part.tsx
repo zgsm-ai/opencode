@@ -47,6 +47,7 @@ import { Markdown } from "./markdown"
 import { ImagePreview } from "./image-preview"
 import { getDirectory as _getDirectory, getFilename } from "@opencode-ai/util/path"
 import { checksum } from "@opencode-ai/util/encode"
+import { stripPromptSeed } from "@opencode-ai/util/prompt-seed"
 import { Tooltip } from "./tooltip"
 import { IconButton } from "./icon-button"
 import { TextShimmer } from "./text-shimmer"
@@ -998,7 +999,10 @@ export function UserMessageDisplay(props: { message: UserMessage; parts: PartTyp
     () => props.parts?.find((p) => p.type === "text" && !(p as TextPart).synthetic) as TextPart | undefined,
   )
 
-  const text = createMemo(() => textPart()?.text || "")
+  // Strip any hidden prompt-seed instruction so the user bubble shows only the
+  // user's own words. Messages without the sentinel (the common case) are
+  // returned unchanged, so this is a no-op for ordinary messages.
+  const text = createMemo(() => stripPromptSeed(textPart()?.text || ""))
 
   const files = createMemo(() => (props.parts?.filter((p) => p.type === "file") as FilePart[]) ?? [])
 

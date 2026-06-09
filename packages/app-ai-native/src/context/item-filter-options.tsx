@@ -64,6 +64,10 @@ export const { use: useItemFilterOptions, provider: ItemFilterOptionsProvider } 
       return option?.url || sourceMap().get(value)?.url || ""
     }
 
+    // 来源是否「可识别」= 命中已知来源映射表（含有 label 但无 url 的，如 internal/Internal Registry）。
+    // 不可识别（如上游 catalog 写入的 UUID 脏值）应整体隐藏来源框。
+    const isKnownSource = (value?: string) => !!value && sourceMap().has(value)
+
     return {
       data,
       categories,
@@ -78,6 +82,7 @@ export const { use: useItemFilterOptions, provider: ItemFilterOptionsProvider } 
       securityRiskGroupLabel,
       sourceLabel,
       sourceUrl,
+      isKnownSource,
       refetch,
     }
   },

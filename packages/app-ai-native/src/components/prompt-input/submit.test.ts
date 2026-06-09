@@ -5,11 +5,22 @@ let createPromptSubmit: typeof import("./submit").createPromptSubmit
 
 const createdClients: string[] = []
 const createdSessions: string[] = []
-const enabledAutoAccept: Array<{ sessionID: string; directory: string }> = []
+const enabledAutoAccept: number[] = []
 const sentShell: string[] = []
 const syncedDirectories: string[] = []
+const toasts: unknown[] = []
+
+type Model = {
+  id: string
+  provider: { id: string }
+  capabilities?: {
+    attachment: boolean
+    input: { image: boolean; pdf: boolean }
+  }
+}
 
 let selected = "/repo/worktree-a"
+let model: Model = { id: "model", provider: { id: "provider" } }
 
 const promptValue: Prompt = [{ type: "text", content: "ls", start: 0, end: 2 }]
 
@@ -51,7 +62,10 @@ beforeAll(async () => {
   }))
 
   mock.module("@opencode-ai/ui/toast", () => ({
-    showToast: () => 0,
+    showToast: (input: unknown) => {
+      toasts.push(input)
+      return 0
+    },
   }))
 
   mock.module("@opencode-ai/util/encode", () => ({
@@ -61,7 +75,7 @@ beforeAll(async () => {
   mock.module("@/context/local", () => ({
     useLocal: () => ({
       model: {
-        current: () => ({ id: "model", provider: { id: "provider" } }),
+        current: () => model,
         variant: { current: () => undefined },
       },
       agent: {
@@ -72,8 +86,8 @@ beforeAll(async () => {
 
   mock.module("@/context/permission", () => ({
     usePermission: () => ({
-      enableAutoAccept(sessionID: string, directory: string) {
-        enabledAutoAccept.push({ sessionID, directory })
+      enableAutoAccept() {
+        enabledAutoAccept.push(1)
       },
     }),
   }))
@@ -175,6 +189,8 @@ beforeEach(() => {
   enabledAutoAccept.length = 0
   sentShell.length = 0
   syncedDirectories.length = 0
+  toasts.length = 0
+  model = { id: "model", provider: { id: "provider" } }
   selected = "/repo/worktree-a"
 })
 
@@ -235,6 +251,59 @@ describe("prompt submit worktree selection", () => {
 
     await submit.handleSubmit(event)
 
-    expect(enabledAutoAccept).toEqual([{ sessionID: "session-1", directory: "/repo/worktree-a" }])
+    expect(enabledAutoAccept).toEqual([1])
+  })
+
+  test("blocks image attachments while native upload is unsupported", async () => {
+    model = {
+      id: "model",
+      provider: { id: "provider" },
+      capabilities: {
+        attachment: true,
+        input: { image: true, pdf: true },
+      },
+    }
+    let history = 0
+    const submit = createPromptSubmit({
+      info: () => undefined,
+      imageAttachments: () => [
+        {
+          type: "image",
+          id: "img",
+          filename: "image.png",
+          mime: "image/png",
+          dataUrl: "data:image/png;base64,AA==",
+        },
+      ],
+      commentCount: () => 0,
+      autoAccept: () => true,
+      mode: () => "normal",
+      working: () => false,
+      editor: () => undefined,
+      queueScroll: () => undefined,
+      promptLength: (value) => value.reduce((sum, part) => sum + ("content" in part ? part.content.length : 0), 0),
+      addToHistory: () => {
+        history += 1
+      },
+      resetHistoryNavigation: () => undefined,
+      setMode: () => undefined,
+      setPopover: () => undefined,
+      newSessionWorktree: () => selected,
+      onNewSessionWorktreeReset: () => undefined,
+      onSubmit: () => undefined,
+    })
+
+    const event = { preventDefault: () => undefined } as unknown as Event
+
+    await submit.handleSubmit(event)
+
+    expect(history).toBe(0)
+    expect(createdSessions).toEqual([])
+    expect(toasts).toEqual([
+      {
+        title: "prompt.toast.imageUnsupported.title",
+        description: "prompt.toast.imageUnsupported.description",
+      },
+    ])
   })
 })

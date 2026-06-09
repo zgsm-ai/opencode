@@ -269,14 +269,6 @@ export default function RootLayout(props: ParentProps) {
               onClick={handleSecurityJump}
               node={<Shield size={18} strokeWidth={1.75} aria-hidden="true" />}
             />
-            <Show when={true}>
-              <NavButton
-                icon="task"
-                label="Multica"
-                active={isMultica()}
-                onClick={() => navigate("/multica")}
-              />
-            </Show>
             <Show when={auth.canAccessMenu("kanban")}>
               <NavButton
                 label={language.t("sidebar.kanban")}

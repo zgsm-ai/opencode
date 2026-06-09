@@ -14,7 +14,7 @@ type TagInputProps = {
   onChange: (value: string[]) => void
 }
 
-function normalizeTag(value: string) {
+export function normalizeTag(value: string) {
   return value
     .trim()
     .toLowerCase()

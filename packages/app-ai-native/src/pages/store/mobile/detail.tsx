@@ -5,6 +5,7 @@ import { useTheme } from "@opencode-ai/ui/theme"
 import { Icon } from "@opencode-ai/ui/icon"
 import { Markdown } from "@opencode-ai/ui/markdown"
 import { LocalIcon } from "@/components/local-icon"
+import AvatarDisplay from "@/components/avatar-display"
 import { useItemFilterOptions } from "@/context/item-filter-options"
 import { useLanguage } from "@/context/language"
 import { useAuth } from "@/context/auth"
@@ -234,7 +235,8 @@ export default function MobileStoreDetail() {
                       <LocalIcon name="subscribe" size="small" />
                       {formatCompactCount(favoriteCount())}
                     </span>
-                    <Show when={data().source}>
+                    {/* 仅当 source 可识别（命中已知来源映射表）才显示；不可识别（UUID 等脏值）隐藏，已知无 url 的仍显示 label。 */}
+                    <Show when={data().source && itemFilterOptions.isKnownSource(data().source)}>
                       <span class="inline-flex items-center gap-1">
                         <LocalIcon name="globe" size="small" />
                         {sourceLabel()}
@@ -263,9 +265,20 @@ export default function MobileStoreDetail() {
                 <div class="mx-4 rounded-xl border border-border-weak-base bg-[var(--native-panel)] p-3">
                   <div class="space-y-2.5 text-xs text-text-weak">
                     <Show when={authorInfo() || authorName()}>
-                      <div class="flex items-center justify-between">
+                      <div class="flex items-center justify-between gap-2">
                         <span class="font-semibold">{language.t("store.detail.author")}</span>
-                        <span class="truncate max-w-[10rem] text-text-strong">{authorInfo()?.name ?? authorName() ?? data().createdBy}</span>
+                        <div class="flex min-w-0 items-center gap-1.5">
+                          <Show when={authorInfo()?.avatarUrl}>
+                            <AvatarDisplay
+                              avatarUrl={authorInfo()?.avatarUrl}
+                              username={authorInfo()?.name ?? authorName() ?? data().createdBy}
+                              title={authorInfo()?.name ?? authorName() ?? data().createdBy}
+                              size="1.25rem"
+                              class="shrink-0"
+                            />
+                          </Show>
+                          <span class="truncate max-w-[10rem] text-text-strong">{authorInfo()?.name ?? authorName() ?? data().createdBy}</span>
+                        </div>
                       </div>
                     </Show>
                     <div class="flex items-center justify-between">

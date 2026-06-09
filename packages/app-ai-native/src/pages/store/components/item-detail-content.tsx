@@ -7,7 +7,9 @@ import { Markdown } from "@opencode-ai/ui/markdown"
 import { showToast } from "@opencode-ai/ui/toast"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { ConfirmDialog } from "./confirm-dialog"
 import { LocalIcon } from "@/components/local-icon"
+import AvatarDisplay from "@/components/avatar-display"
 import { useItemFilterOptions } from "@/context/item-filter-options"
 import { useAuth } from "@/context/auth"
 import { useNavigate } from "@solidjs/router"
@@ -18,6 +20,7 @@ import { pickItemDescription } from "../lib/item-description"
 import SecurityTag from "./security-tag"
 import HealthRadar from "./health-radar"
 import { DistributeDialog } from "./distribute-dialog"
+import { BuiltinContentDialog } from "./builtin-content-dialog"
 import { McpConfigForm } from "./mcp-config-form"
 import { detectMcpFields } from "../lib/mcp-config"
 import type { McpConfigStatus } from "../lib/api"
@@ -279,6 +282,7 @@ interface ItemDetailContentProps {
   showBackButton?: boolean
   onBack?: () => void
   onItemLoaded?: (item: CapabilityItem) => void
+  onDeleted?: () => void
   favorited?: boolean
   favoriteCount?: number
   previewCount?: number
@@ -321,6 +325,13 @@ export default function ItemDetailContent(props: ItemDetailContentProps) {
     () => item()?.forkedFromOwnerId,
     (ownerId) => userApi.getNames([ownerId]).then((names) => names[ownerId] ?? ownerId),
   )
+  // 系统/官方内置账号（forkedFromOwnerId === "system"）显示友好文案，避免露出技术值「Fork 自 system」。
+  const forkedFromText = () =>
+    item()?.forkedFromOwnerId === "system"
+      ? language.t("store.detail.forkedFromOfficial")
+      : language.t("store.detail.forkedFrom", {
+          name: forkedFromName() ?? item()?.forkedFromOwnerId ?? "",
+        })
   const [copied, setCopied] = createSignal(false)
   const [idCopied, setIdCopied] = createSignal(false)
   const [highlighted] = createResource(
@@ -483,6 +494,38 @@ export default function ItemDetailContent(props: ItemDetailContentProps) {
                         <span>{language.t("common.edit")}</span>
                       </button>
                     </Show>
+                    <Show when={canEditItem() && props.onDeleted}>
+                      <button
+                        onClick={() => {
+                          const id = data().id
+                          dialog.show(() => (
+                            <ConfirmDialog
+                              title={language.t("store.console.capabilities.delete")}
+                              description={language.t("store.console.confirmDeleteCapability")}
+                              confirm={language.t("common.delete")}
+                              onConfirm={async () => {
+                                try {
+                                  await itemApi.delete(id)
+                                  showToast({ title: language.t("store.console.capabilities.toast.deleteSuccess") })
+                                  props.onDeleted?.()
+                                } catch (error) {
+                                  showToast({
+                                    title: language.t("store.console.capabilities.toast.deleteFailed"),
+                                    description: error instanceof Error ? error.message : String(error),
+                                  })
+                                  throw error
+                                }
+                              }}
+                            />
+                          ))
+                        }}
+                        class="inline-flex items-center gap-1.5 rounded-lg border border-border-weak-base px-3 py-1.5 text-12-regular text-text-weak transition-colors duration-150 hover:bg-bg-muted hover:text-destructive"
+                        title={language.t("common.delete")}
+                      >
+                        <Icon name="trash" size="small" />
+                        <span>{language.t("common.delete")}</span>
+                      </button>
+                    </Show>
                     <Show when={props.onToggleFavorite}>
                       <button
                         onClick={() => void props.onToggleFavorite?.()}
@@ -551,22 +594,34 @@ export default function ItemDetailContent(props: ItemDetailContentProps) {
                         <button
                           onClick={async () => {
                             const next = !data().isBuiltIn
-                            try {
-                              await itemApi.update(data().id, { isBuiltIn: next })
-                              mutateItem((prev) => (prev ? { ...prev, isBuiltIn: next } : prev))
-                              showToast({
-                                variant: "success",
-                                title: next
-                                  ? language.t("store.detail.setBuiltInSuccess") || "已设为内置 Plugin"
-                                  : language.t("store.detail.unsetBuiltInSuccess") || "已取消内置 Plugin",
-                              })
-                            } catch (err) {
-                              showToast({
-                                variant: "error",
-                                title: language.t("store.detail.toggleBuiltInFailed") || "设置失败",
-                                description: err instanceof Error ? err.message : String(err),
-                              })
+                            // 取消内置：直接更新
+                            if (!next) {
+                              try {
+                                await itemApi.update(data().id, { isBuiltIn: false })
+                                mutateItem((prev) => (prev ? { ...prev, isBuiltIn: false } : prev))
+                                showToast({
+                                  variant: "success",
+                                  title: language.t("store.detail.unsetBuiltInSuccess") || "已取消内置 Plugin",
+                                })
+                              } catch (err) {
+                                showToast({
+                                  variant: "error",
+                                  title: language.t("store.detail.toggleBuiltInFailed") || "设置失败",
+                                  description: err instanceof Error ? err.message : String(err),
+                                })
+                              }
+                              return
                             }
+                            // 设为内置：弹窗上传 Markdown 内容
+                            dialog.show(() => (
+                              <BuiltinContentDialog
+                                itemId={data().id}
+                                itemName={data().name}
+                                onSuccess={(updatedItem) => {
+                                  mutateItem((prev) => (prev ? { ...prev, ...updatedItem } : prev))
+                                }}
+                              />
+                            ))
                           }}
                           class="inline-flex items-center gap-1.5 rounded-lg border border-border-weak-base px-3 py-1.5 text-12-regular text-text-weak transition-colors duration-150 hover:bg-bg-muted hover:text-text-strong"
                           title={data().isBuiltIn ? "取消内置 Plugin" : "设为内置 Plugin"}
@@ -788,16 +843,17 @@ export default function ItemDetailContent(props: ItemDetailContentProps) {
                         </div>
                       </div>
 
-                      <Show when={data().source}>
+                      {/* 仅当 source 可识别（命中已知来源映射表）才显示来源框；不可识别（空 / UUID / 未收录值）整体隐藏，
+                          避免裸露脏值。已知但无 url 的来源（如 internal）仍显示纯 label（不可点）。 */}
+                      <Show when={data().source && itemFilterOptions.isKnownSource(data().source)}>
                         {(() => {
                           const sourceLabel = itemFilterOptions.sourceLabel(data().source) || data().source
                           const sourceUrl = itemFilterOptions.sourceUrl(data().source)
-                          const verified = !!sourceUrl
 
                           return (
                             <div>
                               <Show
-                                when={verified}
+                                when={sourceUrl}
                                 fallback={
                                   <span
                                     class="inline-flex w-full cursor-default items-center justify-center gap-1.5 rounded-[0.5rem] border border-border-weak-base px-3 py-2 text-[14px] font-bold leading-5 text-text-weak"
@@ -873,16 +929,10 @@ export default function ItemDetailContent(props: ItemDetailContentProps) {
                             type="button"
                             onClick={() => navigate(`/capabilities/${data().forkedFromItemId}/edit`)}
                             class="inline-flex max-w-full cursor-pointer items-center gap-1.5 text-sm leading-5 text-text-weak transition-colors hover:text-[var(--native-primary)]"
-                            title={language.t("store.detail.forkedFrom", {
-                              name: forkedFromName() ?? data().forkedFromOwnerId ?? "",
-                            })}
+                            title={forkedFromText()}
                           >
                             <LocalIcon name="fork" size="small" style={{ width: "14px", height: "14px" }} />
-                            <span class="truncate">
-                              {language.t("store.detail.forkedFrom", {
-                                name: forkedFromName() ?? data().forkedFromOwnerId ?? "",
-                              })}
-                            </span>
+                            <span class="truncate">{forkedFromText()}</span>
                           </button>
                         </div>
                       </Show>
@@ -899,24 +949,35 @@ export default function ItemDetailContent(props: ItemDetailContentProps) {
                             >
                               {language.t("store.detail.author")}
                             </div>
-                            <div class="flex min-w-0 flex-col items-end">
-                              <span class="max-w-[12rem] truncate text-right text-sm leading-5 text-text-strong">
-                                {authorInfo()?.name ?? authorName() ?? data().createdBy}
-                              </span>
-                              <Show when={data().createdBy}>
-                                <button
-                                  type="button"
-                                  class="inline-flex cursor-pointer items-center gap-1 text-right font-mono text-[11px] leading-4 text-text-weak transition-colors duration-150 hover:text-text-strong"
-                                  title={data().createdBy}
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    void copyAuthorId(data().createdBy)
-                                  }}
-                                >
-                                  <span>{shortId(data().createdBy)}</span>
-                                  <Icon name={idCopied() ? "check" : "link"} size="small" />
-                                </button>
+                            <div class="flex min-w-0 items-center gap-2">
+                              <Show when={authorInfo()?.avatarUrl}>
+                                <AvatarDisplay
+                                  avatarUrl={authorInfo()?.avatarUrl}
+                                  username={authorInfo()?.name ?? authorName() ?? data().createdBy}
+                                  title={authorInfo()?.name ?? authorName() ?? data().createdBy}
+                                  size="1.75rem"
+                                  class="shrink-0"
+                                />
                               </Show>
+                              <div class="flex min-w-0 flex-col items-end">
+                                <span class="max-w-[12rem] truncate text-right text-sm leading-5 text-text-strong">
+                                  {authorInfo()?.name ?? authorName() ?? data().createdBy}
+                                </span>
+                                <Show when={data().createdBy}>
+                                  <button
+                                    type="button"
+                                    class="inline-flex cursor-pointer items-center gap-1 text-right font-mono text-[11px] leading-4 text-text-weak transition-colors duration-150 hover:text-text-strong"
+                                    title={data().createdBy}
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      void copyAuthorId(data().createdBy)
+                                    }}
+                                  >
+                                    <span>{shortId(data().createdBy)}</span>
+                                    <Icon name={idCopied() ? "check" : "link"} size="small" />
+                                  </button>
+                                </Show>
+                              </div>
                             </div>
                           </div>
                         </div>
