@@ -18,6 +18,7 @@ bundled-skills
 .serena/
 /result
 refs
+.playwright-cli/
 Session.vim
 /opencode.json
 a.out
