@@ -65,6 +65,7 @@ type DeviceWorkspaceValue = {
   subscribe(fn: (payload: EventPayload) => void): () => void
   directory: string
   workspaceId: string | undefined
+  proxyError: () => string | undefined
   autoAccept: {
     enabled: () => boolean
     toggle(): void
@@ -399,6 +400,7 @@ export function DeviceWorkspaceProvider(props: ParentProps<{ workspaceId?: strin
   }
 
   const [autoAcceptSignal, setAutoAcceptSignal] = createSignal(false)
+  const [proxyError, setProxyError] = createSignal<string | undefined>(undefined)
 
   const persistAutoAccept = async (value: boolean) => {
     const wid = props.workspaceId
@@ -504,13 +506,16 @@ export function DeviceWorkspaceProvider(props: ParentProps<{ workspaceId?: strin
   let streamRetry: ReturnType<typeof setTimeout> | undefined
   let streamDisposed = false
   const STREAM_RETRY_MS = 1500
+  const STREAM_PROXY_RETRY_MS = 5000
 
-  const scheduleStreamRestart = () => {
+  const PROXY_FATAL_CODES = new Set(["FILTER_ERROR"])
+
+  const scheduleStreamRestart = (isProxyError = false) => {
     if (streamDisposed || streamRetry || streamAbort?.signal.aborted) return
     streamRetry = setTimeout(() => {
       streamRetry = undefined
       void startEventStream()
-    }, STREAM_RETRY_MS)
+    }, isProxyError ? STREAM_PROXY_RETRY_MS : STREAM_RETRY_MS)
   }
 
   const startEventStream = async () => {
@@ -523,9 +528,21 @@ export function DeviceWorkspaceProvider(props: ParentProps<{ workspaceId?: strin
     streamAbort = new AbortController()
     const signal = streamAbort.signal
     try {
-      const { stream } = await device.client.event.stream({ signal })
+      const { stream } = await device.client.event.stream({
+        signal,
+        onSseError: (err) => {
+          const proxyCode = (err as any)?.proxyCode as string | undefined
+          if (proxyCode) {
+            setProxyError(proxyCode)
+            if (!PROXY_FATAL_CODES.has(proxyCode)) {
+              scheduleStreamRestart(true)
+            }
+          }
+        },
+      })
       const readLoop = async () => {
         try {
+          setProxyError(undefined)
           for await (const event of stream as any) {
             if (signal.aborted) break
             if (!event) continue
@@ -646,13 +663,6 @@ export function DeviceWorkspaceProvider(props: ParentProps<{ workspaceId?: strin
                   const p = payload.properties as { sessionID?: string }
                   const id = p?.sessionID ?? payload.sessionID
                   if (!id) break
-                  const timer = statusTimers.get(id)
-                  if (timer) {
-                    clearTimeout(timer)
-                    statusTimers.delete(id)
-                  }
-                  pendingStatus.delete(id)
-                  setSessionStatus(id, { type: "idle" })
                   summaryChanged = true
                   break
                 }
@@ -771,6 +781,7 @@ export function DeviceWorkspaceProvider(props: ParentProps<{ workspaceId?: strin
     subscribe,
     directory: device.directory,
     workspaceId: props.workspaceId,
+    proxyError,
     autoAccept,
   }
 

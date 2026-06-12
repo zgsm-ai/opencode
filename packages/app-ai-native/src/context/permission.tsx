@@ -21,7 +21,5 @@ export type PermissionValue = {
 export const PermissionContext = createContext<PermissionValue>()
 
 export function usePermission() {
-  const ctx = useContext(PermissionContext)
-  if (!ctx) throw new Error("Permission context must be used within a context provider")
-  return ctx
+  return useContext(PermissionContext)
 }

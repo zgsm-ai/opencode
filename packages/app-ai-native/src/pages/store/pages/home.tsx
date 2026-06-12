@@ -134,6 +134,7 @@ export default function Home() {
   const [pendingSourceFilters, setPendingSourceFilters] = createSignal<string[]>([])
   const [appliedSecurityFilters, setAppliedSecurityFilters] = createSignal<SecurityFilterValue[]>([])
   const [pendingSecurityFilters, setPendingSecurityFilters] = createSignal<SecurityFilterValue[]>([])
+  const [hideSubSkills, setHideSubSkills] = createSignal(false)
   const [detailItem, setDetailItem] = createSignal<CapabilityItem | null>(null)
   const [favoriteActionItemId, setFavoriteActionItemId] = createSignal<string | null>(null)
   const [favoritePending, setFavoritePending] = createSignal(false)
@@ -216,6 +217,14 @@ export default function Home() {
     }
     return map[activeType()]
   })
+  const hidePluginItemsLabel = createMemo(() => {
+    const map: Partial<Record<StoreType, string>> = {
+      all: "store.home.hidePluginItems",
+      skill: "store.home.hideSubSkills",
+      mcp: "store.home.hidePluginMcpServers",
+    }
+    return language.t(map[activeType()] ?? "store.home.hidePluginItems")
+  })
 
   const listParams = createMemo(() => ({
     type: activeType() === "all" ? undefined : activeType(),
@@ -229,7 +238,14 @@ export default function Home() {
     sortBy: sort.by,
     sortOrder: sort.order,
     includeForks: showForks() || undefined,
+    excludeSubSkills: hideSubSkills() || undefined,
   }))
+
+  const toggleHideSubSkills = () => {
+    setHideSubSkills((v) => !v)
+    setPage(1)
+    setSelectedItemId(null)
+  }
 
   const listKey = createMemo(() => JSON.stringify(listParams()))
   const listSrc = createMemo(() => ({ key: listKey(), params: listParams() }))
@@ -795,6 +811,7 @@ export default function Home() {
                     itemId={itemId()}
                     class={cn(sx.sheetBody, "thin-scrollbar")}
                     onItemLoaded={setDetailItem}
+                    onSelectItem={setSelectedItemId}
                     favorited={favorited()}
                     favoriteCount={favoriteCount()}
                     previewCount={previewCount()}
@@ -893,6 +910,23 @@ export default function Home() {
           >
             <LocalIcon name="fork" size="small" />
             <span class="max-[640px]:hidden">{language.t("store.home.showForks")}</span>
+          </button>
+          <button
+            type="button"
+            role="switch"
+            aria-pressed={hideSubSkills()}
+            onClick={toggleHideSubSkills}
+            class="inline-flex h-12 shrink-0 items-center gap-2 rounded-full border px-4 text-13-regular transition-colors"
+            classList={{
+              "border-[color:color-mix(in_srgb,var(--native-primary)_52%,var(--native-border))] bg-[color:color-mix(in_srgb,var(--native-primary)_12%,var(--native-panel))] text-[var(--native-primary)]":
+                hideSubSkills(),
+              "border-[color:color-mix(in_srgb,var(--native-border)_58%,transparent)] bg-[var(--native-panel)] text-text-weak hover:text-text-strong":
+                !hideSubSkills(),
+            }}
+            title={hidePluginItemsLabel()}
+          >
+            <Icon name={hideSubSkills() ? "check" : "configuration"} size="small" />
+            <span class="whitespace-nowrap max-[640px]:hidden">{hidePluginItemsLabel()}</span>
           </button>
         </div>
       </section>

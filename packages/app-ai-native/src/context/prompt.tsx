@@ -4,8 +4,8 @@ import { batch, createMemo, createRoot, onCleanup } from "solid-js"
 import type { FileSelection } from "@/context/file"
 import { Persist, persisted } from "@/utils/persist"
 import { checksum } from "@opencode-ai/util/encode"
-import { useSync } from "@/context/sync"
-import { useSDK } from "@/context/sdk"
+import { useDeviceLocal } from "@/context/device-local"
+import { useDeviceSDK } from "@/context/device-sdk"
 
 interface PartBase {
   content: string
@@ -234,8 +234,8 @@ export const { use: usePrompt, provider: PromptProvider, context: PromptContext 
   name: "Prompt",
   gate: false,
   init: () => {
-    const sync = useSync()
-    const sdk = useSDK()
+    const local = useDeviceLocal()
+    const sdk = useDeviceSDK()
     const cache = new Map<string, PromptCacheEntry>()
 
     const disposeAll = () => {
@@ -276,7 +276,7 @@ export const { use: usePrompt, provider: PromptProvider, context: PromptContext 
       return entry.value
     }
 
-    const session = createMemo(() => load(sdk.directory, (sync as any).currentSessionID?.()))
+    const session = createMemo(() => load(sdk.directory, local.activeSessionID()))
 
     return {
       ready: () => session().ready(),

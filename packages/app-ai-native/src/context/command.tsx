@@ -1,4 +1,4 @@
-import { createEffect, createMemo, onCleanup, onMount, type Accessor } from "solid-js"
+import { createEffect, createMemo, onCleanup, onMount, useContext, type Accessor } from "solid-js"
 import { createStore } from "solid-js/store"
 import { createSimpleContext } from "@opencode-ai/ui/context"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
@@ -185,7 +185,7 @@ function isEditableTarget(target: EventTarget | null) {
   return false
 }
 
-export const { use: useCommand, provider: CommandProvider, context: CommandContext } = createSimpleContext({
+const { use: _useCommand, provider: CommandProvider, context: CommandContext } = createSimpleContext({
   name: "Command",
   init: () => {
     const dialog = useDialog()
@@ -390,3 +390,25 @@ export const { use: useCommand, provider: CommandProvider, context: CommandConte
     }
   },
 })
+
+const commandStub = {
+  ready: () => true,
+  register: () => {},
+  trigger: () => {},
+  keybind: () => "",
+  show: () => {},
+  keybinds: () => {},
+  suspended: () => false,
+  get catalog() {
+    return []
+  },
+  get options() {
+    return []
+  },
+}
+
+export function useCommand() {
+  return useContext(CommandContext) ?? commandStub
+}
+
+export { CommandProvider, CommandContext }

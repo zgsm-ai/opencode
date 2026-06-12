@@ -5,6 +5,7 @@ import katex from "katex"
 import { bundledLanguages, type BundledLanguage } from "shiki"
 import { createSimpleContext } from "./helper"
 import { getSharedHighlighter, registerCustomTheme, ThemeRegistrationResolved } from "@pierre/diffs"
+import { useI18n } from "./i18n"
 
 registerCustomTheme("CoStrict", () => {
   return Promise.resolve({
@@ -461,7 +462,35 @@ async function parseMarkdownWithFrontMatter(parser: { parse: (markdown: string) 
   return `${renderFrontMatterHtml(frontMatter)}${body}`
 }
 
-async function highlightCodeBlocks(html: string): Promise<string> {
+function extractLangFromPrefix(prefixedLang: string): string {
+  if (prefixedLang.startsWith("filtered-")) return prefixedLang.slice("filtered-".length)
+  if (prefixedLang.startsWith("streaming-")) return prefixedLang.slice("streaming-".length)
+  return ""
+}
+
+const FILTERED_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>'
+
+function langDisplayName(lang: string): string {
+  if (!lang) return ""
+  return lang.charAt(0).toUpperCase() + lang.slice(1)
+}
+
+function renderFilteredCard(code: string, lang: string, filteredLabel: string): string {
+  const originalLang = extractLangFromPrefix(lang)
+  const displayLang = originalLang ? langDisplayName(originalLang) : ""
+  const langTag = displayLang ? `<span data-slot="code-filtered-lang">${escapeHtml(displayLang)}</span>` : ""
+  return `<div data-component="code-filtered"${originalLang ? ` data-lang="${escapeHtml(originalLang)}"` : ""}>${FILTERED_SVG}<span>${escapeHtml(filteredLabel)}</span>${langTag}</div>`
+}
+
+function renderStreamingSkeleton(lang: string, streamingLabel: string): string {
+  const originalLang = extractLangFromPrefix(lang)
+  const displayLang = langDisplayName(originalLang)
+  const langTag = originalLang ? `<span data-slot="code-streaming-lang">${escapeHtml(displayLang)}</span>` : ""
+  return `<div data-component="code-streaming"${originalLang ? ` data-lang="${escapeHtml(originalLang)}"` : ""}><div data-slot="code-streaming-header"><span data-slot="code-streaming-label">${escapeHtml(streamingLabel)}</span>${langTag}</div><div data-slot="code-streaming-skeleton"><div class="code-streaming-line" style="width:80%"></div><div class="code-streaming-line" style="width:65%"></div><div class="code-streaming-line" style="width:90%"></div></div></div>`
+}
+
+async function highlightCodeBlocks(html: string, labels: { filteredLabel: string; streamingLabel: string }): Promise<string> {
   const codeBlockRegex = /<pre><code(?:\s+class="language-([^"]*)")?>([\s\S]*?)<\/code><\/pre>/g
   const matches = [...html.matchAll(codeBlockRegex)]
   if (matches.length === 0) return html
@@ -475,6 +504,21 @@ async function highlightCodeBlocks(html: string): Promise<string> {
   let result = html
   for (const match of matches) {
     const [fullMatch, lang, escapedCode] = match
+
+    if (lang && (lang.startsWith("filtered") || lang.startsWith("streaming"))) {
+      const decoded = escapedCode
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">")
+        .replace(/&amp;/g, "&")
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+      const replacement = lang.startsWith("filtered")
+        ? renderFilteredCard(decoded, lang, labels.filteredLabel)
+        : renderStreamingSkeleton(lang, labels.streamingLabel)
+      result = result.replace(fullMatch, () => replacement)
+      continue
+    }
+
     const code = escapedCode
       .replace(/&lt;/g, "<")
       .replace(/&gt;/g, ">")
@@ -506,12 +550,26 @@ export type NativeMarkdownParser = (markdown: string) => Promise<string>
 export const { use: useMarked, provider: MarkedProvider } = createSimpleContext({
   name: "Marked",
   init: (props: { nativeParser?: NativeMarkdownParser }) => {
+    const i18n = useI18n()
+
+    const filteredLabel = () => i18n.t("ui.messagePart.codeFiltered.label")
+    const streamingLabel = () => i18n.t("ui.messagePart.codeStreaming.label")
+
     const jsParser = marked.use(
       {
         renderer: {
           link({ href, title, text }) {
             const titleAttr = title ? ` title="${title}"` : ""
             return `<a href="${href}"${titleAttr} class="external-link" target="_blank" rel="noopener noreferrer">${text}</a>`
+          },
+          code({ text, lang }) {
+            if (lang?.startsWith("filtered")) {
+              return renderFilteredCard(text, lang, filteredLabel())
+            }
+            if (lang?.startsWith("streaming")) {
+              return renderStreamingSkeleton(lang, streamingLabel())
+            }
+            return false
           },
         },
       },
@@ -521,6 +579,12 @@ export const { use: useMarked, provider: MarkedProvider } = createSimpleContext(
       }),
       markedShiki({
         async highlight(code, lang) {
+          if (lang.startsWith("filtered")) {
+            return renderFilteredCard(code, lang, filteredLabel())
+          }
+          if (lang.startsWith("streaming")) {
+            return renderStreamingSkeleton(lang, streamingLabel())
+          }
           const highlighter = await getSharedHighlighter({
             themes: ["CoStrict"],
             langs: [],
@@ -547,7 +611,10 @@ export const { use: useMarked, provider: MarkedProvider } = createSimpleContext(
         async parse(markdown: string): Promise<string> {
           const html = await parseMarkdownWithFrontMatter({ parse: nativeParser }, markdown)
           const withMath = renderMathExpressions(html)
-          return highlightCodeBlocks(withMath)
+          return highlightCodeBlocks(withMath, {
+            filteredLabel: i18n.t("ui.messagePart.codeFiltered.label"),
+            streamingLabel: i18n.t("ui.messagePart.codeStreaming.label"),
+          })
         },
       }
     }

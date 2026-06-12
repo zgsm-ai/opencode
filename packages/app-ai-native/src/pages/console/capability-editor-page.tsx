@@ -1582,6 +1582,16 @@ export default function CapabilityEditorPage() {
 	},
   )
 
+  // A plugin's bundled skills/MCPs are first-class child items (parent_plugin_id).
+  // List them on the plugin editor so the user can open each one's own editor.
+  const [subSkills] = createResource(
+    () => (isEdit() && form.itemType === "plugin" && params.itemId ? params.itemId : undefined),
+    async (pluginId) => {
+      const res = await itemApi.list({ parentPluginId: pluginId, pageSize: 100, includeForks: true })
+      return res.items ?? []
+    },
+  )
+
   const [selectedVersion] = createResource(
     () => {
       if (!isEdit() || !params.itemId || form.selectedRevision <= 0) return null
@@ -1829,6 +1839,9 @@ export default function CapabilityEditorPage() {
     const data = currentItem()
     if (!isEdit() || !data || !form.loaded) return
     if (isViewingHistoricalVersion()) return
+    // Plugins own their file tree via the bundled sub-skill effect below; don't
+    // let the manifest re-sync overwrite it.
+    if (((data.itemType as ItemType) || "skill") === "plugin") return
 
     if (itemAssets.loading) return
     // Same pre-normalization as the initial edit-load effect, so this re-sync
@@ -1849,6 +1862,34 @@ export default function CapabilityEditorPage() {
       fileContents,
       treeNodes: dedupeTreeNodes(buildTreeFromPaths(filePaths)),
       selectedTreePath,
+    })
+    setInitialContentSnapshot(JSON.stringify(fileContents))
+  })
+
+  // Build the plugin editor's file tree from its bundled sub-skills/MCPs. Each
+  // child item's sourcePath is already a tree path (e.g. skills/<slug>/SKILL.md)
+  // and its content is returned by the list call, so we populate the shared file
+  // tree directly and reuse the normal editor. Edits save back per-child.
+  const [pluginPathToChild, setPluginPathToChild] = createSignal<Record<string, CapabilityItem>>({})
+  createEffect(() => {
+    if (!isEdit() || form.itemType !== "plugin" || isViewingHistoricalVersion()) return
+    const children = subSkills()
+    if (subSkills.loading || !children) return
+    const fileContents: FileContentMap = {}
+    const map: Record<string, CapabilityItem> = {}
+    for (const ch of children) {
+      const path = ch.sourcePath || `${ch.itemType}s/${ch.slug || ch.id}/SKILL.md`
+      fileContents[path] = ch.content ?? ""
+      map[path] = ch
+    }
+    const paths = Object.keys(fileContents).sort()
+    setPluginPathToChild(map)
+    setForm("fileContents", fileContents)
+    setForm("treeNodes", dedupeTreeNodes(buildTreeFromPaths(paths)))
+    untrack(() => {
+      if (!form.selectedTreePath || fileContents[form.selectedTreePath] === undefined) {
+        setForm("selectedTreePath", paths[0] ?? "")
+      }
     })
     setInitialContentSnapshot(JSON.stringify(fileContents))
   })
@@ -2186,6 +2227,33 @@ export default function CapabilityEditorPage() {
     setForm("error", "")
 
     try {
+      // Plugin editor: every file in the tree is a bundled sub-skill/MCP child
+      // item; save the changed ones back to their own items (the plugin item has
+      // no editable content of its own here).
+      if (form.itemType === "plugin" && isEdit()) {
+        const map = pluginPathToChild()
+        const initial = JSON.parse(initialContentSnapshot() || "{}") as Record<string, string>
+        const changed = Object.entries(form.fileContents).filter(
+          ([path, content]) => map[path] && content !== initial[path],
+        )
+        await Promise.all(
+          changed.map(([path, content]) => {
+            const ch = map[path]
+            return itemApi.update(ch.id, {
+              name: ch.name,
+              description: ch.description ?? "",
+              category: ch.category,
+              content,
+              sourcePath: ch.sourcePath,
+            })
+          }),
+        )
+        setInitialContentSnapshot(JSON.stringify(form.fileContents))
+        showToast({ title: language.t("store.capabilityDialog.toast.updated", { type: typeLabel() }) })
+        navigateBackWithFallback()
+        return
+      }
+
       const finalSlug = form.slug.trim() || autoSlugFromName(form.name)
       const payload = buildCapabilityPayloadFromFiles(form.itemType, finalSlug, form.fileContents)
 
@@ -2258,8 +2326,8 @@ export default function CapabilityEditorPage() {
             style={{
               width: layout.sidebarCollapsed ? "0px" : `${layout.sidebarWidth}px`,
               opacity: layout.sidebarCollapsed ? 0 : 1,
-              "border-right": layout.sidebarCollapsed ? "0px solid transparent" : `1px solid color-mix(in srgb, ${accent()} 16%, transparent)`,
-              background: `color-mix(in srgb, ${accent()} 6%, var(--native-panel))`,
+              "border-right": layout.sidebarCollapsed ? "0px solid transparent" : `1px solid var(--native-border)`,
+              background: `var(--native-panel)`,
             }}
           >
             <div
@@ -2281,7 +2349,7 @@ export default function CapabilityEditorPage() {
                   <div class="flex items-center justify-between">
                     <div
                       class="text-[11px] font-semibold uppercase tracking-[0.12em]"
-                      style={{ color: `color-mix(in srgb, ${accent()} 52%, var(--native-muted))` }}
+                      style={{ color: `var(--native-muted)` }}
                     >
                       {isEdit() ? language.t("store.capabilityEditor.header.version") : language.t("store.capabilityDialog.create.type")}
                     </div>
@@ -2304,7 +2372,7 @@ export default function CapabilityEditorPage() {
                           disabled={isEdit()}
                           onInput={(e) => updateType(e.currentTarget.value as ItemType)}
                           class="h-8 min-w-0 w-full appearance-none rounded-[6px] bg-background-base pl-2.5 pr-9 text-xs text-[var(--native-foreground)] disabled:cursor-not-allowed disabled:opacity-60"
-                          style={{ border: `1px solid color-mix(in srgb, ${accent()} 18%, var(--native-border))` }}
+                          style={{ border: `1px solid var(--native-border)` }}
                         >
                           <For each={["skill", "subagent", "command", "mcp"] as const}>
                             {(type) => <option value={type}>{typeDropdownLabel(type)}</option>}
@@ -2323,7 +2391,7 @@ export default function CapabilityEditorPage() {
                           onInput={(e) => setForm("selectedRevision", Number(e.currentTarget.value) || 0)}
                           disabled={selectedVersion.loading}
                           class="h-8 min-w-0 w-full appearance-none rounded-[6px] bg-background-base pl-2.5 pr-9 text-xs text-[var(--native-foreground)] disabled:cursor-not-allowed disabled:opacity-60"
-                          style={{ border: `1px solid color-mix(in srgb, ${accent()} 18%, var(--native-border))` }}
+                          style={{ border: `1px solid var(--native-border)` }}
                         >
                           <For each={versionOptions()}>
                             {(version) => (
@@ -2347,16 +2415,16 @@ export default function CapabilityEditorPage() {
                   <section
                     class="space-y-2 rounded-[8px] border px-3 py-3"
                     style={{
-                      border: `1px solid color-mix(in srgb, ${accent()} 20%, var(--native-border))`,
-                      background: `color-mix(in srgb, ${accent()} 8%, var(--native-panel))`,
+                      border: `1px solid var(--native-border)`,
+                      background: `var(--native-hover)`,
                     }}
                   >
                     <div class="flex items-center gap-2">
                       <span
                         class="inline-flex h-5 items-center rounded-full px-2 text-[10px] font-semibold uppercase tracking-[0.08em]"
                         style={{
-                          background: `color-mix(in srgb, ${accent()} 14%, transparent)`,
-                          color: `color-mix(in srgb, ${accent()} 70%, var(--native-foreground))`,
+                          background: `var(--native-hover)`,
+                          color: `var(--native-foreground)`,
                         }}
                       >
                         {language.t("store.capabilityEditor.versionReadonlyBadge")}
@@ -2384,7 +2452,7 @@ export default function CapabilityEditorPage() {
                   <div>
                     <div
                       class="text-[11px] font-semibold uppercase tracking-[0.12em]"
-                      style={{ color: `color-mix(in srgb, ${accent()} 52%, var(--native-muted))` }}
+                      style={{ color: `var(--native-muted)` }}
                     >
                       {language.t("store.capabilityEditor.sections.basic")}
                     </div>
@@ -2399,7 +2467,7 @@ export default function CapabilityEditorPage() {
                             value={form.namespace}
                             onInput={(e) => setForm("namespace", e.currentTarget.value)}
                             class="h-8 min-w-0 w-full appearance-none rounded-[6px] bg-background-base pl-2.5 pr-9 text-xs text-[var(--native-foreground)]"
-                            style={{ border: `1px solid color-mix(in srgb, ${accent()} 18%, var(--native-border))` }}
+                            style={{ border: `1px solid var(--native-border)` }}
                           >
                             <For each={namespaceOptions()}>
                               {(option) => <option value={option.value}>{option.label}</option>}
@@ -2425,7 +2493,7 @@ export default function CapabilityEditorPage() {
                         disabled={isViewingHistoricalVersion()}
                         placeholder={language.t("store.capabilityDialog.field.displayNamePlaceholder", { type: typeLabel() })}
                         class="h-8 min-w-0 flex-1 rounded-[6px] border bg-background-base px-2.5 text-xs text-[var(--native-foreground)] outline-none disabled:cursor-not-allowed disabled:opacity-60"
-                        style={{ border: `1px solid color-mix(in srgb, ${accent()} 18%, var(--native-border))` }}
+                        style={{ border: `1px solid var(--native-border)` }}
                       />
                     </div>
 
@@ -2437,7 +2505,7 @@ export default function CapabilityEditorPage() {
                           onInput={(e) => setForm("category", e.currentTarget.value)}
                           disabled={isViewingHistoricalVersion()}
                           class="h-8 min-w-0 w-full appearance-none rounded-[6px] bg-background-base pl-2.5 pr-9 text-xs text-[var(--native-foreground)] disabled:cursor-not-allowed disabled:opacity-60"
-                          style={{ border: `1px solid color-mix(in srgb, ${accent()} 18%, var(--native-border))` }}
+                          style={{ border: `1px solid var(--native-border)` }}
                         >
                           <For each={categoryOptions()}>
                             {(category) => <option value={category}>{itemFilterOptions.categoryLabel(category)}</option>}
@@ -2460,7 +2528,7 @@ export default function CapabilityEditorPage() {
                           placeholderSecondary={language.t("store.capabilityEditor.tagsPlaceholderSecondary")}
                           lockedTags={isEdit() ? (currentItem()?.tags ?? []).filter((tag) => tag.tagClass === "system").map((tag) => tag.slug) : []}
                           class="w-full text-[var(--native-foreground)] disabled:cursor-not-allowed disabled:opacity-60"
-                          style={{ border: `1px solid color-mix(in srgb, ${accent()} 18%, var(--native-border))` }}
+                          style={{ border: `1px solid var(--native-border)` }}
                           onChange={(value) => setForm("tags", value)}
                         />
                       </div>
@@ -2475,17 +2543,62 @@ export default function CapabilityEditorPage() {
                         rows={8}
                         placeholder={language.t("store.capabilityDialog.field.descriptionPlaceholder")}
                         class="w-full resize-none rounded-[6px] bg-background-base px-3 py-2 text-sm text-[var(--native-foreground)] outline-none disabled:cursor-not-allowed disabled:opacity-60"
-                        style={{ border: `1px solid color-mix(in srgb, ${accent()} 18%, var(--native-border))` }}
+                        style={{ border: `1px solid var(--native-border)` }}
                       />
                     </div>
                   </section>
+
+                <Show when={form.itemType === "plugin" && isEdit()}>
+                  <section class="flex min-h-0 flex-1 flex-col space-y-3 border-t border-[color:color-mix(in_oklab,var(--native-border)_18%,transparent)] pt-4">
+                    <div
+                      class="text-[11px] font-semibold uppercase tracking-[0.12em]"
+                      style={{ color: `var(--native-muted)` }}
+                    >
+                      {language.t("store.detail.bundledSkills")}
+                    </div>
+                    <Show
+                      when={!subSkills.loading}
+                      fallback={<div class="px-1 py-2 text-xs text-[var(--native-muted)]">{language.t("common.loading")}{language.t("common.loading.ellipsis")}</div>}
+                    >
+                      <Show
+                        when={(subSkills() ?? []).length > 0}
+                        fallback={<div class="px-1 py-3 text-xs leading-5 text-[var(--native-muted)]">{language.t("store.detail.bundledSkills.empty")}</div>}
+                      >
+                        <div
+                          class="min-h-0 flex-1 overflow-y-auto rounded-[6px] bg-background-base text-sm"
+                          style={{ border: `1px solid var(--native-border)` }}
+                        >
+                          <WorkspaceLikeTree
+                            nodes={displayTreeNodes()}
+                            selectedPath={form.selectedTreePath}
+                            expanded={form.treeExpanded}
+                            onToggle={(path) => setForm("treeExpanded", path, (value) => !value)}
+                            onSelect={(path) => setForm("selectedTreePath", path)}
+                            onRename={() => {}}
+                            onDelete={() => {}}
+                            onCreateFile={() => {}}
+                            onCreateDirectory={() => {}}
+                            canToggle={() => true}
+                            canRename={() => false}
+                            canDelete={() => false}
+                            pendingAction={form.pendingTreeAction}
+                            onPendingDraftChange={updatePendingTreeDraft}
+                            onPendingSubmit={submitPendingTreeAction}
+                            onPendingCancel={cancelPendingTreeAction}
+                            readOnly={isViewingHistoricalVersion()}
+                          />
+                        </div>
+                      </Show>
+                    </Show>
+                  </section>
+                </Show>
 
                 <Show when={form.itemType === "skill"}>
                   <section class="flex min-h-0 flex-1 flex-col space-y-3 border-t border-[color:color-mix(in_oklab,var(--native-border)_18%,transparent)] pt-4">
                     <div class="flex items-center justify-between gap-2">
                       <div
                         class="text-[11px] font-semibold uppercase tracking-[0.12em]"
-                        style={{ color: `color-mix(in srgb, ${accent()} 52%, var(--native-muted))` }}
+                        style={{ color: `var(--native-muted)` }}
                       >
                         {language.t("store.capabilityEditor.sections.files")}
                       </div>
@@ -2496,12 +2609,12 @@ export default function CapabilityEditorPage() {
                         class="h-7 cursor-pointer border px-2 text-xs transition-colors"
                         disabled={isViewingHistoricalVersion() || form.importing}
                         style={{
-                          border: `1px solid color-mix(in srgb, ${accent()} 24%, var(--native-border))`,
+                          border: `1px solid var(--native-border)`,
                           background: "transparent",
                         }}
                         onMouseEnter={(e) => {
                           if (isViewingHistoricalVersion() || form.importing) return
-                          e.currentTarget.style.background = `color-mix(in srgb, ${accent()} 12%, transparent)`
+                          e.currentTarget.style.background = `var(--native-hover)`
                         }}
                         onMouseLeave={(e) => {
                           e.currentTarget.style.background = "transparent"
@@ -2515,7 +2628,7 @@ export default function CapabilityEditorPage() {
                     <div
                       ref={treeScrollEl}
                       class="min-h-0 flex-1 overflow-y-auto rounded-[6px] bg-background-base text-sm"
-                      style={{ border: `1px solid color-mix(in srgb, ${accent()} 18%, var(--native-border))` }}
+                      style={{ border: `1px solid var(--native-border)` }}
                     >
                       <WorkspaceLikeTree
                         nodes={displayTreeNodes()}

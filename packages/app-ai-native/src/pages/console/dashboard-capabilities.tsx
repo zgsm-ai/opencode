@@ -9,6 +9,7 @@ import { createStore } from "solid-js/store"
 import { useAuth } from "@/pages/store/hooks/use-auth"
 import { getLoginUrl } from "@/pages/store/lib/auth"
 import ItemDetailContent from "@/pages/store/components/item-detail-content"
+import FromPluginBadge from "@/pages/store/components/from-plugin-badge"
 import { behaviorApi, itemApi, repoApi, type CapabilityItem, type Repository } from "@/pages/store/lib/api"
 import { ConfirmDialog } from "@/pages/store/components/confirm-dialog"
 import { MoveCapabilityDialog } from "@/pages/store/components/move-capability-dialog"
@@ -386,7 +387,10 @@ export default function DashboardCapabilities() {
                         return (
                           <tr onClick={() => setSelectedItemId(item.id)}>
                             <td>
-                              <span style={{ color: "var(--native-foreground)" }}>{item.name}</span>
+                              <span class="inline-flex items-center gap-1.5">
+                                <span style={{ color: "var(--native-foreground)" }}>{item.name}</span>
+                                <FromPluginBadge name={item.parentPluginName} />
+                              </span>
                             </td>
                             <td>
                               <span
@@ -508,7 +512,10 @@ export default function DashboardCapabilities() {
                         return (
                           <tr onClick={() => setSelectedItemId(item.id)}>
                             <td>
-                              <span style={{ color: "var(--native-foreground)" }}>{item.name}</span>
+                              <span class="inline-flex items-center gap-1.5">
+                                <span style={{ color: "var(--native-foreground)" }}>{item.name}</span>
+                                <FromPluginBadge name={item.parentPluginName} />
+                              </span>
                             </td>
                             <td>
                               <span
@@ -574,6 +581,7 @@ export default function DashboardCapabilities() {
                       itemId={itemId()}
                       class={cn(sx.sheetBody, "thin-scrollbar")}
                       onItemLoaded={setDetailItem}
+                      onSelectItem={setSelectedItemId}
                       favorited={favorited()}
                       favoriteCount={favoriteCount()}
                       previewCount={previewCount()}

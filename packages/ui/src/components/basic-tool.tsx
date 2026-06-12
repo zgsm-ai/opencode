@@ -231,7 +231,21 @@ export function GenericTool(props: {
   output?: string
   metadata?: Record<string, unknown>
 }) {
+  const i18n = useI18n()
   const pending = () => props.status === "pending" || props.status === "running"
+
+  const filtered = createMemo(() => {
+    const meta = props.metadata
+    if (meta && typeof meta === "object" && "_filtered" in meta) {
+      return meta._filtered as {
+        strategy?: string
+        reason?: string
+        toolName?: string
+        originalSize?: number
+      }
+    }
+    return null
+  })
 
   const title = () =>
     props.tool
@@ -261,22 +275,35 @@ export function GenericTool(props: {
       hideDetails={props.hideDetails}
       defaultOpen={props.defaultOpen}
     >
-      <Show when={entries().length > 0}>
-        <div data-component="generic-tool-input">
-          <For each={entries()}>
-            {([key, value]) => (
-              <div data-slot="generic-tool-input-entry">
-                <span data-slot="generic-tool-input-key">{key}</span>
-                <pre data-slot="generic-tool-input-value">{formatValue(value)}</pre>
-              </div>
-            )}
-          </For>
-        </div>
+      <Show when={filtered()} keyed>
+        {(f) => (
+          <div data-component="tool-filtered-output">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            <span>{i18n.t("ui.messagePart.toolFiltered.label")}</span>
+            <Show when={f.originalSize}>
+              <span data-slot="tool-filtered-size">{i18n.t("ui.messagePart.toolFiltered.originalSize", { size: f.originalSize! })}</span>
+            </Show>
+          </div>
+        )}
       </Show>
-      <Show when={props.output}>
-        <div data-component="tool-output" data-scrollable>
-          <pre data-slot="generic-tool-output-value">{props.output}</pre>
-        </div>
+      <Show when={!filtered()}>
+        <Show when={entries().length > 0}>
+          <div data-component="generic-tool-input">
+            <For each={entries()}>
+              {([key, value]) => (
+                <div data-slot="generic-tool-input-entry">
+                  <span data-slot="generic-tool-input-key">{key}</span>
+                  <pre data-slot="generic-tool-input-value">{formatValue(value)}</pre>
+                </div>
+              )}
+            </For>
+          </div>
+        </Show>
+        <Show when={props.output}>
+          <div data-component="tool-output" data-scrollable>
+            <pre data-slot="generic-tool-output-value">{props.output}</pre>
+          </div>
+        </Show>
       </Show>
     </BasicTool>
   )

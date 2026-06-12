@@ -3,11 +3,11 @@ import { List } from "@opencode-ai/ui/list"
 import { Switch } from "@opencode-ai/ui/switch"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
 import type { Component } from "solid-js"
-import { useLocal } from "@/context/local"
+import { useDeviceLocal } from "@/context/device-local"
 import { useLanguage } from "@/context/language"
 
 export const DialogManageModels: Component = () => {
-  const local = useLocal()
+  const local = useDeviceLocal()
   const language = useLanguage()
   const providerList = (providerID: string) => local.model.list().filter((x) => x.provider.id === providerID)
   const providerVisible = (providerID: string) =>

@@ -18,11 +18,13 @@ export interface SlashCommand {
   source?: "command" | "mcp" | "skill"
   scope?: string
   autoSubmit?: boolean
+  onAction?: () => void
 }
 
 type PromptPopoverProps = {
   popover: "at" | "slash" | null
   setSlashPopoverRef: (el: HTMLDivElement) => void
+  setAtPopoverRef: (el: HTMLDivElement) => void
   atFlat: AtOption[]
   atActive?: string
   atKey: (item: AtOption) => string
@@ -42,7 +44,7 @@ type PromptPopoverProps = {
   t: (key: string) => string
 }
 
-function FileItem(props: { item: AtOption; atKey: string; isActive: boolean; onActive: () => void; onSelect: () => void }) {
+function FileItem(props: { item: AtOption; atKey: string; isActive: boolean; onActive: () => void; onSelect: () => void; "data-at-key"?: string }) {
   const path = () => (props.item as { type: "file"; path: string }).path
   const isDirectory = () => path().endsWith("/")
   const directory = () => (isDirectory() ? path() : getDirectory(path()))
@@ -50,6 +52,7 @@ function FileItem(props: { item: AtOption; atKey: string; isActive: boolean; onA
 
   return (
     <button
+      data-at-key={props["data-at-key"]}
       class="w-full flex items-center gap-x-2 rounded-md px-2 py-0.5"
       classList={{ "bg-surface-raised-base-hover": props.isActive }}
       onClick={() => props.onSelect()}
@@ -72,6 +75,7 @@ export const PromptPopover: Component<PromptPopoverProps> = (props) => {
       <div
         ref={(el) => {
           if (props.popover === "slash") props.setSlashPopoverRef(el)
+          if (props.popover === "at") props.setAtPopoverRef(el)
         }}
         class="absolute inset-x-0 -top-2 -translate-y-full origin-bottom-left max-h-80 min-h-10
                  overflow-auto no-scrollbar flex flex-col p-2 rounded-[12px]
@@ -91,16 +95,20 @@ export const PromptPopover: Component<PromptPopoverProps> = (props) => {
               when={props.wsFileFlat.length > 0}
               fallback={<div class="text-text-weak px-2 py-1">{props.t("prompt.popover.workspaceFile.empty")}</div>}
             >
-              <For each={props.wsFileFlat.slice(0, 10)}>
-                {(item) => (
-                  <FileItem
-                    item={item}
-                    atKey={props.atKey(item)}
-                    isActive={props.wsFileActive === props.atKey(item)}
-                    onActive={() => props.setWsFileActive(props.atKey(item))}
-                    onSelect={() => props.onWsFileSelect(item)}
-                  />
-                )}
+              <For each={props.wsFileFlat}>
+                {(item) => {
+                  const key = props.atKey(item)
+                  return (
+                    <FileItem
+                      data-at-key={key}
+                      item={item}
+                      atKey={key}
+                      isActive={props.wsFileActive === key}
+                      onActive={() => props.setWsFileActive(key)}
+                      onSelect={() => props.onWsFileSelect(item)}
+                    />
+                  )
+                }}
               </For>
             </Show>
           </Match>
@@ -109,13 +117,14 @@ export const PromptPopover: Component<PromptPopoverProps> = (props) => {
               when={props.atFlat.length > 0}
               fallback={<div class="text-text-weak px-2 py-1">{props.t("prompt.popover.emptyResults")}</div>}
             >
-              <For each={props.atFlat.slice(0, 10)}>
+              <For each={props.atFlat}>
                 {(item) => {
                   const key = props.atKey(item)
 
                   if (item.type === "agent") {
                     return (
                       <button
+                        data-at-key={key}
                         class="w-full flex items-center gap-x-2 rounded-md px-2 py-0.5"
                         classList={{ "bg-surface-raised-base-hover": props.atActive === key }}
                         onClick={() => props.onAtSelect(item)}
@@ -132,6 +141,7 @@ export const PromptPopover: Component<PromptPopoverProps> = (props) => {
                     const isActive = () => props.atActive === key && !isCurrent
                     return (
                       <button
+                        data-at-key={key}
                         class="w-full flex items-center justify-between gap-x-2 rounded-md px-2 py-0.5"
                         classList={{ "bg-surface-raised-base-hover": props.atActive === key }}
                         onClick={() => props.onAtSelect(item)}
@@ -153,6 +163,7 @@ export const PromptPopover: Component<PromptPopoverProps> = (props) => {
 
                   return (
                     <FileItem
+                      data-at-key={key}
                       item={item}
                       atKey={key}
                       isActive={props.atActive === key}
@@ -187,7 +198,10 @@ export const PromptPopover: Component<PromptPopoverProps> = (props) => {
                       </Show>
                     </div>
                     <div class="flex items-center gap-2 shrink-0">
-                      <Show when={cmd.type === "custom" && cmd.source !== "command"}>
+                       <Show when={cmd.type === "builtin"}>
+                         <span class="text-11-regular text-text-subtle px-1.5 py-0.5 bg-surface-base rounded">Builtin</span>
+                       </Show>
+                       <Show when={cmd.type === "custom" && cmd.source !== "command"}>
                         <span class="text-11-regular text-text-subtle px-1.5 py-0.5 bg-surface-base rounded">
                           {cmd.source === "skill"
                             ? props.t("prompt.slash.badge.skill")

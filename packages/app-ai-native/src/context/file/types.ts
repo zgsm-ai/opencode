@@ -33,6 +33,13 @@ export type FileViewState = {
   selectedLines?: SelectedLineRange | null
 }
 
+export type FilteredInfo = {
+  strategy?: string
+  reason?: string
+  path?: string
+  originalSize?: number
+}
+
 export type FileState = {
   path: string
   name: string
@@ -43,6 +50,7 @@ export type FileState = {
   meta?: FileMeta
   content?: FileContent
   chunk?: FileContentChunk
+  filtered?: FilteredInfo
 }
 
 export function selectionFromLines(range: SelectedLineRange): FileSelection {

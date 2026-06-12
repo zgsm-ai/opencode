@@ -6,7 +6,7 @@ import type { ParentProps } from "solid-js"
 import { useDeviceSDK } from "./device-sdk"
 import { useDeviceWorkspace } from "./device-workspace"
 import { useLanguage } from "@/context/language"
-import { DeviceHttpError, isBinaryFileError } from "@/client/device-transport"
+import { DeviceHttpError, isBinaryFileError, isRuntimeDiffDisabledError, isRuntimeFileDisabledError, isRuntimeTreeDisabledError } from "@/client/device-transport"
 import { FileContext } from "./file"
 import { createPathHelpers } from "./file/path"
 import { createFileTreeStore } from "./file/tree-store"
@@ -98,11 +98,13 @@ export function DeviceFileProvider(props: DeviceFileProviderProps) {
         description: message,
       })
     },
+    isDisabledError: isRuntimeTreeDisabledError,
   })
 
   const diff = createDiffStore({
     scope,
     fetch: () => device.client.runtime.diff(),
+    isDisabledError: isRuntimeDiffDisabledError,
   })
 
   const visible = props.visible ?? (() => true)
@@ -326,7 +328,17 @@ export function DeviceFileProvider(props: DeviceFileProviderProps) {
       })
       .catch((e) => {
         if (scope() !== directory) return
-        if (isBinaryFileError(e)) {
+        if (isRuntimeFileDisabledError(e)) {
+          setStore(
+            "file",
+            file,
+            produce((draft) => {
+              draft.loading = false
+              draft.loaded = true
+              draft.filtered = { reason: "RUNTIME_FILE_DISABLED" }
+            }),
+          )
+        } else if (isBinaryFileError(e)) {
           setStore(
             "file",
             file,
@@ -398,6 +410,7 @@ export function DeviceFileProvider(props: DeviceFileProviderProps) {
       children: tree.children,
       expand: tree.expandDir,
       collapse: tree.collapseDir,
+      isDisabled: tree.isDisabled,
       toggle(input: string) {
         if (tree.dirState(input)?.expanded) {
           tree.collapseDir(input)

@@ -1,7 +1,6 @@
 import { createStore, reconcile } from "solid-js/store"
 import { createEffect, createMemo } from "solid-js"
 import { createSimpleContext } from "@opencode-ai/ui/context"
-import { persisted } from "@/utils/persist"
 
 export interface WecomChannel {
   id: string
@@ -58,8 +57,8 @@ const defaultSettings: Settings = {
   general: {
     autoSave: true,
     releaseNotes: true,
-    showReasoningSummaries: false,
-    shellToolPartsExpanded: true,
+    showReasoningSummaries: true,
+    shellToolPartsExpanded: false,
     editToolPartsExpanded: false,
   },
   updates: {
@@ -130,7 +129,8 @@ function withFallback<T>(read: () => T | undefined, fallback: T) {
 export const { use: useSettings, provider: SettingsProvider, context: SettingsContext } = createSimpleContext({
   name: "Settings",
   init: () => {
-    const [store, setStore, _, ready] = persisted("settings.v3", createStore<Settings>(defaultSettings))
+    const [store, setStore] = createStore<Settings>(defaultSettings)
+    const ready = () => true
 
     createEffect(() => {
       if (typeof document === "undefined") return

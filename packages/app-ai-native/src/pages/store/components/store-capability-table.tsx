@@ -7,11 +7,12 @@ import { Icon, type IconProps } from "@opencode-ai/ui/icon"
 import { createEffect, createMemo, createResource, createSignal, For, onCleanup, onMount, Show, type JSX } from "solid-js"
 import { createStore } from "solid-js/store"
 import { tagApi, type CapabilityItem, type Category, type ItemOrder, type ItemSort, type ItemTag, type SecurityRiskGroup } from "../lib/api"
-import { detectMcpFields } from "../lib/mcp-config"
+import { detectMcpFields, mcpRequiresPluginRuntime } from "../lib/mcp-config"
 import { pickItemDescription } from "../lib/item-description"
 import { useLanguage } from "@/context/language"
 import { st, sx } from "../lib/styles"
 import SecurityTag from "./security-tag"
+import FromPluginBadge from "./from-plugin-badge"
 
 export type TableColumnKey = "title" | "description" | "type" | "category" | "security" | "tag" | "source" | "experienceScore" | "favorite" | "updated"
 
@@ -694,7 +695,13 @@ export { HighlightText }
 // configured on the detail page first. Already-favorited rows (unsubscribe) are never blocked,
 // and non-MCP / MCP-without-placeholders rows are unaffected. Mirrors detail-page gating.
 export function mcpListSubscribeBlocked(item: Pick<CapabilityItem, "itemType" | "metadata" | "favorited">): boolean {
-  return item.itemType === "mcp" && !item.favorited && detectMcpFields(item.metadata).length > 0
+  return item.itemType === "mcp" && !item.favorited && (mcpRequiresPluginRuntime(item.metadata) || detectMcpFields(item.metadata).length > 0)
+}
+
+// mcpListBlockReason picks the tooltip for a blocked row: plugin-runtime dependency wins
+// over (and is mutually exclusive in practice with) unfilled parameters.
+export function mcpListBlockReason(item: Pick<CapabilityItem, "itemType" | "metadata" | "favorited">): "pluginRuntime" | "params" {
+  return mcpRequiresPluginRuntime(item.metadata) ? "pluginRuntime" : "params"
 }
 
 export function StoreCapabilityTable(props: {
@@ -1039,6 +1046,7 @@ export function StoreCapabilityTable(props: {
                             <Icon name="cloud-upload" size="small" />
                           </span>
                         </Show>
+                        <FromPluginBadge name={item.parentPluginName} />
                       </div>
                     </div>
                   </td>
@@ -1093,7 +1101,7 @@ export function StoreCapabilityTable(props: {
                         type="button"
                         class="inline-flex size-6 items-center justify-center rounded-full transition-colors hover:bg-[color:color-mix(in_oklab,var(--native-foreground)_10%,transparent)] active:bg-[color:color-mix(in_oklab,var(--native-foreground)_16%,transparent)]] disabled:cursor-not-allowed disabled:opacity-60"
                         disabled={!props.onToggleFavorite || mcpListSubscribeBlocked(item)}
-                        title={mcpListSubscribeBlocked(item) ? language.t("store.detail.mcpConfig.gateReason") : item.favorited ? props.labels.unfavoriteTooltip : props.labels.favoriteTooltip}
+                        title={mcpListSubscribeBlocked(item) ? language.t(mcpListBlockReason(item) === "pluginRuntime" ? "store.detail.mcpConfig.pluginRuntimeReason" : "store.detail.mcpConfig.gateReason") : item.favorited ? props.labels.unfavoriteTooltip : props.labels.favoriteTooltip}
                         onClick={(e: MouseEvent) => {
                           e.stopPropagation()
                           if (mcpListSubscribeBlocked(item)) return

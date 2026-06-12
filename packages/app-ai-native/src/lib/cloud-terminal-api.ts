@@ -14,6 +14,28 @@ const SSE_CONNECTION_TIMEOUT = 10000
 const textEncoder = new TextEncoder()
 const textDecoder = new TextDecoder()
 
+export const TERMINAL_DISABLED_CODE = "TERMINAL_DISABLED"
+
+export class TerminalDisabledError extends Error {
+  constructor(message?: string) {
+    super(message ?? "Terminal is disabled by policy")
+    this.name = "TerminalDisabledError"
+  }
+}
+
+export function isTerminalDisabledError(error: unknown): error is TerminalDisabledError {
+  return error instanceof TerminalDisabledError
+}
+
+async function checkTerminalDisabled(response: Response): Promise<void> {
+  if (response.status === 403) {
+    const body = await response.json().catch(() => ({}))
+    if (body?.code === TERMINAL_DISABLED_CODE) {
+      throw new TerminalDisabledError(body.error ?? "Terminal is disabled")
+    }
+  }
+}
+
 type TerminalInputControlMessage = {
   t: string
   s?: string
@@ -70,6 +92,7 @@ export class CloudTerminalApi {
       credentials: "include",
       body: JSON.stringify({ cwd, rows, cols }),
     })
+    await checkTerminalDisabled(response)
     if (!response.ok) {
       const err = await response.json().catch(() => ({ error: { message: "Failed to create terminal" } }))
       throw new Error(err.error?.message ?? "Failed to create terminal session")
@@ -95,6 +118,7 @@ export class CloudTerminalApi {
       credentials: "include",
       body: JSON.stringify({ rows, cols }),
     })
+    await checkTerminalDisabled(response)
     if (!response.ok) {
       throw new Error("Failed to resize terminal")
     }
@@ -107,6 +131,7 @@ export class CloudTerminalApi {
       credentials: "include",
       body: JSON.stringify({ cwd }),
     })
+    await checkTerminalDisabled(response)
     if (!response.ok) {
       throw new Error("Failed to restart terminal session")
     }

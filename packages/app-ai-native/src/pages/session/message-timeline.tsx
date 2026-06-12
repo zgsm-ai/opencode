@@ -15,13 +15,10 @@ import { showToast } from "@opencode-ai/ui/toast"
 import { Binary } from "@opencode-ai/util/binary"
 import { getFilename } from "@opencode-ai/util/path"
 import { shouldMarkBoundaryGesture, normalizeWheelDelta } from "@/pages/session/message-gesture"
-import { SessionContextUsage } from "@/components/session-context-usage"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { useLanguage } from "@/context/language"
 import { useSettings } from "@/context/settings"
-import { useSDK } from "@/context/sdk"
-import { useSync } from "@/context/sync"
-import { useConversationAdapter } from "@/context/device-adapter"
+import { useSessionChat } from "@/context/session-chat"
 import { parseCommentNote, readCommentMetadata } from "@/utils/comment-note"
 
 type MessageComment = {
@@ -211,15 +208,13 @@ export function MessageTimeline(props: {
 
   const params = useParams()
   const navigate = useNavigate()
-  const sdk = useSDK()
-  const conversation = useConversationAdapter()
-  const sync = useSync()
+  const chat = useSessionChat()
   const settings = useSettings()
   const dialog = useDialog()
   const language = useLanguage()
 
   const rendered = createMemo(() => props.renderedUserMessages.map((message) => message.id))
-  const sid = createMemo(() => (sync as any).currentSessionID?.())
+  const sid = createMemo(() => chat.activeSessionID())
   const sessionKey = createMemo(() => {
     const id = sid()
     return `${id ?? ""}`
@@ -228,7 +223,7 @@ export function MessageTimeline(props: {
   const sessionMessages = createMemo(() => {
     const id = sessionID()
     if (!id) return emptyMessages
-    return sync.data.message[id] ?? emptyMessages
+    return chat.messages(id)
   })
   const pending = createMemo(() =>
     sessionMessages().findLast(
@@ -238,7 +233,7 @@ export function MessageTimeline(props: {
   const sessionStatus = createMemo(() => {
     const id = sessionID()
     if (!id) return idle
-    return sync.data.session_status[id] ?? idle
+    return chat.sessionStatus(id)
   })
   const activeMessageID = createMemo(() => {
     const parentID = pending()?.parentID
@@ -262,7 +257,7 @@ export function MessageTimeline(props: {
   const info = createMemo(() => {
     const id = sessionID()
     if (!id) return
-    return sync.session.get(id)
+    return chat.getSession(id)
   })
   const titleValue = createMemo(() => info()?.title)
   const parentID = createMemo(() => info()?.parentID)
@@ -310,8 +305,8 @@ export function MessageTimeline(props: {
       if (!document.hidden) {
         // 页面重新可见时，触发数据刷新以确保所有内容正确显示
         // 强制更新session messages引用，触发所有依赖的memo和effect重新执行
-        const currentMessages = sync.data.message[id] ?? []
-        sync.data.message[id] = [...currentMessages]
+        const currentMessages = chat.messages(id)
+        chat.refreshMessages(id)
       }
     }
 
@@ -348,15 +343,9 @@ export function MessageTimeline(props: {
     }
 
     setTitle("saving", true)
-    await conversation
-      .sessionUpdate({ sessionID: id, title: next })
+    await chat
+      .renameSession(id, next)
       .then(() => {
-        sync.set(
-          produce((draft: any) => {
-            const index = draft.session.findIndex((s: any) => s.id === id)
-            if (index !== -1) draft.session[index].title = next
-          }),
-        )
         setTitle({ editing: false, saving: false })
       })
       .catch((err) => {
@@ -379,12 +368,11 @@ export function MessageTimeline(props: {
   }
 
   const deleteSession = async (sessionID: string) => {
-    const session = sync.session.get(sessionID)
+    const session = chat.getSession(sessionID)
     if (!session) return false
 
-    const result = await conversation
-      .sessionDelete(sessionID)
-      .then((x) => x.data)
+    const result = await chat
+      .deleteSession(sessionID)
       .catch((err) => {
         showToast({
           title: language.t("session.delete.failed.title"),
@@ -395,41 +383,6 @@ export function MessageTimeline(props: {
 
     if (!result) return false
 
-    sync.set(
-      produce((draft: any) => {
-        const removed = new Set<string>([sessionID])
-
-        const byParent = new Map<string, string[]>()
-        for (const item of draft.session) {
-          const parentID = item.parentID
-          if (!parentID) continue
-          const existing = byParent.get(parentID)
-          if (existing) {
-            existing.push(item.id)
-            continue
-          }
-          byParent.set(parentID, [item.id])
-        }
-
-        const stack = [sessionID]
-        while (stack.length) {
-          const parentID = stack.pop()
-          if (!parentID) continue
-
-          const children = byParent.get(parentID)
-          if (!children) continue
-
-          for (const child of children) {
-            if (removed.has(child)) continue
-            removed.add(child)
-            stack.push(child)
-          }
-        }
-
-        draft.session = draft.session.filter((s: any) => !removed.has(s.id))
-      }),
-    )
-
     navigateAfterSessionRemoval(sessionID, session.parentID)
     return true
   }
@@ -437,13 +390,13 @@ export function MessageTimeline(props: {
   const navigateParent = () => {
     const id = parentID()
     if (!id) return
-    const back = (sync as any).navigateBack
+    const back = chat.navigateBack?.()
     if (back) { back(); return }
     navigate(`/workspace/${params.workspaceID}/${id}`)
   }
 
   function DialogDeleteSession(props: { sessionID: string }) {
-    const name = createMemo(() => sync.session.get(props.sessionID)?.title ?? language.t("command.session.new"))
+    const name = createMemo(() => chat.getSession(props.sessionID)?.title ?? language.t("command.session.new"))
     const handleDelete = async () => {
       await deleteSession(props.sessionID)
       dialog.close()
@@ -608,7 +561,6 @@ export function MessageTimeline(props: {
                   <Show when={sessionID()} keyed>
                     {(id) => (
                       <div class="shrink-0 flex items-center gap-3">
-                        <SessionContextUsage placement="bottom" />
                         <DropdownMenu
                           gutter={4}
                           placement="bottom-end"
@@ -693,7 +645,7 @@ export function MessageTimeline(props: {
                     if (activeID) return messageID > activeID
                     return false
                   })
-                  const comments = createMemo(() => messageComments(sync.data.part[messageID] ?? []), [], {
+                  const comments = createMemo(() => messageComments(chat.messageParts(messageID)), [], {
                     equals: (a, b) => JSON.stringify(a) === JSON.stringify(b),
                   })
                   const commentCount = createMemo(() => comments().length)

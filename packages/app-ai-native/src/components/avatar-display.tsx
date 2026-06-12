@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createSignal, type JSX } from "solid-js"
+import { Show, createEffect, createMemo, createSignal, onCleanup, type JSX } from "solid-js"
 import { cn } from "@/lib/utils"
 
 type AvatarDisplayProps = {
@@ -13,14 +13,23 @@ type AvatarDisplayProps = {
 }
 
 export default function AvatarDisplay(props: AvatarDisplayProps): JSX.Element {
-  const [imageFailed, setImageFailed] = createSignal(false)
+  const [imageState, setImageState] = createSignal<"loading" | "loaded" | "error">("loading")
   const normalizedUrl = createMemo(() => props.avatarUrl?.trim() || "")
   const alt = createMemo(() => props.username?.trim() || "User avatar")
-  const showImage = createMemo(() => !!normalizedUrl() && !imageFailed())
 
   createEffect(() => {
-    normalizedUrl()
-    setImageFailed(false)
+    const url = normalizedUrl()
+    if (!url) {
+      setImageState("error")
+      return
+    }
+    setImageState("loading")
+    let stale = false
+    const img = new Image()
+    img.onload = () => { if (!stale) setImageState("loaded") }
+    img.onerror = () => { if (!stale) setImageState("error") }
+    img.src = url
+    onCleanup(() => { stale = true })
   })
 
   const sizeValue = createMemo(() => {
@@ -37,18 +46,10 @@ export default function AvatarDisplay(props: AvatarDisplayProps): JSX.Element {
     "border-radius": radiusValue(),
   }))
 
-  return showImage()
-    ? (
-        <img
-          src={normalizedUrl()}
-          alt={alt()}
-          title={props.title}
-          class={cn("rounded-full object-cover", props.class, props.imgClass)}
-          style={boxStyle()}
-          onError={() => setImageFailed(true)}
-        />
-      )
-    : (
+  return (
+    <Show
+      when={imageState() === "loaded"}
+      fallback={
         <div
           class={cn(
             "relative flex items-center justify-center overflow-hidden rounded-full border border-[color:color-mix(in_oklab,var(--native-border)_60%,transparent)] bg-[linear-gradient(180deg,color-mix(in_oklab,var(--native-surface)_92%,var(--native-panel)),color-mix(in_oklab,var(--native-surface)_78%,var(--native-panel)))] text-[var(--native-muted)]",
@@ -62,5 +63,16 @@ export default function AvatarDisplay(props: AvatarDisplayProps): JSX.Element {
           <div class="absolute top-[22%] h-[30%] w-[30%] rounded-full bg-[color:color-mix(in_oklab,var(--native-muted)_55%,white_45%)]" />
           <div class="absolute bottom-[-8%] h-[42%] w-[68%] rounded-t-[9999px] bg-[color:color-mix(in_oklab,var(--native-muted)_55%,white_45%)]" />
         </div>
-      )
+      }
+    >
+      <img
+        src={normalizedUrl()}
+        alt={alt()}
+        title={props.title}
+        class={cn("rounded-full object-cover", props.class, props.imgClass)}
+        style={boxStyle()}
+        onError={() => setImageState("error")}
+      />
+    </Show>
+  )
 }

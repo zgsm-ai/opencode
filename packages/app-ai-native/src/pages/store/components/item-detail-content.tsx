@@ -22,7 +22,7 @@ import HealthRadar from "./health-radar"
 import { DistributeDialog } from "./distribute-dialog"
 import { BuiltinContentDialog } from "./builtin-content-dialog"
 import { McpConfigForm } from "./mcp-config-form"
-import { detectMcpFields } from "../lib/mcp-config"
+import { detectMcpFields, mcpRequiresPluginRuntime } from "../lib/mcp-config"
 import type { McpConfigStatus } from "../lib/api"
 import "@/styles/vscode-markdown.css"
 
@@ -58,6 +58,12 @@ const EVAL_DIM_WEIGHTS: Record<(typeof EVAL_DIMS)[number], number> = {
 
 // Content-quality subtotal (0-100): Σ (dim/5 * 100 * weight) over the dims present,
 // renormalizing weights across present dims so they still sum to 1. Returns null if no dims.
+//
+// FALLBACK ONLY. The upstream catalog bundle now provides an authoritative
+// per-type `evaluation.content_quality` (correct weights for plugin/rule/prompt),
+// passed through verbatim by the backend. Prefer that value; this client-side
+// recompute only runs for entries that predate it and is APPROXIMATE for
+// non-skill types (it always applies the 6-dim skill weights above).
 function computeContentQuality(evaluation: NonNullable<CapabilityItem["evaluation"]>): number | null {
   let weightSum = 0
   let weighted = 0
@@ -109,7 +115,6 @@ const TAG_COLOR_BY_CLASS = {
 let highlighter: Awaited<ReturnType<typeof createHighlighter>> | undefined
 
 export function getInstallCommand(item: CapabilityItem) {
-  // Prefer metadata.install for plugin items (e.g. zip_download instructions)
   const install = (item.metadata as Record<string, any> | undefined)?.install
   if (install?.method === "zip_download" && Array.isArray(install.commands)) {
     return install.commands.join("\n")
@@ -283,6 +288,7 @@ interface ItemDetailContentProps {
   onBack?: () => void
   onItemLoaded?: (item: CapabilityItem) => void
   onDeleted?: () => void
+  onSelectItem?: (itemId: string) => void
   favorited?: boolean
   favoriteCount?: number
   previewCount?: number
@@ -343,6 +349,11 @@ export default function ItemDetailContent(props: ItemDetailContentProps) {
     (source) => highlight(source.json, source.mode),
   )
 
+  const [subSkills] = createResource(
+    () => (item()?.itemType === "plugin" ? item()!.id : null),
+    (pluginId) => itemApi.list({ parentPluginId: pluginId, pageSize: 100 }).then((res) => res.items),
+  )
+
   const meta = () => TYPE_META[item()?.itemType ?? "skill"] ?? TYPE_META.skill
   const canEditItem = () => !!item() && !!auth.user() && item()!.createdBy === auth.user()!.id
 
@@ -369,6 +380,13 @@ export default function ItemDetailContent(props: ItemDetailContentProps) {
   }
   // Subscribe is blocked only for an MCP item that still has unfilled required placeholders.
   const mcpGateBlocks = () => mcpHasFields() && !mcpConfigComplete()
+  // A plugin-runtime-dependent MCP (references ${CLAUDE_PLUGIN_ROOT} etc.) cannot run
+  // standalone — block subscribing it directly and point the user at the parent plugin.
+  // Unsubscribing an already-favorited item stays allowed.
+  const mcpPluginRuntimeBlocks = () =>
+    item()?.itemType === "mcp" &&
+    !props.favorited &&
+    mcpRequiresPluginRuntime(item()?.metadata as Record<string, unknown> | undefined)
 
   // Called by the inline config form after a successful save: reflect the new masked status
   // immediately (re-gates the subscribe button), then refetch so the per-user-resolved
@@ -394,6 +412,25 @@ export default function ItemDetailContent(props: ItemDetailContentProps) {
     await navigator.clipboard.writeText(id)
     setIdCopied(true)
     setTimeout(() => setIdCopied(false), 1500)
+  }
+
+  const openParentPlugin = () => {
+    const data = item()
+    const parentID = data?.parentPluginId
+    if (!parentID) return
+    if (props.onSelectItem) {
+      props.onSelectItem(parentID)
+      return
+    }
+    navigate(`/store/${parentID}`)
+  }
+
+  const openIncludedItem = (itemId: string) => {
+    if (props.onSelectItem) {
+      props.onSelectItem(itemId)
+      return
+    }
+    navigate(`/store/${itemId}`)
   }
 
   // Fork 仅对公共、非 archive 且非本人创建的 item 可用。
@@ -529,7 +566,7 @@ export default function ItemDetailContent(props: ItemDetailContentProps) {
                     <Show when={props.onToggleFavorite}>
                       <button
                         onClick={() => void props.onToggleFavorite?.()}
-                        disabled={!props.isAuthenticated || props.favoritePending || mcpGateBlocks()}
+                        disabled={!props.isAuthenticated || props.favoritePending || mcpPluginRuntimeBlocks() || mcpGateBlocks()}
                         class="inline-flex items-center gap-1.5 rounded-lg border border-border-weak-base px-3 py-1.5 text-12-regular transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-60"
                         classList={{
                           "bg-bg-muted text-text-strong hover:bg-bg-muted/70": props.favorited,
@@ -538,11 +575,13 @@ export default function ItemDetailContent(props: ItemDetailContentProps) {
                         title={
                           !props.isAuthenticated
                             ? language.t("store.detail.favoriteSignInTooltip")
-                            : mcpGateBlocks()
-                              ? language.t("store.detail.mcpConfig.gateReason")
-                              : props.favorited
-                                ? language.t("store.detail.unfavoriteTooltip")
-                                : language.t("store.detail.favoriteTooltip")
+                            : mcpPluginRuntimeBlocks()
+                              ? language.t("store.detail.mcpConfig.pluginRuntimeReason")
+                              : mcpGateBlocks()
+                                ? language.t("store.detail.mcpConfig.gateReason")
+                                : props.favorited
+                                  ? language.t("store.detail.unfavoriteTooltip")
+                                  : language.t("store.detail.favoriteTooltip")
                         }
                       >
                         <span class="inline-flex items-center" style={{ width: "14px", height: "14px" }}>
@@ -648,7 +687,12 @@ export default function ItemDetailContent(props: ItemDetailContentProps) {
                     </Show>
                   </div>
                 </div>
-                <Show when={props.onToggleFavorite && props.isAuthenticated && mcpGateBlocks()}>
+                <Show when={props.onToggleFavorite && props.isAuthenticated && mcpPluginRuntimeBlocks()}>
+                  <p class="text-right text-12-regular text-text-weak">
+                    {language.t("store.detail.mcpConfig.pluginRuntimeReason")}
+                  </p>
+                </Show>
+                <Show when={props.onToggleFavorite && props.isAuthenticated && !mcpPluginRuntimeBlocks() && mcpGateBlocks()}>
                   <p class="text-right text-12-regular text-text-weak">
                     {language.t("store.detail.mcpConfig.gateHint")}
                   </p>
@@ -663,12 +707,29 @@ export default function ItemDetailContent(props: ItemDetailContentProps) {
                     <p class="text-[13px] leading-6 text-text-weak">{pickItemDescription(data(), language.locale())}</p>
                   </Show>
 
+                  <Show when={data().parentPluginName && data().parentPluginId}>
+                    <div class="flex flex-wrap items-center gap-1.5 rounded-[var(--native-radius-md)] border border-border-weak-base bg-bg-muted/40 px-3 py-2 text-[13px] leading-5 text-text-weak">
+                      <Icon name="configuration" size="small" />
+                      <span>{language.t("store.item.fromPluginLabel")}</span>
+                      <button
+                        type="button"
+                        class="font-semibold text-text-strong underline-offset-2 transition-colors hover:text-[var(--native-primary)] hover:underline"
+                        onClick={openParentPlugin}
+                        title={data().parentPluginName}
+                      >
+                        {data().parentPluginName}
+                      </button>
+                    </div>
+                  </Show>
+
                   <Show when={hasHealthSignals(data().health) || hasEvaluation(data().evaluation)}>
                     <div class="space-y-4">
                       <div class="flex flex-wrap gap-4">
                         <Show
                           when={
-                            data().evaluation && computeContentQuality(data().evaluation!) != null && data().evaluation
+                            data().evaluation &&
+                            (data().evaluation!.content_quality ?? computeContentQuality(data().evaluation!)) != null &&
+                            data().evaluation
                           }
                         >
                           {(evaluation) => (
@@ -684,7 +745,7 @@ export default function ItemDetailContent(props: ItemDetailContentProps) {
                                   {language.t("store.detail.eval.contentQuality")}
                                 </div>
                                 <span class="text-lg font-bold" style={{ color: meta().accent }}>
-                                  {computeContentQuality(evaluation())}
+                                  {evaluation().content_quality ?? computeContentQuality(evaluation())}
                                 </span>
                               </div>
                               <div class="space-y-2.5">
@@ -744,9 +805,24 @@ export default function ItemDetailContent(props: ItemDetailContentProps) {
                               >
                                 {language.t("store.detail.health.title")}
                               </div>
-                              <Show when={data().health?.score != null}>
-                                <span class="text-lg font-bold" style={{ color: meta().accent }}>
-                                  {Math.round(data().health!.score!)}
+                              <Show when={(data().health?.effective_score ?? data().health?.score) != null}>
+                                <span
+                                  class="inline-flex items-baseline gap-0.5 text-lg font-bold"
+                                  style={{ color: meta().accent }}
+                                >
+                                  {Math.round((data().health!.effective_score ?? data().health!.score)!)}
+                                  <Show when={(data().health?.excluded_signals?.length ?? 0) > 0}>
+                                    <span
+                                      class="cursor-help text-[11px] leading-none text-text-weak"
+                                      title={
+                                        data().health?.excluded_signals?.includes("popularity")
+                                          ? language.t("store.detail.health.popularityExcluded")
+                                          : language.t("store.detail.health.signalsExcluded")
+                                      }
+                                    >
+                                      *
+                                    </span>
+                                  </Show>
                                 </span>
                               </Show>
                             </div>
@@ -771,7 +847,15 @@ export default function ItemDetailContent(props: ItemDetailContentProps) {
                               <span class="text-lg font-bold" style={{ color: meta().accent }}>
                                 {Math.round(evaluation().final_score)}
                               </span>
-                              <Show when={data().health?.score != null}>
+                              {/* Show the 85/15 blend formula only when BOTH
+                                  terms exist: the per-type content_quality and
+                                  the star-routing-aware effective_health. This is
+                                  type-agnostic — it shows for skills and fully
+                                  evaluated plugins, and hides for health_only
+                                  plugins and legacy un-reingested data. */}
+                              <Show
+                                when={data().evaluation?.content_quality != null && data().health?.effective_score != null}
+                              >
                                 <span class="text-[11px] text-text-weak">
                                   {language.t("store.detail.overall.breakdown")}
                                 </span>
@@ -797,6 +881,55 @@ export default function ItemDetailContent(props: ItemDetailContentProps) {
                           class="thin-scrollbar min-h-[28rem] overflow-x-auto overflow-y-auto rounded-lg border border-border-weak-base bg-bg-muted/50 p-4 text-12-mono leading-6 [&_pre]:!m-0 [&_pre]:!bg-transparent [&_pre]:!p-0"
                           innerHTML={highlighted()}
                         />
+                      </Show>
+                    </div>
+                  </Show>
+
+                  <Show when={data().itemType === "plugin"}>
+                    <div>
+                      <div
+                        class="mb-3 text-xs"
+                        style={{
+                          color: "color-mix(in srgb, var(--native-muted) 70%, var(--native-panel))",
+                          "font-weight": 700,
+                        }}
+                      >
+                        {language.t("store.detail.bundledSkills")}
+                      </div>
+                      <Show
+                        when={(subSkills() ?? []).length > 0}
+                        fallback={
+                          <Show when={!subSkills.loading}>
+                            <p class="text-[13px] text-text-weak">{language.t("store.detail.bundledSkills.empty")}</p>
+                          </Show>
+                        }
+                      >
+                        <div class="space-y-2">
+                          <For each={subSkills()}>
+                            {(subSkill) => {
+                              const skillMeta = TYPE_META[subSkill.itemType] ?? TYPE_META.skill
+                              return (
+                                <button
+                                  type="button"
+                                  onClick={() => openIncludedItem(subSkill.id)}
+                                  class="flex w-full items-center gap-3 rounded-[var(--native-radius-md)] border border-border-weak-base bg-bg-muted/30 px-3 py-2 text-left transition-colors hover:border-[color:color-mix(in_oklab,var(--native-primary)_42%,var(--native-border))] hover:bg-bg-muted/50"
+                                  title={subSkill.name}
+                                >
+                                  <div
+                                    class="flex h-7 w-7 shrink-0 items-center justify-center rounded-[0.375rem]"
+                                    style={{ "background-color": skillMeta.bg, color: skillMeta.accent }}
+                                  >
+                                    <Icon name={skillMeta.icon} size="small" />
+                                  </div>
+                                  <span class="min-w-0 flex-1 truncate text-[13px] font-semibold text-text-strong">
+                                    {subSkill.name}
+                                  </span>
+                                  <Icon name="chevron-right" size="small" />
+                                </button>
+                              )
+                            }}
+                          </For>
+                        </div>
                       </Show>
                     </div>
                   </Show>

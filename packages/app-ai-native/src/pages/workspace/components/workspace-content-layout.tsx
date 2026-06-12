@@ -12,8 +12,11 @@ import { useFile } from "@/context/file"
 import { useDiff, useTreePolling } from "@/context/device-file"
 import { useDeviceWorkspace } from "@/context/device-workspace"
 import { sessionTreeIDs } from "@/pages/session/composer/session-request-tree"
-import { DeviceSessionProvider } from "@/context/device-session"
-import { DeviceSessionTab } from "./device-session-tab"
+import { DeviceSessionStoreProvider } from "@/context/device-session"
+import { SessionTabProvider, useSessionTab } from "@/context/session-tab"
+import { DeviceSessionView } from "./device-session-view"
+import { DeviceSessionViewHeader } from "./device-session-view-header"
+import { DeviceSessionChatProvider } from "@/context/device-session-chat"
 import { TerminalTab } from "./terminal-tab"
 import { useDeviceTerminal } from "@/context/device-terminal"
 import { ContentTabContext, useContentTabs, type ContentTab } from "@/context/content-tabs"
@@ -27,6 +30,7 @@ import type { FileNode } from "@opencode-ai/sdk/v2"
 import type { Session } from "@opencode-ai/sdk/v2/client"
 import { getDirectory, getFilename } from "@opencode-ai/util/path"
 import { useWorkspace } from "../context"
+import { useWorkspaceVisible } from "./layout"
 import { filePreviewConfig } from "../lib/file-preview-config"
 import { MessageSquare, FolderOpen, GitBranch, Terminal } from "lucide-solid"
 
@@ -165,6 +169,24 @@ function SessionTabIcon(props: { tab: ContentTab }) {
   )
 }
 
+function SessionTabAdapter(props: { tabId: string; sessionID?: string }) {
+  const sessionTab = useSessionTab()
+  const tabStore = useContentTabs()
+  const title = createMemo(() => tabStore.tabs().find((t) => t.id === props.tabId)?.title)
+  return (
+    <DeviceSessionChatProvider>
+      <DeviceSessionView
+        sessionID={props.sessionID}
+        createdSessionID={sessionTab.createdSessionID}
+        title={title}
+        onSessionCreated={sessionTab.replaceTab}
+        onClose={() => tabStore.close(props.tabId)}
+        header={(state) => <DeviceSessionViewHeader state={state} />}
+      />
+    </DeviceSessionChatProvider>
+  )
+}
+
 function TabContent(props: { tab: ContentTab }) {
   return (
     <Switch>
@@ -175,9 +197,9 @@ function TabContent(props: { tab: ContentTab }) {
         <DiffPreviewTab tab={props.tab} />
       </Match>
       <Match when={props.tab.kind === "session"}>
-        <DeviceSessionProvider sessionID={(props.tab.meta as any)?.sessionID}>
-          <DeviceSessionTab tabId={props.tab.id} />
-        </DeviceSessionProvider>
+        <SessionTabProvider tabId={props.tab.id} sessionID={(props.tab.meta as any)?.sessionID}>
+          <SessionTabAdapter tabId={props.tab.id} sessionID={(props.tab.meta as any)?.sessionID} />
+        </SessionTabProvider>
       </Match>
       <Match when={props.tab.kind === "terminal"}>
         <TerminalTab tab={props.tab} />
@@ -192,6 +214,49 @@ function ContentTabPanel() {
   const language = useLanguage()
   const layout = useLayout()
   const dw = useDeviceWorkspace()
+  const visible = useWorkspaceVisible()
+
+  const handleTabSwitch = (e: KeyboardEvent) => {
+    if (!visible()) return
+    if (!e.ctrlKey) return
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return
+    const target = e.target as HTMLElement
+    if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return
+    e.preventDefault()
+
+    const tabs = tabStore.tabs()
+    if (tabs.length <= 1) return
+
+    const activeId = tabStore.activeId()
+    const currentIdx = tabs.findIndex((t) => t.id === activeId)
+    if (currentIdx === -1) return
+
+    const nextIdx = e.key === "ArrowRight"
+      ? (currentIdx + 1) % tabs.length
+      : (currentIdx - 1 + tabs.length) % tabs.length
+
+    tabStore.activate(tabs[nextIdx].id)
+  }
+  document.addEventListener("keydown", handleTabSwitch)
+  onCleanup(() => document.removeEventListener("keydown", handleTabSwitch))
+
+  const WELCOME_EXAMPLES = [
+    "workspace.content.welcome.example.1",
+    "workspace.content.welcome.example.2",
+    "workspace.content.welcome.example.3",
+    "workspace.content.welcome.example.4",
+    "workspace.content.welcome.example.5",
+    "workspace.content.welcome.example.6",
+  ] as const
+
+  const [exampleIdx, setExampleIdx] = createSignal(0)
+  let exampleTimer: ReturnType<typeof setInterval> | undefined
+  onMount(() => {
+    exampleTimer = setInterval(() => {
+      setExampleIdx((i) => (i + 1) % WELCOME_EXAMPLES.length)
+    }, 10000)
+  })
+  onCleanup(() => { if (exampleTimer) clearInterval(exampleTimer) })
 
   const closeTab = (id: string) => {
     const tab = tabStore.tabs().find((t) => t.id === id)
@@ -207,20 +272,34 @@ function ContentTabPanel() {
       <Show
         when={tabStore.tabs().length > 0}
         fallback={
-          <div class="flex-1 h-full flex items-center justify-center vscode-markdown">
-            <div class="flex flex-col gap-1.5" style={{ "min-width": "280px" }}>
-              <div class="flex items-center justify-between gap-8">
-                <span>{language.t("workspace.content.shortcut.newSession")}</span>
-                <span class="flex items-center gap-0.5"><code>Alt</code>+<code>N</code></span>
-              </div>
-              <div class="flex items-center justify-between gap-8">
-                <span>{language.t("workspace.content.shortcut.newTerminal")}</span>
-                <span class="flex items-center gap-0.5"><code>Alt</code>+<code>T</code></span>
-              </div>
-              <div class="flex items-center justify-between gap-8">
-                <span>{language.t("workspace.content.shortcut.toggleSidebar")}</span>
-                <span class="flex items-center gap-0.5"><code>Alt</code>+<code>M</code></span>
-              </div>
+          <div class="flex-1 h-full flex flex-col items-center justify-center">
+            <div class="flex flex-col items-center gap-24 w-full max-w-[720px] 2xl:max-w-[900px] px-6">
+              <Show when={dw.agentAvailable()}>
+                <div class="flex flex-col items-center gap-10 w-[80%]">
+                  <h2 class="text-text-strong" style={{ "font-size": "36px", "font-weight": "700" }}>{language.t("workspace.content.welcome.title")}</h2>
+                  <div class="h-6 flex items-center text-center">
+                    <span class="text-14-regular text-text-weak transition-opacity duration-500">{language.t("workspace.content.welcome.examplePrefix")}{language.t(WELCOME_EXAMPLES[exampleIdx()])}</span>
+                  </div>
+                </div>
+              </Show>
+              <Show when={dw.agentAvailable()}>
+                <div class="w-full">
+                  <DeviceSessionChatProvider>
+                    <DeviceSessionView
+                      inputOnly
+                      onSessionCreated={(input) => {
+                        tabStore.open({
+                          kind: "session",
+                          title: input.title ?? language.t("command.session.new"),
+                          icon: SESSION_TAB_ICON,
+                          key: input.sessionID,
+                          meta: { sessionID: input.sessionID },
+                        })
+                      }}
+                    />
+                  </DeviceSessionChatProvider>
+                </div>
+              </Show>
             </div>
           </div>
         }
@@ -338,6 +417,7 @@ function ContentSidebar(props: { directory: string; autoExpandGroup?: () => { gr
   const terminal = useDeviceTerminal()
   const dw = useDeviceWorkspace()
   const work = useWorkspace()
+  const file = useFile()
   const diff = useDiff()
   const treePolling = useTreePolling()
   const [active, setActive] = createSignal<SidebarSection | undefined>("sessions")
@@ -516,7 +596,6 @@ function ContentSidebar(props: { directory: string; autoExpandGroup?: () => { gr
               })
               terminal.new().then((sessionId) => {
                 if (!sessionId) {
-                  tabStore.close(tabStore.makeTabId("terminal", pendingKey))
                   return
                 }
                 tabStore.replace(tabStore.makeTabId("terminal", pendingKey), {
@@ -634,20 +713,29 @@ function ContentSidebar(props: { directory: string; autoExpandGroup?: () => { gr
               </Show>
             </Show>
             <Show when={active() === "files"}>
-              <div class="p-2">
-                <FileTreeWithTabs path={props.directory} />
-              </div>
-            </Show>
-            <Show when={active() === "diffs"}>
-              <Show when={diff.state().stagedFiles.length > 0 || diff.state().unstagedFiles.length > 0 || diff.state().untrackedFiles.length > 0 || diff.state().loading} fallback={
-                <div class="px-3 py-2 text-12-regular text-text-weak">
-                  {language.t("session.review.noChanges")}
+              <Show when={file.tree.isDisabled(props.directory)} fallback={
+                <div class="p-2">
+                  <FileTreeWithTabs path={props.directory} />
                 </div>
               }>
-                <div class="px-0 py-0.5">
-                  <Show when={diff.state().branch}>
-                    <div class="px-1.5 pb-1 text-11-regular text-text-weak flex items-center gap-1.5">
-                      <Icon name="branch" size="small" class="shrink-0" />
+                <div class="flex-1 flex flex-col items-center justify-center gap-3 text-text-weak py-8">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                  <div class="text-14-medium">{language.t("file.tree.runtimeDisabled.title")}</div>
+                  <div class="text-12-regular">{language.t("file.tree.runtimeDisabled.description")}</div>
+                </div>
+              </Show>
+            </Show>
+            <Show when={active() === "diffs"}>
+              <Show when={diff.state().disabled} fallback={
+                <Show when={diff.state().stagedFiles.length > 0 || diff.state().unstagedFiles.length > 0 || diff.state().untrackedFiles.length > 0 || diff.state().loading} fallback={
+                  <div class="px-3 py-2 text-12-regular text-text-weak">
+                    {language.t("session.review.noChanges")}
+                  </div>
+                }>
+                  <div class="px-0 py-0.5">
+                    <Show when={diff.state().branch}>
+                      <div class="px-1.5 pb-1 text-11-regular text-text-weak flex items-center gap-1.5">
+                        <Icon name="branch" size="small" class="shrink-0" />
                       <span
                         class={`truncate ${
                           dw.data.vcs?.dirty === undefined
@@ -792,6 +880,13 @@ function ContentSidebar(props: { directory: string; autoExpandGroup?: () => { gr
                   </Show>
                 </div>
               </Show>
+              }>
+                <div class="flex-1 flex flex-col items-center justify-center gap-3 text-text-weak py-8">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                  <div class="text-14-medium">{language.t("diff.list.runtimeDisabled.title")}</div>
+                  <div class="text-12-regular">{language.t("diff.list.runtimeDisabled.description")}</div>
+                </div>
+              </Show>
             </Show>
           </div>
         </Show>
@@ -851,7 +946,6 @@ export function WorkspaceContentLayout(props: { workspaceId: string; directory: 
       })
       terminal.new().then((sessionId) => {
         if (!sessionId) {
-          tabStore.close(tabStore.makeTabId("terminal", pendingKey))
           return
         }
         tabStore.replace(tabStore.makeTabId("terminal", pendingKey), {
@@ -958,7 +1052,23 @@ export function WorkspaceContentLayout(props: { workspaceId: string; directory: 
         </div>
 
         <div class="flex-1 min-w-0 h-full flex flex-col">
-          <ContentTabPanel />
+          <Show when={ws.proxyError()}>
+            {(code) => (
+              <div class="shrink-0 h-8 flex items-center gap-2 px-3 border-b text-12-medium text-text-warning bg-surface-warning-weakest">
+                <Icon name="warning" size="small" />
+                <span>
+                  <Switch>
+                    <Match when={code() === "UPSTREAM_ERROR"}>{language.t("workspace.proxy.error.upstream")}</Match>
+                    <Match when={code() === "FILTER_ERROR"}>{language.t("workspace.proxy.error.filter")}</Match>
+                    <Match when={true}>{language.t("workspace.proxy.error.unknown", { code: code() })}</Match>
+                  </Switch>
+                </span>
+              </div>
+            )}
+          </Show>
+          <DeviceSessionStoreProvider>
+            <ContentTabPanel />
+          </DeviceSessionStoreProvider>
         </div>
       </div>
       <Toast.Region />

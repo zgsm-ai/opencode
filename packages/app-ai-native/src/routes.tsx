@@ -197,7 +197,6 @@ export const routeConfig: RouteConfig[] = [
   {
     path: "/store",
     component: StoreLayout,
-    auth: true,
     children: [
       { path: "/", component: StoreHome },
       { path: "/manager", component: StoreManager },

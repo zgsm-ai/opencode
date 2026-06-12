@@ -162,4 +162,9 @@ export const dict: Record<string, string> = {
   "ui.question.multiHint": "Select all answers that apply",
   "ui.question.singleHint": "Select one answer",
   "ui.question.custom.placeholder": "Type your answer...",
+
+  "ui.messagePart.toolFiltered.label": "Output filtered for security",
+  "ui.messagePart.toolFiltered.originalSize": "Original size: {{size}} bytes",
+  "ui.messagePart.codeFiltered.label": "Code content filtered",
+  "ui.messagePart.codeStreaming.label": "Generating code...",
 }

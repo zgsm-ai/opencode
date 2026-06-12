@@ -1,7 +1,7 @@
 import { Popover as Kobalte } from "@kobalte/core/popover"
 import { Component, ComponentProps, createMemo, JSX, Show, ValidComponent } from "solid-js"
 import { createStore } from "solid-js/store"
-import { useLocal } from "@/context/local"
+import { useDeviceLocal } from "@/context/device-local"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { Button } from "@opencode-ai/ui/button"
 import { IconButton } from "@opencode-ai/ui/icon-button"
@@ -22,7 +22,7 @@ const ModelList: Component<{
   onSelect: () => void
   action?: JSX.Element
 }> = (props) => {
-  const local = useLocal()
+  const local = useDeviceLocal()
   const language = useLanguage()
 
   const models = createMemo(() =>
@@ -61,9 +61,7 @@ const ModelList: Component<{
         </Tooltip>
       )}
       onSelect={(x) => {
-        local.model.set(x ? { modelID: x.id, providerID: x.provider.id } : undefined, {
-          recent: true,
-        })
+        local.model.set(x ? { modelID: x.id, providerID: x.provider.id } : undefined)
         props.onSelect()
       }}
     >

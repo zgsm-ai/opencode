@@ -162,4 +162,9 @@ export const dict = {
   "ui.toolErrorCard.copyError": "复制错误",
   "ui.message.duration.seconds": "{{count}}秒",
   "ui.message.duration.minutesSeconds": "{{minutes}}分 {{seconds}}秒",
+
+  "ui.messagePart.toolFiltered.label": "输出已因安全原因过滤",
+  "ui.messagePart.toolFiltered.originalSize": "原始大小：{{size}} 字节",
+  "ui.messagePart.codeFiltered.label": "代码内容已过滤",
+  "ui.messagePart.codeStreaming.label": "正在生成代码...",
 } satisfies Partial<Record<Keys, string>>

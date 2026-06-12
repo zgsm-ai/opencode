@@ -4,9 +4,10 @@ import { useLanguage } from "@/context/language"
 import { ServerConnection, ServerProvider } from "@/context/server"
 import { DeviceInterface, useDeviceLayout } from "@/pages/workspace/components/device-interface"
 import { useDeviceSDK } from "@/context/device-sdk"
-import { DeviceSessionProvider, useDeviceSession } from "@/context/device-session"
+import { DeviceSessionProvider, DeviceSessionStoreProvider, useDeviceSession } from "@/context/device-session"
 import { ContentTabContext, createContentTabStore } from "@/context/content-tabs"
-import { DeviceSessionTab } from "@/pages/workspace/components/device-session-tab"
+import { DeviceSessionView } from "@/pages/workspace/components/device-session-view"
+import { DeviceSessionChatProvider } from "@/context/device-session-chat"
 import { deviceApi } from "@/pages/workspace/lib/api"
 import { deviceFileApi } from "@/pages/workspace/lib/cloud-device-api"
 import { getProxyUrl } from "@/pages/workspace/lib/url"
@@ -308,7 +309,8 @@ function PanelBody(props: { directory: string; proxyId: string; onSkillReady: (t
       <ServerProvider defaultServer={proxyKey()} servers={servers()}>
         <DeviceInterface directory={props.directory} deviceLayout={deviceLayout}>
           <ContentTabContext.Provider value={tabStore}>
-            <DeviceSessionProvider sessionID={sessionID()}>
+            <DeviceSessionStoreProvider>
+              <DeviceSessionProvider sessionID={sessionID()}>
               {/* PRIMARY real-time sync: react to the agent's write/edit tool
                   calls hitting a skill SKILL.md and mirror it into the editor. */}
               <SkillFileToolWatcher
@@ -322,9 +324,12 @@ function PanelBody(props: { directory: string; proxyId: string; onSkillReady: (t
                   session list isn't polluted. Best-effort, fires once. */}
               <SessionTitleGuard sessionID={sessionID} />
               <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
-                <DeviceSessionTab tabId={tabId} hiddenSeed={SKILL_WRITER_INSTRUCTIONS} />
+                <DeviceSessionChatProvider>
+                  <DeviceSessionView sessionID={sessionID()} hiddenSeed={SKILL_WRITER_INSTRUCTIONS} />
+                </DeviceSessionChatProvider>
               </div>
             </DeviceSessionProvider>
+            </DeviceSessionStoreProvider>
           </ContentTabContext.Provider>
         </DeviceInterface>
       </ServerProvider>

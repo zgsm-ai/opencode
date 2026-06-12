@@ -29,7 +29,7 @@ if (typeof window !== "undefined" && DOMPurify.isSupported) {
 }
 
 const config = {
-  USE_PROFILES: { html: true, mathMl: true },
+  USE_PROFILES: { html: true, svg: true, mathMl: true },
   SANITIZE_NAMED_PROPS: true,
   FORBID_TAGS: ["style"],
   FORBID_CONTENTS: ["style", "script"],
@@ -173,6 +173,38 @@ function markCodeLinks(root: HTMLDivElement) {
   }
 }
 
+const FILTERED_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>'
+
+function replaceFilteredBlocks(root: HTMLDivElement, filteredLabel: string, streamingLabel: string) {
+  const codeElements = Array.from(root.querySelectorAll("pre > code"))
+  for (const code of codeElements) {
+    const cls = code.getAttribute("class") ?? ""
+    const langMatch = cls.match(/^language-(filtered|streaming)(?:-(.+))?$/)
+    if (!langMatch) continue
+    const kind = langMatch[1]
+    const lang = langMatch[2] ?? ""
+    const pre = code.parentElement
+    if (!pre) continue
+
+    const displayLang = lang ? lang.charAt(0).toUpperCase() + lang.slice(1) : ""
+
+    if (kind === "filtered") {
+      const card = document.createElement("div")
+      card.setAttribute("data-component", "code-filtered")
+      if (lang) card.setAttribute("data-lang", lang)
+      card.innerHTML = `${FILTERED_SVG}<span>${filteredLabel}</span>${displayLang ? `<span data-slot="code-filtered-lang">${displayLang}</span>` : ""}`
+      pre.replaceWith(card)
+    } else {
+      const card = document.createElement("div")
+      card.setAttribute("data-component", "code-streaming")
+      if (lang) card.setAttribute("data-lang", lang)
+      card.innerHTML = `<div data-slot="code-streaming-header"><span data-slot="code-streaming-label">${streamingLabel}</span>${displayLang ? `<span data-slot="code-streaming-lang">${displayLang}</span>` : ""}</div><div data-slot="code-streaming-skeleton"><div class="code-streaming-line" style="width:80%"></div><div class="code-streaming-line" style="width:65%"></div><div class="code-streaming-line" style="width:90%"></div></div>`
+      pre.replaceWith(card)
+    }
+  }
+}
+
 function decorate(root: HTMLDivElement, labels: CopyLabels) {
   const blocks = Array.from(root.querySelectorAll("pre"))
   for (const block of blocks) {
@@ -294,6 +326,11 @@ export function Markdown(
       copied: i18n.t("ui.message.copied"),
     }
     const temp = new DOMParser().parseFromString(content, "text/html").body as HTMLDivElement
+    replaceFilteredBlocks(
+      temp,
+      i18n.t("ui.messagePart.codeFiltered.label"),
+      i18n.t("ui.messagePart.codeStreaming.label"),
+    )
     decorate(temp, labels)
 
     morphdom(container, temp, {

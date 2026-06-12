@@ -1,125 +1,17 @@
-import { AppIcon } from "@opencode-ai/ui/app-icon"
 import { Button } from "@opencode-ai/ui/button"
-import { DropdownMenu } from "@opencode-ai/ui/dropdown-menu"
 import { Icon } from "@opencode-ai/ui/icon"
-import { IconButton } from "@opencode-ai/ui/icon-button"
 import { Keybind } from "@opencode-ai/ui/keybind"
-import { Spinner } from "@opencode-ai/ui/spinner"
 import { showToast } from "@opencode-ai/ui/toast"
-import { Tooltip, TooltipKeybind } from "@opencode-ai/ui/tooltip"
+import { TooltipKeybind } from "@opencode-ai/ui/tooltip"
 import { getFilename } from "@opencode-ai/util/path"
-import { createEffect, createMemo, For, Show } from "solid-js"
-import { createStore } from "solid-js/store"
-import { Portal } from "solid-js/web"
+import { createMemo, Show } from "solid-js"
 import { useCommand } from "@/context/command"
 import { useLanguage } from "@/context/language"
 import { useLayout } from "@/context/layout"
 import { usePlatform } from "@/context/platform"
-import { useSync } from "@/context/sync"
-import { useSDK } from "@/context/sdk"
-import { Persist, persisted } from "@/utils/persist"
-import { StatusPopover } from "../status-popover"
-
-const OPEN_APPS = [
-  "vscode",
-  "cursor",
-  "zed",
-  "textmate",
-  "antigravity",
-  "finder",
-  "terminal",
-  "iterm2",
-  "ghostty",
-  "warp",
-  "xcode",
-  "android-studio",
-  "powershell",
-  "sublime-text",
-] as const
-
-type OpenApp = (typeof OPEN_APPS)[number]
-type OS = "macos" | "windows" | "linux" | "unknown"
-
-const MAC_APPS = [
-  {
-    id: "vscode",
-    label: "VS Code",
-    icon: "vscode",
-    openWith: "Visual Studio Code",
-  },
-  { id: "cursor", label: "Cursor", icon: "cursor", openWith: "Cursor" },
-  { id: "zed", label: "Zed", icon: "zed", openWith: "Zed" },
-  { id: "textmate", label: "TextMate", icon: "textmate", openWith: "TextMate" },
-  {
-    id: "antigravity",
-    label: "Antigravity",
-    icon: "antigravity",
-    openWith: "Antigravity",
-  },
-  { id: "terminal", label: "Terminal", icon: "terminal", openWith: "Terminal" },
-  { id: "iterm2", label: "iTerm2", icon: "iterm2", openWith: "iTerm" },
-  { id: "ghostty", label: "Ghostty", icon: "ghostty", openWith: "Ghostty" },
-  { id: "warp", label: "Warp", icon: "warp", openWith: "Warp" },
-  { id: "xcode", label: "Xcode", icon: "xcode", openWith: "Xcode" },
-  {
-    id: "android-studio",
-    label: "Android Studio",
-    icon: "android-studio",
-    openWith: "Android Studio",
-  },
-  {
-    id: "sublime-text",
-    label: "Sublime Text",
-    icon: "sublime-text",
-    openWith: "Sublime Text",
-  },
-] as const
-
-const WINDOWS_APPS = [
-  { id: "vscode", label: "VS Code", icon: "vscode", openWith: "code" },
-  { id: "cursor", label: "Cursor", icon: "cursor", openWith: "cursor" },
-  { id: "zed", label: "Zed", icon: "zed", openWith: "zed" },
-  {
-    id: "powershell",
-    label: "PowerShell",
-    icon: "powershell",
-    openWith: "powershell",
-  },
-  {
-    id: "sublime-text",
-    label: "Sublime Text",
-    icon: "sublime-text",
-    openWith: "Sublime Text",
-  },
-] as const
-
-const LINUX_APPS = [
-  { id: "vscode", label: "VS Code", icon: "vscode", openWith: "code" },
-  { id: "cursor", label: "Cursor", icon: "cursor", openWith: "cursor" },
-  { id: "zed", label: "Zed", icon: "zed", openWith: "zed" },
-  {
-    id: "sublime-text",
-    label: "Sublime Text",
-    icon: "sublime-text",
-    openWith: "Sublime Text",
-  },
-] as const
-
-type OpenOption = (typeof MAC_APPS)[number] | (typeof WINDOWS_APPS)[number] | (typeof LINUX_APPS)[number]
-type OpenIcon = OpenApp | "file-explorer"
-const OPEN_ICON_BASE = new Set<OpenIcon>(["finder", "vscode", "cursor", "zed"])
-
-const openIconSize = (id: OpenIcon) => (OPEN_ICON_BASE.has(id) ? "size-4" : "size-[19px]")
-
-const detectOS = (platform: ReturnType<typeof usePlatform>): OS => {
-  if (platform.platform === "desktop" && platform.os) return platform.os
-  if (typeof navigator !== "object") return "unknown"
-  const value = navigator.platform || navigator.userAgent
-  if (/Mac/i.test(value)) return "macos"
-  if (/Win/i.test(value)) return "windows"
-  if (/Linux/i.test(value)) return "linux"
-  return "unknown"
-}
+import { useDeviceLocal } from "@/context/device-local"
+import { useDeviceSDK } from "@/context/device-sdk"
+import { Portal } from "solid-js/web"
 
 const showRequestError = (language: ReturnType<typeof useLanguage>, err: unknown) => {
   showToast({
@@ -132,8 +24,8 @@ const showRequestError = (language: ReturnType<typeof useLanguage>, err: unknown
 export function SessionHeader() {
   const layout = useLayout()
   const command = useCommand()
-  const sync = useSync()
-  const sdk = useSDK()
+  const local = useDeviceLocal()
+  const sdk = useDeviceSDK()
   const platform = usePlatform()
   const language = useLanguage()
 
@@ -150,64 +42,8 @@ export function SessionHeader() {
   })
   const hotkey = createMemo(() => command.keybind("file.open"))
 
-  const sessionKey = createMemo(() => ((sync as any).currentSessionID?.() ?? ""))
+  const sessionKey = createMemo(() => local.activeSessionID() ?? "")
   const view = createMemo(() => layout.view(sessionKey))
-  const os = createMemo(() => detectOS(platform))
-
-  const [exists, setExists] = createStore<Partial<Record<OpenApp, boolean>>>({
-    finder: true,
-  })
-
-  const apps = createMemo(() => {
-    if (os() === "macos") return MAC_APPS
-    if (os() === "windows") return WINDOWS_APPS
-    return LINUX_APPS
-  })
-
-  const fileManager = createMemo(() => {
-    if (os() === "macos") return { label: "Finder", icon: "finder" as const }
-    if (os() === "windows") return { label: "File Explorer", icon: "file-explorer" as const }
-    return { label: "File Manager", icon: "finder" as const }
-  })
-
-  createEffect(() => {
-    if (platform.platform !== "desktop") return
-    if (!platform.checkAppExists) return
-
-    const list = apps()
-
-    setExists(Object.fromEntries(list.map((app) => [app.id, undefined])) as Partial<Record<OpenApp, boolean>>)
-
-    void Promise.all(
-      list.map((app) =>
-        Promise.resolve(platform.checkAppExists?.(app.openWith))
-          .then((value) => Boolean(value))
-          .catch(() => false)
-          .then((ok) => {
-            console.debug(`[session-header] App "${app.label}" (${app.openWith}): ${ok ? "exists" : "does not exist"}`)
-            return [app.id, ok] as const
-          }),
-      ),
-    ).then((entries) => {
-      setExists(Object.fromEntries(entries) as Partial<Record<OpenApp, boolean>>)
-    })
-  })
-
-  const options = createMemo(() => {
-    return [
-      { id: "finder", label: fileManager().label, icon: fileManager().icon },
-      ...apps().filter((app) => exists[app.id]),
-    ] as const
-  })
-
-  const [prefs, setPrefs] = persisted(Persist.global("open.app"), createStore({ app: "finder" as OpenApp }))
-
-  const current = createMemo(() => options().find((o) => o.id === prefs.app) ?? options()[0])
-
-  const selectApp = (app: OpenApp) => {
-    if (!options().some((item) => item.id === app)) return
-    setPrefs("app", app)
-  }
 
   const copyPath = () => {
     const directory = workspaceDirectory()
@@ -262,8 +98,7 @@ export function SessionHeader() {
       <Show when={rightMount()}>
         {(mount) => (
           <Portal mount={mount()}>
-            <div class="flex items-center gap-2">
-              <StatusPopover />
+              <div class="flex items-center gap-2">
               <Show when={workspaceDirectory()}>
                 <div class="hidden xl:flex items-center">
                   <div class="flex h-[24px] box-border items-center rounded-md border border-border-weak-base bg-surface-panel overflow-hidden">

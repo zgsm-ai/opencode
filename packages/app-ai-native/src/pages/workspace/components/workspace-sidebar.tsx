@@ -136,6 +136,22 @@ export function WorkspaceSidebar(props: { hide?: () => void } = {}) {
             <div class="mb-1 flex items-center gap-1.5 px-2.5 py-1.5">
               <span class="text-[11px] font-semibold uppercase tracking-[0.12em] text-sidebar-foreground/70">{t("workspace.running")}</span>
               <span class="ml-auto rounded-[var(--native-radius-full)] bg-[color:color-mix(in_oklab,var(--native-primary)_8%,transparent)] px-2 py-0.5 text-[11px] font-medium text-[var(--native-primary)]">{runningIds().length}</span>
+              <Tooltip value={t("workspace.closeAllRunning")} placement="bottom">
+                <IconButton
+                  icon="close"
+                  variant="ghost"
+                  iconSize="small"
+                  class="size-7 rounded-lg cursor-pointer text-sidebar-foreground/70 hover:text-sidebar-foreground"
+                  onClick={() => {
+                    const ids = runningIds()
+                    for (const id of ids) {
+                      disableWorkspace(id)
+                    }
+                    if (active.id && ids.includes(active.id)) active.clear()
+                  }}
+                  aria-label={t("workspace.closeAllRunning")}
+                />
+              </Tooltip>
             </div>
             <div class="flex flex-col gap-1">
               <For each={runningIds()}>{(id) => <WorkspaceCard id={id} isRunning={true} onOpen={handleOpenWorkspace} onClose={handleCloseWorkspace} />}</For>

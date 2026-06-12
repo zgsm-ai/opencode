@@ -1,55 +1,28 @@
-import { Show, createMemo, onMount } from "solid-js"
-import { DateTime } from "luxon"
-import { useSync } from "@/context/sync"
+import { createMemo, onMount } from "solid-js"
+import { useSessionChat } from "@/context/session-chat"
 import { useLanguage } from "@/context/language"
 import { Icon } from "@opencode-ai/ui/icon"
 import { getDirectory, getFilename } from "@opencode-ai/util/path"
 
-const MAIN_WORKTREE = "main"
-const CREATE_WORKTREE = "create"
 const ROOT_CLASS =
   "size-full flex flex-col justify-end items-start gap-4 flex-[1_0_0] self-stretch max-w-200 mx-auto 2xl:max-w-[1000px] px-6 pb-16"
 
-interface NewSessionViewProps {
-  worktree: string
-  onWorktreeChange: (value: string) => void
-}
-
-export function NewSessionView(props: NewSessionViewProps) {
-  const sync = useSync()
+export function NewSessionView() {
+  const chat = useSessionChat()
   const language = useLanguage()
 
-  const sandboxes = createMemo(() => sync.project?.sandboxes ?? [])
-  const options = createMemo(() => [MAIN_WORKTREE, ...sandboxes(), CREATE_WORKTREE])
-  const current = createMemo(() => {
-    const selection = props.worktree
-    if (options().includes(selection)) return selection
-    return MAIN_WORKTREE
-  })
-  const workspaceRoot = createMemo(() => sync.project?.worktree ?? sync.data.path.directory)
-  const isWorktree = createMemo(() => {
-    const workspace = sync.project
-    if (!workspace) return false
-    return sync.data.path.directory !== workspace.worktree
-  })
+  const workspaceRoot = createMemo(() => chat.directory())
 
   onMount(() => {
-    if (sync.data.vcs !== undefined) return
-    void sync.vcs.load()
+    if (chat.vcs() !== undefined) return
+    void chat.vcsLoad()
   })
 
-  const label = (value: string) => {
-    if (value === MAIN_WORKTREE) {
-      if (isWorktree()) return language.t("session.new.worktree.main")
-      const branch = sync.data.vcs?.branch
-      if (branch) return language.t("session.new.worktree.mainWithBranch", { branch })
-      return language.t("session.new.worktree.main")
-    }
-
-    if (value === CREATE_WORKTREE) return language.t("session.new.worktree.create")
-
-    return getFilename(value)
-  }
+  const branchLabel = createMemo(() => {
+    const branch = chat.vcs()?.branch
+    if (branch) return language.t("session.new.worktree.mainWithBranch", { branch })
+    return language.t("session.new.worktree.main")
+  })
 
   return (
     <div class={ROOT_CLASS}>
@@ -63,23 +36,8 @@ export function NewSessionView(props: NewSessionViewProps) {
       </div>
       <div class="flex justify-center items-start gap-3 min-h-5">
         <Icon name="branch" size="small" class="mt-0.5 shrink-0" />
-        <div class="text-12-medium text-text-weak select-text leading-5">{label(current())}</div>
+        <div class="text-12-medium text-text-weak select-text leading-5">{branchLabel()}</div>
       </div>
-      <Show when={sync.project}>
-        {(project) => (
-          <div class="flex justify-center items-start gap-3 min-h-5">
-            <Icon name="pencil-line" size="small" class="mt-0.5 shrink-0" />
-            <div class="text-12-medium text-text-weak leading-5">
-              {language.t("session.new.lastModified")}&nbsp;
-              <span class="text-text-strong">
-                {DateTime.fromMillis(project().time.updated ?? project().time.created)
-                  .setLocale(language.intl())
-                  .toRelative()}
-              </span>
-            </div>
-          </div>
-        )}
-      </Show>
     </div>
   )
 }
