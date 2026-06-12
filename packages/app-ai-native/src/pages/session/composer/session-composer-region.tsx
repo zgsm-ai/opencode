@@ -1,4 +1,4 @@
-import { Show, createEffect, createMemo, createSignal, onCleanup } from "solid-js"
+import { Show, createEffect, createMemo, createSignal, onCleanup, type JSX } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useSpring } from "@opencode-ai/ui/motion-spring"
 import { useWorkspaceVisible } from "@/pages/workspace/components/layout"
@@ -45,6 +45,7 @@ export function SessionComposerRegion(props: {
   working?: boolean
   busySince?: number
   hiddenSeed?: () => string | undefined
+  footer?: JSX.Element
 }) {
   const prompt = usePrompt()
   const language = useLanguage()
@@ -252,6 +253,18 @@ export function SessionComposerRegion(props: {
               </Show>
             </Show>
           </div>
+          <Show when={!props.hidePrompt && props.footer}>
+            <div
+              classList={{
+                "w-full px-2 pointer-events-auto": true,
+                "md:max-w-200 md:mx-auto 2xl:max-w-[1000px]": props.centered,
+              }}
+            >
+              <div class="flex min-w-0 items-center justify-start pt-2">
+                {props.footer}
+              </div>
+            </div>
+          </Show>
         </Show>
       </div>
   )

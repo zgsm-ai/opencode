@@ -10,6 +10,7 @@ import { useLanguage } from "@/context/language"
 import { PromptProvider, usePrompt } from "@/context/prompt"
 
 import { NewSessionView } from "@/components/session/session-new-view"
+import { SessionBranchFooter } from "@/components/session/session-branch-footer"
 import { MessageTimeline } from "@/pages/session/message-timeline"
 import { SessionComposerRegion } from "@/pages/session/composer/session-composer-region"
 import { createDeviceSessionComposerState } from "@/pages/session/composer/device-session-composer-state"
@@ -512,6 +513,7 @@ export function DeviceSessionView(props: {
                                       }}
                                       hideAttachButton
                                       hidePrompt={!!viewingSessionID()}
+                                      footer={!isNew() ? <SessionBranchFooter /> : undefined}
                                       working={isWorking()}
                                       busySince={busySince()}
                                     />
