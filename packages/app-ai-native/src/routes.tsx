@@ -1,8 +1,9 @@
-import { Navigate, Route } from "@solidjs/router"
-import { Component, lazy, Suspense, type JSX } from "solid-js"
+import { Navigate, Route, useLocation } from "@solidjs/router"
+import { Component, Show, lazy, Suspense, type JSX } from "solid-js"
 import AuthGuard from "@/components/auth-guard"
 import { PageLoadingSkeleton } from "@/components/page-loading-skeleton"
 import { useAuth } from "@/context/auth"
+import { appPath } from "@/lib/router"
 
 const Loading = () => <PageLoadingSkeleton />
 
@@ -50,6 +51,7 @@ const ConsoleNotifications = lazy(() => consoleImport.then((m) => ({ default: m.
 const ConsoleUsage = lazy(() => consoleImport.then((m) => ({ default: m.UsagePage })))
 const ConsoleKanban = lazy(() => consoleImport.then((m) => ({ default: m.DashboardKanban })))
 const ConsoleIdentity = lazy(() => consoleImport.then((m) => ({ default: m.IdentityPage })))
+const LandingHome = lazy(() => import("@/pages/landing"))
 
 const ConsoleDevicesRoute: Component = () => <ConsoleDevices />
 const ConsoleNotificationsRoute: Component = () => <ConsoleNotifications />
@@ -87,11 +89,18 @@ const menu = (code: string, Component: Component<{ children?: JSX.Element }>) =>
   </Suspense>
 )
 
-export const RootLayoutRoute: Component<{ children?: JSX.Element }> = (props) => (
-  <Suspense fallback={<Loading />}>
-    <RootLayout>{props.children}</RootLayout>
-  </Suspense>
-)
+export const RootLayoutRoute: Component<{ children?: JSX.Element }> = (props) => {
+  const location = useLocation()
+  const path = () => appPath(location.pathname)
+
+  return (
+    <Suspense fallback={<Loading />}>
+      <Show when={path() !== "/"} fallback={props.children}>
+        <RootLayout>{props.children}</RootLayout>
+      </Show>
+    </Suspense>
+  )
+}
 
 interface RouteConfig {
   path: string
@@ -110,7 +119,7 @@ export function renderRoutes(routes: RouteConfig[]) {
 }
 
 export const routeConfig: RouteConfig[] = [
-  { path: "/", component: () => <Navigate href="/store" /> },
+  { path: "/", component: LandingHome },
   {
     path: "/workspace",
     component: WorkspaceLayout,

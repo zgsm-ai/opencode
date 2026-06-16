@@ -11,6 +11,9 @@ import { useDeviceWorkspace } from "@/context/device-workspace"
 import { useLanguage } from "@/context/language"
 import { SessionQrCodeContent } from "./session-qrcode-dialog"
 import { isMobile } from "@/lib/mobile"
+import { env } from "@/lib/env"
+
+const mobile = `${(env.BASE_PATH || "").replace(/\/+$/, "")}/workspace/mobile.svg`
 
 export type HeaderState = {
   viewingStack: () => { id: string; name: string }[]
@@ -79,10 +82,12 @@ export function DeviceSessionViewHeader(props: { state: HeaderState }) {
           <Show when={!s.viewingSessionID() && !isMobile()}>
             <Show when={s.mobileUrl()}>
               <Tooltip value={language.t("session.qrcode.title")} placement="bottom">
-                <IconButton
-                  icon="scan-qr-code"
-                  variant="ghost"
-                  iconSize="small"
+                <button
+                  type="button"
+                  data-component="icon-button"
+                  data-icon="mobile"
+                  data-size="normal"
+                  data-variant="ghost"
                   class="size-6 rounded-md"
                   aria-label={language.t("session.qrcode.title")}
                   onClick={() => {
@@ -93,7 +98,9 @@ export function DeviceSessionViewHeader(props: { state: HeaderState }) {
                       />
                     ))
                   }}
-                />
+                >
+                  <img src={mobile} alt="" aria-hidden="true" class="size-5" />
+                </button>
               </Tooltip>
             </Show>
             <DropdownMenu gutter={4} placement="bottom-end">

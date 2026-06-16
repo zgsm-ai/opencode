@@ -1,3 +1,4 @@
+import { useLocation } from "@solidjs/router"
 import { type JSX, Show } from "solid-js"
 import { Sun, Moon } from "lucide-solid"
 import { Icon } from "@opencode-ai/ui/icon"
@@ -8,15 +9,18 @@ import { useTheme } from "@opencode-ai/ui/theme"
 import AvatarDisplay from "@/components/avatar-display"
 import { type Locale, useLanguage } from "@/context/language"
 import { useAuth } from "@/context/auth"
+import { appPath } from "@/lib/router"
 
 export function UserMenuContent() {
   const { user, logout } = useAuth()
   const language = useLanguage()
   const theme = useTheme()
+  const location = useLocation()
 
   const displayName = () => user()?.name || user()?.preferred_username || user()?.email || ""
   const username = () => user()?.preferred_username || user()?.email || user()?.name || ""
   const subjectId = () => user()?.subjectId || user()?.id || ""
+  const landing = () => appPath(location.pathname) === "/"
   const languageOptions: Locale[] = ["zh", "en"]
 
   const isDarkMode = () => {
@@ -65,19 +69,21 @@ export function UserMenuContent() {
         />
       </div>
       <DropdownMenu.Separator class="my-0 mx-0" />
-      <div class="px-2 py-1.5 flex items-center justify-between gap-3">
-        <span class="text-12-medium leading-none text-text-strong">{language.t("settings.general.row.appearance.title")}</span>
-        <button
-          type="button"
-          data-action="user-menu-color-scheme"
-          onClick={() => theme.setColorScheme(isDarkMode() ? "light" : "dark")}
-          class="flex size-7 items-center justify-center rounded-md transition-colors hover:bg-[var(--native-surface)] text-[var(--native-dim)] hover:text-[var(--native-foreground)]"
-          aria-label={isDarkMode() ? language.t("theme.scheme.light") : language.t("theme.scheme.dark")}
-        >
-          {isDarkMode() ? <Sun size={16} /> : <Moon size={16} />}
-        </button>
-      </div>
-      <DropdownMenu.Separator class="my-0 mx-0" />
+      <Show when={!landing()}>
+        <div class="px-2 py-1.5 flex items-center justify-between gap-3">
+          <span class="text-12-medium leading-none text-text-strong">{language.t("settings.general.row.appearance.title")}</span>
+          <button
+            type="button"
+            data-action="user-menu-color-scheme"
+            onClick={() => theme.setColorScheme(isDarkMode() ? "light" : "dark")}
+            class="flex size-7 items-center justify-center rounded-md transition-colors hover:bg-[var(--native-surface)] text-[var(--native-dim)] hover:text-[var(--native-foreground)]"
+            aria-label={isDarkMode() ? language.t("theme.scheme.light") : language.t("theme.scheme.dark")}
+          >
+            {isDarkMode() ? <Sun size={16} /> : <Moon size={16} />}
+          </button>
+        </div>
+        <DropdownMenu.Separator class="my-0 mx-0" />
+      </Show>
       <div
         class="mt-1 px-2 py-1.5 flex items-center justify-between gap-3 cursor-pointer transition-colors rounded-sm hover:bg-accent"
         onClick={logout}

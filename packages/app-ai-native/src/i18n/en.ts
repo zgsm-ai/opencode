@@ -2101,6 +2101,15 @@ export const dict = {
   "workspace.home.proTip.status": "Check service status",
   "workspace.home.proTip.stop": "Stop the service",
 
+  "landing.title": "Enterprise AI Coding Platform",
+  "landing.subtitle": "Unify devices, team knowledge, and AI sessions to make enterprise development manageable, reusable, and take-over ready",
+  "landing.workspace.title": "Workspace",
+  "landing.workspace.description": "Connect devices, choose working directories, and start real development tasks",
+  "landing.knowledge.title": "Knowledge Center",
+  "landing.knowledge.description": "Accumulate knowledge, R&D standards, and Skills to provide reusable capabilities for your team",
+  "landing.dashboard.title": "Efficiency Dashboard",
+  "landing.dashboard.description": "View team usage and R&D efficiency, driving continuous improvement with data",
+
   // ── Kanban ──
   "kanban.back": "Back to Dashboard",
   "kanban.home.title": "AI Coding Dashboard",
