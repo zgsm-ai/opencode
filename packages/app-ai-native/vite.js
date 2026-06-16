@@ -49,6 +49,7 @@ export default [
       globPatterns: ["**/*.{js,css,html,svg,png,ico,woff,woff2,ttf}"],
       globIgnores: ["**/index.html"],
       navigateFallback: null,
+      maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // allow landing page assets (~4.6 MB PNG/SVGs) to be precached
     },
   }),
 ]
