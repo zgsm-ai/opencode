@@ -14,12 +14,15 @@ import { DeviceLocalProvider } from "@/context/device-local"
 import { DirectoryContext } from "@/context/directory"
 import { LayoutContext } from "@/context/layout"
 import { ContentTabContext, createContentTabStore, useContentTabs } from "@/context/content-tabs"
-import { DeviceSessionProvider } from "@/context/device-session"
+import { DeviceSessionStoreProvider } from "@/context/device-session"
+import { SessionTabProvider, useSessionTab } from "@/context/session-tab"
+import { DeviceSessionView } from "../components/device-session-view"
+import { DeviceSessionViewHeader } from "../components/device-session-view-header"
+import { DeviceSessionChatProvider } from "@/context/device-session-chat"
 import { useDeviceWorkspace } from "@/context/device-workspace"
 import { createSdkForServer } from "@/utils/server"
 import { useDeviceLayout } from "../components/device-interface"
 import { getProxyUrl } from "../lib/url"
-import { DeviceSessionTab } from "../components/device-session-tab"
 import { SessionListPanel } from "../components/session-list"
 import { workspaceKey } from "@/lib/workspace-key"
 import { shouldRestore, activeSession } from "../components/workspace-content-layout-sync"
@@ -99,23 +102,43 @@ function MobileDeviceLayoutProvider(props: ParentProps<{ deviceLayout: ReturnTyp
   return <LayoutContext.Provider value={value}>{props.children}</LayoutContext.Provider>
 }
 
+function MobileSessionAdapter(props: { tabId: string; sessionID?: string }) {
+  const sessionTab = useSessionTab()
+  const tabStore = useContentTabs()
+  const title = createMemo(() => tabStore.tabs().find((t) => t.id === props.tabId)?.title)
+  return (
+    <DeviceSessionChatProvider>
+      <DeviceSessionView
+        sessionID={props.sessionID}
+        createdSessionID={sessionTab.createdSessionID}
+        title={title}
+        onSessionCreated={sessionTab.replaceTab}
+        onClose={() => tabStore.close(props.tabId)}
+        header={(state) => <DeviceSessionViewHeader state={state} />}
+      />
+    </DeviceSessionChatProvider>
+  )
+}
+
 function MobileContentTabPanel() {
   const tabStore = useContentTabs()
 
   return (
-    <For each={tabStore.tabs()}>
+    <DeviceSessionStoreProvider>
+      <For each={tabStore.tabs()}>
       {(tab) => (
         <Show when={tabStore.activeId() === tab.id}>
           <div class="flex-1 min-h-0 h-full">
             <Show when={tab.kind === "session"}>
-              <DeviceSessionProvider sessionID={(tab.meta as any)?.sessionID}>
-                <DeviceSessionTab tabId={tab.id} />
-              </DeviceSessionProvider>
+              <SessionTabProvider tabId={tab.id} sessionID={(tab.meta as any)?.sessionID}>
+                <MobileSessionAdapter tabId={tab.id} sessionID={(tab.meta as any)?.sessionID} />
+              </SessionTabProvider>
             </Show>
           </div>
         </Show>
       )}
     </For>
+    </DeviceSessionStoreProvider>
   )
 }
 

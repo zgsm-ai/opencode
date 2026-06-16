@@ -1563,6 +1563,20 @@ PART_MAPPING["reasoning"] = function ReasoningPartDisplay(props) {
   )
 }
 
+type FilteredMeta = {
+  strategy?: string
+  reason?: string
+  toolName?: string
+  originalSize?: number
+}
+
+function getFilteredMeta(metadata: Record<string, unknown> | undefined): FilteredMeta | null {
+  if (metadata && typeof metadata === "object" && "_filtered" in metadata) {
+    return metadata._filtered as FilteredMeta
+  }
+  return null
+}
+
 ToolRegistry.register({
   name: "read",
   render(props) {
@@ -1577,6 +1591,7 @@ ToolRegistry.register({
       if (!value || !Array.isArray(value)) return []
       return value.filter((p): p is string => typeof p === "string")
     })
+    const filtered = createMemo(() => getFilteredMeta(props.metadata))
     return (
       <>
         <BasicTool
@@ -1587,17 +1602,31 @@ ToolRegistry.register({
             subtitle: props.input.filePath ? getFilename(props.input.filePath) : "",
             args,
           }}
-        />
-        <For each={loaded()}>
-          {(filepath) => (
-            <div data-component="tool-loaded-file">
-              <Icon name="enter" size="small" />
-              <span>
-                {i18n.t("ui.tool.loaded")} {relativizeProjectPath(filepath, data.directory)}
-              </span>
-            </div>
-          )}
-        </For>
+        >
+          <Show when={filtered()} keyed>
+            {(f) => (
+              <div data-component="tool-filtered-output">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                <span>{i18n.t("ui.messagePart.toolFiltered.label")}</span>
+                <Show when={f.originalSize}>
+                  <span data-slot="tool-filtered-size">{i18n.t("ui.messagePart.toolFiltered.originalSize", { size: f.originalSize! })}</span>
+                </Show>
+              </div>
+            )}
+          </Show>
+        </BasicTool>
+        <Show when={!filtered()}>
+          <For each={loaded()}>
+            {(filepath) => (
+              <div data-component="tool-loaded-file">
+                <Icon name="enter" size="small" />
+                <span>
+                  {i18n.t("ui.tool.loaded")} {relativizeProjectPath(filepath, data.directory)}
+                </span>
+              </div>
+            )}
+          </For>
+        </Show>
       </>
     )
   },
@@ -1607,13 +1636,25 @@ ToolRegistry.register({
   name: "list",
   render(props) {
     const i18n = useI18n()
+    const filtered = createMemo(() => getFilteredMeta(props.metadata))
     return (
       <BasicTool
         {...props}
         icon="bullet-list"
         trigger={{ title: i18n.t("ui.tool.list"), subtitle: getDirectory(props.input.path || "/") }}
       >
-        <Show when={props.output}>
+        <Show when={filtered()} keyed>
+          {(f) => (
+            <div data-component="tool-filtered-output">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              <span>{i18n.t("ui.messagePart.toolFiltered.label")}</span>
+              <Show when={f.originalSize}>
+                <span data-slot="tool-filtered-size">{i18n.t("ui.messagePart.toolFiltered.originalSize", { size: f.originalSize! })}</span>
+              </Show>
+            </div>
+          )}
+        </Show>
+        <Show when={!filtered() && props.output}>
           <div data-component="tool-output" data-scrollable>
             <Markdown text={props.output!} />
           </div>
@@ -1627,6 +1668,7 @@ ToolRegistry.register({
   name: "glob",
   render(props) {
     const i18n = useI18n()
+    const filtered = createMemo(() => getFilteredMeta(props.metadata))
     return (
       <BasicTool
         {...props}
@@ -1637,7 +1679,18 @@ ToolRegistry.register({
           args: props.input.pattern ? ["pattern=" + props.input.pattern] : [],
         }}
       >
-        <Show when={props.output}>
+        <Show when={filtered()} keyed>
+          {(f) => (
+            <div data-component="tool-filtered-output">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              <span>{i18n.t("ui.messagePart.toolFiltered.label")}</span>
+              <Show when={f.originalSize}>
+                <span data-slot="tool-filtered-size">{i18n.t("ui.messagePart.toolFiltered.originalSize", { size: f.originalSize! })}</span>
+              </Show>
+            </div>
+          )}
+        </Show>
+        <Show when={!filtered() && props.output}>
           <div data-component="tool-output" data-scrollable>
             <Markdown text={props.output!} />
           </div>
@@ -1654,6 +1707,7 @@ ToolRegistry.register({
     const args: string[] = []
     if (props.input.pattern) args.push("pattern=" + props.input.pattern)
     if (props.input.include) args.push("include=" + props.input.include)
+    const filtered = createMemo(() => getFilteredMeta(props.metadata))
     return (
       <BasicTool
         {...props}
@@ -1664,7 +1718,18 @@ ToolRegistry.register({
           args,
         }}
       >
-        <Show when={props.output}>
+        <Show when={filtered()} keyed>
+          {(f) => (
+            <div data-component="tool-filtered-output">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              <span>{i18n.t("ui.messagePart.toolFiltered.label")}</span>
+              <Show when={f.originalSize}>
+                <span data-slot="tool-filtered-size">{i18n.t("ui.messagePart.toolFiltered.originalSize", { size: f.originalSize! })}</span>
+              </Show>
+            </div>
+          )}
+        </Show>
+        <Show when={!filtered() && props.output}>
           <div data-component="tool-output" data-scrollable>
             <Markdown text={props.output!} />
           </div>
@@ -1679,6 +1744,7 @@ ToolRegistry.register({
   render(props) {
     const i18n = useI18n()
     const pending = createMemo(() => props.status === "pending" || props.status === "running")
+    const filtered = createMemo(() => getFilteredMeta(props.metadata))
     const url = createMemo(() => {
       const value = props.input.url
       if (typeof value !== "string") return ""
@@ -1687,7 +1753,7 @@ ToolRegistry.register({
     return (
       <BasicTool
         {...props}
-        hideDetails
+        hideDetails={filtered() ? false : undefined}
         icon="download"
         trigger={
           <div data-slot="basic-tool-tool-info-structured">
@@ -1708,14 +1774,26 @@ ToolRegistry.register({
                 </a>
               </Show>
             </div>
-            <Show when={!pending() && url()}>
+            <Show when={!pending() && url() && !filtered()}>
               <div data-component="tool-action">
                 <Icon name="square-arrow-top-right" size="small" />
               </div>
             </Show>
           </div>
         }
-      />
+      >
+        <Show when={filtered()} keyed>
+          {(f) => (
+            <div data-component="tool-filtered-output">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              <span>{i18n.t("ui.messagePart.toolFiltered.label")}</span>
+              <Show when={f.originalSize}>
+                <span data-slot="tool-filtered-size">{i18n.t("ui.messagePart.toolFiltered.originalSize", { size: f.originalSize! })}</span>
+              </Show>
+            </div>
+          )}
+        </Show>
+      </BasicTool>
     )
   },
 })
@@ -1729,6 +1807,7 @@ ToolRegistry.register({
       if (typeof value !== "string") return ""
       return value
     })
+    const filtered = createMemo(() => getFilteredMeta(props.metadata))
 
     return (
       <BasicTool
@@ -1740,7 +1819,20 @@ ToolRegistry.register({
           subtitleClass: "exa-tool-query",
         }}
       >
-        <ExaOutput output={props.output} />
+        <Show when={filtered()} keyed>
+          {(f) => (
+            <div data-component="tool-filtered-output">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              <span>{i18n.t("ui.messagePart.toolFiltered.label")}</span>
+              <Show when={f.originalSize}>
+                <span data-slot="tool-filtered-size">{i18n.t("ui.messagePart.toolFiltered.originalSize", { size: f.originalSize! })}</span>
+              </Show>
+            </div>
+          )}
+        </Show>
+        <Show when={!filtered()}>
+          <ExaOutput output={props.output} />
+        </Show>
       </BasicTool>
     )
   },
@@ -1755,6 +1847,7 @@ ToolRegistry.register({
       if (typeof value !== "string") return ""
       return value
     })
+    const filtered = createMemo(() => getFilteredMeta(props.metadata))
 
     return (
       <BasicTool
@@ -1766,7 +1859,20 @@ ToolRegistry.register({
           subtitleClass: "exa-tool-query",
         }}
       >
-        <ExaOutput output={props.output} />
+        <Show when={filtered()} keyed>
+          {(f) => (
+            <div data-component="tool-filtered-output">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              <span>{i18n.t("ui.messagePart.toolFiltered.label")}</span>
+              <Show when={f.originalSize}>
+                <span data-slot="tool-filtered-size">{i18n.t("ui.messagePart.toolFiltered.originalSize", { size: f.originalSize! })}</span>
+              </Show>
+            </div>
+          )}
+        </Show>
+        <Show when={!filtered()}>
+          <ExaOutput output={props.output} />
+        </Show>
       </BasicTool>
     )
   },
@@ -1791,6 +1897,7 @@ ToolRegistry.register({
       return childSessionId()
     })
     const callID = () => (props as any).callID as string | undefined
+    const filtered = createMemo(() => getFilteredMeta(props.metadata))
 
     const progress = createMemo<string[]>(() => {
       const cid = callID()
@@ -1837,8 +1944,20 @@ ToolRegistry.register({
     const showProgress = createMemo(() => running() && progress().length > 0)
     return (
       <>
-        <BasicTool icon="bot" status={props.status} trigger={trigger()} hideDetails />
-        <Show when={showProgress()}>
+        <BasicTool icon="bot" status={props.status} trigger={trigger()} hideDetails={filtered() ? false : undefined}>
+          <Show when={filtered()} keyed>
+            {(f) => (
+              <div data-component="tool-filtered-output">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                <span>{i18n.t("ui.messagePart.toolFiltered.label")}</span>
+                <Show when={f.originalSize}>
+                  <span data-slot="tool-filtered-size">{i18n.t("ui.messagePart.toolFiltered.originalSize", { size: f.originalSize! })}</span>
+                </Show>
+              </div>
+            )}
+          </Show>
+        </BasicTool>
+        <Show when={showProgress() && !filtered()}>
           <div data-component="task-progress" style={{ "margin-left": "24px" }}>
             <For each={progress()}>
               {(item) => (
@@ -1864,10 +1983,12 @@ ToolRegistry.register({
     const i18n = useI18n()
     const pending = () => props.status === "pending" || props.status === "running"
     const sawPending = pending()
+    const filtered = createMemo(() => getFilteredMeta(props.metadata))
+    const cmd = () => props.input.command ?? props.metadata.command ?? ""
     const text = createMemo(() => {
-      const cmd = props.input.command ?? props.metadata.command ?? ""
+      const c = cmd()
       const out = stripAnsi(props.output || props.metadata.output || "")
-      return `$ ${cmd}${out ? "\n\n" + out : ""}`
+      return `$ ${c}${out ? "\n\n" + out : ""}`
     })
     const [copied, setCopied] = createSignal(false)
 
@@ -1915,7 +2036,23 @@ ToolRegistry.register({
           </div>
           <div data-slot="bash-scroll" data-scrollable>
             <pre data-slot="bash-pre">
-              <code>{text()}</code>
+              <Show when={filtered()} keyed>
+                {(f) => (
+                  <>
+                    <code>{`$ ${cmd()}`}</code>
+                    <div data-component="tool-filtered-output">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                      <span>{i18n.t("ui.messagePart.toolFiltered.label")}</span>
+                      <Show when={f.originalSize}>
+                        <span data-slot="tool-filtered-size">{i18n.t("ui.messagePart.toolFiltered.originalSize", { size: f.originalSize! })}</span>
+                      </Show>
+                    </div>
+                  </>
+                )}
+              </Show>
+              <Show when={!filtered()}>
+                <code>{text()}</code>
+              </Show>
             </pre>
           </div>
         </div>
@@ -1939,6 +2076,7 @@ ToolRegistry.register({
     const path = createMemo(() => props.metadata?.filediff?.file || props.input.filePath || "")
     const filename = () => getFilename(props.input.filePath ?? "")
     const pending = () => props.status === "pending" || props.status === "running"
+    const filtered = createMemo(() => getFilteredMeta(props.metadata))
     return (
       <div data-component="edit-tool">
         <BasicTool
@@ -1963,14 +2101,25 @@ ToolRegistry.register({
                 </Show>
               </div>
               <div data-slot="message-part-actions">
-                <Show when={props.metadata.filediff}>
+                <Show when={!filtered() && props.metadata.filediff}>
                   <DiffChanges changes={props.metadata.filediff} />
                 </Show>
               </div>
             </div>
           }
         >
-          <Show when={path()}>
+          <Show when={filtered()} keyed>
+            {(f) => (
+              <div data-component="tool-filtered-output">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                <span>{i18n.t("ui.messagePart.toolFiltered.label")}</span>
+                <Show when={f.originalSize}>
+                  <span data-slot="tool-filtered-size">{i18n.t("ui.messagePart.toolFiltered.originalSize", { size: f.originalSize! })}</span>
+                </Show>
+              </div>
+            )}
+          </Show>
+          <Show when={!filtered() && path()}>
             <ToolFileAccordion
               path={path()}
               actions={
@@ -1995,7 +2144,9 @@ ToolRegistry.register({
               </div>
             </ToolFileAccordion>
           </Show>
-          <DiagnosticsDisplay diagnostics={diagnostics()} />
+          <Show when={!filtered()}>
+            <DiagnosticsDisplay diagnostics={diagnostics()} />
+          </Show>
         </BasicTool>
       </div>
     )
@@ -2011,6 +2162,7 @@ ToolRegistry.register({
     const path = createMemo(() => props.input.filePath || "")
     const filename = () => getFilename(props.input.filePath ?? "")
     const pending = () => props.status === "pending" || props.status === "running"
+    const filtered = createMemo(() => getFilteredMeta(props.metadata))
     return (
       <div data-component="write-tool">
         <BasicTool
@@ -2038,7 +2190,18 @@ ToolRegistry.register({
             </div>
           }
         >
-          <Show when={props.input.content && path()}>
+          <Show when={filtered()} keyed>
+            {(f) => (
+              <div data-component="tool-filtered-output">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                <span>{i18n.t("ui.messagePart.toolFiltered.label")}</span>
+                <Show when={f.originalSize}>
+                  <span data-slot="tool-filtered-size">{i18n.t("ui.messagePart.toolFiltered.originalSize", { size: f.originalSize! })}</span>
+                </Show>
+              </div>
+            )}
+          </Show>
+          <Show when={!filtered() && props.input.content && path()}>
             <ToolFileAccordion path={path()}>
               <div data-component="write-content">
                 <Dynamic
@@ -2054,7 +2217,9 @@ ToolRegistry.register({
               </div>
             </ToolFileAccordion>
           </Show>
-          <DiagnosticsDisplay diagnostics={diagnostics()} />
+          <Show when={!filtered()}>
+            <DiagnosticsDisplay diagnostics={diagnostics()} />
+          </Show>
         </BasicTool>
       </div>
     )
@@ -2068,6 +2233,7 @@ ToolRegistry.register({
     const fileComponent = useFileComponent()
     const files = createMemo(() => patchFiles(props.metadata.files))
     const pending = createMemo(() => props.status === "pending" || props.status === "running")
+    const filtered = createMemo(() => getFilteredMeta(props.metadata))
     const single = createMemo(() => {
       const list = files()
       if (list.length !== 1) return
@@ -2090,6 +2256,16 @@ ToolRegistry.register({
       return `${count} ${i18n.t(count > 1 ? "ui.common.file.other" : "ui.common.file.one")}`
     })
 
+    const filteredOutput = (f: FilteredMeta) => (
+      <div data-component="tool-filtered-output">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        <span>{i18n.t("ui.messagePart.toolFiltered.label")}</span>
+        <Show when={f.originalSize}>
+          <span data-slot="tool-filtered-size">{i18n.t("ui.messagePart.toolFiltered.originalSize", { size: f.originalSize! })}</span>
+        </Show>
+      </div>
+    )
+
     return (
       <Show
         when={single()}
@@ -2104,7 +2280,10 @@ ToolRegistry.register({
                 subtitle: subtitle(),
               }}
             >
-              <Show when={files().length > 0}>
+              <Show when={filtered()} keyed>
+                {(f) => filteredOutput(f)}
+              </Show>
+              <Show when={!filtered() && files().length > 0}>
                 <Accordion
                   multiple
                   data-scope="apply-patch"
@@ -2209,42 +2388,47 @@ ToolRegistry.register({
                   </Show>
                 </div>
                 <div data-slot="message-part-actions">
-                  <Show when={!pending()}>
+                  <Show when={!filtered() && !pending()}>
                     <DiffChanges changes={{ additions: single()!.additions, deletions: single()!.deletions }} />
                   </Show>
                 </div>
               </div>
             }
           >
-            <ToolFileAccordion
-              path={single()!.relativePath}
-              actions={
-                <Switch>
-                  <Match when={single()!.type === "add"}>
-                    <span data-slot="apply-patch-change" data-type="added">
-                      {i18n.t("ui.patch.action.created")}
-                    </span>
-                  </Match>
-                  <Match when={single()!.type === "delete"}>
-                    <span data-slot="apply-patch-change" data-type="removed">
-                      {i18n.t("ui.patch.action.deleted")}
-                    </span>
-                  </Match>
-                  <Match when={single()!.type === "move"}>
-                    <span data-slot="apply-patch-change" data-type="modified">
-                      {i18n.t("ui.patch.action.moved")}
-                    </span>
-                  </Match>
-                  <Match when={true}>
-                    <DiffChanges changes={{ additions: single()!.additions, deletions: single()!.deletions }} />
-                  </Match>
-                </Switch>
-              }
-            >
-              <div data-component="apply-patch-file-diff">
-                <Dynamic component={fileComponent} mode="diff" fileDiff={single()!.view.fileDiff} />
-              </div>
-            </ToolFileAccordion>
+            <Show when={filtered()} keyed>
+              {(f) => filteredOutput(f)}
+            </Show>
+            <Show when={!filtered()}>
+              <ToolFileAccordion
+                path={single()!.relativePath}
+                actions={
+                  <Switch>
+                    <Match when={single()!.type === "add"}>
+                      <span data-slot="apply-patch-change" data-type="added">
+                        {i18n.t("ui.patch.action.created")}
+                      </span>
+                    </Match>
+                    <Match when={single()!.type === "delete"}>
+                      <span data-slot="apply-patch-change" data-type="removed">
+                        {i18n.t("ui.patch.action.deleted")}
+                      </span>
+                    </Match>
+                    <Match when={single()!.type === "move"}>
+                      <span data-slot="apply-patch-change" data-type="modified">
+                        {i18n.t("ui.patch.action.moved")}
+                      </span>
+                    </Match>
+                    <Match when={true}>
+                      <DiffChanges changes={{ additions: single()!.additions, deletions: single()!.deletions }} />
+                    </Match>
+                  </Switch>
+                }
+              >
+                <div data-component="apply-patch-file-diff">
+                  <Dynamic component={fileComponent} mode="diff" fileDiff={single()!.view.fileDiff} />
+                </div>
+              </ToolFileAccordion>
+            </Show>
           </BasicTool>
         </div>
       </Show>
@@ -2354,6 +2538,7 @@ ToolRegistry.register({
     const i18n = useI18n()
     const title = createMemo(() => props.input.name || i18n.t("ui.tool.skill"))
     const running = createMemo(() => props.status === "pending" || props.status === "running")
+    const filtered = createMemo(() => getFilteredMeta(props.metadata))
 
     const titleContent = () => <TextShimmer text={title()} active={running()} />
 
@@ -2367,6 +2552,20 @@ ToolRegistry.register({
       </div>
     )
 
-    return <BasicTool icon="brain" status={props.status} trigger={trigger()} hideDetails />
+    return (
+      <BasicTool icon="brain" status={props.status} trigger={trigger()} hideDetails={filtered() ? false : undefined}>
+        <Show when={filtered()} keyed>
+          {(f) => (
+            <div data-component="tool-filtered-output">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              <span>{i18n.t("ui.messagePart.toolFiltered.label")}</span>
+              <Show when={f.originalSize}>
+                <span data-slot="tool-filtered-size">{i18n.t("ui.messagePart.toolFiltered.originalSize", { size: f.originalSize! })}</span>
+              </Show>
+            </div>
+          )}
+        </Show>
+      </BasicTool>
+    )
   },
 })

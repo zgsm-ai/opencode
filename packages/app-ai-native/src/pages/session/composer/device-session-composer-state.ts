@@ -2,41 +2,42 @@ import { createEffect, createMemo, on, onCleanup } from "solid-js"
 import { createStore } from "solid-js/store"
 import type { PermissionRequest, QuestionRequest, Todo } from "@opencode-ai/sdk/v2"
 import { showToast } from "@opencode-ai/ui/toast"
-import { useDeviceSDK } from "@/context/device-sdk"
-import { useDeviceWorkspace } from "@/context/device-workspace"
-import { useDeviceSession } from "@/context/device-session"
 import { useLanguage } from "@/context/language"
+import type { SessionChatBackend } from "@/context/session-chat"
 import { sessionPermissionRequest, sessionQuestionRequest } from "./session-request-tree"
 
-export function createDeviceSessionComposerState(options?: { closeMs?: number | (() => number) }) {
-  const device = useDeviceSDK()
-  const workspace = useDeviceWorkspace()
-  const session = useDeviceSession()
+type ComposerDeps = {
+  chat: SessionChatBackend
+  sessionID: () => string | undefined
+  todos: () => Todo[]
+  isAutoAccepting: () => boolean
+  enableAutoAccept: () => void
+}
+
+export function createDeviceSessionComposerState(deps: ComposerDeps, options?: { closeMs?: number | (() => number) }) {
   const language = useLanguage()
 
-  const todos = createMemo((): Todo[] => session.data.todos)
-
   const questionRequest = createMemo((): QuestionRequest | undefined => {
-    const sid = session.sessionID()
-    return sessionQuestionRequest(workspace.data.session, workspace.data.questions, sid)
+    const sid = deps.sessionID()
+    return sessionQuestionRequest(deps.chat.sessions(), deps.chat.questions(), sid)
   })
 
   const permissionRequest = createMemo((): PermissionRequest | undefined => {
-    const sid = session.sessionID()
-    return sessionPermissionRequest(workspace.data.session, workspace.data.permissions, sid, (item) => {
-      return !session.permission.isAutoAccepting()
+    const sid = deps.sessionID()
+    return sessionPermissionRequest(deps.chat.sessions(), deps.chat.permissions(), sid, () => {
+      return !deps.isAutoAccepting()
     })
   })
 
   const blocked = createMemo(() => {
-    const sid = session.sessionID()
+    const sid = deps.sessionID()
     if (!sid) return false
     return !!permissionRequest() || !!questionRequest()
   })
 
   const [store, setStore] = createStore({
     responding: undefined as string | undefined,
-    dock: todos().length > 0,
+    dock: deps.todos().length > 0,
     closing: false,
     opening: false,
   })
@@ -52,16 +53,13 @@ export function createDeviceSessionComposerState(options?: { closeMs?: number | 
     if (!perm) return
     if (store.responding === perm.id) return
 
-    const sid = session.sessionID()
+    const sid = deps.sessionID()
     setStore("responding", perm.id)
-    device.client.permission
-      .respond(perm.id, {
-        decision: response,
-      })
+    deps.chat.permissionRespond(perm.id, response)
       .catch((err: unknown) => {
         const description = err instanceof Error ? err.message : String(err)
         showToast({ title: language.t("common.requestFailed"), description })
-        if (sid) workspace.session.removePermission(sid, perm.id)
+        if (sid) deps.chat.removePermission(sid, perm.id)
       })
       .finally(() => {
         setStore("responding", (id) => (id === perm.id ? undefined : id))
@@ -69,28 +67,23 @@ export function createDeviceSessionComposerState(options?: { closeMs?: number | 
   }
 
   const autoAccept = () => {
-    // Enable auto-accept first so any newly-arriving permissions
-    // are caught by the permission.asked websocket handler.
-    session.permission.enableAutoAccept()
+    deps.enableAutoAccept()
 
-    // Walk every queued permission across all sessions and respond.
-    // Use Object.entries to avoid sessionTreeIDs omitting any entries.
-    const perms = workspace.data.permissions
+    const perms = deps.chat.permissions()
     for (const [sessionID, list] of Object.entries(perms)) {
       if (!Array.isArray(list)) continue
       for (const perm of list) {
-        device.client.permission
-          .respond(perm.id, { decision: "once" })
+        deps.chat.permissionRespond(perm.id, "once")
           .catch(() => {})
           .finally(() => {
-            workspace.session.removePermission(sessionID, perm.id)
+            deps.chat.removePermission(sessionID, perm.id)
           })
       }
     }
   }
 
   const done = createMemo(
-    () => todos().length > 0 && todos().every((todo) => todo.status === "completed" || todo.status === "cancelled"),
+    () => deps.todos().length > 0 && deps.todos().every((todo) => todo.status === "completed" || todo.status === "cancelled"),
   )
 
   let timer: number | undefined
@@ -113,7 +106,7 @@ export function createDeviceSessionComposerState(options?: { closeMs?: number | 
 
   createEffect(
     on(
-      () => [todos().length, done()] as const,
+      () => [deps.todos().length, done()] as const,
       ([count, complete], prev) => {
         if (raf) cancelAnimationFrame(raf)
         raf = undefined
@@ -170,7 +163,7 @@ export function createDeviceSessionComposerState(options?: { closeMs?: number | 
     permissionResponding,
     decide,
     autoAccept,
-    todos,
+    todos: deps.todos,
     dock: () => store.dock,
     closing: () => store.closing,
     opening: () => store.opening,

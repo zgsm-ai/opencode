@@ -5,13 +5,13 @@
 // fields from the normalized single-server template `metadata` ({command,args,env,...}).
 //
 // The shared cross-layer contract with the backend is ONLY the key scheme
-// (`env:<NAME>` / `args:<INDEX>`): the backend mechanically substitutes by key and
-// does no detection. All detection lives here. See design.md §3.1–3.2.
+// (`env:<NAME>` / `args:<INDEX>` / `headers:<NAME>`): the backend mechanically
+// substitutes by key and does no detection. All detection lives here. See design.md §3.1–3.2.
 
 // One fillable field surfaced to the config dialog. `required` is always true in the
 // MVP (every detected placeholder must be filled to enable subscribe).
 export interface McpField {
-  key: string // "env:<NAME>" | "args:<INDEX>"
+  key: string // "env:<NAME>" | "args:<INDEX>" | "headers:<NAME>"
   label: string
   placeholder: string // the ORIGINAL placeholder string — carries semantics when label is generic
   required: true
@@ -34,6 +34,28 @@ const SECRET_RE = /(token|secret|key|password|passwd|pwd|api[_-]?key|access[_-]?
 const ALL_CAPS_SNAKE_RE = /^[A-Z][A-Z0-9]*(_[A-Z0-9]+)+$/
 const FLAG_RE = /^--?[A-Za-z]/
 const PATH_LIKE_RE = /\/|\.(py|js|ts|sh|rb|jar|exe|cjs|mjs)$/i
+
+// Variables the HOST resolves at run time (Claude Code plugin runtime), never the user.
+// A value whose only ${}/{{}} refs are runtime vars has nothing for the user to fill —
+// but it also means the MCP only works inside its parent plugin's runtime, so standalone
+// subscribe must be blocked (see mcpRequiresPluginRuntime).
+const RUNTIME_VAR_NAMES = new Set(["CLAUDE_PLUGIN_ROOT", "CLAUDE_PROJECT_DIR"])
+const VAR_REF_RE = /\$\{([^}]+)\}|\{\{([^}]+)\}\}/g
+
+// varRefs extracts the variable names referenced via ${NAME} / {{NAME}} in a value.
+function varRefs(v: string): string[] {
+  const names: string[] = []
+  for (const m of v.matchAll(VAR_REF_RE)) names.push((m[1] ?? m[2] ?? "").trim())
+  return names
+}
+
+// isRuntimeResolved reports whether a value references variables and ALL of them are
+// runtime-provided — i.e. it LOOKS like a placeholder but the user must not fill it.
+export function isRuntimeResolved(v: unknown): boolean {
+  if (typeof v !== "string") return false
+  const refs = varRefs(v)
+  return refs.length > 0 && refs.every((name) => RUNTIME_VAR_NAMES.has(name))
+}
 
 // isPlaceholder reports whether a config value still needs to be filled by the user.
 // True when it matches ANY known placeholder shape (design.md §3.2).
@@ -99,6 +121,7 @@ export function detectMcpFields(
   if (env && typeof env === "object" && !Array.isArray(env)) {
     for (const [name, raw] of Object.entries(env as Record<string, unknown>)) {
       if (typeof raw !== "string") continue
+      if (isRuntimeResolved(raw)) continue
       if (!isPlaceholder(raw)) continue
       const label = name
       fields.push({
@@ -115,6 +138,7 @@ export function detectMcpFields(
   if (args) {
     for (let i = 0; i < args.length; i++) {
       const raw = args[i]
+      if (isRuntimeResolved(raw)) continue
       if (!isPlaceholder(raw)) continue
       const label = argLabel(args, i, raw, labels)
       fields.push({
@@ -127,5 +151,44 @@ export function detectMcpFields(
     }
   }
 
+  // HTTP-type MCPs commonly carry auth in headers ("Authorization": "Bearer ${KEY}").
+  // Field key `headers:<HeaderName>`; label prefers the single referenced var name
+  // (GREPTILE_API_KEY) over the generic header name. The backend substitutes IN PLACE
+  // of the ${}/{{}} span(s), preserving literal prefixes like "Bearer ".
+  const headers = metadata.headers
+  if (headers && typeof headers === "object" && !Array.isArray(headers)) {
+    for (const [name, raw] of Object.entries(headers as Record<string, unknown>)) {
+      if (typeof raw !== "string") continue
+      if (isRuntimeResolved(raw)) continue
+      if (!isPlaceholder(raw)) continue
+      const refs = varRefs(raw)
+      const label = refs.length === 1 && refs[0] ? refs[0] : name
+      fields.push({
+        key: `headers:${name}`,
+        label,
+        placeholder: raw,
+        required: true,
+        secret: isSecret(label, raw) || isSecret(name, raw),
+      })
+    }
+  }
+
   return fields
+}
+
+// mcpRequiresPluginRuntime reports whether the template references runtime-provided
+// variables anywhere (command/url/args/env/headers). Such an MCP cannot run outside its
+// parent plugin's runtime, so standalone subscribe is blocked and the user is pointed at
+// the parent plugin instead.
+export function mcpRequiresPluginRuntime(metadata: Record<string, unknown> | null | undefined): boolean {
+  if (!metadata || typeof metadata !== "object") return false
+  const values: unknown[] = [metadata.command, metadata.url]
+  const args = asStringArray(metadata.args)
+  if (args) values.push(...args)
+  for (const group of [metadata.env, metadata.headers]) {
+    if (group && typeof group === "object" && !Array.isArray(group)) {
+      values.push(...Object.values(group as Record<string, unknown>))
+    }
+  }
+  return values.some((v) => typeof v === "string" && varRefs(v).some((name) => RUNTIME_VAR_NAMES.has(name)))
 }

@@ -51,6 +51,7 @@ function languageLabelForPath(path: string) {
 function ReadOnlyCodeMirror(props: {
   source: string
   path: string
+  wrap?: boolean
   onScrollToBottom?: () => void
   onCursorChange?: (payload: { line: number; column: number }) => void
   onLineCountChange?: (count: number) => void
@@ -60,6 +61,7 @@ function ReadOnlyCodeMirror(props: {
   const languageCompartment = new Compartment()
   const themeCompartment = new Compartment()
   const scrollCompartment = new Compartment()
+  const wrapCompartment = new Compartment()
 
   const theme = () =>
     EditorView.theme({
@@ -128,6 +130,7 @@ function ReadOnlyCodeMirror(props: {
           languageCompartment.of(languageExtensionForPath(props.path)),
           syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
           themeCompartment.of(theme()),
+          wrapCompartment.of(props.wrap ? EditorView.lineWrapping : []),
           scrollCompartment.of(EditorView.updateListener.of((update) => {
             if (update.viewportChanged || update.geometryChanged) {
               const scroller = update.view.scrollDOM
@@ -186,6 +189,11 @@ function ReadOnlyCodeMirror(props: {
     })
   })
 
+  createEffect(() => {
+    if (!view) return
+    view.dispatch({ effects: wrapCompartment.reconfigure(props.wrap ? EditorView.lineWrapping : []) })
+  })
+
   onCleanup(() => view?.destroy())
 
   return <div ref={root} class="min-h-0 flex-1 select-text" />
@@ -196,6 +204,7 @@ export function FilePreviewTab(props: { tab: ContentTab }) {
   const language = useLanguage()
   const directory = useDirectory()
   const [preview, setPreview] = createSignal(true)
+  const [wrap, setWrap] = createSignal(true)
   const [cursorLine, setCursorLine] = createSignal(1)
   const [cursorCol, setCursorCol] = createSignal(1)
   const [totalLines, setTotalLines] = createSignal(0)
@@ -217,6 +226,7 @@ export function FilePreviewTab(props: { tab: ContentTab }) {
     return file.get(p)
   })
   const contents = createMemo(() => (state()?.content as { content?: string } | undefined)?.content ?? "")
+  const filtered = createMemo(() => state()?.filtered)
   const chunk = createMemo(() => state()?.chunk)
   const meta = createMemo(() => state()?.meta)
   const loadedLines = createMemo(() => {
@@ -275,8 +285,7 @@ export function FilePreviewTab(props: { tab: ContentTab }) {
 
   const markdownPreviewEnabled = createMemo(() => {
     if (!md()) return false
-    if (hasMore()) return false
-    return (chunk()?.totalLines ?? 0) <= filePreviewConfig.largeMarkdownLineThreshold || !chunk()
+    return !hasMore()
   })
 
   const canAutoLoadMore = createMemo(() => hasMore() && loadedLines() < filePreviewConfig.autoLoadMoreMaxLines)
@@ -338,6 +347,19 @@ export function FilePreviewTab(props: { tab: ContentTab }) {
       <Show when={relativePath()}>
         <div class="shrink-0 h-8 flex items-center gap-0.5 px-3 border-b bg-background-base z-10 text-12-medium text-text-weak truncate">
           <span class="truncate flex-1 min-w-0">{relativePath()}</span>
+          <Tooltip
+            value={wrap() ? language.t("workspace.content.disableWrap") : language.t("workspace.content.enableWrap")}
+            placement="bottom"
+          >
+            <button
+              class="shrink-0 ml-2 flex items-center justify-center h-5 w-5 rounded-md hover:bg-background-stronger transition-colors text-text-weak"
+              classList={{ "border border-border-base": wrap() }}
+              style={{ "font-size": "10px", "font-weight": "600" }}
+              onClick={() => setWrap((w) => !w)}
+            >
+              W
+            </button>
+          </Tooltip>
           <Show when={md()}>
             <Tooltip
               value={markdownPreviewEnabled()
@@ -362,6 +384,27 @@ export function FilePreviewTab(props: { tab: ContentTab }) {
         </div>
       </Show>
       <Switch>
+        <Match when={filtered()}>
+          {(f) => (
+            <div class="flex-1 flex flex-col items-center justify-center gap-3 text-text-weak">
+              <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              <div class="text-14-medium">
+                {f().reason === "RUNTIME_FILE_DISABLED"
+                  ? language.t("file.preview.runtimeDisabled.title")
+                  : language.t("file.preview.filtered.title")}
+              </div>
+              <Show when={f().reason === "RUNTIME_FILE_DISABLED"}>
+                <div class="text-12-regular">{language.t("file.preview.runtimeDisabled.description")}</div>
+              </Show>
+              <Show when={f().path}>
+                <div class="text-12-regular font-mono">{f().path}</div>
+              </Show>
+              <Show when={f().originalSize}>
+                <div class="text-12-regular">{language.t("file.preview.filtered.size", { size: f().originalSize! })}</div>
+              </Show>
+            </div>
+          )}
+        </Match>
         <Match when={state()?.loaded}>
           <ScrollView class="flex-1 min-h-0" viewportRef={(el) => { viewportEl = el }}>
             <Show
@@ -370,6 +413,7 @@ export function FilePreviewTab(props: { tab: ContentTab }) {
                 <ReadOnlyCodeMirror
                   source={contents()}
                   path={path() ?? ""}
+                  wrap={wrap()}
                   onScrollToBottom={() => {
                     if (canAutoLoadMore() && !loadingMore()) {
                       const now = Date.now()
@@ -442,7 +486,7 @@ export function FilePreviewTab(props: { tab: ContentTab }) {
         </Match>
         <Match when={state()?.errorKey || state()?.error}>
           <div class="flex-1 flex items-center justify-center text-text-weak text-14-regular">
-            {state()?.errorKey ? language.t(state()!.errorKey!) : state()?.error}
+            {state()?.errorKey ? language.t(state()!.errorKey!) : String(state()?.error ?? "")}
           </div>
         </Match>
       </Switch>

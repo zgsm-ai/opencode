@@ -496,6 +496,7 @@ function DeviceLayoutProvider(props: ParentProps<{ deviceLayout: ReturnType<type
 function WorkspaceContent(props: ParentProps) {
   const params = useParams()
   const workspace = useWorkspace()
+  const navigate = useNavigate()
 
   createEffect(() => {
     const id = params.workspaceID
@@ -503,6 +504,33 @@ function WorkspaceContent(props: ParentProps) {
     if (workspace.closedWorkspaceIds().includes(id)) return
     if (!workspace.enabledWorkspaceIds().includes(id)) workspace.enableWorkspace(id)
   })
+
+  const handleWorkspaceSwitch = (e: KeyboardEvent) => {
+    if (!e.ctrlKey) return
+    if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return
+    const target = e.target as HTMLElement
+    if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return
+    e.preventDefault()
+
+    const allWorkspaces = workspace.workspaces()
+    const enabledSet = new Set(workspace.enabledWorkspaceIds())
+    const orderedIds = allWorkspaces.filter((w) => enabledSet.has(w.id)).map((w) => w.id)
+    if (orderedIds.length <= 1) return
+
+    const currentId = params.workspaceID
+    if (!currentId) return
+
+    const currentIdx = orderedIds.indexOf(currentId)
+    if (currentIdx === -1) return
+
+    const nextIdx = e.key === "ArrowDown"
+      ? (currentIdx + 1) % orderedIds.length
+      : (currentIdx - 1 + orderedIds.length) % orderedIds.length
+
+    navigate(`/workspace/${orderedIds[nextIdx]}`)
+  }
+  document.addEventListener("keydown", handleWorkspaceSwitch)
+  onCleanup(() => document.removeEventListener("keydown", handleWorkspaceSwitch))
 
   const [transitionState, setTransitionState] = createSignal<{
     direction: "up" | "down"

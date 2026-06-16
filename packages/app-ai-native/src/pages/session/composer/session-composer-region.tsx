@@ -5,11 +5,11 @@ import { useWorkspaceVisible } from "@/pages/workspace/components/layout"
 import { PromptInput } from "@/components/prompt-input"
 import { useLanguage } from "@/context/language"
 import { usePrompt } from "@/context/prompt"
-import { useDeviceSession } from "@/context/device-session"
 import { getSessionHandoff, setSessionHandoff } from "@/pages/session/handoff"
 import { SessionPermissionDock } from "@/pages/session/composer/session-permission-dock"
 import { SessionQuestionDock } from "@/pages/session/composer/session-question-dock"
 import type { SessionComposerState } from "@/pages/session/composer/session-composer-state"
+import { StatusDisplay } from "@/pages/session/composer/session-status-display"
 import { SessionTodoDock } from "@/pages/session/composer/session-todo-dock"
 
 export function SessionComposerRegion(props: {
@@ -41,13 +41,13 @@ export function SessionComposerRegion(props: {
   countWidthDuration?: number
   hideAttachButton?: boolean
   hidePrompt?: boolean
+  compact?: boolean
   working?: boolean
   busySince?: number
   hiddenSeed?: () => string | undefined
 }) {
   const prompt = usePrompt()
   const language = useLanguage()
-  const session = useDeviceSession()
 
   const sessionKey = createMemo(() => "")
   const handoffPrompt = createMemo(() => getSessionHandoff(sessionKey())?.prompt)
@@ -143,17 +143,14 @@ export function SessionComposerRegion(props: {
     <div
       ref={props.setPromptDockRef}
       data-component="session-prompt-dock"
-      class="shrink-0 w-full pb-3 flex flex-col justify-center items-center bg-background-stronger pointer-events-none"
-    >
-      <div
-        classList={{
-          "w-full px-3 pointer-events-auto": true,
-          "md:max-w-200 md:mx-auto 2xl:max-w-[1000px]": props.centered,
-        }}
+      classList={{
+        "shrink-0 w-full py-3 px-1 flex flex-col justify-center items-center pointer-events-none": true,
+        "bg-background-stronger": !props.compact,
+      }}
       >
         <Show when={props.state.questionRequest()} keyed>
           {(request) => (
-            <div>
+            <div class="w-full pointer-events-auto" classList={{ "md:max-w-200 md:mx-auto 2xl:max-w-[1000px]": props.centered }}>
               <SessionQuestionDock request={request} onSubmit={props.onResponseSubmit} />
             </div>
           )}
@@ -161,7 +158,7 @@ export function SessionComposerRegion(props: {
 
         <Show when={props.state.permissionRequest()} keyed>
           {(request) => (
-            <div>
+            <div class="w-full pointer-events-auto" classList={{ "md:max-w-200 md:mx-auto 2xl:max-w-[1000px]": props.centered }}>
               <SessionPermissionDock
                 request={request}
                 responding={props.state.permissionResponding()}
@@ -178,70 +175,84 @@ export function SessionComposerRegion(props: {
           )}
         </Show>
 
-        <Show when={!props.state.blocked() && !props.hidePrompt}>
-          <Show
-            when={prompt.ready()}
-            fallback={
-              <div class="w-full min-h-32 md:min-h-40 rounded-md border border-border-weak-base bg-background-base/50 px-4 py-3 text-text-weak whitespace-pre-wrap pointer-events-none">
-                {handoffPrompt() || language.t("prompt.loading")}
-              </div>
-            }
+        <Show when={dock()}>
+          <div
+            class="w-full overflow-hidden"
+            classList={{
+              "pointer-events-none": value() < 0.98,
+              "md:max-w-200 md:mx-auto 2xl:max-w-[1000px]": props.centered,
+            }}
+            style={{
+              "max-height": `${full() * value()}px`,
+            }}
           >
-            <Show when={dock()}>
-              <div
-                classList={{
-                  "overflow-hidden": true,
-                  "pointer-events-none": value() < 0.98,
-                }}
-                style={{
-                  "max-height": `${full() * value()}px`,
-                }}
-              >
-                <div ref={setContentRef}>
-                  <SessionTodoDock
-                    todos={props.state.todos()}
-                    title={language.t("session.todo.title")}
-                    collapseLabel={language.t("session.todo.collapse")}
-                    expandLabel={language.t("session.todo.expand")}
-                    dockProgress={value()}
-                    visualDuration={props.visualDuration}
-                    bounce={props.bounce}
-                    expandVisualDuration={props.drawerExpandVisualDuration}
-                    expandBounce={props.drawerExpandBounce}
-                    collapseVisualDuration={props.drawerCollapseVisualDuration}
-                    collapseBounce={props.drawerCollapseBounce}
-                    subtitleDuration={props.subtitleDuration}
-                    subtitleTravel={props.subtitleTravel}
-                    subtitleEdge={props.subtitleEdge}
-                    countDuration={props.countDuration}
-                    countMask={props.countMask}
-                    countMaskHeight={props.countMaskHeight}
-                    countWidthDuration={props.countWidthDuration}
-                  />
-                </div>
-              </div>
-            </Show>
-            <div
-              classList={{
-                "relative z-10": true,
-              }}
-              style={{
-                "margin-top": `${-36 * value()}px`,
-              }}
-            >
-              <PromptInput
-                ref={props.inputRef}
-                newSessionWorktree={props.newSessionWorktree}
-                onNewSessionWorktreeReset={props.onNewSessionWorktreeReset}
-                onSubmit={props.onSubmit}
-                hideAttachButton={props.hideAttachButton}
-                busySince={props.busySince}
-                hiddenSeed={props.hiddenSeed}
+            <div ref={setContentRef}>
+              <SessionTodoDock
+                todos={props.state.todos()}
+                title={language.t("session.todo.title")}
+                collapseLabel={language.t("session.todo.collapse")}
+                expandLabel={language.t("session.todo.expand")}
+                dockProgress={value()}
+                visualDuration={props.visualDuration}
+                bounce={props.bounce}
+                expandVisualDuration={props.drawerExpandVisualDuration}
+                expandBounce={props.drawerExpandBounce}
+                collapseVisualDuration={props.drawerCollapseVisualDuration}
+                collapseBounce={props.drawerCollapseBounce}
+                subtitleDuration={props.subtitleDuration}
+                subtitleTravel={props.subtitleTravel}
+                subtitleEdge={props.subtitleEdge}
+                countDuration={props.countDuration}
+                countMask={props.countMask}
+                countMaskHeight={props.countMaskHeight}
+                countWidthDuration={props.countWidthDuration}
               />
             </div>
+          </div>
+        </Show>
+
+        <Show when={!props.state.blocked()}>
+          <Show when={props.working && !props.state.questionRequest() && !props.state.permissionRequest()}>
+            <div class="w-full" classList={{ "md:max-w-200 md:mx-auto 2xl:max-w-[1000px]": props.centered }}>
+              <StatusDisplay working={props.working ?? false} busySince={props.busySince} />
+            </div>
           </Show>
+
+          <div
+            classList={{
+              "w-full px-2 pointer-events-auto": true,
+              "md:max-w-200 md:mx-auto 2xl:max-w-[1000px]": props.centered,
+            }}
+            data-dock-compact=""
+          >
+            <Show when={!props.hidePrompt}>
+              <Show
+                when={prompt.ready()}
+                fallback={
+                  <div class="w-full min-h-32 md:min-h-40 rounded-md border border-border-weak-base bg-background-base/50 px-4 py-3 text-text-weak whitespace-pre-wrap pointer-events-none">
+                    {handoffPrompt() || language.t("prompt.loading")}
+                  </div>
+                }
+              >
+                <div
+                  classList={{
+                    "relative z-10": true,
+                  }}
+                >
+                  <PromptInput
+                    ref={props.inputRef}
+                    newSessionWorktree={props.newSessionWorktree}
+                    onNewSessionWorktreeReset={props.onNewSessionWorktreeReset}
+                    onSubmit={props.onSubmit}
+                    hideAttachButton={props.hideAttachButton}
+                    busySince={props.busySince}
+                    hiddenSeed={props.hiddenSeed}
+                  />
+                </div>
+              </Show>
+            </Show>
+          </div>
         </Show>
       </div>
-    </div>
   )
 }

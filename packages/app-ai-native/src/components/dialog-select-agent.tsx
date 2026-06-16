@@ -1,12 +1,12 @@
 import { Component, createMemo } from "solid-js"
-import { useLocal } from "@/context/local"
+import { useDeviceLocal } from "@/context/device-local"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { Dialog } from "@opencode-ai/ui/dialog"
 import { List } from "@opencode-ai/ui/list"
 import { useLanguage } from "@/context/language"
 
 export const DialogSelectAgent: Component = () => {
-  const local = useLocal()
+  const local = useDeviceLocal()
   const language = useLanguage()
   const dialog = useDialog()
 

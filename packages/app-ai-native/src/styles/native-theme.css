@@ -429,6 +429,66 @@
   animation: bell-ring 1.5s ease-in-out infinite;
 }
 
+/* Single-shot bell ring for the subscribe button. Multi-segment damped recoil — mirrors the
+   design mock's `@keyframes ring` (-16→13→-9→6→-3→0 at 15/30/45/60/75/100%), so the bell swings
+   the opposite way first and settles with five decaying oscillations across the full 0.55s. */
+@keyframes bell-ring-once {
+  0% { transform: rotate(0deg); }
+  15% { transform: rotate(-16deg); }
+  30% { transform: rotate(13deg); }
+  45% { transform: rotate(-9deg); }
+  60% { transform: rotate(6deg); }
+  75% { transform: rotate(-3deg); }
+  100% { transform: rotate(0deg); }
+}
+
+.animate-bell-once {
+  animation: bell-ring-once 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* Expanding ping halo for the subscribe button (concentric ring fades out as it grows).
+   The translate keeps the halo centered on the bell (left:13, -2px x-nudge, -50% y-center);
+   it MUST be carried through every keyframe because `transform` is replaced wholesale — animating
+   only scale() would drop the translate and snap the ring off-center. Matches design `@keyframes pingk`. */
+@keyframes store-ping {
+  0% { opacity: 0.7; transform: translate(-2px, -50%) scale(0.4); }
+  100% { opacity: 0; transform: translate(-2px, -50%) scale(2.2); }
+}
+
+.animate-store-ping {
+  animation: store-ping 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* View Transitions defaults: smooth shared-element transitions for the card ⇄ list switch.
+   Keep the root crossfade near-instant so only the items animate (no full-page fade). */
+::view-transition-group(*) {
+  animation-duration: 0.45s;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0.001s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*) {
+    animation-duration: 0.01ms !important;
+  }
+
+  .animate-bell-once,
+  .animate-store-ping {
+    animation: none !important;
+  }
+
+  /* Subscribe button: drop the color/bell/label cross-fades so the subscribe ⇄ subscribed swap
+     is instant under reduced-motion (keeps parity with the disabled ring/ping keyframes). */
+  .store-subscribe-btn,
+  .store-subscribe-btn * {
+    transition: none !important;
+  }
+}
+
 @keyframes slideFromBottom {
   from { transform: translateY(40px); opacity: 0.6; }
   to { transform: translateY(0); opacity: 1; }

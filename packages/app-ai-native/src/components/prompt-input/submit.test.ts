@@ -113,8 +113,8 @@ beforeAll(async () => {
     }),
   }))
 
-  mock.module("@/context/sdk", () => ({
-    useSDK: () => {
+  mock.module("@/context/device-sdk", () => ({
+    useDeviceSDK: () => {
       const sdk = {
         directory: "/repo/main",
         client: rootClient,
@@ -131,7 +131,7 @@ beforeAll(async () => {
     useSync: () => ({
       data: { command: [] },
       session: {
-        replaceTab: () => undefined,
+        onSessionCreated: () => undefined,
         optimistic: {
           add: () => undefined,
           remove: () => undefined,
@@ -199,7 +199,6 @@ describe("prompt submit worktree selection", () => {
     const submit = createPromptSubmit({
       info: () => undefined,
       imageAttachments: () => [],
-      commentCount: () => 0,
       autoAccept: () => false,
       mode: () => "shell",
       working: () => false,
@@ -231,7 +230,6 @@ describe("prompt submit worktree selection", () => {
     const submit = createPromptSubmit({
       info: () => undefined,
       imageAttachments: () => [],
-      commentCount: () => 0,
       autoAccept: () => true,
       mode: () => "shell",
       working: () => false,
@@ -275,7 +273,6 @@ describe("prompt submit worktree selection", () => {
           dataUrl: "data:image/png;base64,AA==",
         },
       ],
-      commentCount: () => 0,
       autoAccept: () => true,
       mode: () => "normal",
       working: () => false,

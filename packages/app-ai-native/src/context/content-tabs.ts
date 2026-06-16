@@ -27,6 +27,7 @@ export function createContentTabStore() {
   })
 
   const pendingSessionIDs = new Set<string>()
+  let newSessionCounter = 0
 
   let _openPending: string | undefined
 
@@ -124,6 +125,17 @@ export function createContentTabStore() {
     )
   }
 
+  const replaceWithNewSession = (oldId: string, title: string) => {
+    newSessionCounter++
+    replace(oldId, {
+      kind: "session",
+      key: `new-${newSessionCounter}`,
+      title,
+      icon: "bubble-5",
+      meta: { sessionID: undefined },
+    })
+  }
+
   const confirmSession = (sessionID: string) => {
     pendingSessionIDs.delete(sessionID)
   }
@@ -142,6 +154,7 @@ export function createContentTabStore() {
     activate,
     reorder,
     replace,
+    replaceWithNewSession,
     updateMeta,
     setTitle,
     makeTabId,

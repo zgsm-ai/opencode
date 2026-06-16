@@ -13,6 +13,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { cn } from "@/lib/utils"
 import { Persist, persisted } from "@/utils/persist"
 import { ConfirmDialog } from "@/pages/store/components/confirm-dialog"
+import { CreateCapabilityDialog } from "@/pages/store/components/create-capability-dialog"
 import ItemDetailContent from "@/pages/store/components/item-detail-content"
 import { ItemDetailLoadingSkeleton } from "@/pages/store/components/item-detail-loading-skeleton"
 import { MoveCapabilityDialog } from "@/pages/store/components/move-capability-dialog"
@@ -44,7 +45,7 @@ const SIDEBAR_ITEMS = [
 
 const STAT_CARDS = [
   { key: "created" as TabKey, labelKey: "store.console.capabilities.myCreated", icon: "archive" as const, color: "#3B82F6" },
-  { key: "favorited" as TabKey, labelKey: "store.console.capabilities.myFavorited", icon: "star" as const, color: "#F59E0B" },
+  { key: "favorited" as TabKey, labelKey: "store.console.capabilities.myFavorited", icon: "bell" as const, color: "#F59E0B" },
   { key: "received" as TabKey, labelKey: "store.received.title", icon: "inbox" as const, color: "#10B981" },
   { key: "sent" as TabKey, labelKey: "store.sent.title", icon: "share" as const, color: "#8B5CF6" },
 ] as const
@@ -1009,6 +1010,28 @@ export default function StoreManagerPage() {
                     <Icon name="plus" class="size-4" style={{ color: "#ffffff" }} />
                     {language.t("store.console.capabilities.create")}
                   </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    class="h-8 gap-1.5 px-3"
+                    onClick={() => {
+                      dialog.show(() => (
+                        <CreateCapabilityDialog
+                          userId={userId()}
+                          repositories={state.repos}
+                          defaultItemType="plugin"
+                          onCreated={(item) => {
+                            void loadCreated()
+                            setSelectedItemId("value", item.id)
+                          }}
+                        />
+                      ))
+                    }}
+                  >
+                    <Icon name="cloud-upload" size="small" />
+                    {language.t("store.uploadPlugin.title") || "Upload Plugin"}
+                  </Button>
                   {/* Plugin upload hidden — see PR #112 */}
                   {/* <Button
                     type="button"
@@ -1085,7 +1108,9 @@ export default function StoreManagerPage() {
                             color: card.color,
                           }}
                         >
-                          <Icon name={card.icon as any} class="size-6" />
+                          <Show when={card.key === "favorited"} fallback={<Icon name={card.icon as any} class="size-6" />}>
+                            <LocalIcon name="subscribe" class="size-6" />
+                          </Show>
                         </div>
                         <div>
                           <div class="text-2xl font-bold text-[var(--native-foreground)]">{formatCompact(count())}</div>
@@ -1402,6 +1427,7 @@ export default function StoreManagerPage() {
                           setSelectedItemId("value", null)
                           refreshBothTabs()
                         }}
+                        onSelectItem={(id) => setSelectedItemId("value", id)}
                         favorited={detailState.favorited}
                         favoriteCount={detailState.favoriteCount}
                         previewCount={detailState.previewCount}

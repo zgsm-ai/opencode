@@ -116,8 +116,10 @@ export default function BestPracticeCarousel(props: BestPracticeCarouselProps) {
   // ── Actions ──
   const copyInstall = async (item: CapabilityItem, e: MouseEvent) => {
     e.stopPropagation()
+    const cmd = getInstallCommand(item)
+    if (!cmd) return
     try {
-      await navigator.clipboard.writeText(getInstallCommand(item))
+      await navigator.clipboard.writeText(cmd)
       setCopiedId(item.id)
       setTimeout(() => setCopiedId((cur) => (cur === item.id ? null : cur)), 2000)
     } catch {
@@ -250,13 +252,16 @@ export default function BestPracticeCarousel(props: BestPracticeCarouselProps) {
                     </div>
 
                     <div class="flex gap-1">
-                      <button
-                        class="inline-flex h-7 w-7 items-center justify-center rounded-md bg-transparent text-[var(--native-muted)] transition-[background-color,color] hover:bg-[color-mix(in_srgb,var(--native-surface)_60%,transparent)] hover:text-[var(--native-foreground)] disabled:cursor-not-allowed disabled:opacity-[var(--native-disabled-opacity)]"
-                        onClick={(e) => copyInstall(item, e)}
-                        title={language.t("store.home.table.copyInstall")}
-                      >
-                        <Icon name={copiedId() === item.id ? "check-small" : "copy"} size="small" />
-                      </button>
+                      {/* 仅有真实安装命令（plugin）才显示复制按钮；skill 等靠订阅分发、无安装命令。 */}
+                      <Show when={getInstallCommand(item)}>
+                        <button
+                          class="inline-flex h-7 w-7 items-center justify-center rounded-md bg-transparent text-[var(--native-muted)] transition-[background-color,color] hover:bg-[color-mix(in_srgb,var(--native-surface)_60%,transparent)] hover:text-[var(--native-foreground)] disabled:cursor-not-allowed disabled:opacity-[var(--native-disabled-opacity)]"
+                          onClick={(e) => copyInstall(item, e)}
+                          title={language.t("store.home.table.copyInstall")}
+                        >
+                          <Icon name={copiedId() === item.id ? "check-small" : "copy"} size="small" />
+                        </button>
+                      </Show>
                       <button
                         class={[
                           isFavorited(item.id)

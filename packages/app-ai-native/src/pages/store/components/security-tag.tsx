@@ -42,10 +42,15 @@ export default function SecurityTag(props: { status?: SecurityStatus }) {
   return (
     <Show when={props.status}>
       <span
-        class="inline-flex items-center justify-center rounded-[10px] px-2.5 py-[2px] text-xs"
+        class="inline-flex items-center justify-center gap-1.5 rounded-[10px] px-2.5 py-[2px] text-xs"
         style={{ "background-color": COLORS[status()][0], color: COLORS[status()][1] }}
         title={text()}
       >
+        <span
+          aria-hidden="true"
+          class={`h-1.5 w-1.5 shrink-0 rounded-full ${PULSE.has(status()) ? "animate-pulse" : ""}`}
+          style={{ "background-color": COLORS[status()][1] }}
+        />
         <span class={PULSE.has(status()) ? "animate-pulse" : ""}>{text()}</span>
       </span>
     </Show>

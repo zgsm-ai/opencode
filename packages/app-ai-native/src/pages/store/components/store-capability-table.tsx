@@ -1,4 +1,4 @@
-import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuGroup, DropdownMenuGroupLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuGroup, DropdownMenuGroupLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { TextField, TextFieldInput } from "@/components/ui/text-field"
 import { LocalIcon } from "@/components/local-icon"
@@ -7,11 +7,12 @@ import { Icon, type IconProps } from "@opencode-ai/ui/icon"
 import { createEffect, createMemo, createResource, createSignal, For, onCleanup, onMount, Show, type JSX } from "solid-js"
 import { createStore } from "solid-js/store"
 import { tagApi, type CapabilityItem, type Category, type ItemOrder, type ItemSort, type ItemTag, type SecurityRiskGroup } from "../lib/api"
-import { detectMcpFields } from "../lib/mcp-config"
+import { detectMcpFields, mcpRequiresPluginRuntime } from "../lib/mcp-config"
 import { pickItemDescription } from "../lib/item-description"
 import { useLanguage } from "@/context/language"
 import { st, sx } from "../lib/styles"
 import SecurityTag from "./security-tag"
+import FromPluginBadge from "./from-plugin-badge"
 
 export type TableColumnKey = "title" | "description" | "type" | "category" | "security" | "tag" | "source" | "experienceScore" | "favorite" | "updated"
 
@@ -617,7 +618,8 @@ function ColumnToggleMenu(props: {
   label: string
 }) {
   return (
-    <DropdownMenu>
+    // modal={false}：一致性 + 预防 scroll-lock 残留（同 page-size 下拉，不锁滚动，点外部/Esc 仍关闭）。
+    <DropdownMenu modal={false}>
       <DropdownMenuTrigger as="button" class="inline-flex size-7 items-center justify-center rounded-[0.375rem] text-[var(--native-muted)] transition-colors hover:bg-accent hover:text-accent-foreground" title="Toggle columns">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="size-4" aria-hidden="true">
           <path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0" />
@@ -653,12 +655,47 @@ export function StoreTableFooter(props: {
   totalItems: number
   summary: string
   onPageChange: (page: number) => void
+  onPageSizeChange?: (pageSize: number) => void
+  pageSizeOptions?: number[]
 }) {
+  const language = useLanguage()
   const visiblePages = () => rangePages(props.page, props.totalPages)
+  const pageSizeOptions = () => props.pageSizeOptions ?? [15, 30, 50]
+  const perPageLabel = (count: number) => language.t("store.home.pagination.perPage", { count })
 
   return (
     <div class={sx.pager}>
-      <div class={sx.pagerSum}>{props.summary}</div>
+      <div class="flex flex-wrap items-center gap-3">
+        <div class={sx.pagerSum}>{props.summary}</div>
+        <Show when={props.onPageSizeChange}>
+          {/* 每页条数选择器：复用工具栏排序下拉的 pill/下拉风格（--native-* token），单选总是回第一页。
+              modal={false}：Kobalte DropdownMenu 默认 modal=true 会锁 body 滚动；选项一改就触发
+              home setPageSize → setPage(1) → 列表 keyed 重挂 + footer 重渲染，会在 scroll-lock
+              cleanup 跑完前卸载该菜单，残留 body scroll-lock 导致滚轮失效。关掉 modal 即不锁滚动，
+              点外部 / Esc 仍正常关闭。 */}
+          <DropdownMenu modal={false}>
+            <DropdownMenuTrigger
+              as="button"
+              class="inline-flex h-[1.9375rem] shrink-0 cursor-pointer items-center gap-1.5 rounded-[var(--native-radius-sm)] border border-[color:color-mix(in_oklab,var(--native-border)_48%,transparent)] bg-[color:color-mix(in_oklab,var(--native-panel)_82%,var(--native-bg-subtle))] px-2.5 text-[0.8125rem] font-medium text-[var(--native-muted)] transition-all hover:border-[color:color-mix(in_oklab,var(--native-border-strong)_34%,transparent)] hover:text-[var(--native-foreground)]"
+            >
+              <span class="whitespace-nowrap">{perPageLabel(props.pageSize)}</span>
+              <Icon name="chevron-down" size="small" class="opacity-70" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent class="min-w-[6rem]">
+              <DropdownMenuRadioGroup
+                value={String(props.pageSize)}
+                onChange={(value) => props.onPageSizeChange?.(Number(value))}
+              >
+                <For each={pageSizeOptions()}>
+                  {(option) => (
+                    <DropdownMenuRadioItem value={String(option)}>{perPageLabel(option)}</DropdownMenuRadioItem>
+                  )}
+                </For>
+              </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </Show>
+      </div>
       <div class={sx.pagerActs}>
         <button class={st.page(false)} disabled={props.page <= 1} onClick={() => props.onPageChange(1)}>
           <span aria-hidden="true">«</span>
@@ -693,8 +730,24 @@ export { HighlightText }
 // detected placeholders: an unsubscribed MCP that still has fillable placeholder params must be
 // configured on the detail page first. Already-favorited rows (unsubscribe) are never blocked,
 // and non-MCP / MCP-without-placeholders rows are unaffected. Mirrors detail-page gating.
-export function mcpListSubscribeBlocked(item: Pick<CapabilityItem, "itemType" | "metadata" | "favorited">): boolean {
-  return item.itemType === "mcp" && !item.favorited && detectMcpFields(item.metadata).length > 0
+//
+// `favoritedOverride`: the redesign decouples favorited state into home's per-item favStore, so the
+// item object's `favorited` is FROZEN at its stale original value and never reflects a subscribe
+// toggle. Callers with access to the live favStore truth (the card/list views) MUST pass it here,
+// otherwise an MCP subscribed via the detail page keeps `!item.favorited === true` and can never be
+// unsubscribed from the list. Falls back to `item.favorited` when omitted (table column callers).
+export function mcpListSubscribeBlocked(
+  item: Pick<CapabilityItem, "itemType" | "metadata" | "favorited">,
+  favoritedOverride?: boolean,
+): boolean {
+  const favorited = favoritedOverride ?? item.favorited
+  return item.itemType === "mcp" && !favorited && (mcpRequiresPluginRuntime(item.metadata) || detectMcpFields(item.metadata).length > 0)
+}
+
+// mcpListBlockReason picks the tooltip for a blocked row: plugin-runtime dependency wins
+// over (and is mutually exclusive in practice with) unfilled parameters.
+export function mcpListBlockReason(item: Pick<CapabilityItem, "itemType" | "metadata" | "favorited">): "pluginRuntime" | "params" {
+  return mcpRequiresPluginRuntime(item.metadata) ? "pluginRuntime" : "params"
 }
 
 export function StoreCapabilityTable(props: {
@@ -1039,6 +1092,7 @@ export function StoreCapabilityTable(props: {
                             <Icon name="cloud-upload" size="small" />
                           </span>
                         </Show>
+                        <FromPluginBadge name={item.parentPluginName} />
                       </div>
                     </div>
                   </td>
@@ -1093,7 +1147,7 @@ export function StoreCapabilityTable(props: {
                         type="button"
                         class="inline-flex size-6 items-center justify-center rounded-full transition-colors hover:bg-[color:color-mix(in_oklab,var(--native-foreground)_10%,transparent)] active:bg-[color:color-mix(in_oklab,var(--native-foreground)_16%,transparent)]] disabled:cursor-not-allowed disabled:opacity-60"
                         disabled={!props.onToggleFavorite || mcpListSubscribeBlocked(item)}
-                        title={mcpListSubscribeBlocked(item) ? language.t("store.detail.mcpConfig.gateReason") : item.favorited ? props.labels.unfavoriteTooltip : props.labels.favoriteTooltip}
+                        title={mcpListSubscribeBlocked(item) ? language.t(mcpListBlockReason(item) === "pluginRuntime" ? "store.detail.mcpConfig.pluginRuntimeReason" : "store.detail.mcpConfig.gateReason") : item.favorited ? props.labels.unfavoriteTooltip : props.labels.favoriteTooltip}
                         onClick={(e: MouseEvent) => {
                           e.stopPropagation()
                           if (mcpListSubscribeBlocked(item)) return

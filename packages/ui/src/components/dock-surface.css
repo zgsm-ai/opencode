@@ -21,3 +21,37 @@
   border-top-left-radius: 0;
   border-top-right-radius: 0;
 }
+
+[data-dock-compact] {
+  border-radius: 8px;
+  box-shadow: var(--shadow-xs-border);
+  background-color: var(--surface-raised-stronger-non-alpha);
+}
+
+[data-dock-compact]:focus-within {
+  box-shadow:
+    0 0 0 1px var(--border-base, rgba(11, 6, 0, 0.2)),
+    0 2px 8px -1px rgba(19, 16, 16, 0.08),
+    0 4px 12px 0 rgba(19, 16, 16, 0.1);
+}
+
+[data-dock-compact] [data-dock-surface="shell"] {
+  border-radius: 0;
+  box-shadow: none !important;
+  overflow: visible;
+}
+
+[data-dock-compact] [data-dock-surface="tray"][data-dock-attach="top"] {
+  margin-top: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background-color: var(--surface-raised-stronger-non-alpha);
+}
+
+[data-dock-compact]:focus-within {
+  box-shadow:
+    0 0 0 1px var(--border-base, rgba(11, 6, 0, 0.2)),
+    0 2px 8px -1px rgba(19, 16, 16, 0.08),
+    0 4px 12px 0 rgba(19, 16, 16, 0.1);
+}

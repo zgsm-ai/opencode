@@ -1,5 +1,5 @@
-import { createEffect, createMemo, createResource, createSignal, For, onCleanup, Show, Suspense } from "solid-js"
-import { createStore } from "solid-js/store"
+import { createEffect, createMemo, createResource, createSignal, For, onCleanup, onMount, Show, Suspense } from "solid-js"
+import { createStore, produce } from "solid-js/store"
 import { useNavigate, useSearchParams } from "@solidjs/router"
 import { useItemFilterOptions } from "@/context/item-filter-options"
 import { useLanguage } from "@/context/language"
@@ -14,34 +14,41 @@ import {
   type ItemSort,
   type SecurityRiskGroup,
 } from "../lib/api"
-import ItemDetailContent, { getInstallCommand } from "../components/item-detail-content"
+import ItemDetailContent from "../components/item-detail-content"
 import { ItemDetailLoadingSkeleton } from "../components/item-detail-loading-skeleton"
 import {
-  buildStoreTableColumnOptions,
-  DEFAULT_VISIBLE_COLUMNS,
   formatCompact,
   formatSourceMetric,
   formatStoreDate,
   formatStoreTablePaginationSummary,
   HighlightText,
   mcpListSubscribeBlocked,
-  StoreCapabilityTable,
   StoreTableFooter,
-  type TableColumnKey,
 } from "../components/store-capability-table"
 import { Icon, type IconProps } from "@opencode-ai/ui/icon"
 import { LocalIcon } from "@/components/local-icon"
 import { useAuth } from "../hooks/use-auth"
-import { useDialog } from "@opencode-ai/ui/context/dialog"
-import { DistributeDialog } from "../components/distribute-dialog"
 import { cn } from "@/lib/utils"
 import { typeKey } from "../lib/constants"
 import { sx } from "../lib/styles"
+import { StoreIcon } from "../lib/store-icons"
+import { StoreCardGrid, type StoreItemViewProps } from "../components/store-card-grid"
+import { StoreListView } from "../components/store-list-view"
+import { StoreFilterBar } from "../components/store-filter-bar"
+import { withViewTransition, applyStagger } from "../lib/view-transition"
+import { ensureEnterpriseLoaded } from "../lib/enterprise"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 
 const STORE_TYPES = [
   {
     value: "all",
-    labelKey: "store.sidebar.nav.all",
+    labelKey: "store.home.typeTab.all",
     descKey: "store.home.type.all.description",
     icon: "dot-grid" as IconProps["name"],
     color: "#64748b",
@@ -49,7 +56,7 @@ const STORE_TYPES = [
   },
   {
     value: "skill",
-    labelKey: "store.sidebar.nav.skills",
+    labelKey: "store.home.typeTab.skill",
     descKey: "store.home.type.skill.description",
     icon: "sparkles" as IconProps["name"],
     color: "#ffa000",
@@ -57,7 +64,7 @@ const STORE_TYPES = [
   },
   {
     value: "subagent",
-    labelKey: "store.sidebar.nav.subagents",
+    labelKey: "store.home.typeTab.subagent",
     descKey: "store.home.type.subagent.description",
     icon: "brain" as IconProps["name"],
     color: "#1670ff",
@@ -65,7 +72,7 @@ const STORE_TYPES = [
   },
   {
     value: "command",
-    labelKey: "store.sidebar.nav.commands",
+    labelKey: "store.home.typeTab.command",
     descKey: "store.home.type.command.description",
     icon: "console" as IconProps["name"],
     color: "#09b179",
@@ -73,7 +80,7 @@ const STORE_TYPES = [
   },
   {
     value: "mcp",
-    labelKey: "store.sidebar.nav.mcpServers",
+    labelKey: "store.home.typeTab.mcp",
     descKey: "store.home.type.mcp.description",
     icon: "mcp" as IconProps["name"],
     color: "#7338f9",
@@ -81,7 +88,7 @@ const STORE_TYPES = [
   },
   {
     value: "plugin",
-    labelKey: "store.sidebar.nav.plugins",
+    labelKey: "store.home.typeTab.plugin",
     descKey: "store.home.type.plugin.description",
     icon: "configuration" as IconProps["name"],
     color: "#EC4899",
@@ -92,13 +99,37 @@ const STORE_TYPES = [
 type StoreType = (typeof STORE_TYPES)[number]["value"]
 type ListData = Awaited<ReturnType<typeof itemApi.list>>
 type SecurityFilterValue = SecurityRiskGroup
-const PAGE_SIZE = 15
+// 每页条数：可选项 + 默认值。页大小现由用户在分页器里选择并持久化（store.pageSize）。
+const PAGE_SIZE_OPTIONS = [15, 30, 50] as const
+const DEFAULT_PAGE_SIZE = PAGE_SIZE_OPTIONS[0]
+const MAX_PAGE_SIZE = Math.max(...PAGE_SIZE_OPTIONS)
+
+// Entrance animation for the card/list items when an applied filter/sort/search query yields a
+// fresh result set. The keyed wrapper (`[data-store-list-enter]`) remounts on each new query, so
+// its item children freshly mount and play `store-row-enter` once. Stagger by document order via
+// nth-child (covers up to MAX_PAGE_SIZE rows so any selected page size is fully staggered).
+// reduced-motion disables it. The card⇄list view switch does NOT use this path (it animates as
+// shared elements via View Transitions).
+const STORE_LIST_ENTER_CSS = `
+@keyframes store-row-enter {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+[data-store-list-enter] > div > * {
+  animation: store-row-enter 0.34s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+${Array.from({ length: MAX_PAGE_SIZE }, (_, i) =>
+  `[data-store-list-enter] > div > *:nth-child(${i + 1}){animation-delay:${i * 22}ms}`,
+).join("")}
+@media (prefers-reduced-motion: reduce) {
+  [data-store-list-enter] > div > * { animation: none !important; }
+}
+`
 
 export default function Home() {
   const language = useLanguage()
   const itemFilterOptions = useItemFilterOptions()
   const auth = useAuth()
-  const dialog = useDialog()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
 
@@ -108,10 +139,8 @@ export default function Home() {
   }
 
   const [activeType, setActiveType] = createSignal<StoreType>(initialType())
-  const [hoveredType, setHoveredType] = createSignal<StoreType | null>(null)
   const [page, setPage] = createSignal(1)
   const [selectedItemId, setSelectedItemId] = createSignal<string | null>(null)
-  const [copiedItemId, setCopiedItemId] = createSignal<string | null>(null)
   const [searchText, setSearchText] = createSignal("")
   const [debouncedSearch, setDebouncedSearch] = createSignal("")
   let searchInputRef: HTMLInputElement | undefined
@@ -121,19 +150,11 @@ export default function Home() {
   let pendingBlurRefocusTimer: ReturnType<typeof setTimeout> | undefined
   const [listCache, setListCache] = createSignal<{ key: string; data: ListData } | null>(null)
   const [sort, setSort] = createStore<{ by?: ItemSort; order?: ItemOrder }>({ by: "favoriteCount", order: "desc" })
-  const [categoryFilterOpen, setCategoryFilterOpen] = createSignal(false)
-  const [sourceFilterOpen, setSourceFilterOpen] = createSignal(false)
-  const [securityFilterOpen, setSecurityFilterOpen] = createSignal(false)
-  const [categoryFilterQuery, setCategoryFilterQuery] = createSignal("")
-  const [sourceFilterQuery, setSourceFilterQuery] = createSignal("")
-  const [securityFilterQuery, setSecurityFilterQuery] = createSignal("")
-  const [appliedTagFilters, setAppliedTagFilters] = createSignal<string[]>([])
+  const [appliedTagFilters] = createSignal<string[]>([])
   const [appliedCategoryFilters, setAppliedCategoryFilters] = createSignal<string[]>([])
-  const [pendingCategoryFilters, setPendingCategoryFilters] = createSignal<string[]>([])
   const [appliedSourceFilters, setAppliedSourceFilters] = createSignal<string[]>([])
-  const [pendingSourceFilters, setPendingSourceFilters] = createSignal<string[]>([])
   const [appliedSecurityFilters, setAppliedSecurityFilters] = createSignal<SecurityFilterValue[]>([])
-  const [pendingSecurityFilters, setPendingSecurityFilters] = createSignal<SecurityFilterValue[]>([])
+  const [hideSubSkills, setHideSubSkills] = createSignal(false)
   const [detailItem, setDetailItem] = createSignal<CapabilityItem | null>(null)
   const [favoriteActionItemId, setFavoriteActionItemId] = createSignal<string | null>(null)
   const [favoritePending, setFavoritePending] = createSignal(false)
@@ -148,24 +169,73 @@ export default function Home() {
   const [showForks, setShowForks] = createSignal(false)
   let detailContentTimer: ReturnType<typeof setTimeout> | undefined
 
-  const [columnPrefs, setColumnPrefs] = persisted(
-    Persist.global("store.table.columns", ["store.table.columns.v1"]),
-    createStore({ visible: DEFAULT_VISIBLE_COLUMNS }),
+  // ─── Per-item favorite state store (订阅态解耦) ─────────────────────────────────────────────
+  // BUG FIX: 之前 toggleRowFavorite 走 patchListItem，用 `items.map(i => i.id===id ? {...i,...} : i)`
+  // 替换了整个 item 对象 → 列表视图的 `<For each={rows}>`（Solid 按「引用」key）认定该行变了 →
+  // 重建该行 DOM → SubscribeButton 实例被销毁重建，组件内的宽度 FLIP / 颜色过渡永远拿不到「同实例
+  // 内 favorited 的变化」（实例直接被换掉）。
+  //
+  // 解法（零依赖）：把 favorited/favoriteCount 从「item 对象字段」解耦到这个 per-item 响应式 store，
+  // 按 itemId 索引。订阅切换只 setFavStore(id, …)，**不再替换 item 对象** → item 引用稳定 → `<For>`
+  // 不重建行 → SubscribeButton 保持同一实例，favorited 作为响应式 prop 变化，组件内动画得以触发。
+  // 视图 / 详情 Sheet 的 favorited / favoriteCount 都从这个 store 按 id 读，作为单一可信来源。
+  type FavState = { favorited: boolean; favoriteCount: number }
+  const [favStore, setFavStore] = createStore<Record<string, FavState>>({})
+  const favStateOf = (item: CapabilityItem): FavState =>
+    favStore[item.id] ?? { favorited: Boolean(item.favorited), favoriteCount: item.favoriteCount ?? 0 }
+
+  // Card ⇄ list view mode (persisted). Defaults to "list" (列式). The card/list switch and any
+  // filter/sort change that reorders the list run through withViewTransition for shared-element
+  // animation; applyStagger sequences the items in document order.
+  type ViewMode = "card" | "list"
+  const [viewPrefs, setViewPrefs] = persisted(
+    Persist.global("store.viewMode", ["store.viewMode.v1"]),
+    createStore({ mode: "list" as ViewMode }),
   )
-  const visibleColumns = createMemo(() => ({ ...columnPrefs.visible, type: false as const }))
+  const viewMode = createMemo<ViewMode>(() => viewPrefs.mode)
+  const setViewMode = (mode: ViewMode) => {
+    if (mode === viewMode()) return
+    applyStagger(rows().map((row) => row.id))
+    withViewTransition(() => setViewPrefs("mode", mode))
+  }
+
+  // 每页条数（persisted）。默认 15，用户可在分页器里切换 15/30/50。切换时回到第一页并关闭详情，
+  // listParams.pageSize 变化会触发 createResource 重取（正常）。
+  const [pageSizePrefs, setPageSizePrefs] = persisted(
+    Persist.global("store.pageSize"),
+    createStore({ size: DEFAULT_PAGE_SIZE as number }),
+  )
+  const pageSize = createMemo(() => pageSizePrefs.size)
+  const setPageSize = (size: number) => {
+    if (size === pageSize()) return
+    setPageSizePrefs("size", size)
+    setPage(1)
+    setSelectedItemId(null)
+  }
+
+  // ─── 筛选 / 排序 / 搜索导致列表内容变化时的丝滑入场 ───
+  // createResource 是异步重取，View Transitions 的同步回调抓不到稍后到达的新数据，所以这里
+  // 不走 startViewTransition，而是用「已生效查询(listKey) 变化 → 数据 settle 后 bump epoch →
+  // 列表子树按 epoch 重挂 → 子项各自播放一次 store-row-enter（CSS stagger，按文档序 i*22ms）」。
+  // reduced-motion 由内联 @media 降级（见 ContentShell 的 <style>）。effect 注册在 listKey/list
+  // 定义之后（见下方），此处只声明信号。
+  const [listAnimEpoch, setListAnimEpoch] = createSignal(0)
+  // 入场动画激活窗口：仅在 epoch 自增后的一小段时间内开启，避免「卡片⇄列式」切换(不改 epoch)
+  // 时新挂的子项被这套入场 CSS 重复触发（视图切换有自己的 View Transitions 共享元素动画）。
+  const [listEnterActive, setListEnterActive] = createSignal(false)
+  let lastSettledListKey: string | null = null
+  let listEnterTimer: ReturnType<typeof setTimeout> | undefined
 
   onCleanup(() => {
     clearTimeout(searchTimer)
     clearTimeout(pendingBlurRefocusTimer)
     clearTimeout(detailContentTimer)
+    clearTimeout(listEnterTimer)
   })
 
   const formatDate = (iso?: string) => formatStoreDate(language.locale(), iso)
 
   let searchTimer: ReturnType<typeof setTimeout> | undefined
-  const toggleColumnVisibility = (key: TableColumnKey) => {
-    setColumnPrefs("visible", key, (current) => !current)
-  }
   const captureSearchSelection = () => {
     if (!searchInputRef) return
     searchSelectionStart = searchInputRef.selectionStart
@@ -216,6 +286,14 @@ export default function Home() {
     }
     return map[activeType()]
   })
+  const hidePluginItemsLabel = createMemo(() => {
+    const map: Partial<Record<StoreType, string>> = {
+      all: "store.home.hidePluginItems",
+      skill: "store.home.hideSubSkills",
+      mcp: "store.home.hidePluginMcpServers",
+    }
+    return language.t(map[activeType()] ?? "store.home.hidePluginItems")
+  })
 
   const listParams = createMemo(() => ({
     type: activeType() === "all" ? undefined : activeType(),
@@ -225,21 +303,44 @@ export default function Home() {
     tags: appliedTagFilters().length ? appliedTagFilters() : undefined,
     securityStatuses: appliedSecurityFilters().length ? appliedSecurityFilters() : undefined,
     page: page(),
-    pageSize: PAGE_SIZE,
+    pageSize: pageSize(),
     sortBy: sort.by,
     sortOrder: sort.order,
     includeForks: showForks() || undefined,
+    excludeSubSkills: hideSubSkills() || undefined,
   }))
+
+  const toggleHideSubSkills = () => {
+    setHideSubSkills((v) => !v)
+    setPage(1)
+    setSelectedItemId(null)
+  }
 
   const listKey = createMemo(() => JSON.stringify(listParams()))
   const listSrc = createMemo(() => ({ key: listKey(), params: listParams() }))
-  const [list, { mutate: mutateList }] = createResource(listSrc, async (src) => ({
+  const [list] = createResource(listSrc, async (src) => ({
     key: src.key,
     data: await itemApi.list(src.params),
   }))
+
+  // Bump the list entrance epoch when a NEW applied query (listKey) finishes loading. This drives
+  // the staggered fade-in for filter/sort/search/page changes (see listAnimEpoch declaration).
+  createEffect(() => {
+    const key = listKey()
+    const data = list.latest
+    if (!data || data.key !== key) return
+    if (lastSettledListKey === key) return
+    const isFirst = lastSettledListKey === null
+    lastSettledListKey = key
+    if (isFirst) return // 首屏不播入场（避免初次加载整列闪一下）
+    setListAnimEpoch((n) => n + 1)
+    setListEnterActive(true)
+    clearTimeout(listEnterTimer)
+    listEnterTimer = setTimeout(() => setListEnterActive(false), pageSize() * 22 + 340 + 80)
+  })
+
   const typeMeta = createMemo(() => STORE_TYPES.find((entry) => entry.value === activeType()) ?? STORE_TYPES[0])
   const isTypeListMode = createMemo(() => !!searchParams.type && searchParams.type !== "all" && STORE_TYPES.some((e) => e.value === searchParams.type))
-  const currentUserId = createMemo(() => auth.user()?.id ?? auth.user()?.subjectId ?? auth.user()?.sub ?? "")
 
   // Popular items for type-list mode (top 3 by installCount)
   const popularParams = createMemo(() => (isTypeListMode() ? { type: activeType(), page: 1, pageSize: 20 } : null))
@@ -261,30 +362,6 @@ export default function Home() {
     setListCache(data)
   })
 
-  const patchListItem = (itemId: string, updater: (item: CapabilityItem) => CapabilityItem) => {
-    mutateList((prev) => {
-      if (!prev || prev.key !== listKey()) return prev
-      return {
-        ...prev,
-        data: {
-          ...prev.data,
-          items: prev.data.items.map((item) => (item.id === itemId ? updater(item) : item)),
-        },
-      }
-    })
-
-    setListCache((prev) => {
-      if (!prev || prev.key !== listKey()) return prev
-      return {
-        ...prev,
-        data: {
-          ...prev.data,
-          items: prev.data.items.map((item) => (item.id === itemId ? updater(item) : item)),
-        },
-      }
-    })
-  }
-
   const toggleFavorite = async () => {
     const data = detailItem()
     if (!data || !auth.user() || auth.loading() || favoritePending()) return
@@ -294,11 +371,9 @@ export default function Home() {
       const result = favorited() ? await behaviorApi.unfavorite(data.id) : await behaviorApi.favorite(data.id)
       setFavorited(result.favorited)
       setFavoriteCount(result.favoriteCount)
-      patchListItem(data.id, (current) => ({
-        ...current,
-        favorited: result.favorited,
-        favoriteCount: result.favoriteCount,
-      }))
+      // Keep the list view's per-item store in sync with a detail-page toggle (no item-object
+      // replacement → list rows stay mounted).
+      setFavStore(data.id, { favorited: result.favorited, favoriteCount: result.favoriteCount })
     } finally {
       setFavoritePending(false)
     }
@@ -310,20 +385,19 @@ export default function Home() {
     // already blocks this; this guards a bypass). Unsubscribing is always allowed.
     if (mcpListSubscribeBlocked(item)) return
 
+    // Read the current favorited state from the store (single source of truth), not off the (possibly
+    // stale) item object reference captured by the row.
+    const current = favStateOf(item)
     setFavoriteActionItemId(item.id)
     try {
-      const result = item.favorited ? await behaviorApi.unfavorite(item.id) : await behaviorApi.favorite(item.id)
+      const result = current.favorited ? await behaviorApi.unfavorite(item.id) : await behaviorApi.favorite(item.id)
 
-      patchListItem(item.id, (current) => ({
-        ...current,
-        favorited: result.favorited,
-        favoriteCount: result.favoriteCount,
-      }))
+      // Update ONLY the per-item favorite store — never replace the item object. This keeps the
+      // list `<For>` row (and its SubscribeButton instance) intact, so favorited flips as a
+      // reactive prop on the same instance and the in-component width FLIP / color transitions fire.
+      setFavStore(item.id, { favorited: result.favorited, favoriteCount: result.favoriteCount })
 
       if (detailItem()?.id === item.id) {
-        setDetailItem((current) =>
-          current ? { ...current, favorited: result.favorited, favoriteCount: result.favoriteCount } : current,
-        )
         setFavorited(result.favorited)
         setFavoriteCount(result.favoriteCount)
       }
@@ -332,15 +406,16 @@ export default function Home() {
     }
   }
 
-  const canEditItem = (item: CapabilityItem) => item.createdBy === currentUserId()
-
   createEffect(() => {
     const data = detailItem()
     if (!data) return
     setPreviewCount(data.previewCount ?? 0)
     setInstallCount(data.installCount ?? 0)
-    setFavorited(Boolean(data.favorited))
-    setFavoriteCount(data.favoriteCount ?? 0)
+    // Prefer the per-item favorite store (latest truth after any prior list/detail toggle) over the
+    // possibly-stale detailItem snapshot, so reopening a row whose favorite was toggled is correct.
+    const fav = favStore[data.id]
+    setFavorited(fav ? fav.favorited : Boolean(data.favorited))
+    setFavoriteCount(fav ? fav.favoriteCount : (data.favoriteCount ?? 0))
   })
 
   createEffect(() => {
@@ -365,48 +440,45 @@ export default function Home() {
   const categories = createMemo(() => itemFilterOptions.categories())
   const sourceOptions = createMemo(() => itemFilterOptions.sources())
   const securityOptions = createMemo(() => itemFilterOptions.securityRiskGroups())
-  const categoryFilterActive = createMemo(() => appliedCategoryFilters().length > 0)
-  const sourceFilterActive = createMemo(() => appliedSourceFilters().length > 0)
-  const securityFilterActive = createMemo(() => appliedSecurityFilters().length > 0)
-  const tagFilterActive = createMemo(() => appliedTagFilters().length > 0)
-  const columnOptions = createMemo(() =>
-    buildStoreTableColumnOptions(language.t).filter((column) => column.key !== "type"),
-  )
-  const filteredCategoryOptions = createMemo(() => {
-    const query = categoryFilterQuery().trim().toLowerCase()
-    if (!query) return categories()
-    return categories().filter(
-      (cat) =>
-        itemFilterOptions.categoryLabel(cat.slug, cat).toLowerCase().includes(query) ||
-        cat.slug.toLowerCase().includes(query),
-    )
-  })
-  const filteredSourceOptions = createMemo(() => {
-    const query = sourceFilterQuery().trim().toLowerCase()
-    if (!query) return sourceOptions()
-    return sourceOptions().filter(
-      (source) =>
-        (itemFilterOptions.sourceLabel(source.value, source) || source.value).toLowerCase().includes(query) ||
-        source.value.toLowerCase().includes(query),
-    )
-  })
-  const filteredSecurityOptions = createMemo(() => {
-    const query = securityFilterQuery().trim().toLowerCase()
-    if (!query) return securityOptions()
-    return securityOptions().filter(
-      (option) =>
-        itemFilterOptions
-          .securityRiskGroupLabel(option.value as SecurityFilterValue, option)
-          .toLowerCase()
-          .includes(query) || option.value.toLowerCase().includes(query),
-    )
-  })
   const rows = createMemo(() => listData()?.items ?? [])
   const totalItems = createMemo(() => listData()?.total ?? 0)
-  const totalPages = createMemo(() => Math.max(1, Math.ceil(totalItems() / PAGE_SIZE)))
+  const totalPages = createMemo(() => Math.max(1, Math.ceil(totalItems() / pageSize())))
   const listError = createMemo(() => (list.error instanceof Error ? list.error.message : ""))
   const showError = createMemo(() => !!listError() && rows().length === 0)
   const detailOpen = createMemo(() => !!selectedItemId())
+
+  // Seed (only) the per-item favorite store from the current list data. Runs whenever `rows`
+  // changes (筛选/排序/翻页/新数据到达), seeding *new* ids the store hasn't recorded yet.
+  //
+  // BUG FIX (订阅点击后弹回): this effect must NEVER overwrite an existing favStore entry. The
+  // item object's `favorited`/`favoriteCount` are FROZEN at their stale original values (方案 C
+  // decoupled favorited off the item and we deliberately never mutate the item), so overwriting an
+  // already-seeded/toggled entry with `item.favorited` would clobber the optimistic/API truth and
+  // bounce the UI back. Once an id is in the store, that store entry is the single source of truth
+  // (toggleRowFavorite updates it from the API result), so we leave it untouched.
+  //
+  // We also DROP the `favoriteActionItemId` dependency: the old in-flight skip is no longer needed
+  // (existing entries are never overwritten regardless), and removing the dependency means the
+  // toggle's `setFavoriteActionItemId(null)` no longer re-runs this effect.
+  //
+  // Why toggling doesn't revert: a toggle never changes `rows()` (we never replace the item object,
+  // so listData/rows memos don't notify), so this effect simply doesn't fire on toggle. Why
+  // filter/sort/page still works: those swap in fresh list data → `rows()` changes → new ids get
+  // seeded here, while ids already in the store keep their current (optimistic/operated) value.
+  // produce() patches per-key in place — it never replaces item objects, so the list `<For>` keys
+  // (which key by item reference, not by this store) are unaffected and rows are not rebuilt.
+  createEffect(() => {
+    const items = rows()
+    setFavStore(
+      produce((store) => {
+        for (const item of items) {
+          if (!(item.id in store)) {
+            store[item.id] = { favorited: Boolean(item.favorited), favoriteCount: item.favoriteCount ?? 0 }
+          }
+        }
+      }),
+    )
+  })
 
   const openItemDetail = (item: CapabilityItem) => {
     setSelectedItemId(item.id)
@@ -433,6 +505,46 @@ export default function Home() {
   })
 
   const statCards = createMemo(() => STORE_TYPES)
+
+  // ─── 顶栏类型 pill 滑块：测量选中按钮位置，驱动 absolute thumb ───
+  const tabEls: Partial<Record<StoreType, HTMLButtonElement>> = {}
+  const [tabThumb, setTabThumb] = createSignal({ x: 0, w: 0 })
+  const measureTabThumb = () => {
+    const el = tabEls[activeType()]
+    if (!el) return
+    setTabThumb({ x: el.offsetLeft, w: el.offsetWidth })
+  }
+  createEffect(() => {
+    // 选中项变化 / 语言切换（label 宽度变）都需重测
+    activeType()
+    language.locale()
+    requestAnimationFrame(measureTabThumb)
+  })
+  // ─── 卡片/列式 seg 滑块：复用 P1 的测量模式（仅 2 项） ───
+  const segEls: Partial<Record<ViewMode, HTMLButtonElement>> = {}
+  const [segThumb, setSegThumb] = createSignal({ x: 0, w: 0 })
+  const measureSegThumb = () => {
+    const el = segEls[viewMode()]
+    if (!el) return
+    setSegThumb({ x: el.offsetLeft, w: el.offsetWidth })
+  }
+  createEffect(() => {
+    viewMode()
+    language.locale()
+    requestAnimationFrame(measureSegThumb)
+  })
+
+  onMount(() => {
+    // Pull the 大客户 roster from the backend once; falls back to the built-in demo list on
+    // failure/empty (e.g. demo mode where the endpoint is absent). Idempotent across mounts.
+    ensureEnterpriseLoaded()
+    const onResize = () => {
+      measureTabThumb()
+      measureSegThumb()
+    }
+    window.addEventListener("resize", onResize)
+    onCleanup(() => window.removeEventListener("resize", onResize))
+  })
 
   const resetToType = (type: StoreType) => {
     setListCache(null)
@@ -464,113 +576,48 @@ export default function Home() {
     setSelectedItemId(null)
   }
 
-  const handleSortChange = (by: ItemSort) => {
-    setSelectedItemId(null)
-    setPage(1)
-    if (sort.by !== by) {
-      setSort({ by, order: "desc" })
-      return
-    }
-    if (sort.order === "desc") {
-      setSort("order", "asc")
-      return
-    }
-    setSort({ by: undefined, order: undefined })
-  }
-
-  const sortState = (by: ItemSort) => {
-    if (sort.by !== by || !sort.order) return "none"
-    return sort.order === "asc" ? "ascending" : "descending"
-  }
-
-  const togglePendingCategoryFilter = (slug: string) => {
-    setPendingCategoryFilters((current) =>
-      current.includes(slug) ? current.filter((item) => item !== slug) : [...current, slug],
-    )
-  }
-
-  const togglePendingSourceFilter = (source: string) => {
-    setPendingSourceFilters((current) =>
-      current.includes(source) ? current.filter((item) => item !== source) : [...current, source],
-    )
-  }
-
-  const togglePendingSecurityFilter = (status: SecurityFilterValue) => {
-    setPendingSecurityFilters((current) =>
-      current.includes(status) ? current.filter((item) => item !== status) : [...current, status],
-    )
-  }
-
-  const applyCategoryFilters = () => {
-    setAppliedCategoryFilters([...pendingCategoryFilters()])
+  // Toolbar sort dropdown (single-select, always desc) — the design-mock
+  // "订阅最多 / 评分最高 / 最近更新" selector.
+  const SORT_OPTIONS: { value: ItemSort; labelKey: Parameters<typeof language.t>[0] }[] = [
+    { value: "favoriteCount", labelKey: "store.home.sort.mostSubscribed" },
+    { value: "experienceScore", labelKey: "store.home.sort.topRated" },
+    { value: "updatedAt", labelKey: "store.home.sort.recentlyUpdated" },
+  ]
+  const selectSort = (by: ItemSort) => {
+    setSort({ by, order: "desc" })
     setPage(1)
     setSelectedItemId(null)
-    setCategoryFilterQuery("")
-    setCategoryFilterOpen(false)
   }
+  const currentSortLabel = createMemo(() => {
+    const option = SORT_OPTIONS.find((entry) => entry.value === sort.by)
+    return language.t(option?.labelKey ?? "store.home.sort.mostSubscribed")
+  })
 
-  const applySourceFilters = () => {
-    setAppliedSourceFilters([...pendingSourceFilters()])
+  // ─── 独立筛选条（StoreFilterBar）: point-to-apply（直写 applied，无 pending→apply 两段式）───
+  const afterFilterChange = () => {
     setPage(1)
     setSelectedItemId(null)
-    setSourceFilterQuery("")
-    setSourceFilterOpen(false)
   }
-
-  const applySecurityFilters = () => {
-    setAppliedSecurityFilters([...pendingSecurityFilters()])
-    setPage(1)
-    setSelectedItemId(null)
-    setSecurityFilterQuery("")
-    setSecurityFilterOpen(false)
+  const toggleCategoryFilter = (value: string) => {
+    setAppliedCategoryFilters((xs) => (xs.includes(value) ? xs.filter((v) => v !== value) : [...xs, value]))
+    afterFilterChange()
   }
-
-  const resetCategoryFilters = () => {
-    setPendingCategoryFilters([])
+  const toggleSecurityFilter = (value: SecurityFilterValue) => {
+    setAppliedSecurityFilters((xs) => (xs.includes(value) ? xs.filter((v) => v !== value) : [...xs, value]))
+    afterFilterChange()
+  }
+  const toggleSourceFilter = (value: string) => {
+    setAppliedSourceFilters((xs) => (xs.includes(value) ? xs.filter((v) => v !== value) : [...xs, value]))
+    afterFilterChange()
+  }
+  const clearAllFilters = () => {
     setAppliedCategoryFilters([])
-    setPage(1)
-    setSelectedItemId(null)
-    setCategoryFilterQuery("")
-    setCategoryFilterOpen(false)
-  }
-
-  const resetSourceFilters = () => {
-    setPendingSourceFilters([])
-    setAppliedSourceFilters([])
-    setPage(1)
-    setSelectedItemId(null)
-    setSourceFilterQuery("")
-    setSourceFilterOpen(false)
-  }
-
-  const resetSecurityFilters = () => {
-    setPendingSecurityFilters([])
     setAppliedSecurityFilters([])
-    setPage(1)
-    setSelectedItemId(null)
-    setSecurityFilterQuery("")
-    setSecurityFilterOpen(false)
+    setAppliedSourceFilters([])
+    afterFilterChange()
   }
 
-  const toggleAppliedTagFilter = (slug: string) => {
-    setAppliedTagFilters((current) =>
-      current.includes(slug) ? current.filter((item) => item !== slug) : [...current, slug],
-    )
-    setPage(1)
-    setSelectedItemId(null)
-  }
-
-  const favoriteIconColor = (favorited?: boolean) =>
-    favorited ? (typeMeta().color ?? "var(--native-primary)") : "var(--native-muted)"
   const typeLabel = (value: string) => language.t(typeKey(value))
-
-  const copyInstall = async (item: CapabilityItem) => {
-    await navigator.clipboard.writeText(getInstallCommand(item))
-    setCopiedItemId(item.id)
-    setTimeout(() => {
-      setCopiedItemId((cur) => (cur === item.id ? null : cur))
-    }, 2000)
-  }
 
   // Aggregate stats for type-list hero
   const typeAggregate = createMemo(() => {
@@ -581,70 +628,96 @@ export default function Home() {
     }
   })
 
+  // Shared view contract for the card grid / list view (StoreItemViewProps).
+  const viewProps = createMemo<StoreItemViewProps>(() => ({
+    rows: rows(),
+    onRowClick: openItemDetail,
+    typeLabel,
+    typeColor: (value) => STORE_TYPES.find((entry) => entry.value === value)?.color,
+    typeIcon: (value) => STORE_TYPES.find((entry) => entry.value === value)?.icon ?? "dot-grid",
+    categoryLabel: (slug) => itemFilterOptions.categoryLabel(slug),
+    formatSourceMetric,
+    formatDate,
+    searchQuery: debouncedSearch(),
+    onToggleFavorite: (item) => void toggleRowFavorite(item),
+    // Reactive favorite state per item id, decoupled from the item object so toggling does NOT
+    // replace the item (which would rebuild the `<For>` row and the SubscribeButton instance).
+    favoriteState: favStateOf,
+    favoriteActionItemId: favoriteActionItemId(),
+    isAuthenticated: !!auth.user() && !auth.loading(),
+    favoriteLabels: {
+      subscribe: language.t("store.detail.favorite"),
+      subscribed: language.t("store.detail.unfavorite"),
+      tooltip: language.t("store.distribute.tooltip"),
+    },
+    emptyMessage: language.t("store.noResults"),
+  }))
+
+  // 筛选条 labels 以设计稿为准：分类 / 风险 / 来源（与表格列头/详情页共享的 key 解耦，
+  // 用 home 专属 store.home.filters.* 避免改动别处文案）。
+  const filterBarLabels = createMemo(() => ({
+    category: language.t("store.home.filters.category"),
+    security: language.t("store.home.filters.risk"),
+    source: language.t("store.home.filters.source"),
+    clear: language.t("store.home.filters.clear"),
+    noOptions: language.t("store.noResults"),
+    totalCount: (count: number) => language.t("store.home.filters.totalCount", { count }),
+  }))
+
   return (
-    <div class="flex h-full min-h-0 w-full flex-1 flex-col">
+    <div class="flex min-h-full w-full flex-col">
       <Show
         when={isTypeListMode()}
         fallback={
           <>
             {/* ═══ HOME MODE ═══ */}
-            <header class="relative overflow-hidden bg-[linear-gradient(135deg,color-mix(in_srgb,var(--native-primary)_2%,var(--native-bg)),color-mix(in_srgb,var(--native-primary)_10%,var(--native-panel))_62%,color-mix(in_srgb,var(--native-primary)_14%,var(--native-panel)))] before:pointer-events-none before:absolute before:right-[-10%] before:top-[-60%] before:h-[340px] before:w-[340px] before:rounded-full before:bg-[radial-gradient(circle,color-mix(in_srgb,var(--native-primary)_8%,transparent),transparent_70%)] before:content-['']">
+            {/* 顶栏底色对齐设计稿 .topbar：中性浅色半透明 + 毛玻璃 + 底部细边线（无 primary 蓝调），
+                深浅主题均用 --native-* token 自适应。 */}
+            <header class="relative overflow-hidden border-b border-[color:color-mix(in_srgb,var(--native-border)_50%,transparent)] bg-[color:color-mix(in_srgb,var(--native-panel)_85%,var(--native-bg))] backdrop-blur-[14px]">
               <div class="relative flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-4 px-4 md:px-5 py-3 lg:gap-6">
                 <div class="min-w-0 flex flex-col md:flex-row md:flex-1 md:items-center gap-0.5 md:gap-4">
                   <h1 class="relative m-0 shrink-0 text-[1.625rem] leading-[1.15] font-extrabold tracking-[-0.035em] text-[var(--native-foreground)]">
                     {language.t("store.home.hero.title")}
                   </h1>
-                  <p class="relative m-0 hidden min-w-0 max-w-none lg:block lg:max-w-[38rem] text-[0.8125rem] leading-6 text-[var(--native-muted)]">
+                  <p class="relative m-0 hidden min-w-0 max-w-none lg:block lg:max-w-[38rem] text-[0.8125rem] font-semibold leading-6 text-[var(--native-muted)]">
                     {language.t("store.home.hero.description")}
                   </p>
                 </div>
 
                 <div class="flex flex-wrap sm:flex-nowrap shrink-0 items-center justify-start md:justify-end gap-2 md:gap-3 w-full md:w-auto pb-1 md:pb-0">
-                  <div class="flex flex-nowrap items-stretch justify-start md:justify-end gap-2">
+                  <div class="relative flex flex-nowrap items-center gap-0.5" role="tablist">
+                    {/* sliding thumb：白底滑块（iOS segmented 风），1px 边框 + 轻阴影，跟随选中项滑动。
+                        选中文字/图标用「管理」按钮同款主色蓝。 */}
+                    <div
+                      class="pointer-events-none absolute inset-y-0 z-0 rounded-[9px] border border-[color:color-mix(in_srgb,var(--native-border)_60%,transparent)] bg-[var(--native-panel)] shadow-[var(--native-shadow-sm)] transition-[transform,width] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]"
+                      style={{
+                        transform: `translateX(${tabThumb().x}px)`,
+                        width: `${tabThumb().w}px`,
+                        opacity: tabThumb().w ? "1" : "0",
+                      }}
+                    />
                     <For each={statCards()}>
                       {(entry) => (
                         <button
+                          ref={(el) => (tabEls[entry.value] = el)}
                           type="button"
+                          role="tab"
                           class={cn(
-                            "group flex shrink-0 items-center gap-1.5 rounded-[0.375rem] border border-transparent bg-transparent px-2 md:px-3 py-0.5 text-left cursor-pointer transition-[background-color,border-color,color,transform,box-shadow]",
-                            entry.value === activeType() && "border-transparent bg-[var(--stat-accent)] text-white",
-                            hoveredType() === entry.value &&
-                              entry.value !== activeType() &&
-                              "bg-[color:color-mix(in_oklab,var(--stat-accent)_70%,white)] text-white",
+                            "relative z-[1] flex shrink-0 cursor-pointer items-center gap-1.5 rounded-[9px] px-3 py-[7px] text-[13px] font-bold transition-[color] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]",
+                            entry.value === activeType()
+                              ? "text-[var(--native-primary)]"
+                              : "text-[color:color-mix(in_srgb,var(--native-muted)_88%,white)] hover:text-[var(--native-foreground)]",
                           )}
-                          style={{ "--stat-accent": entry.color, "--stat-bg": entry.bg }}
                           onClick={() => handleTypeChange(entry.value)}
-                          onMouseEnter={() => setHoveredType(entry.value)}
-                          onMouseLeave={() => setHoveredType((current) => (current === entry.value ? null : current))}
                           aria-pressed={entry.value === activeType()}
                         >
-                          <div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-none bg-transparent">
-                            <Icon
-                              name={entry.icon}
-                              class={cn("type-icon transition-colors", entry.value === activeType() && "!text-white")}
-                              style={{
-                                color:
-                                  entry.value === activeType() || hoveredType() === entry.value
-                                    ? "#ffffff"
-                                    : entry.color,
-                              }}
-                            />
-                          </div>
-                          <div class="min-w-0">
-                            <div
-                              class={cn(
-                                "type-label text-[12px] uppercase tracking-[0.05em] text-[var(--native-foreground)]",
-                                entry.value === activeType() ? "font-bold !text-white" : "font-medium",
-                              )}
-                              style={
-                                entry.value === activeType() || hoveredType() === entry.value
-                                  ? { color: "#ffffff", "font-weight": entry.value === activeType() ? 700 : 500 }
-                                  : undefined
-                              }
-                            >
-                              {language.t(entry.labelKey)}
-                            </div>
-                          </div>
+                          <StoreIcon
+                            name={entry.value}
+                            size={15}
+                            class="shrink-0 transition-colors duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]"
+                            style={{ color: entry.value === activeType() ? "var(--native-primary)" : entry.color }}
+                          />
+                          <span class="whitespace-nowrap">{language.t(entry.labelKey)}</span>
                         </button>
                       )}
                     </For>
@@ -660,7 +733,7 @@ export default function Home() {
                       >
                         <Icon name="sliders" class="size-4" style={{ color: "#ffffff" }} />
                         <span
-                          class="text-sm font-medium leading-none !text-white hidden sm:inline"
+                          class="text-sm font-semibold leading-none !text-white hidden sm:inline"
                           style={{ color: "#ffffff" }}
                         >
                           {language.t("store.console.capabilities.manage")}
@@ -672,7 +745,8 @@ export default function Home() {
               </div>
             </header>
 
-            <div class="flex min-h-0 min-w-0 flex-1 flex-col">
+            {/* 内容区随卡片/列式自然增高，整页滚动交给 StoreLayout；不再 flex-1/min-h-0 压高 */}
+            <div class="flex min-w-0 flex-col">
               <div class="flex w-full py-4">
                 <SearchControls />
               </div>
@@ -683,7 +757,7 @@ export default function Home() {
         }
       >
         {/* ═══ TYPE LIST MODE ═══ */}
-        <div class="flex min-h-0 min-w-0 flex-1 flex-col gap-4 max-[1280px]:gap-3">
+        <div class="flex min-w-0 flex-col gap-4 max-[1280px]:gap-3">
           {/* Type Hero Header */}
           <header
             class="relative flex flex-col gap-4 lg:gap-5 overflow-hidden rounded-[1.25rem] border border-[color:color-mix(in_srgb,var(--native-border)_12%,transparent)] bg-[linear-gradient(135deg,var(--native-panel),color-mix(in_srgb,var(--tp-accent)_5%,var(--native-panel)))] px-4 py-4 lg:px-7 lg:py-6 before:pointer-events-none before:absolute before:right-[-5%] before:top-[-40%] before:h-[280px] before:w-[280px] before:rounded-full before:bg-[radial-gradient(circle,color-mix(in_srgb,var(--tp-accent)_8%,transparent),transparent_70%)] before:content-[''] lg:flex-row lg:items-center lg:justify-between"
@@ -696,7 +770,7 @@ export default function Home() {
               <h1 class="m-0 text-[1.375rem] leading-[1.2] font-extrabold tracking-[-0.03em] text-[var(--native-foreground)]">
                 {language.t(typeMeta().labelKey)}
               </h1>
-              <p class="mt-1 text-[0.8125rem] leading-[1.5] text-[var(--native-muted)]">
+              <p class="mt-1 text-[0.8125rem] font-semibold leading-[1.5] text-[var(--native-muted)]">
                 {language.t(typeMeta().descKey)}
               </p>
             </div>
@@ -795,6 +869,7 @@ export default function Home() {
                     itemId={itemId()}
                     class={cn(sx.sheetBody, "thin-scrollbar")}
                     onItemLoaded={setDetailItem}
+                    onSelectItem={setSelectedItemId}
                     favorited={favorited()}
                     favoriteCount={favoriteCount()}
                     previewCount={previewCount()}
@@ -816,22 +891,12 @@ export default function Home() {
   function SearchControls() {
     return (
       <section class={sx.section}>
-        <div class="mx-auto flex w-full max-w-[64rem] items-center gap-3 px-3 sm:px-4 max-[640px]:gap-2">
-            <div class="relative min-w-0 flex-1 rounded-full transition-shadow hover:shadow-[0_2px_6px_-3px_color-mix(in_srgb,var(--native-primary)_22%,rgba(15,23,42,0.3))] focus-within:shadow-[0_2px_6px_-3px_color-mix(in_srgb,var(--native-primary)_22%,rgba(15,23,42,0.3))]">
-            <div class="pointer-events-none absolute inset-y-0 left-0 z-10 flex items-center pl-4 text-[color:color-mix(in_srgb,var(--native-muted)_82%,white)]">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                class="size-4"
-              >
-                <circle cx="11" cy="11" r="7" />
-                <path d="m20 20 -3.5 -3.5" />
-              </svg>
+        {/* 居中容器，对齐设计稿 .wrap（max-width:1200px; padding:0 26px） */}
+        <div class="mx-auto flex w-full max-w-[1200px] items-center gap-3 px-[26px] max-[640px]:gap-2 max-[640px]:px-4">
+            {/* 搜索框：对齐设计稿 .search input（h 42 / rounded 13 / native-border / native-panel） */}
+            <div class="relative min-w-0 flex-1 max-w-[560px] rounded-[13px] transition-shadow hover:shadow-[0_2px_6px_-3px_color-mix(in_srgb,var(--native-primary)_22%,rgba(15,23,42,0.3))] focus-within:shadow-[0_2px_6px_-3px_color-mix(in_srgb,var(--native-primary)_22%,rgba(15,23,42,0.3))]">
+            <div class="pointer-events-none absolute inset-y-0 left-0 z-10 flex items-center pl-[13px] text-[color:color-mix(in_srgb,var(--native-muted)_82%,white)]">
+              <StoreIcon name="search" size={16} />
             </div>
             <input
               ref={searchInputRef}
@@ -849,7 +914,7 @@ export default function Home() {
                   restoreSearchFocus()
                 }, 0)
               }}
-              class="h-12 w-full rounded-full border border-[color:color-mix(in_srgb,var(--native-border)_58%,transparent)] bg-[var(--native-panel)] pr-12 pl-11 text-base !text-[var(--native-foreground)] caret-[var(--native-primary)] placeholder:text-[color:color-mix(in_srgb,var(--native-muted)_72%,white)] shadow-[var(--native-shadow-sm)] focus-visible:border-2 focus-visible:border-[color:color-mix(in_srgb,var(--native-primary)_52%,var(--native-border))] focus-visible:!text-[var(--native-foreground)] focus-visible:placeholder:text-[color:color-mix(in_srgb,var(--native-muted)_36%,white)] focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0"
+              class="h-[42px] w-full rounded-[13px] border border-[var(--native-border)] bg-[var(--native-panel)] pr-10 pl-10 text-sm font-medium !text-[var(--native-foreground)] caret-[var(--native-primary)] placeholder:font-normal placeholder:text-[color:color-mix(in_srgb,var(--native-muted)_72%,white)] transition-[border-color,box-shadow] focus-visible:border-[color:color-mix(in_srgb,var(--native-primary)_55%,transparent)] focus-visible:!text-[var(--native-foreground)] focus-visible:placeholder:text-[color:color-mix(in_srgb,var(--native-muted)_36%,white)] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[color:color-mix(in_srgb,var(--native-primary)_15%,transparent)] focus-visible:ring-offset-0"
             />
             <Show when={searchText().length > 0}>
               <button
@@ -857,24 +922,17 @@ export default function Home() {
                 aria-label={language.t("common.clear")}
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={clearSearchInput}
-                class="absolute inset-y-0 right-0 flex h-full w-12 cursor-pointer items-center justify-center rounded-r-full text-[color:color-mix(in_srgb,var(--native-muted)_78%,white)] transition-colors hover:text-[var(--native-foreground)]"
+                class="absolute inset-y-0 right-0 flex h-full w-10 cursor-pointer items-center justify-center rounded-r-[13px] text-[color:color-mix(in_srgb,var(--native-muted)_78%,white)] transition-colors hover:text-[var(--native-foreground)]"
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  class="size-4"
-                >
-                  <path d="M18 6 6 18" />
-                  <path d="m6 6 12 12" />
-                </svg>
+                <StoreIcon name="x" size={16} />
               </button>
             </Show>
             </div>
+
+          {/* 右侧控件组：显示Fork / 隐藏插件子集 / 排序 / 卡片|列式 seg 整体靠最右（对齐设计稿
+              .right：margin-left:auto; display:flex; gap:10px）。搜索框 flex-1 占左、本组 ml-auto 居右。 */}
+          <div class="ml-auto flex flex-wrap items-center justify-end gap-2">
+          {/* 显示 Fork / 隐藏插件子集：对齐设计稿 .ftgl（h 34 / rounded 10 / border / bg-panel；on=主色） */}
           <button
             type="button"
             onClick={() => {
@@ -883,17 +941,109 @@ export default function Home() {
             }}
             aria-pressed={showForks()}
             title={language.t("store.home.showForks")}
-            class="inline-flex h-12 shrink-0 items-center gap-1.5 rounded-full border px-4 text-sm transition-colors max-[640px]:px-3"
+            class="inline-flex h-[34px] shrink-0 items-center gap-1.5 rounded-[10px] border px-3 text-[12.5px] font-bold transition-[color,border-color,background-color] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]"
             classList={{
-              "border-[color:color-mix(in_srgb,var(--native-primary)_52%,var(--native-border))] bg-[color:color-mix(in_srgb,var(--native-primary)_10%,var(--native-panel))] text-[var(--native-foreground)]":
+              "border-[color:color-mix(in_srgb,var(--native-primary)_45%,transparent)] bg-[color:color-mix(in_srgb,var(--native-primary)_10%,var(--native-panel))] text-[var(--native-primary)]":
                 showForks(),
-              "border-[color:color-mix(in_srgb,var(--native-border)_58%,transparent)] bg-[var(--native-panel)] text-[color:color-mix(in_srgb,var(--native-muted)_82%,white)] hover:text-[var(--native-foreground)]":
+              "border-[var(--native-border)] bg-[var(--native-panel)] text-[var(--native-foreground)] hover:border-[var(--native-dim)] hover:text-[var(--native-foreground)]":
                 !showForks(),
             }}
           >
-            <LocalIcon name="fork" size="small" />
+            <StoreIcon name="layers" size={14} />
             <span class="max-[640px]:hidden">{language.t("store.home.showForks")}</span>
           </button>
+          <button
+            type="button"
+            role="switch"
+            aria-pressed={hideSubSkills()}
+            onClick={toggleHideSubSkills}
+            class="inline-flex h-[34px] shrink-0 items-center gap-1.5 rounded-[10px] border px-3 text-[12.5px] font-bold transition-[color,border-color,background-color] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]"
+            classList={{
+              "border-[color:color-mix(in_srgb,var(--native-primary)_45%,transparent)] bg-[color:color-mix(in_srgb,var(--native-primary)_10%,var(--native-panel))] text-[var(--native-primary)]":
+                hideSubSkills(),
+              "border-[var(--native-border)] bg-[var(--native-panel)] text-[var(--native-foreground)] hover:border-[var(--native-dim)] hover:text-[var(--native-foreground)]":
+                !hideSubSkills(),
+            }}
+            title={hidePluginItemsLabel()}
+          >
+            <StoreIcon name={hideSubSkills() ? "check" : "layers"} size={14} />
+            <span class="whitespace-nowrap max-[640px]:hidden">{hidePluginItemsLabel()}</span>
+          </button>
+
+          {/* 排序下拉：订阅最多 / 评分最高 / 最近更新（始终 desc）；触发器对齐设计稿 .fbtn。
+              modal={false}：预防同类 scroll-lock（选排序也会 setPage(1) → 列表重挂），且与 page-size/
+              列显隐下拉保持一致——不锁 body 滚动，点外部 / Esc 仍正常关闭。 */}
+          <DropdownMenu modal={false}>
+            <DropdownMenuTrigger
+              as="button"
+              class="inline-flex h-[34px] shrink-0 cursor-pointer items-center gap-1.5 rounded-[10px] border border-[var(--native-border)] bg-[var(--native-panel)] px-3 text-[12.5px] font-bold text-[var(--native-foreground)] transition-[color,border-color,background-color] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:border-[var(--native-dim)] hover:text-[var(--native-foreground)]"
+            >
+              <span class="whitespace-nowrap max-[640px]:hidden">{currentSortLabel()}</span>
+              <StoreIcon name="caret" size={13} class="opacity-70" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent class="w-44">
+              <DropdownMenuRadioGroup value={sort.by} onChange={(value) => selectSort(value as ItemSort)}>
+                <For each={SORT_OPTIONS}>
+                  {(option) => (
+                    <DropdownMenuRadioItem value={option.value}>
+                      {language.t(option.labelKey)}
+                    </DropdownMenuRadioItem>
+                  )}
+                </For>
+              </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* 卡片/列式 seg：严格 1:1 复刻设计稿 .seg。
+              外框 .seg = p-1 / rounded-12 / 1px native-border / bg-native-panel。
+              thumb .seg-thumb = inset-y-1(top/bottom 4px) + 1px native-border + box-shadow:0 2px 8px -4px #0007
+                + 背景 --panel-2（比 panel 明显更亮的一层）→ 用 native-surface，滑块才能"浮起来"；
+                过渡 transform/width .42s ease（与设计稿一致，非 cubic-bezier）。left-0 为定位基准，由 measureSegThumb 驱动。
+              button .seg button = rounded-9 / px-13 py-7 / 13px font-bold / gap-7 / transition-color .25s；
+                选中 .on = text native-foreground（深色，非蓝；蓝是顶栏 tab）。 */}
+          <div class="relative inline-flex shrink-0 items-center rounded-[12px] border border-[var(--native-border)] bg-[var(--native-panel)] p-1">
+            <div
+              class="pointer-events-none absolute inset-y-1 left-0 z-0 rounded-[9px] border border-[var(--native-border)] bg-[var(--native-surface)] shadow-[0_2px_8px_-4px_rgba(0,0,0,0.45)] transition-[transform,width] duration-[420ms] ease-out"
+              style={{
+                transform: `translateX(${segThumb().x}px)`,
+                width: `${segThumb().w}px`,
+                opacity: segThumb().w ? "1" : "0",
+              }}
+            />
+            <button
+              ref={(el) => (segEls.card = el)}
+              type="button"
+              aria-pressed={viewMode() === "card"}
+              title={language.t("store.home.view.card")}
+              onClick={() => setViewMode("card")}
+              class={cn(
+                "relative z-[1] inline-flex cursor-pointer items-center gap-[7px] rounded-[9px] px-[13px] py-[7px] text-[13px] font-bold transition-[color] duration-[250ms] ease-out",
+                viewMode() === "card"
+                  ? "text-[var(--native-foreground)]"
+                  : "text-[var(--native-muted)] hover:text-[var(--native-foreground)]",
+              )}
+            >
+              <StoreIcon name="grid" size={15} />
+              <span class="whitespace-nowrap max-[640px]:hidden">{language.t("store.home.view.card")}</span>
+            </button>
+            <button
+              ref={(el) => (segEls.list = el)}
+              type="button"
+              aria-pressed={viewMode() === "list"}
+              title={language.t("store.home.view.list")}
+              onClick={() => setViewMode("list")}
+              class={cn(
+                "relative z-[1] inline-flex cursor-pointer items-center gap-[7px] rounded-[9px] px-[13px] py-[7px] text-[13px] font-bold transition-[color] duration-[250ms] ease-out",
+                viewMode() === "list"
+                  ? "text-[var(--native-foreground)]"
+                  : "text-[var(--native-muted)] hover:text-[var(--native-foreground)]",
+              )}
+            >
+              <StoreIcon name="rows" size={15} />
+              <span class="whitespace-nowrap max-[640px]:hidden">{language.t("store.home.view.list")}</span>
+            </button>
+          </div>
+          </div>
         </div>
       </section>
     )
@@ -901,8 +1051,57 @@ export default function Home() {
 
   function ContentShell() {
     return (
-      <section class={cn(sx.section, "flex min-h-0 flex-1 flex-col px-2 sm:px-3")}>
-        <div class={cn(sx.tableShell, "flex min-h-0 flex-1 flex-col")}>
+      <section class={sx.section}>
+        {/* 居中容器，对齐设计稿 .wrap（max-width:1200px; padding:0 26px），修掉列表过宽。
+            注意：列表区随内容自然增高，整页滚动交给 StoreLayout 的 overflow-y-auto；
+            这里不再用 flex-1 / min-h-0 压列表高度（那会把卡片裁掉、把分页器顶到中间被遮挡）。 */}
+        <div class="mx-auto flex w-full max-w-[1200px] flex-col gap-4 px-[26px] pb-6 max-[640px]:px-4">
+        {/* 独立筛选条：分类/风险/来源 下拉 + chips + 清除 + 共 N 个 */}
+        <StoreFilterBar
+          category={{
+            options: categories().map((category) => ({
+              value: category.slug,
+              label: itemFilterOptions.categoryLabel(category.slug, category),
+            })),
+            appliedValues: appliedCategoryFilters(),
+            toggle: toggleCategoryFilter,
+            reset: () => {
+              setAppliedCategoryFilters([])
+              afterFilterChange()
+            },
+          }}
+          security={{
+            options: securityOptions().map((option) => ({
+              value: option.value,
+              label: itemFilterOptions.securityRiskGroupLabel(option.value as SecurityFilterValue, option),
+            })),
+            appliedValues: appliedSecurityFilters(),
+            toggle: (value) => toggleSecurityFilter(value as SecurityFilterValue),
+            reset: () => {
+              setAppliedSecurityFilters([])
+              afterFilterChange()
+            },
+          }}
+          source={{
+            options: sourceOptions().map((source) => ({
+              value: source.value,
+              label: itemFilterOptions.sourceLabel(source.value, source) || source.value,
+            })),
+            appliedValues: appliedSourceFilters(),
+            toggle: toggleSourceFilter,
+            reset: () => {
+              setAppliedSourceFilters([])
+              afterFilterChange()
+            },
+          }}
+          totalItems={totalItems()}
+          onClearAll={clearAllFilters}
+          labels={filterBarLabels()}
+        />
+
+        {/* 列表区：relative 定位仅用于承载 loading 半透明遮罩（absolute inset-0），
+            最小高度保证空态/加载态不塌陷；不抢占整页滚动。 */}
+        <div class="relative min-h-[18rem]">
           <Show
             when={!showError()}
             fallback={
@@ -918,170 +1117,40 @@ export default function Home() {
                   <div class={sx.spinner} />
                 </div>
               </Show>
-              <StoreCapabilityTable
-                rows={rows()}
-                visibleColumns={visibleColumns()}
-                columnOptions={columnOptions()}
-                onToggleColumnVisibility={toggleColumnVisibility}
-                sort={sort}
-                onSortChange={handleSortChange}
-                onRowClick={openItemDetail}
-                typeLabel={typeLabel}
-                typeColor={activeType() === "all" ? undefined : (value) => STORE_TYPES.find((e) => e.value === value)?.color}
-                typeBadge={
-                  activeType() === "all"
-                    ? (value) => {
-                        const t = STORE_TYPES.find((e) => e.value === value)
-                        return t ? { icon: t.icon, color: t.color } : undefined
-                      }
-                    : undefined
-                }
-                categoryLabel={(slug, category) => itemFilterOptions.categoryLabel(slug, category)}
-                sourceLabel={(value, source) =>
-                  itemFilterOptions.sourceLabel(value, source as Parameters<typeof itemFilterOptions.sourceLabel>[1])
-                }
-                sourceUrl={(value) => itemFilterOptions.sourceUrl(value)}
-                securityLabel={(value, option) =>
-                  itemFilterOptions.securityRiskGroupLabel(
-                    value,
-                    option as Parameters<typeof itemFilterOptions.securityRiskGroupLabel>[1],
-                  )
-                }
-                favoriteIconColor={favoriteIconColor}
-                onToggleFavorite={(item) => void toggleRowFavorite(item)}
-                currentUserId={currentUserId()}
-                currentUserRoles={auth.user()?.systemRoles ?? []}
-                onDistribute={(item) =>
-                  dialog.show(() => (
-                    <DistributeDialog itemId={item.id} itemName={item.name} />
-                  ))
-                }
-                distributeTooltip={language.t("store.distribute.tooltip")}
-                formatDate={formatDate}
-                formatSourceMetric={formatSourceMetric}
-                formatCompact={formatCompact}
-                searchQuery={debouncedSearch()}
-                filters={{
-                  category: {
-                    open: categoryFilterOpen(),
-                    onOpenChange: (open) => {
-                      setCategoryFilterOpen(open)
-                      if (open) {
-                        setPendingCategoryFilters([...appliedCategoryFilters()])
-                        setCategoryFilterQuery("")
-                      }
-                    },
-                    active: categoryFilterActive(),
-                    appliedValues: appliedCategoryFilters(),
-                    pendingValues: pendingCategoryFilters(),
-                    query: categoryFilterQuery(),
-                    onQueryChange: setCategoryFilterQuery,
-                    options: filteredCategoryOptions(),
-                    togglePending: togglePendingCategoryFilter,
-                    apply: applyCategoryFilters,
-                    reset: resetCategoryFilters,
-                  },
-                  security: {
-                    open: securityFilterOpen(),
-                    onOpenChange: (open) => {
-                      setSecurityFilterOpen(open)
-                      if (open) {
-                        setPendingSecurityFilters([...appliedSecurityFilters()])
-                        setSecurityFilterQuery("")
-                      }
-                    },
-                    active: securityFilterActive(),
-                    appliedValues: appliedSecurityFilters(),
-                    pendingValues: pendingSecurityFilters(),
-                    query: securityFilterQuery(),
-                    onQueryChange: setSecurityFilterQuery,
-                    options: filteredSecurityOptions(),
-                    togglePending: togglePendingSecurityFilter,
-                    apply: applySecurityFilters,
-                    reset: resetSecurityFilters,
-                  },
-                  source: {
-                    open: sourceFilterOpen(),
-                    onOpenChange: (open) => {
-                      setSourceFilterOpen(open)
-                      if (open) {
-                        setPendingSourceFilters([...appliedSourceFilters()])
-                        setSourceFilterQuery("")
-                      }
-                    },
-                    active: sourceFilterActive(),
-                    appliedValues: appliedSourceFilters(),
-                    pendingValues: pendingSourceFilters(),
-                    query: sourceFilterQuery(),
-                    onQueryChange: setSourceFilterQuery,
-                    options: filteredSourceOptions(),
-                    togglePending: togglePendingSourceFilter,
-                    apply: applySourceFilters,
-                    reset: resetSourceFilters,
-                  },
-                  tag: {
-                    active: tagFilterActive(),
-                    appliedValues: appliedTagFilters(),
-                    onApply: (values) => {
-                      setAppliedTagFilters(values)
-                      setPage(1)
-                      setSelectedItemId(null)
-                    },
-                    onReset: () => {
-                      setAppliedTagFilters([])
-                      setPage(1)
-                      setSelectedItemId(null)
-                    },
-                    onTagClick: toggleAppliedTagFilter,
-                  },
-                }}
-                labels={{
-                  title: language.t("store.home.table.title"),
-                  description: language.t("store.home.table.description"),
-                  type: language.t("store.console.capabilities.type"),
-                  category: language.t("store.console.capabilities.category"),
-                  security: language.t("store.security.riskLevel"),
-                  tag: language.t("store.home.table.tag"),
-                  source: language.t("store.home.table.source"),
-                  experienceScore: language.t("store.home.table.experienceScore"),
-                  favoriteCount: language.t("store.home.table.favoriteCount"),
-                  favorite: language.t("store.detail.favorite"),
-                  unfavorite: language.t("store.detail.unfavorite"),
-                  favoriteTooltip: language.t("store.detail.favoriteTooltip"),
-                  unfavoriteTooltip: language.t("store.detail.unfavoriteTooltip"),
-                  favoriteSignInTooltip: language.t("store.detail.favoriteSignInTooltip"),
-                  updated: language.t("store.detail.updated"),
-                  toggleColumns: language.t("store.home.table.toggleColumns"),
-                  noResults: language.t("store.noResults"),
-                  reset: language.t("common.reset"),
-                  confirm: language.t("channels.add.confirm"),
-                  searchCategory: language.t("store.home.filters.searchCategory"),
-                  searchSecurity: language.t("store.home.filters.searchSecurity"),
-                  searchSource: language.t("store.home.filters.searchSource"),
-                  searchTag: language.t("store.home.filters.searchTag"),
-                  tagLimitHint: language.t("store.home.filters.tagLimitHint"),
-                }}
-                emptyMessage={language.t("store.home.emptyCategory")}
-                maxVisibleRows={PAGE_SIZE}
-              />
+              {/* 入场动画：筛选/排序/搜索使「已生效查询」变化并取回新数据后，listAnimEpoch 自增，
+                  下面的 keyed <Show> 把列表子树重挂一次，子项各自播放 store-row-enter（stagger）。
+                  卡片⇄列式切换不经过这里（走 withViewTransition 共享元素），两套动画互不干扰。 */}
+              <style>{STORE_LIST_ENTER_CSS}</style>
+              {/* keyed 用 epoch+1 保证始终为真值（首屏也渲染）；epoch 变化时整子树重挂以触发入场。 */}
+              <Show keyed when={listAnimEpoch() + 1}>
+                <div data-store-list-enter={listEnterActive() ? "" : undefined}>
+                  {/* 卡片 / 列式 视图（共用 StoreItemViewProps 契约，由 viewMode 切换） */}
+                  <Show when={viewMode() === "card"} fallback={<StoreListView {...viewProps()} />}>
+                    <StoreCardGrid {...viewProps()} />
+                  </Show>
+                </div>
+              </Show>
             </Show>
           </Show>
         </div>
 
         <StoreTableFooter
           page={page()}
-          pageSize={PAGE_SIZE}
+          pageSize={pageSize()}
           totalPages={totalPages()}
           totalItems={totalItems()}
           summary={formatStoreTablePaginationSummary({
             page: page(),
-            pageSize: PAGE_SIZE,
+            pageSize: pageSize(),
             totalItems: totalItems(),
             showingLabel: (args) => language.t("store.console.capabilities.showing", args),
             emptyLabel: language.t("store.home.pagination.empty"),
           })}
           onPageChange={handlePageChange}
+          onPageSizeChange={setPageSize}
+          pageSizeOptions={[...PAGE_SIZE_OPTIONS]}
         />
+        </div>
       </section>
     )
   }

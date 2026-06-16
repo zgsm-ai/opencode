@@ -8,11 +8,13 @@ type DiffState = {
   branch: string
   loading: boolean
   error: string | undefined
+  disabled: boolean
 }
 
 type DiffStoreOptions = {
   scope: () => string
   fetch: () => Promise<DiffData | undefined>
+  isDisabledError?: (e: unknown) => boolean
 }
 
 export function createDiffStore(options: DiffStoreOptions) {
@@ -23,6 +25,7 @@ export function createDiffStore(options: DiffStoreOptions) {
     branch: "",
     loading: false,
     error: undefined,
+    disabled: false,
   })
 
   const inflight = new Map<string, Promise<void>>()
@@ -37,6 +40,7 @@ export function createDiffStore(options: DiffStoreOptions) {
         draft.branch = ""
         draft.loading = false
         draft.error = undefined
+        draft.disabled = false
       }),
     )
   }
@@ -66,7 +70,11 @@ export function createDiffStore(options: DiffStoreOptions) {
       })
       .catch((e) => {
         if (options.scope() !== directory) return
-        setState("error", e?.message ?? "Unknown error")
+        if (options.isDisabledError?.(e)) {
+          setState("disabled", true)
+        } else {
+          setState("error", e?.message ?? "Unknown error")
+        }
       })
       .finally(() => {
         if (options.scope() !== directory) return

@@ -8,11 +8,11 @@ import { createMemo } from "solid-js"
 import type { FileSelection } from "@/context/file"
 import { useGlobalSync } from "@/context/global-sync"
 import { useLanguage } from "@/context/language"
-import { useLocal } from "@/context/local"
-import { usePermission } from "@/context/permission"
+import { useDeviceLocal } from "@/context/device-local"
+import { useDeviceWorkspace } from "@/context/device-workspace"
+import { useDeviceSessionStore } from "@/context/device-session"
 import { type ImageAttachmentPart, type Prompt, usePrompt } from "@/context/prompt"
-import { useSDK } from "@/context/sdk"
-import { useSync } from "@/context/sync"
+import { useDeviceSDK } from "@/context/device-sdk"
 import { useConversationAdapter } from "@/context/device-adapter"
 import { Identifier } from "@/utils/id"
 import { Worktree as WorktreeState } from "@/utils/worktree"
@@ -30,7 +30,6 @@ const pending = new Map<string, PendingPrompt>()
 type PromptSubmitInput = {
   info: Accessor<{ id: string } | undefined>
   imageAttachments: Accessor<ImageAttachmentPart[]>
-  commentCount: Accessor<number>
   autoAccept: Accessor<boolean>
   mode: Accessor<"normal" | "shell">
   working: Accessor<boolean>
@@ -48,24 +47,16 @@ type PromptSubmitInput = {
   // first user message of a new session only. Opt-in: when absent, behavior is
   // unchanged.
   hiddenSeed?: Accessor<string | undefined>
-}
-
-type CommentItem = {
-  path: string
-  selection?: FileSelection
-  comment?: string
-  commentID?: string
-  commentOrigin?: "review" | "file"
-  preview?: string
+  onCommand?: (name: string) => boolean
 }
 
 export function createPromptSubmit(input: PromptSubmitInput) {
   const navigate = useNavigate()
-  const sdk = useSDK()
-  const sync = useSync()
+  const sdk = useDeviceSDK()
   const globalSync = useGlobalSync()
-  const local = useLocal()
-  const permission = usePermission()
+  const local = useDeviceLocal()
+  const workspace = useDeviceWorkspace()
+  const store = useDeviceSessionStore()
   const prompt = usePrompt()
   const language = useLanguage()
   const deviceAdapter = useConversationAdapter()
@@ -79,13 +70,11 @@ export function createPromptSubmit(input: PromptSubmitInput) {
     return language.t("common.requestFailed")
   }
 
-  const sessionID = createMemo(() => (sync as any).currentSessionID?.())
+  const sessionID = createMemo(() => local.activeSessionID())
 
   const abort = async () => {
     const id = sessionID()
     if (!id) return Promise.resolve()
-
-    sync.set("todo", id, [])
 
     const queued = pending.get(id)
     if (queued) {
@@ -99,26 +88,6 @@ export function createPromptSubmit(input: PromptSubmitInput) {
       .catch(() => {})
   }
 
-  const restoreCommentItems = (items: CommentItem[]) => {
-    for (const item of items) {
-      prompt.context.add({
-        type: "file",
-        path: item.path,
-        selection: item.selection,
-        comment: item.comment,
-        commentID: item.commentID,
-        commentOrigin: item.commentOrigin,
-        preview: item.preview,
-      })
-    }
-  }
-
-  const removeCommentItems = (items: { key: string }[]) => {
-    for (const item of items) {
-      prompt.context.remove(item.key)
-    }
-  }
-
   const handleSubmit = async (event: Event) => {
     event.preventDefault()
 
@@ -127,9 +96,14 @@ export function createPromptSubmit(input: PromptSubmitInput) {
     const images = input.imageAttachments().slice()
     const mode = input.mode()
 
-    if (text.trim().length === 0 && images.length === 0 && input.commentCount() === 0) {
+    if (text.trim().length === 0 && images.length === 0) {
       if (input.working()) abort()
       return
+    }
+
+    if (text.startsWith("/")) {
+      const commandName = text.trim().slice(1).split(/\s/)[0]
+      if (input.onCommand?.(commandName)) return
     }
 
     const currentModel = local.model.current()
@@ -276,8 +250,9 @@ export function createPromptSubmit(input: PromptSubmitInput) {
     if (mode === "shell") {
       clearInput()
       if (isNewSession) {
-        sync.session.replaceTab({ sessionID: session.id, title: session.title })
-        if (shouldAutoAccept) permission.enableAutoAccept()
+        const cb = local.onSessionCreated?.()
+    cb?.({ sessionID: session.id, title: session.title })
+        if (shouldAutoAccept) workspace.autoAccept.enable()
       }
       void conversation
         .sessionShell({
@@ -299,13 +274,14 @@ export function createPromptSubmit(input: PromptSubmitInput) {
     if (text.startsWith("/")) {
       const [cmdName, ...args] = text.split(" ")
       const commandName = cmdName.slice(1)
-      const commands = sync.data.command.length > 0 ? sync.data.command : await sync.command.load()
+      const commands = workspace.data.command.length > 0 ? workspace.data.command : await workspace.command.load()
       const customCommand = commands.find((c) => c.name === commandName || c.aliases?.includes(commandName))
       if (customCommand && (customCommand.scope === "prompt" || !customCommand.scope)) {
         clearInput()
         if (isNewSession) {
-          sync.session.replaceTab({ sessionID: session.id, title: session.title })
-          if (shouldAutoAccept) permission.enableAutoAccept()
+          const cb = local.onSessionCreated?.()
+    cb?.({ sessionID: session.id, title: session.title })
+          if (shouldAutoAccept) workspace.autoAccept.enable()
         }
         void conversation
           .sessionCommand({
@@ -335,7 +311,6 @@ export function createPromptSubmit(input: PromptSubmitInput) {
     }
 
     const context = prompt.context.items().slice()
-    const commentItems = context.filter((item) => item.type === "file" && !!item.comment?.trim())
 
     const messageID = Identifier.ascending("message")
     // Opt-in hidden instruction seeding (e.g. the in-page skill-writer). The
@@ -368,26 +343,24 @@ export function createPromptSubmit(input: PromptSubmitInput) {
     }
 
     const addOptimisticMessage = () =>
-      sync.session.optimistic.add({
-        directory: sessionDirectory,
+      store.optimisticAdd({
         sessionID: session.id,
         message: optimisticMessage,
         parts: optimisticParts,
       })
 
     const removeOptimisticMessage = () =>
-      sync.session.optimistic.remove({
-        directory: sessionDirectory,
+      store.optimisticRemove({
         sessionID: session.id,
         messageID,
       })
 
-    removeCommentItems(commentItems)
     clearInput()
 
     if (isNewSession) {
-      sync.session.replaceTab({ sessionID: session.id, title: session.title })
-      if (shouldAutoAccept) permission.enableAutoAccept()
+      const cb = local.onSessionCreated?.()
+    cb?.({ sessionID: session.id, title: session.title })
+      if (shouldAutoAccept) workspace.autoAccept.enable()
     }
 
     addOptimisticMessage()
@@ -397,16 +370,15 @@ export function createPromptSubmit(input: PromptSubmitInput) {
       if (!worktree || worktree.status !== "pending") return true
 
       if (sessionDirectory === projectDirectory) {
-        sync.set("session_status", session.id, { type: "busy" })
+        workspace.session.setStatus(session.id, { type: "busy" })
       }
 
       const controller = new AbortController()
       const cleanup = () => {
         if (sessionDirectory === projectDirectory) {
-          sync.set("session_status", session.id, { type: "idle" })
+          workspace.session.setStatus(session.id, { type: "idle" })
         }
         removeOptimisticMessage()
-        restoreCommentItems(commentItems)
         restoreInput()
       }
 
@@ -463,14 +435,13 @@ export function createPromptSubmit(input: PromptSubmitInput) {
     void send().catch((err) => {
       pending.delete(session.id)
       if (sessionDirectory === projectDirectory) {
-        sync.set("session_status", session.id, { type: "idle" })
+        workspace.session.setStatus(session.id, { type: "idle" })
       }
       showToast({
         title: language.t("prompt.toast.promptSendFailed.title"),
         description: errorMessage(err),
       })
       removeOptimisticMessage()
-      restoreCommentItems(commentItems)
       restoreInput()
     })
   }

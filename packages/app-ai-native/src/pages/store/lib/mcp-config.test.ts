@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { detectMcpFields, isPlaceholder, isSecret, type McpFieldLabels } from "./mcp-config"
+import { detectMcpFields, isPlaceholder, isRuntimeResolved, isSecret, mcpRequiresPluginRuntime, type McpFieldLabels } from "./mcp-config"
 
 // Fixed labels so the detector is testable without an i18n context.
 const LABELS: McpFieldLabels = { path: "path", arg: (n) => `arg ${n}` }
@@ -131,5 +131,59 @@ describe("detectMcpFields", () => {
     expect(fields).toHaveLength(1)
     expect(fields[0].key).toBe("args:0")
     expect(fields[0].label).toBe("arg 1")
+  })
+
+  test("headers (greptile shape): Bearer ${KEY} → headers field labeled by var name, secret, literal prefix kept in placeholder", () => {
+    const fields = detectMcpFields(
+      { type: "http", url: "https://api.greptile.com/mcp", headers: { Authorization: "Bearer ${GREPTILE_API_KEY}" } },
+      LABELS,
+    )
+    expect(fields).toHaveLength(1)
+    expect(fields[0]).toMatchObject({
+      key: "headers:Authorization",
+      label: "GREPTILE_API_KEY",
+      placeholder: "Bearer ${GREPTILE_API_KEY}",
+      required: true,
+      secret: true,
+    })
+  })
+
+  test("headers with real values are not fields (posthog shape)", () => {
+    expect(detectMcpFields({ url: "https://mcp.posthog.com/mcp", headers: { "x-posthog-mcp-consumer": "plugin" } }, LABELS)).toEqual([])
+  })
+
+  test("runtime vars (discord shape): ${CLAUDE_PLUGIN_ROOT} arg is NOT a fillable field", () => {
+    const discord = { command: "bun", args: ["run", "--cwd", "${CLAUDE_PLUGIN_ROOT}", "--shell=bun", "--silent", "start"] }
+    expect(detectMcpFields(discord, LABELS)).toEqual([])
+  })
+})
+
+describe("isRuntimeResolved", () => {
+  test("values whose only refs are runtime vars are host-resolved, not user-fillable", () => {
+    expect(isRuntimeResolved("${CLAUDE_PLUGIN_ROOT}")).toBe(true)
+    expect(isRuntimeResolved("${CLAUDE_PLUGIN_ROOT}/server.js")).toBe(true)
+    expect(isRuntimeResolved("${CLAUDE_PROJECT_DIR}")).toBe(true)
+  })
+
+  test("user vars / mixed refs / plain strings are not runtime-resolved", () => {
+    expect(isRuntimeResolved("${GREPTILE_API_KEY}")).toBe(false)
+    expect(isRuntimeResolved("${CLAUDE_PLUGIN_ROOT}/${USER_PATH}")).toBe(false)
+    expect(isRuntimeResolved("no refs")).toBe(false)
+    expect(isRuntimeResolved(undefined)).toBe(false)
+  })
+})
+
+describe("mcpRequiresPluginRuntime", () => {
+  test("flags templates referencing runtime vars anywhere", () => {
+    expect(mcpRequiresPluginRuntime({ command: "bun", args: ["run", "--cwd", "${CLAUDE_PLUGIN_ROOT}", "start"] })).toBe(true)
+    expect(mcpRequiresPluginRuntime({ command: "${CLAUDE_PLUGIN_ROOT}/bin/server" })).toBe(true)
+    expect(mcpRequiresPluginRuntime({ env: { ROOT: "${CLAUDE_PLUGIN_ROOT}" } })).toBe(true)
+  })
+
+  test("normal MCPs are unaffected", () => {
+    expect(mcpRequiresPluginRuntime({ command: "npx", env: { API_KEY: "YOUR_API_KEY" } })).toBe(false)
+    expect(mcpRequiresPluginRuntime({ url: "https://api.greptile.com/mcp", headers: { Authorization: "Bearer ${GREPTILE_API_KEY}" } })).toBe(false)
+    expect(mcpRequiresPluginRuntime(null)).toBe(false)
+    expect(mcpRequiresPluginRuntime({})).toBe(false)
   })
 })

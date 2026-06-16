@@ -5,12 +5,12 @@ import { List, type ListRef } from "@opencode-ai/ui/list"
 import { Tag } from "@opencode-ai/ui/tag"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { type Component, Show } from "solid-js"
-import { useLocal } from "@/context/local"
+import { useDeviceLocal } from "@/context/device-local"
 import { ModelTooltip } from "./model-tooltip"
 import { useLanguage } from "@/context/language"
 
 export const DialogSelectModelUnpaid: Component = () => {
-  const local = useLocal()
+  const local = useDeviceLocal()
   const dialog = useDialog()
   const language = useLanguage()
 
@@ -50,9 +50,7 @@ export const DialogSelectModelUnpaid: Component = () => {
             </Tooltip>
           )}
           onSelect={(x) => {
-            local.model.set(x ? { modelID: x.id, providerID: x.provider.id } : undefined, {
-              recent: true,
-            })
+            local.model.set(x ? { modelID: x.id, providerID: x.provider.id } : undefined)
             dialog.close()
           }}
         >

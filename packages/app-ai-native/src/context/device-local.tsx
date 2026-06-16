@@ -9,7 +9,7 @@ import type { ProviderCapability, ProviderCapabilityModel } from "./global-sync/
 type ModelKey = { providerID: string; modelID: string }
 
 type ModelInfo = ProviderCapabilityModel & {
-  provider: { id: string; name?: string }
+  provider: { id: string; name: string }
   latest?: boolean
 }
 
@@ -23,7 +23,13 @@ type AgentInfo = {
 
 type DeviceLocalValue = {
   slug: () => string
+  activeSessionID: () => string | undefined
   setActiveSession: (sessionID: string | undefined) => void
+  onSessionCreated: () => (((input: { sessionID: string; title?: string }) => void) | undefined)
+  navigateBack: () => (() => void) | undefined
+  setOnSessionCreated: (fn: ((input: { sessionID: string; title?: string }) => void) | undefined) => void
+  setNavigateBack: (fn: (() => void) | undefined) => void
+
   agent: {
     list: () => AgentInfo[]
     current: () => AgentInfo | undefined
@@ -97,6 +103,12 @@ export function DeviceLocalProvider(props: ParentProps<{ workspaceId?: string }>
   }
 
   const [activeSessionID, setActiveSessionID] = createSignal<string | undefined>()
+  let _onSessionCreated: ((input: { sessionID: string; title?: string }) => void) | undefined
+  let _navigateBack: (() => void) | undefined
+  const onSessionCreated = () => _onSessionCreated
+  const navigateBack = () => _navigateBack
+  const setOnSessionCreated = (fn: typeof _onSessionCreated) => { _onSessionCreated = fn }
+  const setNavigateBack = (fn: typeof _navigateBack) => { _navigateBack = fn }
 
   const [store, setStore] = createStore<{
     currentAgent: string | undefined
@@ -219,7 +231,12 @@ export function DeviceLocalProvider(props: ParentProps<{ workspaceId?: string }>
 
   const value: DeviceLocalValue = {
     slug: () => base64Encode(device.directory),
+    activeSessionID,
     setActiveSession,
+    onSessionCreated: onSessionCreated,
+    navigateBack: navigateBack,
+    setOnSessionCreated,
+    setNavigateBack,
     agent: {
       list: agentList,
       current: currentAgent,

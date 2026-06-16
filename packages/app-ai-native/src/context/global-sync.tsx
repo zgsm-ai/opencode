@@ -20,10 +20,27 @@ type GlobalSyncValue = {
   todo: { set: () => void }
 }
 
-export const GlobalSyncContext = createContext<GlobalSyncValue>()
+const globalSyncStub: GlobalSyncValue = {
+  data: { ready: true, error: undefined, session_todo: {} },
+  set: () => {},
+  get ready() {
+    return true
+  },
+  get error() {
+    return undefined
+  },
+  child: () => [{ path: {} } as any, () => {}] as const,
+  bootstrap: async () => {},
+  project: {
+    loadSessions: async () => {},
+    meta: () => {},
+    icon: () => {},
+  },
+  todo: { set: () => {} },
+}
+
+export const GlobalSyncContext = createContext<GlobalSyncValue>(globalSyncStub)
 
 export function useGlobalSync() {
-  const ctx = useContext(GlobalSyncContext)
-  if (!ctx) throw new Error("GlobalSync context must be used within a context provider")
-  return ctx
+  return useContext(GlobalSyncContext)
 }

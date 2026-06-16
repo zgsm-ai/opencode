@@ -1,6 +1,6 @@
 import { createResource, createSignal, createEffect, Show, For } from "solid-js"
 import { createHighlighter } from "shiki"
-import { useParams } from "@solidjs/router"
+import { useNavigate, useParams } from "@solidjs/router"
 import { useTheme } from "@opencode-ai/ui/theme"
 import { Icon } from "@opencode-ai/ui/icon"
 import { Markdown } from "@opencode-ai/ui/markdown"
@@ -10,7 +10,7 @@ import { useItemFilterOptions } from "@/context/item-filter-options"
 import { useLanguage } from "@/context/language"
 import { useAuth } from "@/context/auth"
 import { itemApi, userApi, behaviorApi, type McpConfigStatus } from "../lib/api"
-import { detectMcpFields } from "../lib/mcp-config"
+import { detectMcpFields, mcpRequiresPluginRuntime } from "../lib/mcp-config"
 import { McpConfigForm } from "../components/mcp-config-form"
 import SecurityTag from "../components/security-tag"
 import "@/styles/vscode-markdown.css"
@@ -88,6 +88,7 @@ export default function MobileStoreDetail() {
   const itemFilterOptions = useItemFilterOptions()
   const auth = useAuth()
   const theme = useTheme()
+  const navigate = useNavigate()
 
   const [item, { mutate: mutateItem, refetch: refetchItem }] = createResource(
     () => params.itemId,
@@ -171,11 +172,22 @@ export default function MobileStoreDetail() {
       .every((f) => filled[f.key])
   }
   const mcpGateBlocks = () => mcpHasFields() && !mcpConfigComplete()
+  // Plugin-runtime-dependent MCP: not standalone-runnable, block subscribe (unsubscribe stays allowed).
+  const mcpPluginRuntimeBlocks = () =>
+    item()?.itemType === "mcp" &&
+    !favorited() &&
+    mcpRequiresPluginRuntime(item()?.metadata as Record<string, unknown> | undefined)
 
   const onMcpSaved = (status: McpConfigStatus) => {
     setMcpStatusOverride(status)
     mutateItem((prev) => (prev ? { ...prev, mcpConfig: status } : prev))
     void refetchItem()
+  }
+
+  const openParentPlugin = () => {
+    const parentId = item()?.parentPluginId
+    if (!parentId) return
+    navigate(`/m/store/${parentId}`)
   }
 
   return (
@@ -326,6 +338,21 @@ export default function MobileStoreDetail() {
                   <p class="px-4 pt-4 pb-2 text-[13px] leading-6 text-text-weak">{data().description}</p>
                 </Show>
 
+                <Show when={data().parentPluginName && data().parentPluginId}>
+                  <div class="mx-4 mt-2 flex flex-wrap items-center gap-1.5 rounded-[var(--native-radius-md)] border border-border-weak-base bg-bg-muted/40 px-3 py-2 text-[13px] leading-5 text-text-weak">
+                    <Icon name="configuration" size="small" />
+                    <span>{language.t("store.item.fromPluginLabel")}</span>
+                    <button
+                      type="button"
+                      class="font-semibold text-text-strong underline-offset-2 transition-colors hover:text-[var(--native-primary)] hover:underline"
+                      onClick={openParentPlugin}
+                      title={data().parentPluginName}
+                    >
+                      {data().parentPluginName}
+                    </button>
+                  </div>
+                </Show>
+
                 {/* Content */}
                 <Show when={data().content}>
                   <div class="px-4 pb-6 pt-2">
@@ -373,14 +400,19 @@ export default function MobileStoreDetail() {
 
               {/* Bottom bar */}
               <div class="shrink-0 border-t border-border-weak-base bg-background-base px-4 py-3 safe-area-bottom space-y-2">
-                <Show when={auth.user() && mcpGateBlocks()}>
+                <Show when={auth.user() && mcpPluginRuntimeBlocks()}>
+                  <p class="text-center text-12-regular text-text-weak">
+                    {language.t("store.detail.mcpConfig.pluginRuntimeReason")}
+                  </p>
+                </Show>
+                <Show when={auth.user() && !mcpPluginRuntimeBlocks() && mcpGateBlocks()}>
                   <p class="text-center text-12-regular text-text-weak">
                     {language.t("store.detail.mcpConfig.gateHint")}
                   </p>
                 </Show>
                 <button
                   onClick={() => void toggleFavorite()}
-                  disabled={!auth.user() || auth.loading() || favoritePending() || mcpGateBlocks()}
+                  disabled={!auth.user() || auth.loading() || favoritePending() || mcpPluginRuntimeBlocks() || mcpGateBlocks()}
                   class="flex h-11 w-full items-center justify-center gap-2 rounded-xl text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60"
                   classList={{
                     "bg-bg-muted text-text-strong": favorited(),

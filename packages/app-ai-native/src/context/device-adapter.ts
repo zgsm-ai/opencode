@@ -1,5 +1,6 @@
 import { createContext, useContext } from "solid-js"
 import type { DeviceClient } from "../client/device-client"
+import { useDeviceSDK } from "./device-sdk"
 
 export type ConversationAdapter = {
   sessionCreate: (body?: unknown) => Promise<{ data: unknown }>
@@ -34,9 +35,8 @@ export type ConversationAdapter = {
 const ConversationAdapterContext = createContext<ConversationAdapter>()
 
 export function useConversationAdapter() {
-  const ctx = useContext(ConversationAdapterContext)
-  if (!ctx) throw new Error("useConversationAdapter must be used within a ConversationAdapterContext.Provider")
-  return ctx
+  const sdk = useDeviceSDK()
+  return deviceAdapter(sdk.client)
 }
 
 export { ConversationAdapterContext }

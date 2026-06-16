@@ -35,11 +35,50 @@ export class DeviceHttpError extends Error {
   }
 }
 
+export const PROXY_ERROR_CODES = new Set(["UPSTREAM_ERROR", "FILTER_ERROR", "TERMINAL_DISABLED", "RUNTIME_FILE_DISABLED", "RUNTIME_TREE_DISABLED", "RUNTIME_DIFF_DISABLED"])
+
+export function isProxyError(e: unknown): e is DeviceHttpError {
+  if (e instanceof DeviceHttpError) return PROXY_ERROR_CODES.has(e.code)
+  if (e && typeof e === "object" && "code" in e) return PROXY_ERROR_CODES.has((e as any).code)
+  return false
+}
+
+export function isRuntimeFileDisabledError(e: unknown): boolean {
+  if (e instanceof DeviceHttpError) return e.code === "RUNTIME_FILE_DISABLED"
+  if (e && typeof e === "object") {
+    if ("code" in e && (e as any).code === "RUNTIME_FILE_DISABLED") return true
+    const err = (e as any).error
+    if (err && typeof err === "object" && err.code === "RUNTIME_FILE_DISABLED") return true
+  }
+  return false
+}
+
 export function isBinaryFileError(e: unknown): boolean {
   if (e instanceof DeviceHttpError) return e.code === "BINARY_FILE"
   if (e && typeof e === "object") {
+    if ("code" in e && (e as any).code === "BINARY_FILE") return true
     const err = (e as any).error
     if (err && typeof err === "object" && err.code === "BINARY_FILE") return true
+  }
+  return false
+}
+
+export function isRuntimeTreeDisabledError(e: unknown): boolean {
+  if (e instanceof DeviceHttpError) return e.code === "RUNTIME_TREE_DISABLED"
+  if (e && typeof e === "object") {
+    if ("code" in e && (e as any).code === "RUNTIME_TREE_DISABLED") return true
+    const err = (e as any).error
+    if (err && typeof err === "object" && err.code === "RUNTIME_TREE_DISABLED") return true
+  }
+  return false
+}
+
+export function isRuntimeDiffDisabledError(e: unknown): boolean {
+  if (e instanceof DeviceHttpError) return e.code === "RUNTIME_DIFF_DISABLED"
+  if (e && typeof e === "object") {
+    if ("code" in e && (e as any).code === "RUNTIME_DIFF_DISABLED") return true
+    const err = (e as any).error
+    if (err && typeof err === "object" && err.code === "RUNTIME_DIFF_DISABLED") return true
   }
   return false
 }
@@ -74,7 +113,7 @@ export function createDeviceTransport(opts: TransportOpts) {
         payload = payload.error
       }
       if (payload && typeof payload === "object") {
-        throw new DeviceHttpError(payload.message ?? String(payload), res.status, payload.code ?? "UNKNOWN")
+        throw new DeviceHttpError(payload.error ?? payload.message ?? String(payload), res.status, payload.code ?? "UNKNOWN")
       }
       throw new DeviceHttpError(`Request failed: ${res.status}`, res.status, "UNKNOWN")
     }

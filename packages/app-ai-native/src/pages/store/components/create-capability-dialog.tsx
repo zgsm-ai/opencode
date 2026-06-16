@@ -22,8 +22,12 @@ type CreateCapabilityDialogProps = {
   userId: string
   username?: string
   repositories: Repository[]
+  defaultItemType?: CreateItemType
   onCreated?: (item: CapabilityItem) => void
 }
+
+const CREATE_ITEM_TYPES = ["skill", "subagent", "command", "mcp", "plugin"] as const
+type CreateItemType = (typeof CREATE_ITEM_TYPES)[number]
 
 function slugify(value: string) {
   return value
@@ -36,15 +40,16 @@ export function CreateCapabilityDialog(props: CreateCapabilityDialogProps) {
   const dialog = useDialog()
   const language = useLanguage()
   const itemFilterOptions = useItemFilterOptions()
+  const initialItemType = CREATE_ITEM_TYPES.includes(props.defaultItemType ?? "skill") ? (props.defaultItemType ?? "skill") : "skill"
   const [store, setStore] = createStore({
-    itemType: "skill" as "skill" | "subagent" | "command" | "mcp",
+    itemType: initialItemType,
     namespace: "public",
     name: "",
     slug: "",
     slugManual: false,
     description: "",
     category: "utilities",
-    content: TYPE_CONTENT_PLACEHOLDER.skill,
+    content: TYPE_CONTENT_PLACEHOLDER[initialItemType] ?? "",
     contentMode: "text" as ContentMode,
     file: null as File | null,
     saving: false,
@@ -108,7 +113,7 @@ export function CreateCapabilityDialog(props: CreateCapabilityDialogProps) {
     setStore("category", options[0]!.slug)
   })
 
-  function setItemType(value: "skill" | "subagent" | "command" | "mcp") {
+  function setItemType(value: CreateItemType) {
     setStore("itemType", value)
     setStore("content", TYPE_CONTENT_PLACEHOLDER[value] ?? "")
     if (!store.slugManual) setStore("slug", slugify(store.name))
@@ -206,9 +211,9 @@ export function CreateCapabilityDialog(props: CreateCapabilityDialogProps) {
             <select
               class="modal-input"
               value={store.itemType}
-              onInput={(e) => setItemType(e.currentTarget.value as "skill" | "subagent" | "command" | "mcp")}
+              onInput={(e) => setItemType(e.currentTarget.value as CreateItemType)}
             >
-              {(["skill", "subagent", "command", "mcp"] as const).map((type) => (
+              {CREATE_ITEM_TYPES.map((type) => (
                 <option value={type}>{language.t(typeKey(type))}</option>
               ))}
             </select>

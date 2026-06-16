@@ -6,6 +6,7 @@ type DirectoryState = {
   loaded?: boolean
   loading?: boolean
   error?: string
+  disabled?: boolean
   children?: string[]
 }
 
@@ -14,6 +15,7 @@ type TreeStoreOptions = {
   normalizeDir: (input: string) => string
   list: (input: string) => Promise<FileNode[]>
   onError: (message: string) => void
+  isDisabledError?: (e: unknown) => boolean
 }
 
 export function createFileTreeStore(options: TreeStoreOptions) {
@@ -109,15 +111,26 @@ export function createFileTreeStore(options: TreeStoreOptions) {
       })
       .catch((e) => {
         if (options.scope() !== directory) return
-        setTree(
-          "dir",
-          dir,
-          produce((draft) => {
-            draft.loading = false
-            draft.error = e.message
-          }),
-        )
-        options.onError(e.message)
+        if (options.isDisabledError?.(e)) {
+          setTree(
+            "dir",
+            dir,
+            produce((draft) => {
+              draft.loading = false
+              draft.disabled = true
+            }),
+          )
+        } else {
+          setTree(
+            "dir",
+            dir,
+            produce((draft) => {
+              draft.loading = false
+              draft.error = e.message
+            }),
+          )
+          options.onError(e.message)
+        }
       })
       .finally(() => {
         inflight.delete(dir)
@@ -174,6 +187,10 @@ export function createFileTreeStore(options: TreeStoreOptions) {
     children,
     node: (path: string) => tree.node[path],
     isLoaded: (path: string) => Boolean(tree.dir[path]?.loaded),
+    isDisabled: (input: string) => {
+      const dir = options.normalizeDir(input)
+      return Boolean(tree.dir[dir]?.disabled)
+    },
     refreshExpanded,
     reset,
   }

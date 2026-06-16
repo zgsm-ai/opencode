@@ -26,10 +26,18 @@ export type DiffData = {
   untrackedFiles?: DiffFileEntry[]
 }
 
+export type FilteredInfo = {
+  strategy?: string
+  reason?: string
+  path?: string
+  originalSize?: number
+}
+
 export type DiffContentData = {
   diff: string
   before?: string
   after?: string
+  _filtered?: FilteredInfo
 }
 
 export type InitStatusAgent = {
@@ -280,7 +288,15 @@ export function createDeviceClient(opts: ClientOpts): DeviceClient {
               signal: controller.signal,
             })
             if (!res.ok || !res.body) {
-              input?.onSseError?.(new Error(`SSE connect failed: ${res.status}`))
+              let proxyCode: string | undefined
+              try {
+                const text = await res.clone().text()
+                const json = JSON.parse(text)
+                if (json?.code && typeof json.code === "string") proxyCode = json.code
+              } catch {}
+              const err = new Error(proxyCode ? `SSE proxy error: ${proxyCode}` : `SSE connect failed: ${res.status}`) as Error & { proxyCode?: string }
+              if (proxyCode) err.proxyCode = proxyCode
+              input?.onSseError?.(err)
               return
             }
             const reader = res.body.getReader()

@@ -14,6 +14,7 @@ export interface FilteredListProps<T> {
   sortGroupsBy?: (a: { category: string; items: T[] }, b: { category: string; items: T[] }) => number
   onSelect?: (value: T | undefined, index: number) => void
   noInitialSelection?: boolean
+  maxItems?: number
 }
 
 export function useFilteredList<T>(props: FilteredListProps<T>) {
@@ -51,10 +52,11 @@ export function useFilteredList<T>(props: FilteredListProps<T>) {
   )
 
   const flat = createMemo(() => {
-    return pipe(
+    const all = pipe(
       grouped.latest || [],
       flatMap((x) => x.items),
     )
+    return props.maxItems ? all.slice(0, props.maxItems) : all
   })
 
   function initialActive() {

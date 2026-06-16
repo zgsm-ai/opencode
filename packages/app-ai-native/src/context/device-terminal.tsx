@@ -4,7 +4,7 @@ import { createMemo, createRoot, createSignal, onCleanup, batch } from "solid-js
 import { useServer } from "@/context/server"
 import { useDeviceSDK } from "@/context/device-sdk"
 import { Persist, persisted, removePersisted } from "@/utils/persist"
-import { CloudTerminalApi } from "@/lib/cloud-terminal-api"
+import { CloudTerminalApi, isTerminalDisabledError } from "@/lib/cloud-terminal-api"
 
 export type LocalPTY = {
   id: string
@@ -40,6 +40,17 @@ function createDeviceTerminalSession(deviceId: string, directory: string, server
     }),
   )
 
+  const [disabled, setDisabled] = createSignal(false)
+
+  const markDisabledOnError = (error: unknown) => {
+    if (isTerminalDisabledError(error)) {
+      setDisabled(true)
+    } else if (error && typeof error === "object") {
+      const code = (error as any)?.code
+      if (code === "TERMINAL_DISABLED") setDisabled(true)
+    }
+  }
+
   const pickNextTerminalNumber = () => {
     const existingTitleNumbers = new Set(
       store.all.flatMap((pty) => {
@@ -68,6 +79,7 @@ function createDeviceTerminalSession(deviceId: string, directory: string, server
     ready,
     all: createMemo(() => store.all),
     active: createMemo(() => store.active),
+    disabled,
     clear() {
       batch(() => {
         setStore("active", undefined)
@@ -75,6 +87,7 @@ function createDeviceTerminalSession(deviceId: string, directory: string, server
       })
     },
     new(): Promise<string | undefined> {
+      if (disabled()) return Promise.resolve(undefined)
       const nextNumber = pickNextTerminalNumber()
       const api = cloudApi()
       if (!api) return Promise.resolve(undefined)
@@ -90,6 +103,10 @@ function createDeviceTerminalSession(deviceId: string, directory: string, server
           return id
         })
         .catch((error: unknown) => {
+          if (isTerminalDisabledError(error)) {
+            setDisabled(true)
+          }
+          markDisabledOnError(error)
           console.error("Failed to create cloud terminal", error)
           return undefined
         })
@@ -102,6 +119,7 @@ function createDeviceTerminalSession(deviceId: string, directory: string, server
       const api = cloudApi()
       if (api && pty.cols && pty.rows) {
         api.resize(pty.id, pty.rows, pty.cols).catch((error: unknown) => {
+          markDisabledOnError(error)
           console.error("Failed to update cloud terminal", error)
         })
       }
@@ -114,9 +132,10 @@ function createDeviceTerminalSession(deviceId: string, directory: string, server
       if (!api) return
 
       const session = await api.restart(id, directory).catch((error: unknown) => {
-        console.error("Failed to clone cloud terminal", error)
-        return null
-      })
+          markDisabledOnError(error)
+          console.error("Failed to clone cloud terminal", error)
+          return null
+        })
       if (!session) return
 
       const active = store.active === pty.id
@@ -213,6 +232,7 @@ type DeviceTerminalValue = {
   all: () => LocalPTY[]
   active: () => string | undefined
   get: (id: string) => LocalPTY | undefined
+  disabled: () => boolean
   clear: () => void
   "new": () => Promise<string | undefined>
   update: (pty: Partial<LocalPTY> & { id: string }) => void
@@ -292,6 +312,7 @@ export function DeviceTerminalProvider(props: ParentProps) {
     all: () => { ensure(); return terminal()?.all() ?? [] },
     active: () => { ensure(); return terminal()?.active() },
     get: (id: string) => { ensure(); return terminal()?.all().find((p) => p.id === id) },
+    disabled: () => { ensure(); return terminal()?.disabled() ?? false },
     clear: () => { ensure(); terminal()?.clear() },
     "new": () => { ensure(); return terminal() ? terminal()!.new() as Promise<string | undefined> : Promise.resolve(undefined) },
     update: (pty: Partial<LocalPTY> & { id: string }) => { ensure(); terminal()?.update(pty) },

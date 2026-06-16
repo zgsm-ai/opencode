@@ -1,11 +1,9 @@
 import { createMemo, For, Show } from "solid-js"
 import { useNavigate, useParams } from "@solidjs/router"
 import { Icon } from "@opencode-ai/ui/icon"
-import { IconButton } from "@opencode-ai/ui/icon-button"
 import { DropdownMenu } from "@opencode-ai/ui/dropdown-menu"
-import { RadioGroup } from "@opencode-ai/ui/radio-group"
-import { showToast } from "@opencode-ai/ui/toast"
 import AvatarDisplay from "@/components/avatar-display"
+import { UserDropdown } from "@/components/user-menu"
 import { useAuth } from "@/context/auth"
 import { type Locale, useLanguage } from "@/context/language"
 import { useWorkspace } from "../context"
@@ -13,23 +11,9 @@ import { getLoginUrl } from "@/pages/store/lib/auth"
 import { triggerNewSession } from "./layout"
 
 function UserMenu() {
-  const { user, logout } = useAuth()
+  const { user } = useAuth()
   const language = useLanguage()
   const displayName = () => user()?.name || user()?.preferred_username || user()?.email || ""
-  const subjectId = () => user()?.subjectId || user()?.id || ""
-
-  const copySubjectId = () => {
-    const id = subjectId()
-    if (!id) return
-    navigator.clipboard
-      .writeText(id)
-      .then(() => {
-        showToast({ variant: "success", title: "Copied", description: id })
-      })
-      .catch(() => {})
-  }
-
-  const languageOptions: Locale[] = ["zh", "en"]
 
   return (
     <Show
@@ -47,59 +31,13 @@ function UserMenu() {
         </button>
       }
     >
-      <DropdownMenu placement="bottom-end">
-        <DropdownMenu.Trigger class="flex items-center rounded-md p-1 hover:bg-[var(--surface-base-hover)] transition-colors outline-none">
-          <AvatarDisplay avatarUrl={user()?.picture} username={displayName()} class="size-6" />
-        </DropdownMenu.Trigger>
-        <DropdownMenu.Portal>
-          <DropdownMenu.Content class="w-[280px]">
-            <div class="px-3 py-2 min-w-0">
-              <p class="text-13-medium text-text-strong truncate" title={displayName()}>
-                {displayName()}
-              </p>
-              <p class="text-[10px] text-text-weak mt-0.5 truncate" title={`@${user()?.preferred_username || user()?.email || ""}`}>
-                @{user()?.preferred_username || user()?.email || ""}
-              </p>
-            </div>
-            <div class="px-3 py-1.5 flex items-center justify-between gap-2">
-              <div class="min-w-0 flex-1">
-                <p class="text-11-medium text-text-weak">{language.t("sidebar.user.subjectId")}</p>
-                <p class="text-11-regular text-text-weak truncate" title={subjectId()}>
-                  {subjectId()}
-                </p>
-              </div>
-              <IconButton
-                icon="copy"
-                variant="ghost"
-                class="shrink-0"
-                onClick={copySubjectId}
-                aria-label={language.t("sidebar.user.copySubjectId")}
-              />
-            </div>
-            <DropdownMenu.Separator class="my-0 mx-0" />
-            <div class="px-3 py-2 flex items-center justify-between gap-3">
-              <span class="text-12-medium leading-none text-text-strong">{language.t("sidebar.user.language")}</span>
-              <RadioGroup
-                options={languageOptions}
-                current={language.locale()}
-                size="small"
-                pad="none"
-                class="leading-none"
-                value={(locale) => locale}
-                label={(locale) => language.label(locale)}
-                onSelect={(locale) => locale && language.setLocale(locale as Locale)}
-              />
-            </div>
-            <DropdownMenu.Separator class="my-0 mx-0" />
-            <DropdownMenu.Item onSelect={() => window.open("/credit/manager/?tab=usage", "_blank")}>
-              <DropdownMenu.ItemLabel>{language.t("sidebar.user.creditUsage")}</DropdownMenu.ItemLabel>
-            </DropdownMenu.Item>
-            <DropdownMenu.Item onSelect={logout}>
-              <DropdownMenu.ItemLabel>{language.t("sidebar.user.signOut")}</DropdownMenu.ItemLabel>
-            </DropdownMenu.Item>
-          </DropdownMenu.Content>
-        </DropdownMenu.Portal>
-      </DropdownMenu>
+      <UserDropdown
+        trigger={
+          <DropdownMenu.Trigger class="flex items-center rounded-md p-1 hover:bg-[var(--surface-base-hover)] transition-colors outline-none">
+            <AvatarDisplay avatarUrl={user()?.picture} username={displayName()} class="size-6" />
+          </DropdownMenu.Trigger>
+        }
+      />
     </Show>
   )
 }
@@ -227,18 +165,24 @@ export function MobileWorkspaceHeader() {
       {/* Left: Session sidebar toggle + new session */}
       <div class="shrink-0 flex items-center">
         <Show when={hasWorkspace()}>
-          <IconButton
-            icon={work.sidebarOpened() ? "layout-left-full" : "layout-left"}
-            variant="ghost"
-            onClick={work.toggleSidebar}
-            aria-label={t("workspace.toggleSessionList")}
-          />
-          <IconButton
-            icon="plus-small"
-            variant="ghost"
-            onClick={triggerNewSession}
-            aria-label={t("workspace.content.newSession")}
-          />
+          <div class="inline-flex rounded-md border border-border overflow-hidden">
+            <button
+              type="button"
+              class="flex items-center justify-center size-8 hover:bg-[var(--surface-base-hover)] transition-colors"
+              onClick={work.toggleSidebar}
+              aria-label={t("workspace.toggleSessionList")}
+            >
+              <Icon name={work.sidebarOpened() ? "layout-left-full" : "layout-left"} class="text-text-weak" />
+            </button>
+            <button
+              type="button"
+              class="flex items-center justify-center size-8 border-l border-border hover:bg-[var(--surface-base-hover)] transition-colors"
+              onClick={triggerNewSession}
+              aria-label={t("workspace.content.newSession")}
+            >
+              <Icon name="plus-small" class="text-text-weak" />
+            </button>
+          </div>
         </Show>
       </div>
 
@@ -252,7 +196,7 @@ export function MobileWorkspaceHeader() {
             </span>
           }
         >
-          <div class="inline-flex h-8 rounded-lg border border-border overflow-hidden">
+          <div class="inline-flex h-8 rounded-md border border-border overflow-hidden">
             <WorkspaceSelector bordered />
             <button
               type="button"

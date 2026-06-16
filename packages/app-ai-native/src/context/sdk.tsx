@@ -11,7 +11,5 @@ export type SDKValue = {
 export const SDKContext = createContext<SDKValue>()
 
 export function useSDK() {
-  const ctx = useContext(SDKContext)
-  if (!ctx) throw new Error("SDK context must be used within a context provider")
-  return ctx
+  return useContext(SDKContext)
 }

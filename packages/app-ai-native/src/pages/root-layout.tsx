@@ -1,14 +1,12 @@
 import { type JSX, type ParentProps, Show, createEffect, createMemo, createSignal } from "solid-js"
 import { useLocation, useNavigate } from "@solidjs/router"
-import { Gauge, Shield, Sun, Moon } from "lucide-solid"
+import { Gauge, Shield } from "lucide-solid"
 import { Icon } from "@opencode-ai/ui/icon"
-import { IconButton } from "@opencode-ai/ui/icon-button"
-import { RadioGroup } from "@opencode-ai/ui/radio-group"
 import { showToast } from "@opencode-ai/ui/toast"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { DropdownMenu } from "@opencode-ai/ui/dropdown-menu"
-import { useTheme } from "@opencode-ai/ui/theme"
 import AvatarDisplay from "@/components/avatar-display"
+import { UserDropdown } from "@/components/user-menu"
 import { usePlatform } from "@/context/platform"
 import { type Locale, useLanguage } from "@/context/language"
 import { useAuth } from "@/context/auth"
@@ -48,37 +46,9 @@ function NavButton(props: {
 }
 
 function UserButton() {
-  const { user, logout } = useAuth()
+  const { user } = useAuth()
   const language = useLanguage()
-  const theme = useTheme()
-  const navigate = useNavigate()
   const displayName = () => user()?.name || user()?.preferred_username || user()?.email || ""
-  const username = () => user()?.preferred_username || user()?.email || user()?.name || ""
-  const subjectId = () => user()?.subjectId || user()?.id || ""
-
-  const copySubjectId = () => {
-    const id = subjectId()
-    if (!id) return
-    navigator.clipboard
-      .writeText(id)
-      .then(() => {
-        showToast({
-          variant: "success",
-          title: "Copied",
-          description: id,
-        })
-      })
-      .catch(() => {})
-  }
-
-  const languageOptions: Locale[] = ["zh", "en"]
-
-  const isDarkMode = () => {
-    const scheme = theme.colorScheme()
-    if (scheme === "dark") return true
-    if (scheme === "light") return false
-    return window.matchMedia("(prefers-color-scheme: dark)").matches
-  }
 
   return (
     <Show
@@ -98,72 +68,14 @@ function UserButton() {
         </Tooltip>
       }
     >
-      <DropdownMenu placement="right-end">
-        <DropdownMenu.Trigger
-          class={item(false)}
-          aria-label={language.t("sidebar.user.menu")}
-        >
-          <AvatarDisplay avatarUrl={user()?.picture} username={displayName()} class="size-6" />
-        </DropdownMenu.Trigger>
-        <DropdownMenu.Portal>
-          <DropdownMenu.Content class="w-[280px]">
-            <div class="px-3 py-2 min-w-0">
-              <p class="text-13-medium text-text-strong truncate" title={displayName()}>
-                {displayName()}
-              </p>
-              <p class="text-[10px] text-text-weak mt-0.5 truncate" title={`@${username()}`}>
-                @{username()}
-              </p>
-            </div>
-            <div class="px-3 py-1.5 flex items-center justify-between gap-2">
-              <div class="min-w-0 flex-1">
-                <p class="text-11-medium text-text-weak">{language.t("sidebar.user.subjectId")}</p>
-                <p class="text-11-regular text-text-weak truncate" title={subjectId()}>
-                  {subjectId()}
-                </p>
-              </div>
-              <IconButton
-                icon="copy"
-                variant="ghost"
-                class="shrink-0"
-                onClick={copySubjectId}
-                aria-label={language.t("sidebar.user.copySubjectId")}
-              />
-            </div>
-            <DropdownMenu.Separator class="my-0 mx-0" />
-            <div class="px-3 py-2 flex items-center justify-between gap-3">
-              <span class="text-12-medium leading-none text-text-strong">{language.t("sidebar.user.language")}</span>
-              <RadioGroup
-                options={languageOptions}
-                current={language.locale()}
-                size="small"
-                pad="none"
-                class="leading-none"
-                value={(locale) => locale}
-                label={(locale) => language.label(locale)}
-                onSelect={(locale) => locale && language.setLocale(locale as Locale)}
-              />
-            </div>
-            <DropdownMenu.Separator class="my-0 mx-0" />
-            <div class="px-3 py-2 flex items-center justify-between gap-3">
-              <span class="text-12-medium leading-none text-text-strong">{language.t("settings.general.row.appearance.title")}</span>
-              <button
-                type="button"
-                data-action="user-menu-color-scheme"
-                onClick={() => theme.setColorScheme(isDarkMode() ? "light" : "dark")}
-                class="flex size-7 items-center justify-center rounded-md transition-colors hover:bg-[var(--native-surface)] text-[var(--native-dim)] hover:text-[var(--native-foreground)]"
-                aria-label={isDarkMode() ? language.t("theme.scheme.light") : language.t("theme.scheme.dark")}
-              >
-                {isDarkMode() ? <Sun size={16} /> : <Moon size={16} />}
-              </button>
-            </div>
-            <DropdownMenu.Separator class="my-0 mx-0" />
-            <DropdownMenu.Item onSelect={logout}>
-              <DropdownMenu.ItemLabel>{language.t("sidebar.user.signOut")}</DropdownMenu.ItemLabel>
-            </DropdownMenu.Item>
-          </DropdownMenu.Content>
-        </DropdownMenu.Portal>
-      </DropdownMenu>
+      <UserDropdown
+        placement="right-end"
+        trigger={
+          <DropdownMenu.Trigger class={item(false)} aria-label={language.t("sidebar.user.menu")}>
+            <AvatarDisplay avatarUrl={user()?.picture} username={displayName()} class="size-6" />
+          </DropdownMenu.Trigger>
+        }
+      />
     </Show>
   )
 }
