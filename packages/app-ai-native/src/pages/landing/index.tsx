@@ -102,15 +102,16 @@ export default function LandingHome() {
 
   return (
     <div
-      class="thin-scrollbar relative h-full overflow-y-auto font-[var(--native-font-body)]"
+      class="thin-scrollbar relative h-full overflow-x-hidden overflow-y-auto font-[var(--native-font-body)]"
       onPointerMove={move}
       style={{ "--bg-x": "0px", "--bg-y": "0px" }}
     >
-      <div
-        aria-hidden="true"
-        class="pointer-events-none absolute inset-[-24px] z-0 bg-cover bg-center bg-no-repeat transition-transform duration-300 ease-out"
-        style={{ "background-image": `url('${asset}background.webp')`, transform: "translate3d(var(--bg-x), var(--bg-y), 0) scale(1.04)" }}
-      />
+      <div aria-hidden="true" class="pointer-events-none absolute inset-0 z-0 overflow-hidden">
+        <div
+          class="absolute inset-[-24px] bg-cover bg-center bg-no-repeat transition-transform duration-300 ease-out"
+          style={{ "background-image": `url('${asset}background.webp')`, transform: "translate3d(var(--bg-x), var(--bg-y), 0) scale(1.04)" }}
+        />
+      </div>
 
       <header class="relative z-10 flex w-full items-center justify-between px-6 py-5 md:px-[26px] md:py-5">
         <Logo />
