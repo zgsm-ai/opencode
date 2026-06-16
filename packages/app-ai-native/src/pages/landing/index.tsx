@@ -120,6 +120,7 @@ export default function LandingHome() {
           fallback={
             <Button
               variant="primary"
+              class="cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_22px_-14px_rgba(89,141,240,0.9)] active:translate-y-0 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-[#598df0]/35 focus-visible:ring-offset-2"
               onClick={() => {
                 window.location.href = getLoginUrl()
               }}
@@ -131,7 +132,7 @@ export default function LandingHome() {
           <UserDropdown
             trigger={
               <DropdownMenu.Trigger
-                class="flex items-center gap-1.5 rounded-full px-1 py-0.5 transition-colors hover:bg-white/45 outline-none"
+                class="flex cursor-pointer items-center gap-1.5 rounded-full px-1 py-0.5 transition-all duration-200 hover:-translate-y-0.5 hover:bg-white/55 hover:shadow-[0_8px_20px_-16px_rgba(69,72,89,0.8)] active:translate-y-0 active:scale-[0.97] focus-visible:ring-2 focus-visible:ring-[#598df0]/35 focus-visible:ring-offset-2 outline-none"
                 aria-label={language.t("sidebar.user.menu")}
               >
                 <AvatarDisplay avatarUrl={auth.user()?.picture} username={name()} size={34} />
