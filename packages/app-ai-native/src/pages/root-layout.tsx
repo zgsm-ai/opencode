@@ -1,6 +1,6 @@
-import { type JSX, type ParentProps, Show, createEffect, createMemo } from "solid-js"
+import { type JSX, type ParentProps, Show, createEffect, createMemo, createSignal } from "solid-js"
 import { useLocation, useNavigate } from "@solidjs/router"
-import { Gauge } from "lucide-solid"
+import { Gauge, Shield } from "lucide-solid"
 import { Icon } from "@opencode-ai/ui/icon"
 import { showToast } from "@opencode-ai/ui/toast"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
@@ -11,6 +11,7 @@ import { usePlatform } from "@/context/platform"
 import { type Locale, useLanguage } from "@/context/language"
 import { useAuth } from "@/context/auth"
 import { appPath } from "@/lib/router"
+import { buildSecurityUrl } from "@/lib/security-jump"
 import { isMobile, useSyncMobile } from "@/lib/mobile"
 import { getLoginUrl } from "@/pages/store/lib/auth"
 
@@ -132,6 +133,23 @@ export default function RootLayout(props: ParentProps) {
     return path === "/console" || path.startsWith("/console/")
   }
 
+  const [securityJumping, setSecurityJumping] = createSignal(false)
+
+  async function handleSecurityJump() {
+    if (securityJumping()) return
+    setSecurityJumping(true)
+    try {
+      window.open(buildSecurityUrl(), "_blank")
+    } catch {
+      showToast({
+        title: language.t("sidebar.codeReview.jumpFailed"),
+        variant: "error",
+      })
+    } finally {
+      setSecurityJumping(false)
+    }
+  }
+
   const isMultica = () => {
     const path = appPathname()
     return path === "/multica"
@@ -157,14 +175,12 @@ export default function RootLayout(props: ParentProps) {
               active={isWorkspace()}
               onClick={() => navigate(lastWorkspace)}
             />
-            {/* <Show when={true}>
-              <NavButton
-                icon="task"
-                label="Multica"
-                active={isMultica()}
-                onClick={() => navigate("/multica")}
-              />
-            </Show> */}
+            <NavButton
+              label={language.t("sidebar.codeReview")}
+              active={false}
+              onClick={handleSecurityJump}
+              node={<Shield size={18} strokeWidth={1.75} aria-hidden="true" />}
+            />
             <Show when={auth.canAccessMenu("kanban")}>
               <NavButton
                 label={language.t("sidebar.kanban")}

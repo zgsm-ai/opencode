@@ -1897,6 +1897,8 @@ export const dict = {
   "landing.dashboard.title": "效能看板",
   "landing.dashboard.description": "查看团队使用情况和研发效能，用数据驱动持续改进",
   "sidebar.kanban": "指标看板",
+  "sidebar.codeReview": "代码审查",
+  "sidebar.codeReview.jumpFailed": "跳转代码审查平台失败",
   "sidebar.projects": "项目",
 
   "projects.nav.title": "项目",

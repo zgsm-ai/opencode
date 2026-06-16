@@ -20,6 +20,7 @@ import path from "path"
 import { writeFile, readFile, rm } from "fs/promises"
 import { Log } from "../../util/log"
 import { Filesystem } from "../../util/filesystem"
+// @ts-ignore skill/builtin 由构建期下载生成（见 bundled-skills/），仓库默认不存在，无需 typecheck
 import * as Builtin from "./skill/builtin"
 
 const log = Log.create({ service: "costrict-skill" })

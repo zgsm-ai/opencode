@@ -18,7 +18,8 @@ ENV_VARS='\${VITE_CLOUD_SERVER_HOST} \
 \${VITE_STORE_URL} \
 \${VITE_OPENCODE_CLOUD_DEVICE_ID} \
 \${VITE_OPENCODE_SERVER_HOST} \
-\${VITE_OPENCODE_SERVER_PORT}'
+\${VITE_OPENCODE_SERVER_PORT} \
+\${VITE_SECURITY_FRONTEND_URL}'
 
 # Substitute environment variables in index.html for runtime configuration
 if [ -f "/app/packages/app-ai-native/dist/index.html" ]; then

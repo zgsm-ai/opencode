@@ -5,9 +5,8 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "VITE_")
 
   const cloudHost = env.VITE_CLOUD_SERVER_HOST ?? "localhost"
-  const cloudPort = env.VITE_CLOUD_SERVER_PORT ?? "8080"
-  const cloudTarget = `http://${cloudHost}:${cloudPort}`
-  // const cloudTarget = `http://${cloudHost}`
+  const cloudPort = env.VITE_CLOUD_SERVER_PORT
+  const cloudTarget = `https://${cloudHost}${cloudPort ? `:${cloudPort}` : ""}`
   const appPort = parseInt(env.VITE_APP_PORT ?? "3000")
   const prefix = env.VITE_API_PREFIX ?? ""
   const quotaPrefix = env.VITE_QUOTA_PREFIX ?? ""
@@ -46,6 +45,7 @@ export default defineConfig(({ mode }) => {
               Cookie: cookie,
             },
           }),
+          rewrite: (path) => `${cloudApiPrefix}${path}`,
         },
         [`${prefix}/cloud`]: {
           target: cloudTarget,
@@ -56,9 +56,7 @@ export default defineConfig(({ mode }) => {
               Cookie: cookie,
             },
           }),
-          rewrite: (path) => {
-            return path.replace(new RegExp(`^${prefix}/cloud`), cloudApiPrefix)
-          },
+          rewrite: (path) => `${cloudApiPrefix}${path}`,
           configure: (proxy) => {
             proxy.on("proxyReq", (proxyReq) => {
               if (proxyReq.path.endsWith("/global/event")) {
@@ -77,10 +75,10 @@ export default defineConfig(({ mode }) => {
           }),
           rewrite: (path) => {
             if (path.startsWith(v2Prefix)) {
-              return path.replace(new RegExp(`^${apiPrefix}`), cloudDashboardPrefix)
+              return `${cloudDashboardPrefix}${path}`
             }
 
-            return path.replace(new RegExp(`^${apiPrefix}`), cloudApiPrefix)
+            return `${cloudApiPrefix}${path}`
           },
         },
         [`${quotaPrefix}/quota-manager`]: {

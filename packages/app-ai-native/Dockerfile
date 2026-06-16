@@ -70,6 +70,7 @@ ENV VITE_STORE_URL=
 ENV VITE_OPENCODE_CLOUD_DEVICE_ID=
 ENV VITE_OPENCODE_SERVER_HOST=localhost
 ENV VITE_OPENCODE_SERVER_PORT=8080
+ENV VITE_SECURITY_FRONTEND_URL=/llm_sast
 
 COPY --from=builder /app/packages/app-ai-native/dist ./dist
 RUN chmod -R 777 ./dist 

@@ -18,6 +18,8 @@ bundled-skills
 .serena/
 /result
 refs
+.playwright-cli/
+docs/superpowers/
 Session.vim
 /opencode.json
 a.out
