@@ -30,12 +30,14 @@ export interface CasdoorUser {
  */
 export function getLoginUrl(redirectTo?: string) {
   const prefix = env.API_PREFIX ?? ""
-  const basePath = env.BASE_PATH ?? ""
+  const base = (env.BASE_PATH ?? "").replace(/\/+$/, "")
   const origin = window.location.origin
+  const path = redirectTo ? (redirectTo.startsWith("/") ? redirectTo : `/${redirectTo}`) : "/"
+  const route = base && (path === base || path.startsWith(`${base}/`)) ? path.slice(base.length) || "/" : path
 
   const params = new URLSearchParams()
-  // Full redirect target after login completes (origin + basePath + route path)
-  params.set("redirect_to", origin + basePath + (redirectTo || "/"))
+  // Full redirect target after login completes (origin + base path + route path)
+  params.set("redirect_to", origin + base + route)
   // Callback URL on the frontend host so Set-Cookie lands on the correct domain.
   // Casdoor will redirect here; Vite proxy (dev) or nginx (prod) forwards to the backend.
   params.set("callback_url", origin + prefix + "/api/auth/callback")

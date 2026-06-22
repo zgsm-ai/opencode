@@ -12,7 +12,7 @@ const base = (env.BASE_PATH || "").replace(/\/+$/, "")
 const asset = `${base}/landing/`
 
 function href(path: string) {
-  const root = (env.APP_URL || (typeof window === "undefined" ? "" : window.location.origin)).replace(/\/+$/, "")
+  const root = typeof window === "undefined" ? "" : window.location.origin
   const route = path.startsWith("/") ? path : `/${path}`
   return `${root}${base}${route}`
 }
