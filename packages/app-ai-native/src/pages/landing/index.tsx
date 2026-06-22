@@ -1,5 +1,4 @@
 import { createMemo, Show } from "solid-js"
-import { useNavigate } from "@solidjs/router"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu } from "@opencode-ai/ui/dropdown-menu"
 import { useAuth } from "@/context/auth"
@@ -9,7 +8,14 @@ import AvatarDisplay from "@/components/avatar-display"
 import { UserDropdown } from "@/components/user-menu"
 import { env } from "@/lib/env"
 
-const asset = `${(env.BASE_PATH || "").replace(/\/+$/, "")}/landing/`
+const base = (env.BASE_PATH || "").replace(/\/+$/, "")
+const asset = `${base}/landing/`
+
+function href(path: string) {
+  const root = (env.APP_URL || (typeof window === "undefined" ? "" : window.location.origin)).replace(/\/+$/, "")
+  const route = path.startsWith("/") ? path : `/${path}`
+  return `${root}${base}${route}`
+}
 
 function Logo() {
   return (
@@ -43,7 +49,6 @@ function Arrow(props: { tone?: string }) {
 }
 
 function Card(props: { icon: string; title: string; desc: string; href: string; tone?: string; full?: boolean }) {
-  const navigate = useNavigate()
   const icon = () => {
     if (!props.tone) return <img src={props.icon} alt="" class="h-[70px] w-[75px] md:h-[76px] md:w-[81px] xl:h-[70px] xl:w-[75px]" />
     return (
@@ -63,7 +68,9 @@ function Card(props: { icon: string; title: string; desc: string; href: string; 
   return (
     <button
       type="button"
-      onClick={() => navigate(props.href)}
+      onClick={() => {
+        window.location.href = props.href
+      }}
       class="group relative flex h-[274px] w-full flex-col items-start gap-6 rounded-2xl p-6 text-left shadow-[3px_4px_4px_0_rgba(163,193,223,0.25)] transition-transform duration-200 hover:-translate-y-1 sm:w-[335px] md:h-[300px] md:w-[365px] md:gap-7 md:rounded-[20px] md:p-7 xl:h-[274px] xl:w-[335px] xl:gap-6 xl:rounded-2xl xl:p-6"
       classList={{ "bg-[rgba(252,252,252,0.6)]": !props.tone, "bg-[rgba(252,252,252,0.5)]": props.tone === "warm", "bg-[rgba(252,252,252,0.7)]": props.tone === "cool" }}
     >
@@ -150,13 +157,13 @@ export default function LandingHome() {
             icon={`${asset}workspace.svg`}
             title={language.t("landing.workspace.title")}
             desc={language.t("landing.workspace.description")}
-            href="/workspace"
+            href={href("/workspace")}
           />
           <Card
             icon={`${asset}knowledge.svg`}
             title={language.t("landing.knowledge.title")}
             desc={language.t("landing.knowledge.description")}
-            href="/store"
+            href={href("/store")}
             tone="warm"
           />
           <Show when={kanban()}>
@@ -164,7 +171,7 @@ export default function LandingHome() {
               icon={`${asset}dashboard.svg`}
               title={language.t("landing.dashboard.title")}
               desc={language.t("landing.dashboard.description")}
-              href="/kanban"
+              href={href("/kanban")}
               tone="cool"
               full
             />
