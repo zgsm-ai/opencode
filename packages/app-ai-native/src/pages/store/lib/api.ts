@@ -1558,6 +1558,15 @@ export const adminItemApi = {
 
   remove: (id: string) =>
     apiFetch<{ success: boolean }>(`/api/admin/items/${encodeURIComponent(id)}`, { method: "DELETE" }),
+
+  // Batch delete (max 200 ids) in a single backend transaction: all succeed or
+  // none do. `skipped` counts ids that no longer existed (e.g. a sub-skill
+  // already removed via its parent plugin's cascade earlier in the same batch).
+  batchRemove: (ids: string[]) =>
+    apiFetch<{ success: boolean; deleted: number; skipped: number; skippedIds: string[] }>(
+      "/api/admin/items/batch-delete",
+      { method: "POST", body: JSON.stringify({ ids }) },
+    ),
 }
 
 // ── Admin · Ops (M5): system notification channels ─────────────────────────
