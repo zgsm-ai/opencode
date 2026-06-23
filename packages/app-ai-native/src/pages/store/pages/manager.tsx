@@ -1,24 +1,21 @@
 import { useDialog } from "@opencode-ai/ui/context/dialog"
-import { Icon, type IconProps } from "@opencode-ai/ui/icon"
+import { Icon } from "@opencode-ai/ui/icon"
 import { showToast } from "@opencode-ai/ui/toast"
-import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { useNavigate } from "@solidjs/router"
 import { createEffect, createMemo, createResource, For, onCleanup, Show, Suspense } from "solid-js"
 import { createStore, produce, reconcile } from "solid-js/store"
 import { useItemFilterOptions } from "@/context/item-filter-options"
 import { useLanguage } from "@/context/language"
-import { LocalIcon } from "@/components/local-icon"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { cn } from "@/lib/utils"
-import { Persist, persisted } from "@/utils/persist"
 import { ConfirmDialog } from "@/pages/store/components/confirm-dialog"
 import { CreateCapabilityDialog } from "@/pages/store/components/create-capability-dialog"
 import ItemDetailContent from "@/pages/store/components/item-detail-content"
 import { ItemDetailLoadingSkeleton } from "@/pages/store/components/item-detail-loading-skeleton"
 import { MoveCapabilityDialog } from "@/pages/store/components/move-capability-dialog"
-import { DistributeDialog } from "@/pages/store/components/distribute-dialog"
-import { buildStoreTableColumnOptions, DEFAULT_VISIBLE_COLUMNS, formatCompact, formatSourceMetric, formatStoreDate, formatStoreTablePaginationSummary, mcpListSubscribeBlocked, StoreCapabilityTable, StoreTableFooter, type TableColumnKey } from "@/pages/store/components/store-capability-table"
+import { formatCompact, formatStoreDate, formatStoreTablePaginationSummary, StoreTableFooter } from "@/pages/store/components/store-capability-table"
+import { ManagerListView } from "@/pages/store/components/manager-list-view"
 import { useAuth } from "@/pages/store/hooks/use-auth"
 import { behaviorApi, distributionApi, itemApi, repoApi, userApi, type CapabilityItem, type DistributionResult, type ItemOrder, type ItemSort, type Repository, type SecurityRiskGroup } from "@/pages/store/lib/api"
 import { getLoginUrl } from "@/pages/store/lib/auth"
@@ -44,13 +41,6 @@ const SIDEBAR_ITEMS = [
   { key: "favorited" as TabKey, labelKey: "store.console.capabilities.myFavorited", icon: "check" as const },
   { key: "received" as TabKey, labelKey: "store.received.title", icon: "inbox" as const },
   { key: "sent" as TabKey, labelKey: "store.sent.title", icon: "share" as const },
-] as const
-
-const STAT_CARDS = [
-  { key: "created" as TabKey, labelKey: "store.console.capabilities.myCreated", icon: "archive" as const, color: "#3B82F6" },
-  { key: "favorited" as TabKey, labelKey: "store.console.capabilities.myFavorited", icon: "bell" as const, color: "#F59E0B" },
-  { key: "received" as TabKey, labelKey: "store.received.title", icon: "inbox" as const, color: "#10B981" },
-  { key: "sent" as TabKey, labelKey: "store.sent.title", icon: "share" as const, color: "#8B5CF6" },
 ] as const
 
 type TabKey = "created" | "favorited" | "received" | "sent"
@@ -138,10 +128,6 @@ export default function StoreManagerPage() {
     sort: { by: "favoriteCount" as ItemSort | undefined, order: "desc" as ItemOrder | undefined },
     favoriteActionItemId: null as string | null,
   })
-  const [columnPrefs, setColumnPrefs] = persisted(
-    Persist.global("store.manager.table.columns", ["store.manager.table.columns.v1"]),
-    createStore({ visible: DEFAULT_VISIBLE_COLUMNS }),
-  )
   // Multi-select for batch delete (My Created tab only). `selected` holds the
   // explicitly-checked row ids; `batch.allMatching` is the "select all matching
   // the current filter" mode, resolved to ids lazily at delete time.
@@ -179,7 +165,12 @@ export default function StoreManagerPage() {
     return state.receivedLoading
   })
   const totalPages = createMemo(() => Math.max(1, Math.ceil(activeTotal() / PAGE_SIZE)))
-  const statCards = createMemo(() => STORE_TYPES)
+  const tabCount = (key: TabKey) => {
+    if (key === "created") return state.totalItems
+    if (key === "favorited") return state.favoritedTotal
+    if (key === "received") return state.receivedItems.length
+    return state.sentItems.length
+  }
   const rows = createMemo(() => activeItems())
   const filteredReceivedItems = createMemo(() => {
     const query = state.debouncedSearch.trim().toLowerCase()
@@ -197,36 +188,6 @@ export default function StoreManagerPage() {
       d.item?.description?.toLowerCase().includes(query),
     )
   })
-  const categories = createMemo(() => itemFilterOptions.categories())
-  const sourceOptions = createMemo(() => itemFilterOptions.sources())
-  const securityOptions = createMemo(() => itemFilterOptions.securityRiskGroups())
-  const categoryFilterActive = createMemo(() => state.appliedCategoryFilters.length > 0)
-  const sourceFilterActive = createMemo(() => state.appliedSourceFilters.length > 0)
-  const securityFilterActive = createMemo(() => state.appliedSecurityFilters.length > 0)
-  const tagFilterActive = createMemo(() => state.appliedTagFilters.length > 0)
-  const columnOptions = createMemo(() => buildStoreTableColumnOptions(language.t))
-  const typeOptions = createMemo(() => STORE_TYPES.map((entry) => ({ value: entry.value, label: language.t(entry.labelKey) })))
-  const typeFilterActive = createMemo(() => state.appliedTypeFilters.length > 0)
-  const filteredTypeOptions = createMemo(() => {
-    const query = state.typeFilterQuery.trim().toLowerCase()
-    if (!query) return typeOptions()
-    return typeOptions().filter((option) => option.label.toLowerCase().includes(query) || option.value.toLowerCase().includes(query))
-  })
-  const filteredCategoryOptions = createMemo(() => {
-    const query = state.categoryFilterQuery.trim().toLowerCase()
-    if (!query) return categories()
-    return categories().filter((cat) => itemFilterOptions.categoryLabel(cat.slug, cat).toLowerCase().includes(query) || cat.slug.toLowerCase().includes(query))
-  })
-  const filteredSourceOptions = createMemo(() => {
-    const query = state.sourceFilterQuery.trim().toLowerCase()
-    if (!query) return sourceOptions()
-    return sourceOptions().filter((source) => (itemFilterOptions.sourceLabel(source.value, source) || source.value).toLowerCase().includes(query) || source.value.toLowerCase().includes(query))
-  })
-  const filteredSecurityOptions = createMemo(() => {
-    const query = state.securityFilterQuery.trim().toLowerCase()
-    if (!query) return securityOptions()
-    return securityOptions().filter((option) => itemFilterOptions.securityRiskGroupLabel(option.value as SecurityFilterValue, option).toLowerCase().includes(query) || option.value.toLowerCase().includes(query))
-  })
   let initializedForUser = ""
   let detailContentTimer: ReturnType<typeof setTimeout> | undefined
   let searchTimer: ReturnType<typeof setTimeout> | undefined
@@ -239,7 +200,6 @@ export default function StoreManagerPage() {
   })
 
   const formatDate = (iso?: string) => formatStoreDate(language.locale(), iso)
-  const favoriteIconColor = (favorited?: boolean, itemType?: string) => favorited ? (STORE_TYPES.find((entry) => entry.value === itemType)?.color ?? "var(--native-primary)") : "var(--native-muted)"
   const typeLabel = (value: string) => language.t(typeKey(value))
   const captureSearchSelection = () => {
     if (!searchInputRef) return
@@ -545,50 +505,6 @@ export default function StoreManagerPage() {
     }
   }
 
-  const toggleRowFavorite = async (item: CapabilityItem) => {
-    if (!auth.user() || auth.loading() || state.favoriteActionItemId === item.id) return
-    // Defense-in-depth: never subscribe an unconfigured MCP from the list (the disabled button
-    // already blocks this; this guards a bypass). Unsubscribing is always allowed.
-    if (mcpListSubscribeBlocked(item)) return
-
-    setState("favoriteActionItemId", item.id)
-    try {
-      const result = item.favorited
-        ? await behaviorApi.unfavorite(item.id)
-        : await behaviorApi.favorite(item.id)
-
-      patchItemEverywhere(item.id, (current) => ({
-        ...current,
-        favorited: result.favorited,
-        favoriteCount: result.favoriteCount,
-      }))
-
-      if (state.tab === "favorited" && !result.favorited) {
-        setState("favoritedItems", (items) => items.filter((current) => current.id !== item.id))
-        setState("favoritedTotal", (total) => Math.max(0, total - 1))
-      }
-
-      if (detailState.item?.id === item.id) {
-        setDetailState("item", (current) => current ? { ...current, favorited: result.favorited, favoriteCount: result.favoriteCount } : current)
-        setDetailState("favorited", result.favorited)
-        setDetailState("favoriteCount", result.favoriteCount)
-      }
-
-      if (state.favoritedLoaded || state.tab === "favorited") void loadFavorited()
-    } catch (err) {
-      if (item.favorited) {
-        showToast({
-          variant: "error",
-          title: language.t("store.toast.unfavoriteReadonlyFailed"),
-          description: err instanceof Error ? err.message : String(err),
-        })
-      }
-    }
-    finally {
-      setState("favoriteActionItemId", (current) => current === item.id ? null : current)
-    }
-  }
-
   const openEditCapability = (item: CapabilityItem) => {
     navigate(`/capabilities/${item.id}/edit`)
   }
@@ -784,34 +700,6 @@ export default function StoreManagerPage() {
     if (!state.receivedLoaded) void loadReceived()
   }
 
-  const togglePendingTypeFilter = (value: string) => {
-    const type = value as StoreType
-    setState("pendingTypeFilters", (current) => current.includes(type) ? current.filter((item) => item !== type) : [...current, type])
-  }
-  const applyTypeFilters = () => {
-    setSelectedItemId("value", null)
-    setState("appliedTypeFilters", [...state.pendingTypeFilters])
-    setState("itemPage", 1)
-    setState("favoritedPage", 1)
-    setState("typeFilterQuery", "")
-    setState("typeFilterOpen", false)
-    setState("createdLoaded", false)
-    setState("favoritedLoaded", false)
-    refreshBothTabs()
-  }
-  const resetTypeFilters = () => {
-    setSelectedItemId("value", null)
-    setState("pendingTypeFilters", [])
-    setState("appliedTypeFilters", [])
-    setState("itemPage", 1)
-    setState("favoritedPage", 1)
-    setState("typeFilterQuery", "")
-    setState("typeFilterOpen", false)
-    setState("createdLoaded", false)
-    setState("favoritedLoaded", false)
-    refreshBothTabs()
-  }
-
   const handlePageChange = (nextPage: number) => {
     if (nextPage === activePage() || nextPage < 1 || nextPage > totalPages()) return
     setSelectedItemId("value", null)
@@ -827,258 +715,17 @@ export default function StoreManagerPage() {
     }
   }
 
-  const handleSortChange = (by: ItemSort) => {
-    setSelectedItemId("value", null)
-    if (state.tab === "created") setState("itemPage", 1)
-    else if (state.tab === "favorited") setState("favoritedPage", 1)
-
-    if (state.sort.by !== by) {
-      setState("sort", { by, order: "desc" })
-      refreshActiveTab()
-      return
-    }
-    if (state.sort.order === "desc") {
-      setState("sort", "order", "asc")
-      refreshActiveTab()
-      return
-    }
-    setState("sort", { by: undefined, order: undefined })
-    refreshActiveTab()
-  }
-
-  const toggleColumnVisibility = (key: TableColumnKey) => {
-    setColumnPrefs("visible", key, (current) => !current)
-  }
-
-  const togglePendingCategoryFilter = (slug: string) => {
-    setState("pendingCategoryFilters", (current) => current.includes(slug) ? current.filter((item) => item !== slug) : [...current, slug])
-  }
-  const togglePendingSourceFilter = (source: string) => {
-    setState("pendingSourceFilters", (current) => current.includes(source) ? current.filter((item) => item !== source) : [...current, source])
-  }
-  const togglePendingSecurityFilter = (status: SecurityFilterValue) => {
-    setState("pendingSecurityFilters", (current) => current.includes(status) ? current.filter((item) => item !== status) : [...current, status])
-  }
-  const applyCategoryFilters = () => {
-    setSelectedItemId("value", null)
-    setState("appliedCategoryFilters", [...state.pendingCategoryFilters])
-    if (state.tab === "created") setState("itemPage", 1)
-    else setState("favoritedPage", 1)
-    setState("categoryFilterQuery", "")
-    setState("categoryFilterOpen", false)
-    refreshActiveTab()
-  }
-  const applySourceFilters = () => {
-    setSelectedItemId("value", null)
-    setState("appliedSourceFilters", [...state.pendingSourceFilters])
-    if (state.tab === "created") setState("itemPage", 1)
-    else setState("favoritedPage", 1)
-    setState("sourceFilterQuery", "")
-    setState("sourceFilterOpen", false)
-    refreshActiveTab()
-  }
-  const applySecurityFilters = () => {
-    setSelectedItemId("value", null)
-    setState("appliedSecurityFilters", [...state.pendingSecurityFilters])
-    if (state.tab === "created") setState("itemPage", 1)
-    else setState("favoritedPage", 1)
-    setState("securityFilterQuery", "")
-    setState("securityFilterOpen", false)
-    refreshActiveTab()
-  }
-  const resetCategoryFilters = () => {
-    setSelectedItemId("value", null)
-    setState("pendingCategoryFilters", [])
-    setState("appliedCategoryFilters", [])
-    if (state.tab === "created") setState("itemPage", 1)
-    else setState("favoritedPage", 1)
-    setState("categoryFilterQuery", "")
-    setState("categoryFilterOpen", false)
-    refreshActiveTab()
-  }
-  const resetSourceFilters = () => {
-    setSelectedItemId("value", null)
-    setState("pendingSourceFilters", [])
-    setState("appliedSourceFilters", [])
-    if (state.tab === "created") setState("itemPage", 1)
-    else setState("favoritedPage", 1)
-    setState("sourceFilterQuery", "")
-    setState("sourceFilterOpen", false)
-    refreshActiveTab()
-  }
-  const resetSecurityFilters = () => {
-    setSelectedItemId("value", null)
-    setState("pendingSecurityFilters", [])
-    setState("appliedSecurityFilters", [])
-    if (state.tab === "created") setState("itemPage", 1)
-    else setState("favoritedPage", 1)
-    setState("securityFilterQuery", "")
-    setState("securityFilterOpen", false)
-    refreshActiveTab()
-  }
-  const toggleAppliedTagFilter = (slug: string) => {
-    setSelectedItemId("value", null)
-    setState("appliedTagFilters", (current) => current.includes(slug) ? current.filter((item) => item !== slug) : [...current, slug])
-    if (state.tab === "created") setState("itemPage", 1)
-    else setState("favoritedPage", 1)
-    refreshActiveTab()
-  }
-
   function TableContent() {
     return (
-      <StoreCapabilityTable
+<ManagerListView
           rows={rows()}
-          visibleColumns={columnPrefs.visible}
-          columnOptions={columnOptions()}
-          onToggleColumnVisibility={toggleColumnVisibility}
-          sort={state.sort}
-          onSortChange={handleSortChange}
           onRowClick={openItemDetail}
           typeLabel={typeLabel}
           typeColor={(value) => STORE_TYPES.find((e) => e.value === value)?.color}
-          categoryLabel={(slug, category) => itemFilterOptions.categoryLabel(slug, category)}
-          sourceLabel={(value, source) => itemFilterOptions.sourceLabel(value, source as Parameters<typeof itemFilterOptions.sourceLabel>[1])}
-          sourceUrl={(value) => itemFilterOptions.sourceUrl(value)}
-          securityLabel={(value, option) => itemFilterOptions.securityRiskGroupLabel(value, option as Parameters<typeof itemFilterOptions.securityRiskGroupLabel>[1])}
-          favoriteIconColor={favoriteIconColor}
-          onToggleFavorite={(item) => void toggleRowFavorite(item)}
-          currentUserId={userId()}
-          currentUserRoles={auth.user()?.systemRoles ?? []}
-          onDistribute={(item) =>
-            dialog.show(() => (
-              <DistributeDialog itemId={item.id} itemName={item.name} />
-            ))
-          }
-          distributeTooltip={language.t("store.distribute.tooltip")}
+          categoryLabel={(slug) => itemFilterOptions.categoryLabel(slug)}
           formatDate={formatDate}
-          formatSourceMetric={formatSourceMetric}
-          formatCompact={formatCompact}
-          filters={{
-            type: {
-              open: state.typeFilterOpen,
-              onOpenChange: (open) => {
-                setState("typeFilterOpen", open)
-                if (open) {
-                  setState("pendingTypeFilters", [...state.appliedTypeFilters])
-                  setState("typeFilterQuery", "")
-                }
-              },
-              active: typeFilterActive(),
-              appliedValues: state.appliedTypeFilters,
-              pendingValues: state.pendingTypeFilters,
-              query: state.typeFilterQuery,
-              onQueryChange: (value) => setState("typeFilterQuery", value),
-              options: filteredTypeOptions(),
-              togglePending: togglePendingTypeFilter,
-              apply: applyTypeFilters,
-              reset: resetTypeFilters,
-            },
-            category: {
-              open: state.categoryFilterOpen,
-              onOpenChange: (open) => {
-                setState("categoryFilterOpen", open)
-                if (open) {
-                  setState("pendingCategoryFilters", [...state.appliedCategoryFilters])
-                  setState("categoryFilterQuery", "")
-                }
-              },
-              active: categoryFilterActive(),
-              appliedValues: state.appliedCategoryFilters,
-              pendingValues: state.pendingCategoryFilters,
-              query: state.categoryFilterQuery,
-              onQueryChange: (value) => setState("categoryFilterQuery", value),
-              options: filteredCategoryOptions(),
-              togglePending: togglePendingCategoryFilter,
-              apply: applyCategoryFilters,
-              reset: resetCategoryFilters,
-            },
-            security: {
-              open: state.securityFilterOpen,
-              onOpenChange: (open) => {
-                setState("securityFilterOpen", open)
-                if (open) {
-                  setState("pendingSecurityFilters", [...state.appliedSecurityFilters])
-                  setState("securityFilterQuery", "")
-                }
-              },
-              active: securityFilterActive(),
-              appliedValues: state.appliedSecurityFilters,
-              pendingValues: state.pendingSecurityFilters,
-              query: state.securityFilterQuery,
-              onQueryChange: (value) => setState("securityFilterQuery", value),
-              options: filteredSecurityOptions(),
-              togglePending: togglePendingSecurityFilter,
-              apply: applySecurityFilters,
-              reset: resetSecurityFilters,
-            },
-            source: {
-              open: state.sourceFilterOpen,
-              onOpenChange: (open) => {
-                setState("sourceFilterOpen", open)
-                if (open) {
-                  setState("pendingSourceFilters", [...state.appliedSourceFilters])
-                  setState("sourceFilterQuery", "")
-                }
-              },
-              active: sourceFilterActive(),
-              appliedValues: state.appliedSourceFilters,
-              pendingValues: state.pendingSourceFilters,
-              query: state.sourceFilterQuery,
-              onQueryChange: (value) => setState("sourceFilterQuery", value),
-              options: filteredSourceOptions(),
-              togglePending: togglePendingSourceFilter,
-              apply: applySourceFilters,
-              reset: resetSourceFilters,
-            },
-            tag: {
-              active: tagFilterActive(),
-              appliedValues: state.appliedTagFilters,
-              onApply: (values) => {
-                setSelectedItemId("value", null)
-                setState("appliedTagFilters", values)
-                if (state.tab === "created") setState("itemPage", 1)
-                else setState("favoritedPage", 1)
-                refreshActiveTab()
-              },
-              onReset: () => {
-                setSelectedItemId("value", null)
-                setState("appliedTagFilters", [])
-                if (state.tab === "created") setState("itemPage", 1)
-                else setState("favoritedPage", 1)
-                refreshActiveTab()
-              },
-              onTagClick: toggleAppliedTagFilter,
-            },
-          }}
-          labels={{
-            title: language.t("store.home.table.title"),
-            description: language.t("store.home.table.description"),
-            type: language.t("store.console.capabilities.type"),
-            category: language.t("store.console.capabilities.category"),
-            security: language.t("store.security.riskLevel"),
-            tag: language.t("store.home.table.tag"),
-            source: language.t("store.home.table.source"),
-            experienceScore: language.t("store.home.table.experienceScore"),
-            favoriteCount: language.t("store.home.table.favoriteCount"),
-            favorite: language.t("store.detail.favorite"),
-            unfavorite: language.t("store.detail.unfavorite"),
-            favoriteTooltip: language.t("store.detail.favoriteTooltip"),
-            unfavoriteTooltip: language.t("store.detail.unfavoriteTooltip"),
-            favoriteSignInTooltip: language.t("store.detail.favoriteSignInTooltip"),
-            updated: language.t("store.detail.updated"),
-            toggleColumns: language.t("store.home.table.toggleColumns"),
-            noResults: language.t("store.noResults"),
-            reset: language.t("common.reset"),
-            confirm: language.t("channels.add.confirm"),
-            searchCategory: language.t("store.home.filters.searchCategory"),
-            searchSecurity: language.t("store.home.filters.searchSecurity"),
-            searchSource: language.t("store.home.filters.searchSource"),
-            searchTag: language.t("store.home.filters.searchTag"),
-            tagLimitHint: language.t("store.home.filters.tagLimitHint"),
-          }}
+          searchQuery={state.debouncedSearch}
           emptyMessage={language.t(state.tab === "created" ? "store.console.capabilities.empty" : "store.console.capabilities.favorited.empty")}
-          maxVisibleRows={PAGE_SIZE}
-          fixedRows
           selectable={selectableTab()}
           selectedIds={selected}
           allOnPageSelected={allOnPageSelected()}
@@ -1087,6 +734,12 @@ export default function StoreManagerPage() {
           onToggleAll={togglePage}
           selectAllLabel={language.t("store.console.capabilities.selectAll")}
           selectRowLabel={language.t("store.console.capabilities.selectRow")}
+          onEdit={selectableTab() ? openEditCapability : undefined}
+          onMove={selectableTab() ? openMoveCapability : undefined}
+          onDelete={selectableTab() ? (item) => handleDeleteItem(item.id) : undefined}
+          editLabel={language.t("store.console.capabilities.edit")}
+          moveLabel={language.t("store.console.capabilities.move")}
+          deleteLabel={language.t("store.console.capabilities.delete")}
         />
     )
   }
@@ -1124,7 +777,17 @@ export default function StoreManagerPage() {
                     onClick={() => switchTab(item.key)}
                   >
                     <Icon name={item.icon as any} class="size-4 shrink-0" />
-                    <span>{language.t(item.labelKey)}</span>
+                    <span class="flex-1 truncate">{language.t(item.labelKey)}</span>
+                    <span
+                      class={cn(
+                        "min-w-5 shrink-0 rounded-full px-1.5 py-0.5 text-center text-[11px] font-semibold [font-variant-numeric:tabular-nums]",
+                        state.tab === item.key
+                          ? "bg-[color:color-mix(in_oklab,var(--native-primary)_16%,transparent)] text-[var(--native-primary)]"
+                          : "bg-[color:color-mix(in_oklab,var(--native-foreground)_7%,transparent)] text-[var(--native-muted)]",
+                      )}
+                    >
+                      {formatCompact(tabCount(item.key))}
+                    </span>
                   </button>
                 )}
               </For>
@@ -1223,50 +886,7 @@ export default function StoreManagerPage() {
               </div>
             </header>
 
-            {/* Stat Cards */}
-            <div class="mx-auto w-full max-w-[64rem] px-4 pt-4">
-              <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <For each={STAT_CARDS}>
-                  {(card) => {
-                    const count = () => {
-                      if (card.key === "created") return state.totalItems
-                      if (card.key === "favorited") return state.favoritedTotal
-                      if (card.key === "received") return state.receivedItems.length
-                      if (card.key === "sent") return state.sentItems.length
-                      return 0
-                    }
-                    return (
-                      <button
-                        type="button"
-                        onClick={() => switchTab(card.key)}
-                        class={cn(
-                          "group flex items-center gap-4 rounded-xl border border-[var(--native-border)] bg-[var(--native-panel)] p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-md",
-                          state.tab === card.key && "ring-1 ring-[var(--native-primary)]",
-                        )}
-                      >
-                        <div
-                          class="flex size-12 items-center justify-center rounded-lg"
-                          style={{
-                            "background-color": `color-mix(in srgb, ${card.color} 12%, var(--native-panel))`,
-                            color: card.color,
-                          }}
-                        >
-                          <Show when={card.key === "favorited"} fallback={<Icon name={card.icon as any} class="size-6" />}>
-                            <LocalIcon name="subscribe" class="size-6" />
-                          </Show>
-                        </div>
-                        <div>
-                          <div class="text-2xl font-bold text-[var(--native-foreground)]">{formatCompact(count())}</div>
-                          <div class="text-sm text-[var(--native-muted)]">{language.t(card.labelKey)}</div>
-                        </div>
-                      </button>
-                    )
-                  }}
-                </For>
-              </div>
-            </div>
-
-            <div class="flex min-h-[5rem] w-full items-center overflow-hidden">
+            <div class="flex min-h-[5rem] w-full items-center overflow-hidden pt-2">
               <section class={sx.section}>
                 <div class="mx-auto flex w-full max-w-[64rem] items-center gap-3 px-4 max-[768px]:flex-col max-[768px]:items-stretch max-[640px]:gap-2">
                   <div class="relative min-w-0 flex-1">
@@ -1342,7 +962,18 @@ export default function StoreManagerPage() {
                 </div>
               </div>
             </Show>
-            <div class={cn(sx.tableShell, "flex min-h-0 flex-1 flex-col")}>
+            <div
+              class={cn(
+                "relative flex min-h-0 flex-1 flex-col",
+                // Card-list tabs (created/favorited) render self-contained rounded
+                // cards, so they get NO outer table frame — just a scroll area with
+                // breathing room (matches the store home list). The receipt/sent
+                // tabs are real tables and keep the framed shell.
+                state.tab === "received" || state.tab === "sent"
+                  ? sx.tableShell
+                  : "overflow-y-auto px-1 pb-3 pt-1",
+              )}
+            >
               <Show when={state.tab !== "received" && state.tab !== "sent"}>
                 <Show when={state.createdLoaded || state.favoritedLoaded}>
                   <Show when={activeLoading()}>
