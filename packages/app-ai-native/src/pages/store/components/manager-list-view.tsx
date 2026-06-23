@@ -32,6 +32,7 @@ export interface ManagerListViewProps {
   // Multi-select (optional)
   selectable?: boolean
   selectedIds?: Record<string, boolean>
+  allMatching?: boolean
   allOnPageSelected?: boolean
   someOnPageSelected?: boolean
   onToggleRow?: (id: string, checked: boolean) => void
@@ -69,8 +70,8 @@ export function ManagerListView(props: ManagerListViewProps): JSX.Element {
               type="checkbox"
               class="cursor-pointer align-middle"
               aria-label={props.selectAllLabel}
-              checked={Boolean(props.allOnPageSelected)}
-              ref={(el) => createEffect(() => (el.indeterminate = Boolean(props.someOnPageSelected)))}
+              checked={Boolean(props.allMatching || props.allOnPageSelected)}
+              ref={(el) => createEffect(() => (el.indeterminate = !props.allMatching && Boolean(props.someOnPageSelected)))}
               onChange={(e) => props.onToggleAll?.(e.currentTarget.checked)}
             />
             <span>{props.selectAllLabel}</span>
@@ -95,7 +96,7 @@ function ManagerListRow(props: {
   const item = () => props.item
   const accent = () => view.typeColor(item().itemType) ?? "var(--native-muted)"
   const description = () => pickItemDescription(item(), props.language.locale())
-  const selected = () => Boolean(view.selectedIds?.[item().id])
+  const selected = () => Boolean(view.allMatching || view.selectedIds?.[item().id])
 
   return (
     <div

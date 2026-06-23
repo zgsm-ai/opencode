@@ -3106,6 +3106,7 @@ export const dict = {
   "admin.content.toast.batchArchived": "{{count}} items taken offline",
   "admin.content.toast.batchActivated": "{{count}} items taken online",
   "admin.content.toast.batchStatusFailed": "Batch status change failed",
+  "admin.content.toast.batchStatusCapped": "Only the first {{max}} of {{total}} matching items were changed.",
   "admin.content.confirm.batchDelete.title": "Delete Items",
   "admin.content.confirm.batchDelete.description": "Permanently delete the {{count}} selected items and all their versions, assets, and records? This cannot be undone.",
   "admin.content.confirm.batchDelete.withPlugins": "Includes {{plugins}} plugin(s) — their bundled sub-skills will be deleted too.",

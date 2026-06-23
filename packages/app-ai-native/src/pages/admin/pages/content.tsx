@@ -344,6 +344,7 @@ export default function AdminContent() {
   async function doBatchStatus(status: AdminItemStatus) {
     if (batch.deleting || batch.preparing) return
     let ids: string[]
+    let capped = false
     if (batch.allMatching) {
       setBatch("preparing", true)
       try {
@@ -356,6 +357,7 @@ export default function AdminContent() {
           pageSize: MAX_BATCH_DELETE,
         })
         ids = (res.items ?? []).map((i) => i.id)
+        capped = state.total > MAX_BATCH_DELETE
       } catch (err) {
         showToast({
           variant: "error",
@@ -382,6 +384,9 @@ export default function AdminContent() {
           status === "archived" ? "admin.content.toast.batchArchived" : "admin.content.toast.batchActivated",
           { count: String(res.updated) },
         ),
+        description: capped
+          ? language.t("admin.content.toast.batchStatusCapped", { total: String(state.total), max: String(MAX_BATCH_DELETE) })
+          : undefined,
       })
     } catch (err) {
       showToast({

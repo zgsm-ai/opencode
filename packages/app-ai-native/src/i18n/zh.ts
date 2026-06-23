@@ -3049,6 +3049,7 @@ export const dict = {
   "admin.content.toast.batchArchived": "已下架 {{count}} 项",
   "admin.content.toast.batchActivated": "已上架 {{count}} 项",
   "admin.content.toast.batchStatusFailed": "批量上下架失败",
+  "admin.content.toast.batchStatusCapped": "匹配 {{total}} 条,本次仅处理前 {{max}} 条。",
   "admin.content.confirm.batchDelete.title": "批量删除条目",
   "admin.content.confirm.batchDelete.description": "确认永久删除选中的 {{count}} 项及其所有版本、资源与记录？此操作不可撤销。",
   "admin.content.confirm.batchDelete.withPlugins": "其中含 {{plugins}} 个 Plugin，将连带删除它们名下的 subskill。",

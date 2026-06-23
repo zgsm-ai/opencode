@@ -728,6 +728,7 @@ export default function StoreManagerPage() {
           emptyMessage={language.t(state.tab === "created" ? "store.console.capabilities.empty" : "store.console.capabilities.favorited.empty")}
           selectable={selectableTab()}
           selectedIds={selected}
+          allMatching={batch.allMatching}
           allOnPageSelected={allOnPageSelected()}
           someOnPageSelected={someOnPageSelected()}
           onToggleRow={toggleRow}
