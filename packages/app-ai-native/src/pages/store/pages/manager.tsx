@@ -930,8 +930,9 @@ export default function StoreManagerPage() {
 
           <section class={cn(sx.section, "flex min-h-0 flex-1 flex-col px-2 sm:px-3")}>
             <Show when={selectableTab() && selectedCount() > 0}>
-              <div class="mx-auto mb-2 flex w-full max-w-[64rem] flex-wrap items-center gap-3 rounded-lg border border-[var(--native-border)] bg-[color:color-mix(in_oklab,var(--native-primary)_6%,var(--native-panel))] px-3 py-2">
-                <span class="text-[0.8125rem] font-medium text-[var(--native-foreground)]">
+              <div class="mx-auto mb-2.5 flex w-full max-w-[64rem] flex-wrap items-center gap-x-4 gap-y-2 rounded-[0.875rem] bg-[color:color-mix(in_oklab,var(--native-primary)_8%,var(--native-panel))] px-4 py-2.5 ring-1 ring-inset ring-[color:color-mix(in_oklab,var(--native-primary)_18%,transparent)] shadow-[0_6px_16px_-8px_color-mix(in_oklab,var(--native-primary)_45%,transparent)]">
+                <span class="inline-flex items-center gap-2 text-[0.8125rem] font-semibold text-[var(--native-primary)]">
+                  <span class="size-1.5 shrink-0 rounded-full bg-[var(--native-primary)]" aria-hidden="true" />
                   {batch.allMatching
                     ? language.t("store.console.capabilities.allMatchingSelected", { count: String(state.totalItems) })
                     : language.t("store.console.capabilities.selectedCount", { count: String(selectedCount()) })}
@@ -939,25 +940,24 @@ export default function StoreManagerPage() {
                 <Show when={canSelectAllMatching()}>
                   <button
                     type="button"
-                    class="cursor-pointer text-[0.8125rem] text-[var(--native-primary)] transition-colors hover:underline"
+                    class="cursor-pointer rounded-md px-2 py-0.5 text-[0.8125rem] font-medium text-[var(--native-primary)] transition-colors hover:bg-[color:color-mix(in_oklab,var(--native-primary)_12%,transparent)]"
                     onClick={() => setBatch("allMatching", true)}
                   >
                     {language.t("store.console.capabilities.selectAllMatching", { count: String(state.totalItems) })}
                   </button>
                 </Show>
                 <div class="ml-auto flex items-center gap-2">
+                  <Button type="button" variant="ghost" size="sm" class="h-8 text-[var(--native-muted)] hover:text-[var(--native-foreground)]" onClick={clearSelection}>
+                    {language.t("store.console.capabilities.clearSelection")}
+                  </Button>
                   <Button
                     type="button"
-                    variant="outline"
                     size="sm"
-                    class="h-8 border-[var(--native-error)] !text-[var(--native-error)] hover:bg-[color:color-mix(in_oklab,var(--native-error)_10%,transparent)]"
+                    class="h-8 bg-[var(--native-error)] !text-white shadow-sm hover:bg-[color:color-mix(in_oklab,var(--native-error)_88%,black)] disabled:cursor-not-allowed disabled:opacity-60"
                     disabled={batch.deleting || batch.preparing}
                     onClick={() => void startBatchDelete()}
                   >
                     {language.t("store.console.capabilities.batchDelete")}
-                  </Button>
-                  <Button type="button" variant="ghost" size="sm" class="h-8" onClick={clearSelection}>
-                    {language.t("store.console.capabilities.clearSelection")}
                   </Button>
                 </div>
               </div>
