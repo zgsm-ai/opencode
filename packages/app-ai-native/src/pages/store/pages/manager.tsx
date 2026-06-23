@@ -4,7 +4,7 @@ import { showToast } from "@opencode-ai/ui/toast"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { useNavigate } from "@solidjs/router"
 import { createEffect, createMemo, createResource, For, onCleanup, Show, Suspense } from "solid-js"
-import { createStore } from "solid-js/store"
+import { createStore, produce, reconcile } from "solid-js/store"
 import { useItemFilterOptions } from "@/context/item-filter-options"
 import { useLanguage } from "@/context/language"
 import { LocalIcon } from "@/components/local-icon"
@@ -28,6 +28,9 @@ import { typeKey } from "@/pages/store/lib/constants"
 // import { CreateRepoDialog } from "@/pages/store/components/create-repo-dialog"
 
 const PAGE_SIZE = 10
+// Mirrors the backend per-request batch cap. "Select all matching" pulls at most
+// this many ids; a larger result set is trimmed with an explicit warning.
+const MAX_BATCH_DELETE = 200
 const STORE_TYPES = [
   { value: "skill", labelKey: "store.sidebar.nav.skills", icon: "sparkles" as const, color: "#ffa000", bg: "#FEF3C7" },
   { value: "subagent", labelKey: "store.sidebar.nav.subagents", icon: "brain" as const, color: "#1670ff", bg: "#DBEAFE" },
@@ -139,6 +142,11 @@ export default function StoreManagerPage() {
     Persist.global("store.manager.table.columns", ["store.manager.table.columns.v1"]),
     createStore({ visible: DEFAULT_VISIBLE_COLUMNS }),
   )
+  // Multi-select for batch delete (My Created tab only). `selected` holds the
+  // explicitly-checked row ids; `batch.allMatching` is the "select all matching
+  // the current filter" mode, resolved to ids lazily at delete time.
+  const [selected, setSelected] = createStore<Record<string, boolean>>({})
+  const [batch, setBatch] = createStore({ allMatching: false, deleting: false, preparing: false })
   let searchInputRef: HTMLInputElement | undefined
   let searchSelectionStart: number | null = null
   let searchSelectionEnd: number | null = null
@@ -607,6 +615,125 @@ export default function StoreManagerPage() {
     ))
   }
 
+  // ── Multi-select / batch delete (My Created tab only) ──────────────────────
+  const selectableTab = createMemo(() => state.tab === "created")
+  const selectedIdList = createMemo(() => Object.keys(selected).filter((id) => selected[id]))
+  const selectedCount = createMemo(() => (batch.allMatching ? state.totalItems : selectedIdList().length))
+  const pageSelectedCount = createMemo(() => state.items.filter((i) => selected[i.id]).length)
+  const allOnPageSelected = createMemo(() => state.items.length > 0 && pageSelectedCount() === state.items.length)
+  const someOnPageSelected = createMemo(() => pageSelectedCount() > 0 && !allOnPageSelected())
+  const canSelectAllMatching = createMemo(
+    () => !batch.allMatching && allOnPageSelected() && state.totalItems > state.items.length,
+  )
+
+  function clearSelection() {
+    setSelected(reconcile({}))
+    setBatch("allMatching", false)
+  }
+  function toggleRow(id: string, checked: boolean) {
+    // Unchecking in "all matching" mode: materialize the current page minus this
+    // row as the explicit selection, then leave the mode (cross-page implied
+    // selection on other pages is intentionally dropped).
+    if (batch.allMatching && !checked) {
+      setSelected(produce((s) => {
+        for (const i of state.items) s[i.id] = true
+        s[id] = false
+      }))
+      setBatch("allMatching", false)
+      return
+    }
+    setSelected(id, checked)
+    if (!checked) setBatch("allMatching", false)
+  }
+  function togglePage(checked: boolean) {
+    setSelected(produce((s) => {
+      for (const i of state.items) s[i.id] = checked
+    }))
+    if (!checked) setBatch("allMatching", false)
+  }
+
+  // Clear selection whenever the result set changes (filters/search/tab) but NOT
+  // on pagination, so a cross-page manual selection survives page changes.
+  const filterSignature = createMemo(() => JSON.stringify({
+    tab: state.tab,
+    search: state.debouncedSearch,
+    type: state.appliedTypeFilters,
+    category: state.appliedCategoryFilters,
+    source: state.appliedSourceFilters,
+    security: state.appliedSecurityFilters,
+    tags: state.appliedTagFilters,
+  }))
+  createEffect(() => {
+    filterSignature()
+    clearSelection()
+  })
+
+  async function doBatchRemove(ids: string[]) {
+    setBatch("deleting", true)
+    try {
+      const res = await itemApi.batchDelete(ids)
+      setSelectedItemId("value", null)
+      clearSelection()
+      setState("itemPage", 1)
+      await loadCreated()
+      const parts = [language.t("store.console.capabilities.toast.batchDeleted", { deleted: String(res.deleted) })]
+      if (res.skipped > 0 || res.forbidden > 0) {
+        parts.push(language.t("store.console.capabilities.toast.batchDeleteSkipped", { skipped: String(res.skipped + res.forbidden) }))
+      }
+      showToast({ variant: "success", title: parts.join(" · ") })
+    } catch (error) {
+      showToast({
+        variant: "error",
+        title: language.t("store.console.capabilities.toast.batchDeleteFailed"),
+        description: error instanceof Error ? error.message : String(error),
+      })
+    } finally {
+      setBatch("deleting", false)
+    }
+  }
+
+  async function startBatchDelete() {
+    if (batch.deleting || batch.preparing) return
+    let ids: string[]
+    let knownItems: CapabilityItem[]
+    if (batch.allMatching) {
+      setBatch("preparing", true)
+      try {
+        const res = await itemApi.listMy({ ...buildListParams(), page: 1, pageSize: MAX_BATCH_DELETE })
+        knownItems = res.items ?? []
+      } catch (error) {
+        showToast({
+          variant: "error",
+          title: language.t("store.console.capabilities.toast.batchDeleteFailed"),
+          description: error instanceof Error ? error.message : String(error),
+        })
+        return
+      } finally {
+        setBatch("preparing", false)
+      }
+      ids = knownItems.map((i) => i.id)
+    } else {
+      ids = selectedIdList()
+      knownItems = state.items.filter((i) => selected[i.id])
+    }
+    if (ids.length === 0) return
+
+    const pluginCount = knownItems.filter((i) => i.itemType === "plugin").length
+    const capped = batch.allMatching && state.totalItems > MAX_BATCH_DELETE
+    let description = language.t("store.console.capabilities.confirmBatchDelete", { count: String(ids.length) })
+    if (pluginCount > 0) description += " " + language.t("store.console.capabilities.confirmBatchDeletePlugins", { plugins: String(pluginCount) })
+    if (capped) description += " " + language.t("store.console.capabilities.confirmBatchDeleteCapped", { total: String(state.totalItems), max: String(MAX_BATCH_DELETE) })
+    dialog.show(() => (
+      <ConfirmDialog
+        title={language.t("store.console.capabilities.batchDelete")}
+        description={description}
+        confirm={language.t("common.delete")}
+        variant="danger"
+        onConfirm={() => doBatchRemove(ids)}
+      />
+    ))
+  }
+
   const handleSearchInput = (value: string) => {
     allowSearchRefocusUntil = Date.now() + 3000
     setState("search", value)
@@ -952,6 +1079,14 @@ export default function StoreManagerPage() {
           emptyMessage={language.t(state.tab === "created" ? "store.console.capabilities.empty" : "store.console.capabilities.favorited.empty")}
           maxVisibleRows={PAGE_SIZE}
           fixedRows
+          selectable={selectableTab()}
+          selectedIds={selected}
+          allOnPageSelected={allOnPageSelected()}
+          someOnPageSelected={someOnPageSelected()}
+          onToggleRow={toggleRow}
+          onToggleAll={togglePage}
+          selectAllLabel={language.t("store.console.capabilities.selectAll")}
+          selectRowLabel={language.t("store.console.capabilities.selectRow")}
         />
     )
   }
@@ -1174,6 +1309,39 @@ export default function StoreManagerPage() {
             </div>
 
           <section class={cn(sx.section, "flex min-h-0 flex-1 flex-col px-2 sm:px-3")}>
+            <Show when={selectableTab() && selectedCount() > 0}>
+              <div class="mx-auto mb-2 flex w-full max-w-[64rem] flex-wrap items-center gap-3 rounded-lg border border-[var(--native-border)] bg-[color:color-mix(in_oklab,var(--native-primary)_6%,var(--native-panel))] px-3 py-2">
+                <span class="text-[0.8125rem] font-medium text-[var(--native-foreground)]">
+                  {batch.allMatching
+                    ? language.t("store.console.capabilities.allMatchingSelected", { count: String(state.totalItems) })
+                    : language.t("store.console.capabilities.selectedCount", { count: String(selectedCount()) })}
+                </span>
+                <Show when={canSelectAllMatching()}>
+                  <button
+                    type="button"
+                    class="cursor-pointer text-[0.8125rem] text-[var(--native-primary)] transition-colors hover:underline"
+                    onClick={() => setBatch("allMatching", true)}
+                  >
+                    {language.t("store.console.capabilities.selectAllMatching", { count: String(state.totalItems) })}
+                  </button>
+                </Show>
+                <div class="ml-auto flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    class="h-8 border-[var(--native-error)] !text-[var(--native-error)] hover:bg-[color:color-mix(in_oklab,var(--native-error)_10%,transparent)]"
+                    disabled={batch.deleting || batch.preparing}
+                    onClick={() => void startBatchDelete()}
+                  >
+                    {language.t("store.console.capabilities.batchDelete")}
+                  </Button>
+                  <Button type="button" variant="ghost" size="sm" class="h-8" onClick={clearSelection}>
+                    {language.t("store.console.capabilities.clearSelection")}
+                  </Button>
+                </div>
+              </div>
+            </Show>
             <div class={cn(sx.tableShell, "flex min-h-0 flex-1 flex-col")}>
               <Show when={state.tab !== "received" && state.tab !== "sent"}>
                 <Show when={state.createdLoaded || state.favoritedLoaded}>

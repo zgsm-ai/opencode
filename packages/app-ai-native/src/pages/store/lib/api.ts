@@ -961,6 +961,15 @@ export const itemApi = {
 
   delete: (id: string) => apiFetch<{ message: string }>(`/api/items/${id}`, { method: "DELETE" }),
 
+  // Batch delete (max 200) of the caller's own items in a single backend
+  // transaction; a platform admin may delete any. `forbidden` counts ids the
+  // caller may not delete, `skipped` ids that no longer existed.
+  batchDelete: (ids: string[]) =>
+    apiFetch<{ deleted: number; skipped: number; forbidden: number; deletedIds: string[]; forbiddenIds: string[] }>(
+      "/api/items",
+      { method: "DELETE", body: JSON.stringify({ ids }) },
+    ),
+
   get: (id: string) => apiFetch<CapabilityItem>(`/api/items/${id}`, { credentials: "include" }),
 
   getAssets: (id: string) => apiFetch<{ assets: CapabilityItemAsset[] }>(`/api/items/${id}/assets`, { credentials: "include" }).then((res) => res.assets ?? []),
@@ -1566,6 +1575,13 @@ export const adminItemApi = {
     apiFetch<{ success: boolean; deleted: number; skipped: number; skippedIds: string[] }>(
       "/api/admin/items/batch-delete",
       { method: "POST", body: JSON.stringify({ ids }) },
+    ),
+
+  // Batch take items online/offline (active|archived) in one transaction.
+  batchSetStatus: (ids: string[], status: AdminItemStatus) =>
+    apiFetch<{ success: boolean; updated: number; skipped: number; skippedIds: string[] }>(
+      "/api/admin/items/batch-status",
+      { method: "POST", body: JSON.stringify({ ids, status }) },
     ),
 }
 

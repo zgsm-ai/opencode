@@ -883,6 +883,17 @@ export function StoreCapabilityTable(props: {
   maxVisibleRows?: number
   fixedRows?: boolean
   searchQuery?: string
+  // Optional multi-select. When `selectable` is set, a leading checkbox column is
+  // rendered; row-checkbox clicks are isolated from the row's onRowClick so
+  // selecting a row never opens its detail drawer.
+  selectable?: boolean
+  selectedIds?: Record<string, boolean>
+  allOnPageSelected?: boolean
+  someOnPageSelected?: boolean
+  onToggleRow?: (id: string, checked: boolean) => void
+  onToggleAll?: (checked: boolean) => void
+  selectAllLabel?: string
+  selectRowLabel?: string
 }) {
   const language = useLanguage()
   const itemFilterOptions = useItemFilterOptions()
@@ -911,6 +922,19 @@ export function StoreCapabilityTable(props: {
         <table class="w-full min-w-[48rem] table-auto caption-bottom text-sm">
           <thead class={cn("[&_tr]:border-b [&_tr]:border-border", sx.thead)}>
             <tr class={stickyHeadRowClass}>
+              <Show when={props.selectable}>
+                <th class={cn("h-10 w-10 px-2 text-left align-middle", stickyHeadClass)}>
+                  <input
+                    type="checkbox"
+                    class="cursor-pointer align-middle"
+                    aria-label={props.selectAllLabel}
+                    checked={Boolean(props.allOnPageSelected)}
+                    ref={(el) => createEffect(() => (el.indeterminate = Boolean(props.someOnPageSelected)))}
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={(e) => props.onToggleAll?.(e.currentTarget.checked)}
+                  />
+                </th>
+              </Show>
               <Show when={isColumnVisible("title")}>
                 <th class={cn("h-10 px-2 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0", sx.th, sx.colTitle, stickyHeadClass)}>{props.labels.title}</th>
               </Show>
@@ -1078,10 +1102,25 @@ export function StoreCapabilityTable(props: {
             </tr>
           </thead>
           <tbody class="[&_tr:last-child]:border-0">
-            <Show when={props.rows.length > 0} fallback={<StoreTableEmptyState colSpan={visibleColumnCount()} message={props.emptyMessage} />}>
+            <Show when={props.rows.length > 0} fallback={<StoreTableEmptyState colSpan={visibleColumnCount() + (props.selectable ? 1 : 0)} message={props.emptyMessage} />}>
               <For each={props.rows}>
                 {(item) => (
-                  <tr class={cn("border-b border-border transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted h-[3.9375rem]", sx.row)} onClick={() => props.onRowClick(item)}>
+                  <tr
+                    class={cn("border-b border-border transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted h-[3.9375rem]", sx.row)}
+                    data-state={props.selectable && props.selectedIds?.[item.id] ? "selected" : undefined}
+                    onClick={() => props.onRowClick(item)}
+                  >
+                <Show when={props.selectable}>
+                  <td class={cn("w-10 p-2 align-middle", sx.td)} onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      class="cursor-pointer align-middle"
+                      aria-label={props.selectRowLabel}
+                      checked={Boolean(props.selectedIds?.[item.id])}
+                      onChange={(e) => props.onToggleRow?.(item.id, e.currentTarget.checked)}
+                    />
+                  </td>
+                </Show>
                 <Show when={isColumnVisible("title")}>
                   <td class={cn("relative p-2 align-middle [&:has([role=checkbox])]:pr-0", sx.td, sx.colTitle)}>
                     <Show when={props.typeColor?.(item.itemType)}>

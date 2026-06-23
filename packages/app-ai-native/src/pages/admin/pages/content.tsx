@@ -339,6 +339,61 @@ export default function AdminContent() {
     ))
   }
 
+  // Batch take items online/offline. Status changes are reversible, so unlike
+  // delete this runs directly (no strong confirm) and reports the result.
+  async function doBatchStatus(status: AdminItemStatus) {
+    if (batch.deleting || batch.preparing) return
+    let ids: string[]
+    if (batch.allMatching) {
+      setBatch("preparing", true)
+      try {
+        const res = await adminItemApi.list({
+          type: state.type || undefined,
+          status: state.status || undefined,
+          securityStatus: state.security || undefined,
+          search: state.debouncedSearch || undefined,
+          page: 1,
+          pageSize: MAX_BATCH_DELETE,
+        })
+        ids = (res.items ?? []).map((i) => i.id)
+      } catch (err) {
+        showToast({
+          variant: "error",
+          title: language.t("admin.content.toast.batchStatusFailed"),
+          description: err instanceof Error ? err.message : String(err),
+        })
+        return
+      } finally {
+        setBatch("preparing", false)
+      }
+    } else {
+      ids = selectedIdList()
+    }
+    if (ids.length === 0) return
+
+    setBatch("deleting", true)
+    try {
+      const res = await adminItemApi.batchSetStatus(ids, status)
+      clearSelection()
+      await load()
+      showToast({
+        variant: "success",
+        title: language.t(
+          status === "archived" ? "admin.content.toast.batchArchived" : "admin.content.toast.batchActivated",
+          { count: String(res.updated) },
+        ),
+      })
+    } catch (err) {
+      showToast({
+        variant: "error",
+        title: language.t("admin.content.toast.batchStatusFailed"),
+        description: err instanceof Error ? err.message : String(err),
+      })
+    } finally {
+      setBatch("deleting", false)
+    }
+  }
+
   function openDetail(item: AdminItem) {
     setDetail({ open: true, item })
   }
@@ -472,6 +527,22 @@ export default function AdminContent() {
             </button>
           </Show>
           <div class="ml-auto flex items-center gap-3">
+            <button
+              type="button"
+              class="cursor-pointer rounded-[var(--native-radius-md)] border border-[color:color-mix(in_oklab,var(--native-border)_60%,transparent)] px-3 py-1.5 text-[0.8125rem] text-[var(--native-muted)] transition-colors hover:text-[var(--native-foreground)] disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={batch.deleting || batch.preparing}
+              onClick={() => void doBatchStatus("archived")}
+            >
+              {language.t("admin.content.batch.archive")}
+            </button>
+            <button
+              type="button"
+              class="cursor-pointer rounded-[var(--native-radius-md)] border border-[color:color-mix(in_oklab,var(--native-border)_60%,transparent)] px-3 py-1.5 text-[0.8125rem] text-[var(--native-muted)] transition-colors hover:text-[var(--native-foreground)] disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={batch.deleting || batch.preparing}
+              onClick={() => void doBatchStatus("active")}
+            >
+              {language.t("admin.content.batch.activate")}
+            </button>
             <button
               type="button"
               class="cursor-pointer rounded-[var(--native-radius-md)] border border-[var(--native-error)] px-3 py-1.5 text-[0.8125rem] text-[var(--native-error)] transition-colors hover:bg-[color:color-mix(in_oklab,var(--native-error)_10%,transparent)] disabled:cursor-not-allowed disabled:opacity-50"
