@@ -139,7 +139,7 @@ export default function RootLayout(props: ParentProps) {
 
   const isMultica = () => {
     const path = appPathname()
-    return path === "/multica"
+    return path === "/workflow"
   }
 
   return (
@@ -167,7 +167,7 @@ export default function RootLayout(props: ParentProps) {
                 icon="task"
                 label="Multica"
                 active={isMultica()}
-                onClick={() => navigate("/multica")}
+                onClick={() => navigate("/workflow")}
               />
             </Show>
             {/* 效能看板入口暂时隐藏，恢复时改回 auth.canAccessMenu("kanban") */}
