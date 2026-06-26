@@ -1979,6 +1979,10 @@ export const dict = {
   "workspace.onboarding.workspaceReady.title": "工作空间已准备好",
   "workspace.onboarding.workspaceReady.description":
     "创建完成后会自动打开会话页。也可以从左侧 Workspaces 列表重新进入已有工作空间。",
+  "workspace.onboarding.workspaceReady.hint":
+    "左侧已有可用空间可直接使用，也可以基于在线设备再新建一个工作空间。",
+  "workspace.onboarding.selectDevice.title": "选择开发设备",
+  "workspace.onboarding.selectDevice.description": "请选择用于新建工作空间的在线设备。",
   "workspace.onboarding.storePrefix": "暂时不连接设备？",
   "workspace.onboarding.storeLink": "浏览团队知识中心",
   "landing.title": "企业级 AI Coding 平台",

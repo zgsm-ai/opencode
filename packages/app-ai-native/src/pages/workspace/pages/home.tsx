@@ -8,6 +8,7 @@ import { SHENMA_ORIGIN } from "@/pages/store/lib/constants"
 import { useWorkspace } from "../context"
 import type { Device } from "../types"
 import { CreateWorkspaceDialogContent } from "../components/create-workspace-dialog"
+import { SelectDeviceDialogContent } from "../components/select-device-dialog"
 
 type State = "no-device" | "device-ready" | "workspace-ready"
 
@@ -179,7 +180,7 @@ function NoDevice(props: {
   const t = useLanguage().t
   return (
     <>
-      <section class="rounded-[20px] bg-[linear-gradient(145deg,color-mix(in_oklab,var(--native-panel)_82%,transparent),color-mix(in_oklab,#f4fbff_54%,var(--native-panel))_60%,color-mix(in_oklab,#fff7fb_48%,var(--native-panel)))] p-5 shadow-[30px_18px_68px_-42px_color-mix(in_oklab,var(--native-primary)_28%,transparent),0_14px_40px_-30px_rgba(15,23,42,0.18)] backdrop-blur">
+      <section class="rounded-[20px] bg-[linear-gradient(145deg,color-mix(in_oklab,var(--native-panel)_82%,transparent),color-mix(in_oklab,var(--native-surface)_54%,var(--native-panel))_60%,color-mix(in_oklab,var(--native-bg-subtle)_48%,var(--native-panel)))] p-5 shadow-[30px_18px_68px_-42px_color-mix(in_oklab,var(--native-primary)_28%,transparent),0_14px_40px_-30px_color-mix(in_oklab,var(--native-foreground)_18%,transparent)] backdrop-blur">
         <div class="mb-4">
           <p class="m-0 text-[0.8125rem] font-semibold text-[var(--native-primary)]">{t("workspace.onboarding.currentAction")}</p>
           <h2 class="m-0 mt-2.5 text-[1.25rem] font-semibold tracking-[-0.03em] text-[var(--native-foreground)]">{t("workspace.onboarding.noDevice.title")}</h2>
@@ -287,14 +288,25 @@ function DeviceReady(props: {
   )
 }
 
-function WorkspaceReady() {
+function WorkspaceReady(props: { onConnectAnother: () => void; onCreateWorkspace: () => void }) {
   const t = useLanguage().t
   return (
     <section class="rounded-[3px] border border-[color:color-mix(in_oklab,var(--native-border)_30%,transparent)] bg-[color:color-mix(in_oklab,var(--native-panel)_88%,var(--native-bg-subtle))] p-5 shadow-[var(--native-shadow-sm)]">
       <h2 class="m-0 text-[1.25rem] font-semibold tracking-[-0.03em] text-[var(--native-foreground)]">{t("workspace.onboarding.workspaceReady.title")}</h2>
-      <p class="m-0 mt-2 max-w-[62ch] text-[0.875rem] leading-[1.65] text-[var(--native-muted)]">
+      <p class="m-0 mt-2 whitespace-nowrap text-[0.875rem] leading-[1.65] text-[var(--native-muted)]">
         {t("workspace.onboarding.workspaceReady.description")}
       </p>
+      <p class="m-0 mt-1.5 whitespace-nowrap text-[0.8125rem] leading-[1.65] text-[var(--native-muted)]">
+        {t("workspace.onboarding.workspaceReady.hint")}
+      </p>
+      <div class="mt-5 flex flex-wrap items-center gap-3">
+        <Button type="button" variant="primary" onClick={props.onCreateWorkspace}>
+          {t("workspace.onboarding.deviceReady.selectProject")}
+        </Button>
+        <Button type="button" variant="secondary" onClick={props.onConnectAnother}>
+          {t("workspace.onboarding.deviceReady.connectAnother")}
+        </Button>
+      </div>
     </section>
   )
 }
@@ -324,7 +336,7 @@ export default function WorkspaceHome() {
     updatedAt: new Date(0).toISOString(),
   }
   const online = createMemo(() => preview() === "device-ready" ? [sample] : work.devices().filter((device) => device.status === "online"))
-  const usable = createMemo(() => work.workspaces().filter((item) => item.deviceUniqueId && (item.directories?.length ?? 0) > 0))
+  const usable = createMemo(() => work.workspaces().filter((item) => item.deviceUniqueId && item.deviceStatus === "online" && (item.directories?.length ?? 0) > 0))
   const state = createMemo<State>(() => {
     const value = preview()
     if (value) return value
@@ -375,6 +387,26 @@ export default function WorkspaceHome() {
       />
     ))
   }
+  const createWorkspaceFromPicker = () => {
+    if (preview()) return
+    const devices = online()
+    const onCreate = async (device: Device, dir: string, name: string) => {
+      await work.createWorkspace(device.id, dir, name)
+    }
+    const workspaceNames = work.workspaces().map((workspace) => workspace.name)
+    if (devices.length <= 1) {
+      if (!devices[0]) return
+      open(devices[0])
+      return
+    }
+    dialog.show(() => (
+      <SelectDeviceDialogContent
+        devices={devices}
+        workspaceNames={workspaceNames}
+        onCreate={onCreate}
+      />
+    ))
+  }
   const refresh = () => {
     work.refreshDevices()
   }
@@ -397,26 +429,37 @@ export default function WorkspaceHome() {
 
         <Stepper state={state()} select={select} />
 
-        <Show when={state() === "workspace-ready"} fallback={
-          <Show
-            when={state() === "device-ready" && !guide()}
-            fallback={
-              <NoDevice
-                copied={copied}
-                copy={copy}
-                refresh={refresh}
-                login={login()}
-                start={start()}
-                env={env()}
-              />
-            }
-          >
-            <Show when={online()[0]}>
-              {(device) => <DeviceReady device={device()} open={open} showGuide={() => setGuide(true)} />}
+        <Show
+          when={guide()}
+          fallback={
+            <Show when={state() === "workspace-ready"} fallback={
+              <Show when={state() === "device-ready"} fallback={
+                <NoDevice
+                  copied={copied}
+                  copy={copy}
+                  refresh={refresh}
+                  login={login()}
+                  start={start()}
+                  env={env()}
+                />
+              }>
+                <Show when={online()[0]}>
+                  {(device) => <DeviceReady device={device()} open={open} showGuide={() => setGuide(true)} />}
+                </Show>
+              </Show>
+            }>
+              <WorkspaceReady onConnectAnother={() => setGuide(true)} onCreateWorkspace={createWorkspaceFromPicker} />
             </Show>
-          </Show>
-        }>
-          <WorkspaceReady />
+          }
+        >
+          <NoDevice
+            copied={copied}
+            copy={copy}
+            refresh={refresh}
+            login={login()}
+            start={start()}
+            env={env()}
+          />
         </Show>
 
         <Help copied={copied} copy={copy} />

@@ -2237,6 +2237,10 @@ export const dict = {
   "workspace.onboarding.workspaceReady.title": "Workspace ready",
   "workspace.onboarding.workspaceReady.description":
     "After creation, the session page opens automatically. You can also re-enter an existing workspace from the Workspaces list on the left.",
+  "workspace.onboarding.workspaceReady.hint":
+    "Existing workspaces on the left are ready to use. You can also create a new workspace from an online device.",
+  "workspace.onboarding.selectDevice.title": "Select a device",
+  "workspace.onboarding.selectDevice.description": "Choose an online device to create the new workspace.",
   "workspace.onboarding.storePrefix": "Not connecting a device yet?",
   "workspace.onboarding.storeLink": "Browse Team Knowledge Hub",
 
