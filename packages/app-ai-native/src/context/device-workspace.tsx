@@ -7,6 +7,8 @@ import { getDirectory } from "@opencode-ai/util/path"
 import type { Session, Command, Agent, VcsInfo, SessionStatus, PermissionRequest, QuestionRequest } from "@opencode-ai/sdk/v2/client"
 import type { ProviderCapabilitiesResponse } from "./global-sync/types"
 import { workspaceApi } from "@/pages/workspace/lib/api"
+import { scheduleNotifPromptCheck, type NotifPromptTexts } from "@/utils/notification-prompt"
+import { useLanguage } from "./language"
 
 
 function groupBy<T extends { id?: string; sessionID?: string }>(items: T[]): Record<string, T[]> {
@@ -63,6 +65,7 @@ type DeviceWorkspaceValue = {
     setQuestions(questions: Record<string, QuestionRequest[]>): void
     setPermissions(permissions: Record<string, PermissionRequest[]>): void
     removePermission(sessionID: string, requestID: string): void
+    removeQuestion(sessionID: string, requestID: string): void
     clearUnread(id: string): void
   }
   command: {
@@ -97,6 +100,7 @@ export { DeviceWorkspaceContext }
 
 export function DeviceWorkspaceProvider(props: ParentProps<{ workspaceId?: string }>) {
   const device = useDeviceSDK()
+  const language = useLanguage()
 
   const [store, setStore] = createStore<WorkspaceData>({
     status: "loading",
@@ -735,6 +739,16 @@ export function DeviceWorkspaceProvider(props: ParentProps<{ workspaceId?: strin
                     }
                   }))
                   summaryChanged = true
+                  // Schedule notification channel prompt after a new session is created
+                  const texts: NotifPromptTexts = {
+                    title: language.t("workspace.notifPrompt.title"),
+                    description: language.t("workspace.notifPrompt.description"),
+                    configure: language.t("workspace.notifPrompt.configure"),
+                    dismiss: language.t("workspace.notifPrompt.dismiss"),
+                  }
+                  scheduleNotifPromptCheck((path) => {
+                    window.location.assign(path)
+                  }, texts)
                   break
                 }
                 // ── session.updated: debounce per sessionID with field merge ──
@@ -944,6 +958,7 @@ export function DeviceWorkspaceProvider(props: ParentProps<{ workspaceId?: strin
       setQuestions: (q: Record<string, QuestionRequest[]>) => setStore("questions", reconcile(q)),
       setPermissions: (p: Record<string, PermissionRequest[]>) => setStore("permissions", reconcile(p)),
       removePermission,
+      removeQuestion,
       clearUnread: (id: string) => {
         if (!store.unread[id]) return
         batch(() => {

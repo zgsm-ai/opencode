@@ -350,6 +350,9 @@ export const dict = {
   "console.identity.provider.phone": "Phone",
   "console.identity.provider.casdoor": "Casdoor",
   "console.identity.provider.unknown": "Unknown",
+  "console.identity.providerMismatchTitle": "Authentication Method Mismatch",
+  "console.identity.providerMismatchDescription": "You selected {expected} but authenticated with {actual}. Please use the {expected} method when signing in on the login page.",
+  "console.identity.retryBind": "Retry",
   "store.sidebar.nav.skills": "Skills",
   "store.sidebar.nav.subagents": "Subagents",
   "store.sidebar.nav.commands": "Commands",
@@ -642,6 +645,8 @@ export const dict = {
   "channels.toast.deleteFailed": "Failed to delete channel",
   "channels.toast.testSent": "Test message sent",
   "channels.toast.testFailed": "Failed to send test message",
+  "channels.wecomBot.scanQRCode": "Scan with WeCom to start your first conversation with the bot",
+  "channels.wecomBot.scanHint": "The bot notification will work after you send your first message",
   "channels.add.name": "Channel name",
   "channels.add.namePlaceholder": "e.g. My AI assistant",
   "channels.add.config": "Configuration",
@@ -1378,6 +1383,11 @@ export const dict = {
   "workspace.proxy.error.filter": "Content processing error. Please contact administrator.",
   "workspace.proxy.error.unknown": "Proxy error: {code}",
 
+  "workspace.notifPrompt.title": "Enable notification channels",
+  "workspace.notifPrompt.description": "Once enabled, pending permission approvals, questionnaires and more will be pushed to you in real time via your configured channels.",
+  "workspace.notifPrompt.configure": "Configure",
+  "workspace.notifPrompt.dismiss": "Don't show again",
+
   "toast.context.noLineSelection.title": "No line selection",
   "toast.context.noLineSelection.description": "Select a line range in a file tab first.",
 
@@ -2102,6 +2112,7 @@ export const dict = {
   "workspace.device.createWorkspace": "Create workspace",
   "workspace.device.offlineHint": "Device offline, cannot create workspace",
   "workspace.device.upgradeHint": "Upgrade available: v{{version}}",
+  "workspace.device.refresh": "Refresh device list",
 
   "workspace.init.checking": "Checking workspace status...",
   "workspace.init.initializing": "Workspace is initializing",

@@ -204,6 +204,14 @@
   }
 }
 
+[data-component="toast"][data-placement="bottom-left"] {
+  position: fixed !important;
+  bottom: 48px !important;
+  left: 32px !important;
+  right: auto !important;
+  z-index: 1001;
+}
+
 @keyframes toastPopIn {
   from {
     opacity: 0;

@@ -113,6 +113,8 @@ export interface ToastOptions {
   duration?: number
   persistent?: boolean
   actions?: ToastAction[]
+  /** When true, toast appears at bottom-left instead of the default bottom-right */
+  bottomLeft?: boolean
 }
 
 export function showToast(options: ToastOptions | string) {
@@ -123,6 +125,7 @@ export function showToast(options: ToastOptions | string) {
       duration={opts.duration}
       persistent={opts.persistent}
       data-variant={opts.variant ?? "default"}
+      data-placement={opts.bottomLeft ? "bottom-left" : undefined}
     >
       <Show when={opts.icon}>
         <Toast.Icon name={opts.icon!} />

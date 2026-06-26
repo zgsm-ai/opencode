@@ -1,6 +1,7 @@
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { showToast } from "@opencode-ai/ui/toast"
 import { createResource, createSignal, For, Show } from "solid-js"
+import QRCode from "qrcode"
 import { useLanguage } from "@/context/language"
 import { channelApi, type ChannelConfig } from "@/pages/store/lib/api"
 import { Button } from "@/components/ui/button"
@@ -242,6 +243,11 @@ function ChannelTypeSection(props: ChannelTypeSectionProps) {
         </div>
       </Show>
 
+      {/* wecom-bot 二维码引导 — 启用后展示 */}
+      <Show when={props.td.id === "wecom-bot" && first()?.enabled && first()?.config?.botQRCode}>
+        <WecomBotQRCode url={first()!.config!.botQRCode} language={language} />
+      </Show>
+
       {/* 错误信息 */}
       <Show when={props.channels.length === 0}>
         <div class="rounded-md border border-dashed border-[color:color-mix(in_srgb,var(--native-border)_20%,transparent)] px-4 py-6 text-center text-sm text-[var(--native-muted)]">
@@ -255,6 +261,38 @@ function ChannelTypeSection(props: ChannelTypeSectionProps) {
           </Show>
         )}
       </For>
+    </div>
+  )
+}
+
+function WecomBotQRCode(props: { url: string; language: ReturnType<typeof useLanguage> }) {
+  const [dataUrl, setDataUrl] = createSignal("")
+
+  createResource(() => props.url, async (url) => {
+    if (!url) return
+    try {
+      const result = await QRCode.toDataURL(url, { width: 200, margin: 2 })
+      setDataUrl(result)
+    } catch {
+      // ignore
+    }
+  })
+
+  return (
+    <div class="mt-4 flex flex-col items-center gap-2 rounded-md bg-[color:color-mix(in_srgb,#22c55e_6%,transparent)] px-4 py-4">
+      <div class="text-xs text-[var(--native-muted)]">
+        {props.language.t("channels.wecomBot.scanQRCode")}
+      </div>
+      <Show when={dataUrl()}>
+        <img
+          src={dataUrl()}
+          alt="Bot QR Code"
+          style={{ width: "140px", height: "140px", "object-fit": "contain" }}
+        />
+      </Show>
+      <div class="text-[11px] text-[var(--native-muted)]">
+        {props.language.t("channels.wecomBot.scanHint")}
+      </div>
     </div>
   )
 }
