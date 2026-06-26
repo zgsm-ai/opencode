@@ -3,7 +3,7 @@ import { Icon, type IconProps } from "@opencode-ai/ui/icon"
 import { showToast } from "@opencode-ai/ui/toast"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { useNavigate, useSearchParams } from "@solidjs/router"
-import { createEffect, createMemo, createResource, For, onCleanup, Show, Suspense } from "solid-js"
+import { createEffect, createMemo, createResource, For, onCleanup, Show, Suspense, untrack } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useItemFilterOptions } from "@/context/item-filter-options"
 import { useLanguage } from "@/context/language"
@@ -663,7 +663,10 @@ export default function StoreManagerPage() {
   createEffect(() => {
     const requestedTab = searchParams.tab
     if (requestedTab === "created" || requestedTab === "favorited" || requestedTab === "received" || requestedTab === "sent") {
-      switchTab(requestedTab)
+      // untrack so the effect depends ONLY on searchParams.tab — switchTab reads
+      // state.tab, and tracking that would re-run this effect (and force the tab
+      // back to the URL value) whenever the user manually switches tabs.
+      untrack(() => switchTab(requestedTab))
     }
   })
 

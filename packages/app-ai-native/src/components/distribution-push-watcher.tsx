@@ -20,11 +20,14 @@ function loadSeen(key: string): Set<string> | null {
     const raw = localStorage.getItem(key)
     if (raw == null) return null
     const parsed = JSON.parse(raw)
-    return Array.isArray(parsed) ? new Set(parsed.filter((id): id is string => typeof id === "string")) : new Set()
+    if (!Array.isArray(parsed)) return null
+    return new Set(parsed.filter((id): id is string => typeof id === "string"))
   } catch {
-    // Corrupt/blocked storage: treat as an empty baseline rather than null so we
-    // don't replay historical receipts as toasts.
-    return new Set()
+    // Storage unavailable/blocked/corrupt: report "no stored baseline" (null) so
+    // the caller baselines to the CURRENT receipt set in memory. Returning an
+    // empty Set here would (wrongly) mark every existing unread receipt as fresh
+    // and re-toast it every poll.
+    return null
   }
 }
 
@@ -50,6 +53,9 @@ export function DistributionPushWatcher() {
     const storageKey = `${STORAGE_PREFIX}${userId}`
     let cancelled = false
     let timer: ReturnType<typeof setTimeout> | undefined
+    // In-memory seen set: carries the baseline + dedup for the whole session even
+    // when localStorage is unavailable. null until the first poll establishes it.
+    let seen: Set<string> | null = null
 
     const poll = async () => {
       try {
@@ -59,15 +65,18 @@ export function DistributionPushWatcher() {
         const receipts = res?.receipts ?? []
 
         const ids = receipts.map((r) => r.id)
-        const seen = loadSeen(storageKey)
         if (seen === null) {
-          // First time for this user in this browser: establish a baseline silently so
-          // we never flood the recipient with toasts for pushes they already had.
-          saveSeen(storageKey, ids)
-          return
+          // First poll this session: hydrate from storage, or (no usable stored
+          // baseline) silently baseline to the CURRENT set so historical pushes are
+          // never replayed as toasts. The in-memory `seen` then carries dedup for
+          // the session, so a disabled/blocked localStorage can't cause re-toasting.
+          const stored = loadSeen(storageKey)
+          seen = stored ?? new Set(ids)
+          saveSeen(storageKey, [...seen])
+          if (stored === null) return
         }
 
-        const fresh = receipts.filter((r) => r.receiptStatus === "unread" && !seen.has(r.id))
+        const fresh = receipts.filter((r) => r.receiptStatus === "unread" && !seen!.has(r.id))
         if (fresh.length === 1) {
           const itemName = fresh[0]!.distribution?.item?.name || language.t("store.received.unknownItem")
           showToast({
@@ -88,25 +97,36 @@ export function DistributionPushWatcher() {
           })
         }
 
-        // Record the full current set so neither toasted nor already-handled receipts
-        // re-toast on the next poll.
-        saveSeen(storageKey, ids)
+        // Mark every current receipt seen (in memory + best-effort persist) so
+        // neither toasted nor already-handled receipts re-toast on the next poll.
+        for (const id of ids) seen!.add(id)
+        saveSeen(storageKey, [...seen!])
       } catch {
         // Network / permission / not-logged-in: skip this round, retry next interval.
       }
     }
 
+    // Guard against overlapping polls: visibilitychange can fire while a poll() is
+    // still in flight; without this it would start a second tick loop (duplicate
+    // requests). An in-flight tick always reschedules when it finishes, so the
+    // chain is never lost.
+    let ticking = false
     const schedule = () => {
       timer = setTimeout(tick, POLL_INTERVAL_MS)
     }
     const tick = async () => {
-      if (cancelled) return
+      if (cancelled || ticking) return
       // Pause work while the tab is hidden; just reschedule.
       if (typeof document !== "undefined" && document.hidden) {
         schedule()
         return
       }
-      await poll()
+      ticking = true
+      try {
+        await poll()
+      } finally {
+        ticking = false
+      }
       if (!cancelled) schedule()
     }
 
