@@ -404,6 +404,9 @@ export function DistributionWizardDialog(props: Props) {
         {/* Step 3: permission + message */}
         <div class="flex flex-col gap-2">
           <span class={fieldLabel}>{language.t("admin.distributions.wizard.stepOptions")}</span>
+          <span class="text-[12px] text-[var(--native-muted)]">
+            {language.t("admin.distributions.wizard.permissionLabel")}
+          </span>
           <div class="flex gap-1.5">
             <For each={PERMISSION_OPTIONS}>
               {(opt) => (
@@ -417,6 +420,15 @@ export function DistributionWizardDialog(props: Props) {
               )}
             </For>
           </div>
+          {/* Clarify what 只读 / 可忽略 actually mean for the recipient (UX: meaning was opaque) */}
+          <p class="text-[12px] leading-snug text-[var(--native-muted)]">
+            {store.permissionMode === "readonly"
+              ? language.t("admin.distributions.permission.readonlyDesc")
+              : language.t("admin.distributions.permission.dismissibleDesc")}
+          </p>
+          <span class="mt-1 text-[12px] text-[var(--native-muted)]">
+            {language.t("admin.distributions.wizard.messageLabel")}
+          </span>
           <textarea
             class={`${inputCls} h-auto min-h-[3.5rem] py-2`}
             placeholder={language.t("admin.distributions.wizard.messagePlaceholder")}
