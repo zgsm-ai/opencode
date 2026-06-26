@@ -48,7 +48,7 @@ function Arrow(props: { tone?: string }) {
   )
 }
 
-function Card(props: { icon: string; title: string; desc: string; href: string; tone?: string; full?: boolean }) {
+function Card(props: { icon: string; title: string; desc: string; href: string; tone?: string; full?: boolean; newTab?: boolean }) {
   const icon = () => {
     if (!props.tone) return <img src={props.icon} alt="" class="h-[70px] w-[75px] md:h-[76px] md:w-[81px] xl:h-[70px] xl:w-[75px]" />
     return (
@@ -69,7 +69,11 @@ function Card(props: { icon: string; title: string; desc: string; href: string; 
     <button
       type="button"
       onClick={() => {
-        window.location.href = props.href
+        if (props.newTab) {
+          window.open(props.href, "_blank", "noopener,noreferrer")
+        } else {
+          window.location.href = props.href
+        }
       }}
       class="group relative flex h-[274px] w-full flex-col items-start gap-6 rounded-2xl p-6 text-left shadow-[3px_4px_4px_0_rgba(163,193,223,0.25)] transition-transform duration-200 hover:-translate-y-1 sm:w-[335px] md:h-[300px] md:w-[365px] md:gap-7 md:rounded-[20px] md:p-7 xl:h-[274px] xl:w-[335px] xl:gap-6 xl:rounded-2xl xl:p-6"
       classList={{ "bg-[rgba(252,252,252,0.6)]": !props.tone, "bg-[rgba(252,252,252,0.5)]": props.tone === "warm", "bg-[rgba(252,252,252,0.7)]": props.tone === "cool" }}
@@ -99,8 +103,8 @@ export default function LandingHome() {
   const auth = useAuth()
   const language = useLanguage()
   const name = () => auth.user()?.name || auth.user()?.preferred_username || auth.user()?.email || ""
-  // 效能看板入口暂时隐藏，恢复时改回 auth.canAccessMenu("kanban") 判断
-  const kanban = createMemo(() => false && !!auth.user() && auth.canAccessMenu("kanban"))
+  // 效能看板已迁移到独立前端；入口可见性由后端权限快照 menus 控制（管理员角色或被授予 kanban scope）。
+  const kanban = createMemo(() => !!auth.user() && auth.canAccessMenu("kanban"))
 
   return (
     <div
@@ -171,7 +175,8 @@ export default function LandingHome() {
               icon={`${asset}dashboard.svg`}
               title={language.t("landing.dashboard.title")}
               desc={language.t("landing.dashboard.description")}
-              href={href("/kanban")}
+              href="/kanban/"
+              newTab
               tone="cool"
               full
             />
