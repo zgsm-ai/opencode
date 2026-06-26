@@ -78,7 +78,7 @@ export default function StoreManagerPage() {
   const language = useLanguage()
   const itemFilterOptions = useItemFilterOptions()
   const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const auth = useAuth()
 
   const [selectedItemId, setSelectedItemId] = createStore<{ value: string | null }>({ value: null })
@@ -643,6 +643,10 @@ export default function StoreManagerPage() {
     if (state.tab === tab) return
     setSelectedItemId("value", null)
     setState("tab", tab)
+    // Keep the URL in sync with the active tab so it's the single source of truth:
+    // without this a manual switch leaves a stale ?tab=, and re-clicking the push
+    // toast's「查看」(navigate to the same ?tab=received) would be a no-op.
+    setSearchParams({ tab }, { replace: true })
     if (tab === "created") {
       if (!state.createdLoaded) void loadCreated()
       return
