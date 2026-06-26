@@ -1062,6 +1062,9 @@ export const dict = {
   "store.received.toast.markReadFailed": "标记已读失败",
   "store.received.toast.loadFailed": "加载推送失败",
   "store.received.status.label": "状态",
+  "store.push.toast.title": "收到新的技能下发",
+  "store.push.toast.titlePlural": "收到 {{count}} 条新的技能下发",
+  "store.push.toast.view": "查看",
   "store.toast.unfavoriteReadonlyFailed": "该技能为强制推送，无法取消订阅",
 
   "store.sent.title": "我下发的",

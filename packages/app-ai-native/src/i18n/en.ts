@@ -123,6 +123,9 @@ export const dict = {
   "store.received.toast.markReadFailed": "Failed to mark as read",
   "store.received.toast.loadFailed": "Failed to load pushes",
   "store.received.status.label": "Status",
+  "store.push.toast.title": "New skill pushed to you",
+  "store.push.toast.titlePlural": "{{count}} new skills pushed to you",
+  "store.push.toast.view": "View",
   "store.toast.unfavoriteReadonlyFailed": "This skill is required and cannot be unsubscribed",
 
   "store.sent.title": "Sent Distributions",

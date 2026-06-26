@@ -618,6 +618,7 @@ export function getMockDistributions(): DistributionResult["distribution"][] {
 
 export function getMockReceipts() {
   const item = MOCK_ITEMS[2]!
+  const freshItem = MOCK_ITEMS[0]!
   return [
     {
       id: "receipt-1", distributionId: "dist-r1", userId: "demo-user-001",
@@ -628,6 +629,17 @@ export function getMockReceipts() {
         targetId: "demo-user-001", message: "Sharing this useful skill with you",
         createdAt: new Date(Date.now() - 3 * 86400000).toISOString(),
         item,
+      },
+    },
+    {
+      id: "receipt-2", distributionId: "dist-r2", userId: "demo-user-001",
+      receiptStatus: "unread",
+      distribution: {
+        id: "dist-r2", itemId: freshItem.id, distributorId: "user-003",
+        permissionMode: "readonly", status: "active", scopeType: "user",
+        targetId: "demo-user-001", message: "刚推送给你一个新技能",
+        createdAt: new Date(Date.now() - 2 * 60000).toISOString(),
+        item: freshItem,
       },
     },
   ]

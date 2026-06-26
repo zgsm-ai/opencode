@@ -2,7 +2,7 @@ import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { Icon, type IconProps } from "@opencode-ai/ui/icon"
 import { showToast } from "@opencode-ai/ui/toast"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
-import { useNavigate } from "@solidjs/router"
+import { useNavigate, useSearchParams } from "@solidjs/router"
 import { createEffect, createMemo, createResource, For, onCleanup, Show, Suspense } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useItemFilterOptions } from "@/context/item-filter-options"
@@ -78,6 +78,7 @@ export default function StoreManagerPage() {
   const language = useLanguage()
   const itemFilterOptions = useItemFilterOptions()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const auth = useAuth()
 
   const [selectedItemId, setSelectedItemId] = createStore<{ value: string | null }>({ value: null })
@@ -656,6 +657,15 @@ export default function StoreManagerPage() {
     }
     if (!state.receivedLoaded) void loadReceived()
   }
+
+  // Honor a deep-link like /store/manager?tab=received (e.g. the skill-push toast CTA).
+  // Reacts to URL changes so it also works when already on the manager page.
+  createEffect(() => {
+    const requestedTab = searchParams.tab
+    if (requestedTab === "created" || requestedTab === "favorited" || requestedTab === "received" || requestedTab === "sent") {
+      switchTab(requestedTab)
+    }
+  })
 
   const togglePendingTypeFilter = (value: string) => {
     const type = value as StoreType
