@@ -420,7 +420,7 @@ export function DistributionWizardDialog(props: Props) {
               )}
             </For>
           </div>
-          {/* Clarify what 只读 / 可忽略 actually mean for the recipient (UX: meaning was opaque) */}
+          {/* Clarify what 强制 / 可移除 actually mean for the recipient (UX: meaning was opaque) */}
           <p class="text-[12px] leading-snug text-[var(--native-muted)]">
             {store.permissionMode === "readonly"
               ? language.t("admin.distributions.permission.readonlyDesc")
