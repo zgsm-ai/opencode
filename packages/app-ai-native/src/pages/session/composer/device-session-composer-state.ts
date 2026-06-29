@@ -84,6 +84,12 @@ export function createDeviceSessionComposerState(deps: ComposerDeps, options?: {
     }
   }
 
+  const dismissQuestion = () => {
+    const q = questionRequest()
+    if (!q) return
+    deps.chat.removeQuestion(q.sessionID, q.id)
+  }
+
   const done = createMemo(
     () => deps.todos().length > 0 && deps.todos().every((todo) => todo.status === "completed" || todo.status === "cancelled"),
   )
@@ -165,6 +171,7 @@ export function createDeviceSessionComposerState(deps: ComposerDeps, options?: {
     permissionResponding,
     decide,
     autoAccept,
+    dismissQuestion,
     todos: deps.todos,
     dock: () => store.dock,
     closing: () => store.closing,

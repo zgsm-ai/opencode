@@ -1,7 +1,8 @@
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { Icon } from "@opencode-ai/ui/icon"
 import { showToast } from "@opencode-ai/ui/toast"
-import { createMemo, createResource, For, Show } from "solid-js"
+import { createMemo, createResource, createSignal, For, Show } from "solid-js"
+import QRCode from "qrcode"
 import { channelApi, type ChannelConfig } from "../lib/api"
 import { useLanguage } from "@/context/language"
 import { ConfirmDialog } from "./confirm-dialog"
@@ -157,6 +158,13 @@ export function ChannelsSection(props: Props = {}) {
                       </div>
                     </Show>
 
+                    <Show when={t.type === "wecom-bot" && cfg()?.enabled && (cfg()?.config?.botQRCode || cfg()?.botQRCode)}>
+                      <WecomBotQRCode
+                        url={cfg()?.config?.botQRCode || cfg()?.botQRCode || ""}
+                        language={language}
+                      />
+                    </Show>
+
                     <div class="store-dash-card-foot" style={{ "justify-content": "space-between" }}>
                       <div style={{ display: "flex", gap: "0.25rem" }}>
                         <Show
@@ -208,5 +216,37 @@ export function ChannelsSection(props: Props = {}) {
         </Show>
       </Show>
     </section>
+  )
+}
+
+function WecomBotQRCode(props: { url: string; language: ReturnType<typeof useLanguage> }) {
+  const [dataUrl, setDataUrl] = createSignal("")
+
+  createResource(() => props.url, async (url) => {
+    if (!url) return
+    try {
+      const result = await QRCode.toDataURL(url, { width: 200, margin: 2 })
+      setDataUrl(result)
+    } catch {
+      // ignore
+    }
+  })
+
+  return (
+    <div style={{ "margin-bottom": "0.5rem", "text-align": "center", padding: "0.75rem", background: "rgba(34,197,94,0.06)", "border-radius": "8px" }}>
+      <div style={{ "font-size": "12px", color: "var(--st-text-secondary)", "margin-bottom": "0.5rem" }}>
+        {props.language.t("channels.wecomBot.scanQRCode")}
+      </div>
+      <Show when={dataUrl()}>
+        <img
+          src={dataUrl()}
+          alt="Bot QR Code"
+          style={{ width: "140px", height: "140px", "object-fit": "contain" }}
+        />
+      </Show>
+      <div style={{ "font-size": "11px", color: "var(--st-text-tertiary)", "margin-top": "0.375rem" }}>
+        {props.language.t("channels.wecomBot.scanHint")}
+      </div>
+    </div>
   )
 }

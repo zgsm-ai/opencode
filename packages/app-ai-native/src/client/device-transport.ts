@@ -45,6 +45,11 @@ export function isProxyError(e: unknown): e is DeviceHttpError {
   return false
 }
 
+export function isNotFoundError(e: unknown): e is DeviceHttpError {
+  if (e instanceof DeviceHttpError) return e.status === 404
+  return false
+}
+
 export function isRuntimeFileDisabledError(e: unknown): boolean {
   if (e instanceof DeviceHttpError) return e.code === "RUNTIME_FILE_DISABLED"
   if (e && typeof e === "object") {

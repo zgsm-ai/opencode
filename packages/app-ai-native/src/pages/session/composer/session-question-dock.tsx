@@ -7,10 +7,11 @@ import { showToast } from "@opencode-ai/ui/toast"
 import type { QuestionAnswer, QuestionRequest } from "@opencode-ai/sdk/v2"
 import { useLanguage } from "@/context/language"
 import { useConversationAdapter } from "@/context/device-adapter"
+import { isNotFoundError } from "@/client/device-transport"
 
 const cache = new Map<string, { tab: number; answers: QuestionAnswer[]; custom: string[]; customOn: boolean[] }>()
 
-export const SessionQuestionDock: Component<{ request: QuestionRequest; onSubmit: () => void }> = (props) => {
+export const SessionQuestionDock: Component<{ request: QuestionRequest; onSubmit: () => void; onStale: () => void }> = (props) => {
   const api = useConversationAdapter()
   const language = useLanguage()
 
@@ -137,6 +138,7 @@ export const SessionQuestionDock: Component<{ request: QuestionRequest; onSubmit
       cache.delete(props.request.id)
     } catch (err) {
       fail(err)
+      if (isNotFoundError(err)) props.onStale()
     } finally {
       setStore("sending", false)
     }
@@ -153,6 +155,7 @@ export const SessionQuestionDock: Component<{ request: QuestionRequest; onSubmit
       cache.delete(props.request.id)
     } catch (err) {
       fail(err)
+      if (isNotFoundError(err)) props.onStale()
     } finally {
       setStore("sending", false)
     }

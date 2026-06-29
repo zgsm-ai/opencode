@@ -68,6 +68,7 @@ export interface SessionChatBackend {
 
   permissionRespond: (id: string, decision: "once" | "always" | "reject") => Promise<void>
   removePermission: (sessionId: string, permId: string) => void
+  removeQuestion: (sessionId: string, requestId: string) => void
 
   autoAccept: {
     enabled: () => boolean

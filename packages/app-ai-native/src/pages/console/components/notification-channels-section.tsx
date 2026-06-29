@@ -1,6 +1,7 @@
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { showToast } from "@opencode-ai/ui/toast"
-import { createResource, createSignal, For, Show } from "solid-js"
+import { createEffect, createResource, createSignal, For, onCleanup, Show } from "solid-js"
+import QRCode from "qrcode"
 import { useLanguage } from "@/context/language"
 import { channelApi, type ChannelConfig } from "@/pages/store/lib/api"
 import { Button } from "@/components/ui/button"
@@ -99,6 +100,8 @@ export function NotificationChannelsSection() {
     ))
   }
 
+  const refreshChannels = () => chActs.refetch()
+
   const isLoading = () => availableTypes.loading || allChannels.loading
 
   return (
@@ -138,6 +141,7 @@ export function NotificationChannelsSection() {
                   hasIdTrust={hasIdTrust()}
                   onToggle={handleToggle}
                   onRemove={handleRemove}
+                  onRefresh={refreshChannels}
                 />
               )}
             </For>
@@ -154,6 +158,7 @@ type ChannelTypeSectionProps = {
   hasIdTrust: boolean
   onToggle: (id: string, enabled: boolean) => Promise<void>
   onRemove: (id: string) => void
+  onRefresh: () => void
 }
 
 function ChannelTypeSection(props: ChannelTypeSectionProps) {
@@ -161,7 +166,23 @@ function ChannelTypeSection(props: ChannelTypeSectionProps) {
   const dialog = useDialog()
   const available = () => props.td.id !== "wecom-app" || props.hasIdTrust
   const [toggling, setToggling] = createSignal(false)
+  const [testing, setTesting] = createSignal(false)
   const first = () => props.channels[0]
+
+  const isWecomBot = () => props.td.id === "wecom-bot"
+  const isBound = () => isWecomBot() && !!first()?.webhookVerified
+  const isBinding = () => isWecomBot() && !!first()?.enabled && !first()?.webhookVerified
+
+  // Poll channel list while waiting for the user's first message so the UI flips
+  // to "bound" automatically once the proxy/server handshake completes.
+  createEffect(() => {
+    if (!isBinding()) return
+    const id = first()?.id
+    if (!id) return
+    const timer = setInterval(() => props.onRefresh(), 5000)
+    onCleanup(() => clearInterval(timer))
+  })
+
   const handleToggle = async () => {
     const ch = first()
     if (!ch) return
@@ -171,6 +192,72 @@ function ChannelTypeSection(props: ChannelTypeSectionProps) {
     } finally {
       setToggling(false)
     }
+  }
+
+  const handleTest = async () => {
+    const ch = first()
+    if (!ch) return
+    setTesting(true)
+    try {
+      await channelApi.test(ch.id)
+      showToast({
+        variant: "success",
+        icon: "circle-check",
+        title: language.t("channels.wecomBot.testSent"),
+      })
+    } catch (error) {
+      showToast({
+        variant: "error",
+        icon: "circle-x",
+        title: language.t("channels.toast.testFailed"),
+        description: error instanceof Error ? error.message : String(error),
+      })
+    } finally {
+      setTesting(false)
+    }
+  }
+
+  const statusBadge = () => {
+    const ch = first()
+    if (!ch) return null
+    if (!ch.enabled) {
+      return (
+        <span
+          class="ml-2 rounded px-1.5 py-0.5 text-[11px] font-medium"
+          style={{ background: "color-mix(in srgb, #ef4444 12%, transparent)", color: "#ef4444" }}
+        >
+          {language.t("channels.disabled")}
+        </span>
+      )
+    }
+    if (isWecomBot()) {
+      if (isBound()) {
+        return (
+          <span
+            class="ml-2 rounded px-1.5 py-0.5 text-[11px] font-medium"
+            style={{ background: "color-mix(in srgb, #22c55e 12%, transparent)", color: "#22c55e" }}
+          >
+            {language.t("channels.wecomBot.bound")}
+          </span>
+        )
+      }
+      return (
+        <span
+          class="ml-2 rounded px-1.5 py-0.5 text-[11px] font-medium"
+          style={{ background: "color-mix(in srgb, #f59e0b 14%, transparent)", color: "#f59e0b" }}
+        >
+          {language.t("channels.wecomBot.unbound")}
+        </span>
+      )
+    }
+    return (
+      <span
+        class="ml-2 rounded px-1.5 py-0.5 text-[11px] font-medium"
+        style={{ background: "color-mix(in srgb, #22c55e 12%, transparent)", color: "#22c55e" }}
+      >
+        {language.t("channels.enabled")}
+      </span>
+    )
   }
 
   return (
@@ -186,36 +273,39 @@ function ChannelTypeSection(props: ChannelTypeSectionProps) {
           <div>
             <h3 class="m-0 font-[var(--native-font-display)] text-[1rem] font-semibold tracking-[-0.035em] text-[var(--native-foreground)]">
               {props.td.name}
-              <Show when={first()}>
-                <span
-                  class="ml-2 rounded px-1.5 py-0.5 text-[11px] font-medium"
-                  style={{
-                    background: first()!.enabled ? "color-mix(in srgb, #22c55e 12%, transparent)" : "color-mix(in srgb, #ef4444 12%, transparent)",
-                    color: first()!.enabled ? "#22c55e" : "#ef4444",
-                  }}
-                >
-                  {first()!.enabled ? language.t("channels.enabled") : language.t("channels.disabled")}
-                </span>
-              </Show>
+              {statusBadge()}
             </h3>
             <p class="mt-0.5 text-[0.8125rem] text-[var(--native-muted)]">{props.td.desc}</p>
           </div>
         </div>
 
-        <Show when={first() && available()}>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={toggling()}
-            onClick={handleToggle}
-            class={first()!.enabled
-              ? "bg-[color:color-mix(in_oklab,var(--native-primary)_8%,transparent)] text-[var(--native-primary)] border-[color:color-mix(in_oklab,var(--native-primary)_20%,transparent)]"
-              : "bg-[color:color-mix(in_srgb,#ef4444_8%,transparent)] text-[#ef4444] border-[color:color-mix(in_srgb,#ef4444_20%,transparent)]"
-            }
-          >
-            {toggling() ? language.t("common.saving") : (first()!.enabled ? language.t("channels.disable") : language.t("channels.enable"))}
-          </Button>
-        </Show>
+        <div class="flex items-center gap-2">
+          <Show when={first() && isBound()}>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={testing()}
+              onClick={handleTest}
+              class="bg-[color:color-mix(in_oklab,var(--native-primary)_8%,transparent)] text-[var(--native-primary)] border-[color:color-mix(in_oklab,var(--native-primary)_20%,transparent)]"
+            >
+              {testing() ? language.t("common.saving") : language.t("channels.wecomBot.test")}
+            </Button>
+          </Show>
+          <Show when={first() && available()}>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={toggling()}
+              onClick={handleToggle}
+              class={first()!.enabled
+                ? "bg-[color:color-mix(in_srgb,#ef4444_8%,transparent)] text-[#ef4444] border-[color:color-mix(in_srgb,#ef4444_20%,transparent)]"
+                : "bg-[color:color-mix(in_oklab,var(--native-primary)_8%,transparent)] text-[var(--native-primary)] border-[color:color-mix(in_oklab,var(--native-primary)_20%,transparent)]"
+              }
+            >
+              {toggling() ? language.t("common.saving") : (first()!.enabled ? language.t("channels.disable") : language.t("channels.enable"))}
+            </Button>
+          </Show>
+        </div>
       </div>
 
       {/* IDTrust 警告 — 仅对 wecom-app 类型 */}
@@ -242,6 +332,23 @@ function ChannelTypeSection(props: ChannelTypeSectionProps) {
         </div>
       </Show>
 
+      {/* wecom-bot 绑定引导/状态展示 */}
+      <Show when={props.td.id === "wecom-bot" && first()?.enabled}>
+        <Show
+          when={isBound()}
+          fallback={
+            <WecomBotBindingFlow
+              url={first()?.config?.botQRCode ?? ""}
+              language={language}
+            />
+          }
+        >
+          <div class="mt-4 rounded-md border border-[color:color-mix(in_srgb,#22c55e_24%,transparent)] bg-[color:color-mix(in_srgb,#22c55e_6%,transparent)] px-4 py-3">
+            <div class="text-[0.8125rem] font-medium text-[#16a34a]">{language.t("channels.wecomBot.boundHint")}</div>
+          </div>
+        </Show>
+      </Show>
+
       {/* 错误信息 */}
       <Show when={props.channels.length === 0}>
         <div class="rounded-md border border-dashed border-[color:color-mix(in_srgb,var(--native-border)_20%,transparent)] px-4 py-6 text-center text-sm text-[var(--native-muted)]">
@@ -255,6 +362,49 @@ function ChannelTypeSection(props: ChannelTypeSectionProps) {
           </Show>
         )}
       </For>
+    </div>
+  )
+}
+
+function WecomBotBindingFlow(props: { url: string; language: ReturnType<typeof useLanguage> }) {
+  const [dataUrl, setDataUrl] = createSignal("")
+
+  createResource(() => props.url, async (url) => {
+    if (!url) return
+    try {
+      const result = await QRCode.toDataURL(url, { width: 200, margin: 2 })
+      setDataUrl(result)
+    } catch {
+      // ignore
+    }
+  })
+
+  return (
+    <div class="mt-4 rounded-md bg-[color:color-mix(in_srgb,#f59e0b_5%,transparent)] px-4 py-4">
+      <div class="flex flex-col items-center gap-3 sm:flex-row sm:items-start sm:gap-4">
+        <Show when={dataUrl()}>
+          <img
+            src={dataUrl()}
+            alt="Bot QR Code"
+            style={{ width: "140px", height: "140px", "object-fit": "contain" }}
+          />
+        </Show>
+        <div class="flex flex-col gap-1.5">
+          <div class="text-[0.8125rem] font-medium text-[var(--native-foreground)]">
+            {props.language.t("channels.wecomBot.step1")}
+          </div>
+          <div class="text-[0.8125rem] text-[var(--native-muted)]">
+            {props.language.t("channels.wecomBot.step2")}
+          </div>
+          <div class="text-[0.8125rem] text-[var(--native-muted)]">
+            {props.language.t("channels.wecomBot.step3")}
+          </div>
+          <div class="mt-1.5 flex items-center gap-1.5 text-[11px] text-[#f59e0b]">
+            <span class="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-current"></span>
+            {props.language.t("channels.wecomBot.waitingBinding")}
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

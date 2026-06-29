@@ -11,6 +11,8 @@ import { DeviceUpgradeDialog } from "@/pages/console/components/device-upgrade-d
 const UPGRADE_POLL_MS = 2000
 const UPGRADE_TIMEOUT_MS = 3 * 60 * 1000
 const UPGRADE_SUPPRESS_MS = 5 * 60 * 1000
+const REFRESH_MIN_SPIN_MS = 600
+const REFRESH_DEBOUNCE_MS = 1000
 
 function loadUpgradeCmdId(deviceId: string): string | null {
   try {
@@ -147,6 +149,7 @@ export type DeviceListProps = {
   isCollapsed: () => boolean
   onToggleCollapse: () => void
   onUpgradeCompleted?: () => void
+  onRefresh?: () => Promise<void>
 }
 
 export function DeviceList(props: DeviceListProps) {
@@ -155,6 +158,18 @@ export function DeviceList(props: DeviceListProps) {
   const dialog = useDialog()
 
   const [upgradeMap, setUpgradeMap] = createSignal<Record<string, { commandId: string; progress: number; done: "completed" | "failed" | null }>>({})
+  const [spinning, setSpinning] = createSignal(false)
+
+  let lastRefreshTs = 0
+  const handleRefresh = () => {
+    if (spinning()) return
+    const now = Date.now()
+    if (now - lastRefreshTs < REFRESH_DEBOUNCE_MS) return
+    lastRefreshTs = now
+    setSpinning(true)
+    const minSpin = new Promise((r) => setTimeout(r, REFRESH_MIN_SPIN_MS))
+    Promise.all([props.onRefresh?.(), minSpin]).finally(() => setSpinning(false))
+  }
 
   const filtered = createMemo(() => {
     const query = props.searchQuery().toLowerCase()
@@ -313,23 +328,41 @@ export function DeviceList(props: DeviceListProps) {
 
       <Show when={!props.isCollapsed()}>
         <div class="px-3 pb-2">
-          <div class="flex h-8 w-full items-center rounded-[var(--native-radius-sm)] border border-sidebar-border bg-[color:color-mix(in_oklab,var(--native-panel)_82%,var(--native-bg-subtle))] shadow-[var(--native-shadow-sm)] transition-all duration-200 focus-within:border-sidebar-ring focus-within:ring-1 focus-within:ring-sidebar-ring">
-            <Icon name="magnifying-glass" class="ml-3 size-4 shrink-0 text-sidebar-foreground/45" />
-            <input
-              type="text"
-              value={props.searchQuery()}
-              placeholder={t("workspace.device.search")}
-              onInput={(e: Event) => props.onSearchChange((e.target as HTMLInputElement).value)}
-              class="h-full min-w-0 flex-1 bg-transparent px-2 text-[0.8125rem] text-sidebar-foreground placeholder:text-sidebar-foreground/45 focus:outline-none"
-            />
-            <Show when={props.searchQuery()}>
-              <button
-                type="button"
-                class="mr-1 flex h-6 w-6 items-center justify-center rounded-full text-sidebar-foreground/45 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground focus:outline-none focus-visible:bg-sidebar-accent"
-                onClick={() => props.onSearchChange("")}
-              >
-                <Icon name="close" class="size-3.5" />
-              </button>
+          <div class="flex items-center gap-1">
+            <div class="flex h-8 flex-1 items-center rounded-[var(--native-radius-sm)] border border-sidebar-border bg-[color:color-mix(in_oklab,var(--native-panel)_82%,var(--native-bg-subtle))] shadow-[var(--native-shadow-sm)] transition-all duration-200 focus-within:border-sidebar-ring focus-within:ring-1 focus-within:ring-sidebar-ring">
+              <Icon name="magnifying-glass" class="ml-3 size-4 shrink-0 text-sidebar-foreground/45" />
+              <input
+                type="text"
+                value={props.searchQuery()}
+                placeholder={t("workspace.device.search")}
+                onInput={(e: Event) => props.onSearchChange((e.target as HTMLInputElement).value)}
+                class="h-full min-w-0 flex-1 bg-transparent px-2 text-[0.8125rem] text-sidebar-foreground placeholder:text-sidebar-foreground/45 focus:outline-none"
+              />
+              <Show when={props.searchQuery()}>
+                <button
+                  type="button"
+                  class="mr-1 flex h-6 w-6 items-center justify-center rounded-full text-sidebar-foreground/45 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground focus:outline-none focus-visible:bg-sidebar-accent"
+                  onClick={() => props.onSearchChange("")}
+                >
+                  <Icon name="close" class="size-3.5" />
+                </button>
+              </Show>
+            </div>
+            <Show when={props.onRefresh}>
+              <Tooltip value={t("workspace.device.refresh")} placement="bottom">
+                <button
+                  type="button"
+                  class="flex size-8 shrink-0 items-center justify-center rounded-[var(--native-radius-sm)] border border-sidebar-border text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
+                  classList={{
+                    "cursor-pointer": !spinning(),
+                    "pointer-events-none": spinning(),
+                  }}
+                  onClick={handleRefresh}
+                  aria-label={t("workspace.device.refresh")}
+                >
+                  <Icon name="arrows-rotate" size="small" classList={{ "animate-spin": spinning() }} />
+                </button>
+              </Tooltip>
             </Show>
           </div>
         </div>

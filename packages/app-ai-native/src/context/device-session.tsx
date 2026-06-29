@@ -2,6 +2,7 @@ import { createContext, useContext, type ParentProps } from "solid-js"
 import { batch, createEffect, createMemo, onCleanup } from "solid-js"
 import { createStore, produce } from "solid-js/store"
 import { showToast } from "@opencode-ai/ui/toast"
+import { isNotFoundError } from "@/client/device-transport"
 import { useDeviceSDK } from "./device-sdk"
 import { useDeviceWorkspace } from "./device-workspace"
 import { useLanguage } from "./language"
@@ -126,7 +127,7 @@ type DeviceSessionValue = {
 }
 
 const MESSAGE_PAGE_SIZE = 50
-const MESSAGE_INITIAL_LIMIT = 100
+const MESSAGE_INITIAL_LIMIT = 200
 const MESSAGE_INCREMENTAL_LIMIT = 20
 const idle: SessionStatus = { type: "idle" }
 
@@ -502,6 +503,11 @@ export function DeviceSessionStoreProvider(props: ParentProps) {
           const partCallID = (part as any).callID as string | undefined
           const partStatus = (part as any).state?.status as string | undefined
           const partProgress = (part as any).state?.progress as string[] | undefined
+          const partTool = (part as any).tool as string | undefined
+          const partInput = (part as any).state?.input as { todos?: Todo[] } | undefined
+          if (partTool === "todowrite" && partInput?.todos && eventSID) {
+            setStore("todos", eventSID, partInput.todos)
+          }
           if (partCallID) {
             if (partStatus === "completed" || partStatus === "error") {
               setStore("partProgress", partCallID, undefined as any)
@@ -653,7 +659,19 @@ export function DeviceSessionStoreProvider(props: ParentProps) {
     if (!workspace.agentAvailable()) return
     device.client.permission.respond(input.permissionID, {
       decision: input.response,
-    }).catch(() => {})
+    }).catch((err: unknown) => {
+      if (isNotFoundError(err)) {
+        const perms = workspace.data.permissions
+        for (const [sid, list] of Object.entries(perms)) {
+          if (!Array.isArray(list)) continue
+          const idx = list.findIndex((p) => p.id === input.permissionID)
+          if (idx !== -1) {
+            workspace.session.removePermission(sid, input.permissionID)
+            break
+          }
+        }
+      }
+    })
   }
 
   const historyLoading = (sessionID?: string) => {

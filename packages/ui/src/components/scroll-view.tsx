@@ -154,8 +154,9 @@ export function ScrollView(props: ScrollViewProps) {
   // We can also explicitly catch PageUp/Down if we want smooth scroll or specific behavior,
   // but native usually handles this perfectly. Let's explicitly ensure it behaves well.
   const onKeyDown = (e: KeyboardEvent) => {
-    // If user is focused on an input inside the scroll view, don't hijack keys
-    if (document.activeElement && ["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement.tagName)) {
+    // If user is focused on an editable element inside the scroll view, don't hijack keys
+    const active = document.activeElement as HTMLElement | null
+    if (active && (["INPUT", "TEXTAREA", "SELECT"].includes(active.tagName) || active.isContentEditable)) {
       return
     }
 

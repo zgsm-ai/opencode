@@ -154,7 +154,7 @@ export function SessionComposerRegion(props: {
         <Show when={props.state.questionRequest()} keyed>
           {(request) => (
             <div class="w-full pointer-events-auto" classList={{ "md:max-w-200 md:mx-auto 2xl:max-w-[1000px]": props.centered }}>
-              <SessionQuestionDock request={request} onSubmit={props.onResponseSubmit} />
+              <SessionQuestionDock request={request} onSubmit={props.onResponseSubmit} onStale={props.state.dismissQuestion} />
             </div>
           )}
         </Show>

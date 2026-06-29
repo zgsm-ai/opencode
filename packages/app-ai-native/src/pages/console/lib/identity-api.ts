@@ -23,7 +23,7 @@ export async function startBind(provider: string, redirectTo?: string): Promise<
     method: "POST",
     body: JSON.stringify({
       provider,
-      redirectTo: redirectTo ?? new URL((basePath === "/" ? "" : basePath) + "/console/identity?bind=success", window.location.origin).href,
+      redirectTo: redirectTo ?? new URL((basePath === "/" ? "" : basePath) + "/console/identity", window.location.origin).href,
       callbackUrl: new URL(prefix + "/api/auth/callback", window.location.origin).href,
     }),
   })

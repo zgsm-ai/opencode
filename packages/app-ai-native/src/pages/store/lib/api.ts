@@ -1719,6 +1719,7 @@ export interface ChannelConfig {
   webhookVerified: boolean
   lastActiveAt?: string
   lastError?: string
+  botQRCode?: string
   createdAt: string
   updatedAt: string
 }

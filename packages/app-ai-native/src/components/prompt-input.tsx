@@ -749,6 +749,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     if (last?.nodeType === Node.ELEMENT_NODE && (last as HTMLElement).tagName === "BR") {
       editorRef.appendChild(document.createTextNode("\u200B"))
     }
+    editorRef.normalize()
   }
 
   // Auto-scroll active command into view when navigating with keyboard
@@ -804,6 +805,11 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
       () => prompt.current(),
       (currentParts) => {
         const inputParts = currentParts.filter((part) => part.type !== "image")
+
+        if (composing()) {
+          if (mirror.input) mirror.input = false
+          return
+        }
 
         if (mirror.input) {
           mirror.input = false
@@ -1403,7 +1409,8 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
               aria-label={placeholder()}
               contenteditable="true"
               autocapitalize="off"
-              autocorrect="off"
+              // autocorrect="off" 会在 contenteditable div 上破坏中文 IME 输入(第一下无回显),
+              // 这是一个非标准属性,浏览器对其处理方式会干扰 IME context 的稳定性
               spellcheck={false}
               onInput={handleInput}
               onPaste={handlePaste}

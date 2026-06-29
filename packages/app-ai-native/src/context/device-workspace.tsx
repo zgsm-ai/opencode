@@ -7,6 +7,8 @@ import { getDirectory } from "@opencode-ai/util/path"
 import type { Session, Command, Agent, VcsInfo, SessionStatus, PermissionRequest, QuestionRequest } from "@opencode-ai/sdk/v2/client"
 import type { ProviderCapabilitiesResponse } from "./global-sync/types"
 import { workspaceApi } from "@/pages/workspace/lib/api"
+import { scheduleNotifPromptCheck, type NotifPromptTexts } from "@/utils/notification-prompt"
+import { useLanguage } from "./language"
 
 
 function groupBy<T extends { id?: string; sessionID?: string }>(items: T[]): Record<string, T[]> {
@@ -63,6 +65,7 @@ type DeviceWorkspaceValue = {
     setQuestions(questions: Record<string, QuestionRequest[]>): void
     setPermissions(permissions: Record<string, PermissionRequest[]>): void
     removePermission(sessionID: string, requestID: string): void
+    removeQuestion(sessionID: string, requestID: string): void
     clearUnread(id: string): void
   }
   command: {
@@ -97,6 +100,7 @@ export { DeviceWorkspaceContext }
 
 export function DeviceWorkspaceProvider(props: ParentProps<{ workspaceId?: string }>) {
   const device = useDeviceSDK()
+  const language = useLanguage()
 
   const [store, setStore] = createStore<WorkspaceData>({
     status: "loading",
@@ -490,6 +494,12 @@ export function DeviceWorkspaceProvider(props: ParentProps<{ workspaceId?: strin
     // Fire-and-forget: version query may be slow, don't block rebootstrap
     checkAgentVersion()
 
+    const agentPromise = Promise.all([
+      device.client.agent.sessionModes().catch(() => undefined),
+      device.client.agent.models().catch(() => undefined),
+      device.client.agent.commands().catch(() => undefined),
+    ])
+
     // Refresh session list, status, permissions, questions, vcs
     const [sessionsRes, vcsRes] = await Promise.all([
       device.client.conversation.list({ roots: "true", limit: 50, directory: device.directory }).catch(() => undefined),
@@ -522,6 +532,15 @@ export function DeviceWorkspaceProvider(props: ParentProps<{ workspaceId?: strin
           permissions: groupBy(arr<PermissionRequest>(permsRes, "permissions")),
         })
       }
+    })
+
+    agentPromise.then(([agentsRes, providersRes, commandsRes]) => {
+      batch(() => {
+        setStore("agent", reconcile((agentsRes as Agent[]) ?? [], { key: "name" }))
+        const providerData = (providersRes as ProviderCapabilitiesResponse) ?? { connected: [] }
+        setStore("provider", reconcile(providerData, { key: "id" }))
+        setStore("command", reconcile((commandsRes as Command[]) ?? [], { key: "name" }))
+      })
     })
 
     startEventStream()
@@ -788,12 +807,23 @@ export function DeviceWorkspaceProvider(props: ParentProps<{ workspaceId?: strin
                     break
                   }
                   // busy/retry: debounce
+                  const wasIdle = !store.sessionStatus[id] || store.sessionStatus[id]?.type === "idle"
                   pendingStatus.set(id, sp.status)
                   const existingTimer = statusTimers.get(id)
                   if (existingTimer) clearTimeout(existingTimer)
                   statusTimers.set(id, setTimeout(() => {
                     statusTimers.delete(id)
                     flushStatus(id)
+                    if (wasIdle) {
+                      scheduleNotifPromptCheck((path) => {
+                        window.location.assign(path)
+                      }, {
+                        title: language.t("workspace.notifPrompt.title"),
+                        description: language.t("workspace.notifPrompt.description"),
+                        configure: language.t("workspace.notifPrompt.configure"),
+                        dismiss: language.t("workspace.notifPrompt.dismiss"),
+                      })
+                    }
                   }, STATUS_DEBOUNCE_MS))
                   break
                 }
@@ -944,6 +974,7 @@ export function DeviceWorkspaceProvider(props: ParentProps<{ workspaceId?: strin
       setQuestions: (q: Record<string, QuestionRequest[]>) => setStore("questions", reconcile(q)),
       setPermissions: (p: Record<string, PermissionRequest[]>) => setStore("permissions", reconcile(p)),
       removePermission,
+      removeQuestion,
       clearUnread: (id: string) => {
         if (!store.unread[id]) return
         batch(() => {
