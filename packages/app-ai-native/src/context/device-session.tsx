@@ -127,7 +127,7 @@ type DeviceSessionValue = {
 }
 
 const MESSAGE_PAGE_SIZE = 50
-const MESSAGE_INITIAL_LIMIT = 100
+const MESSAGE_INITIAL_LIMIT = 200
 const MESSAGE_INCREMENTAL_LIMIT = 20
 const idle: SessionStatus = { type: "idle" }
 
