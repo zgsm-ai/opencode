@@ -37,6 +37,8 @@ export default function IdentityPage() {
   const [mergeToken, setMergeToken] = createSignal<string | null>(null)
   const [mergeProvider, setMergeProvider] = createSignal<string | null>(null)
   const [merging, setMerging] = createSignal(false)
+  const [mismatchExpected, setMismatchExpected] = createSignal<string | null>(null)
+  const [mismatchActual, setMismatchActual] = createSignal<string | null>(null)
 
   const fetchIdentities = async () => {
     setLoadingIdentities(true)
@@ -151,6 +153,10 @@ export default function IdentityPage() {
         }
         setMergeToken(token)
       }
+    } else if (bind === "provider_mismatch") {
+      setMismatchExpected(params.get("expected_provider"))
+      setMismatchActual(params.get("actual_provider"))
+      window.history.replaceState({}, "", window.location.pathname)
     }
   })
 
@@ -184,6 +190,16 @@ export default function IdentityPage() {
           <Show when={bindSuccess()}>
             <div class="mb-4 rounded-[var(--native-radius-md)] border border-[color:color-mix(in_oklab,#16a34a_30%,transparent)] bg-[color:color-mix(in_oklab,#16a34a_8%,var(--native-panel))] px-4 py-3 text-[0.8125rem] text-[#16a34a]">
               {language.t("console.identity.bindSuccess")}
+            </div>
+          </Show>
+
+          <Show when={mismatchExpected()}>
+            <div class="mb-4 rounded-[var(--native-radius-md)] border border-[color:color-mix(in_oklab,#d97706_30%,transparent)] bg-[color:color-mix(in_oklab,#d97706_8%,var(--native-panel))] px-4 py-3 text-[0.8125rem] text-[#d97706]">
+              <p class="font-medium mb-1">{language.t("console.identity.providerMismatchTitle")}</p>
+              <p>{language.t("console.identity.providerMismatchDescription", {
+                expected: labelKeyForProvider(mismatchExpected() ?? ""),
+                actual: labelKeyForProvider(mismatchActual() ?? ""),
+              })}</p>
             </div>
           </Show>
 
