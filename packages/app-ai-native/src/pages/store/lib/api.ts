@@ -994,7 +994,7 @@ export const itemApi = {
 }
 
 export interface DistributionTarget {
-  scopeType: "user" | "organization"
+  scopeType: "user" | "organization" | "department"
   targetId: string
 }
 
