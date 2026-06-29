@@ -503,6 +503,11 @@ export function DeviceSessionStoreProvider(props: ParentProps) {
           const partCallID = (part as any).callID as string | undefined
           const partStatus = (part as any).state?.status as string | undefined
           const partProgress = (part as any).state?.progress as string[] | undefined
+          const partTool = (part as any).tool as string | undefined
+          const partInput = (part as any).state?.input as { todos?: Todo[] } | undefined
+          if (partTool === "todowrite" && partInput?.todos && eventSID) {
+            setStore("todos", eventSID, partInput.todos)
+          }
           if (partCallID) {
             if (partStatus === "completed" || partStatus === "error") {
               setStore("partProgress", partCallID, undefined as any)
