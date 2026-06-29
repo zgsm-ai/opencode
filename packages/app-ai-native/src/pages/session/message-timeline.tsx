@@ -20,6 +20,7 @@ import { useLanguage } from "@/context/language"
 import { useSettings } from "@/context/settings"
 import { useSessionChat } from "@/context/session-chat"
 import { parseCommentNote, readCommentMetadata } from "@/utils/comment-note"
+import { MessageTransition } from "./message-transition"
 
 type MessageComment = {
   path: string
@@ -32,6 +33,10 @@ type MessageComment = {
 
 const emptyMessages: MessageType[] = []
 const idle = { type: "idle" as const }
+
+const messageKey = (m: { id: string; role: string; time?: { created?: number }; agent?: string }) => {
+  return `${m.role}|${m.time?.created ?? 0}|${m.agent ?? ""}`
+}
 
 const messageComments = (parts: Part[]): MessageComment[] =>
   parts.flatMap((part) => {
@@ -137,6 +142,14 @@ function createTimelineStaging(input: TimelineStageInput) {
       () => [input.sessionKey(), input.messages().length] as const,
       ([sessionKey, total]) => {
         cancel()
+
+        // Session switch detected: show all immediately instead of staging
+        const isSessionSwitch = state.completedSession !== "" && state.completedSession !== sessionKey
+        if (isSessionSwitch) {
+          setState({ activeSession: "", count: total, completedSession: sessionKey })
+          return
+        }
+
         const shouldStage =
           total > input.config.init &&
           state.completedSession !== sessionKey &&
@@ -295,27 +308,6 @@ export function MessageTimeline(props: {
       { defer: true },
     ),
   )
-
-  // 页面可见性检测：当页面从隐藏变为可见时，触发数据刷新
-  createEffect(() => {
-    const id = sessionID()
-    if (!id) return
-
-    const handleVisibilityChange = () => {
-      if (!document.hidden) {
-        // 页面重新可见时，触发数据刷新以确保所有内容正确显示
-        // 强制更新session messages引用，触发所有依赖的memo和effect重新执行
-        const currentMessages = chat.messages(id)
-        chat.refreshMessages(id)
-      }
-    }
-
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-
-    onCleanup(() => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange)
-    })
-  })
 
   const openTitleEditor = () => {
     if (!sessionID()) return
@@ -698,20 +690,24 @@ export function MessageTimeline(props: {
                           </div>
                         </div>
                       </Show>
-                      <SessionTurn
-                        sessionID={sessionID() ?? ""}
+                      <MessageTransition
                         messageID={messageID}
-                        active={active()}
-                        status={active() ? sessionStatus() : undefined}
-                        showReasoningSummaries={settings.general.showReasoningSummaries()}
-                        shellToolDefaultOpen={settings.general.shellToolPartsExpanded()}
-                        editToolDefaultOpen={settings.general.editToolPartsExpanded()}
-                        classes={{
-                          root: "min-w-0 w-full relative",
-                          content: "flex flex-col justify-between !overflow-visible",
-                          container: "w-full px-4 md:px-5",
-                        }}
-                      />
+                      >
+                        <SessionTurn
+                          sessionID={sessionID() ?? ""}
+                          messageID={messageID}
+                          active={active()}
+                          status={active() ? sessionStatus() : undefined}
+                          showReasoningSummaries={settings.general.showReasoningSummaries()}
+                          shellToolDefaultOpen={settings.general.shellToolPartsExpanded()}
+                          editToolDefaultOpen={settings.general.editToolPartsExpanded()}
+                          classes={{
+                            root: "min-w-0 w-full relative",
+                            content: "flex flex-col justify-between !overflow-visible",
+                            container: "w-full px-4 md:px-5",
+                          }}
+                        />
+                      </MessageTransition>
                     </div>
                   )
                 }}

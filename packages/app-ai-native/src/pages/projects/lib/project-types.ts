@@ -127,17 +127,10 @@ export interface UserBasicInfo {
 }
 
 export interface SearchedUser {
-  avatarUrl?: string
-  avatar_url?: string
-  display_name?: string
-  email?: string
   id: string
   name?: string
-  owner?: string
-  picture?: string
-  preferred_username?: string
-  sub?: string
-  username?: string
+  displayName?: string
+  avatarUrl?: string
 }
 
 export interface ProjectListItem extends Project {

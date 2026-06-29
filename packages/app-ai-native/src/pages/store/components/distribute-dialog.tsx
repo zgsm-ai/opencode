@@ -98,7 +98,7 @@ export function DistributeDialog(props: Props) {
     try {
       const targets = store.selected.map((user) => ({
         scopeType: store.scopeType,
-        targetId: String(user.subject_id || user.sub || user.id),
+        targetId: user.id,
       }))
       const res = await distributionApi.distribute(props.itemId, {
         targets,
@@ -234,17 +234,14 @@ export function DistributeDialog(props: Props) {
                   >
                     <div style={{ display: "flex", "align-items": "center", gap: "0.625rem", "min-width": "0" }}>
                       <AvatarDisplay
-                        avatarUrl={user.picture}
-                        username={user.name || user.preferred_username || user.email}
+                        avatarUrl={user.avatarUrl}
+                        username={user.displayName || user.name || user.id}
                         size="1.75rem"
                         class="shrink-0"
                       />
                       <div style={{ "min-width": "0", "text-align": "left" }}>
                         <div style={{ "font-size": "0.8125rem", color: "var(--native-foreground)", overflow: "hidden", "text-overflow": "ellipsis", "white-space": "nowrap" }}>
-                          {user.name || user.preferred_username}
-                        </div>
-                        <div style={{ "font-size": "12px", color: "var(--native-muted)", overflow: "hidden", "text-overflow": "ellipsis", "white-space": "nowrap" }}>
-                          {user.email}
+                          {user.displayName || user.name}
                         </div>
                       </div>
                     </div>
@@ -282,17 +279,14 @@ export function DistributeDialog(props: Props) {
                   >
                     <div style={{ display: "flex", "align-items": "center", gap: "0.625rem", "min-width": "0" }}>
                       <AvatarDisplay
-                        avatarUrl={user.picture}
-                        username={user.name || user.preferred_username || user.email}
+                        avatarUrl={user.avatarUrl}
+                        username={user.displayName || user.name || user.id}
                         size="1.75rem"
                         class="shrink-0"
                       />
                       <div style={{ "min-width": "0" }}>
                         <div style={{ "font-size": "0.8125rem", color: "var(--native-foreground)", overflow: "hidden", "text-overflow": "ellipsis", "white-space": "nowrap" }}>
-                          {user.name || user.preferred_username}
-                        </div>
-                        <div style={{ "font-size": "12px", color: "var(--native-muted)", overflow: "hidden", "text-overflow": "ellipsis", "white-space": "nowrap" }}>
-                          {user.email}
+                          {user.displayName || user.name}
                         </div>
                       </div>
                     </div>

@@ -7,11 +7,13 @@ import { useLanguage } from "@/context/language"
 import { workspaceApi, deviceApi } from "@/pages/workspace/lib/api"
 import { getProxyUrl } from "@/pages/workspace/lib/url"
 import { createDeviceClient } from "@/client/device-client"
+import { env } from "@/lib/env"
 import { openSessionById } from "./open-session-by-id"
 
 function getMulticaUrl(): string {
-  // Runtime-configurable via env; falls back to a sensible default.
-  return import.meta.env.VITE_MULTICA_WEB_URL || "https://zgsmtest.cn:30443/multica-web"
+  // Runtime-configurable via VITE_MULTICA_WEB_URL (window.__ENV__ injected by
+  // docker-entrypoint.sh); falls back to a sensible default.
+  return env.MULTICA_WEB_URL ?? "https://zgsmtest.cn:30443/workflow-web"
 }
 
 export default function MulticaPage() {

@@ -160,7 +160,7 @@ export function DistributionWizardDialog(props: Props) {
       store.scopeType === "user"
         ? store.selectedUsers.map((u) => ({
             scopeType: "user" as const,
-            targetId: String(u.subject_id || u.sub || u.id),
+            targetId: u.id,
           }))
         : store.selectedOrgs.map((org) => ({ scopeType: "organization" as const, targetId: org }))
 
@@ -304,16 +304,16 @@ export function DistributionWizardDialog(props: Props) {
                     <div class="flex items-center justify-between gap-3 rounded-[var(--native-radius-sm)] border border-[color:color-mix(in_oklab,var(--native-primary)_18%,transparent)] bg-[color:color-mix(in_oklab,var(--native-primary)_6%,transparent)] px-2.5 py-1.5">
                       <div class="flex min-w-0 items-center gap-2">
                         <AvatarDisplay
-                          avatarUrl={user.picture}
-                          username={user.name || user.preferred_username || user.email}
+                          avatarUrl={user.avatarUrl}
+                          username={user.displayName || user.name}
                           size="1.5rem"
                           class="shrink-0"
                         />
                         <div class="min-w-0">
                           <div class="truncate text-[0.8125rem] text-[var(--native-foreground)]">
-                            {user.name || user.preferred_username}
+                            {user.displayName || user.name}
                           </div>
-                          <div class="truncate text-[12px] text-[var(--native-muted)]">{user.email}</div>
+                          <div class="truncate text-[12px] text-[var(--native-muted)]">{(user as any).email ?? ""}</div>
                         </div>
                       </div>
                       <button
@@ -341,16 +341,16 @@ export function DistributionWizardDialog(props: Props) {
                     <button type="button" class={resultRow} onClick={() => toggleUser(user)}>
                       <div class="flex min-w-0 items-center gap-2">
                         <AvatarDisplay
-                          avatarUrl={user.picture}
-                          username={user.name || user.preferred_username || user.email}
+                          avatarUrl={user.avatarUrl}
+                          username={user.displayName || user.name}
                           size="1.5rem"
                           class="shrink-0"
                         />
                         <div class="min-w-0">
                           <div class="truncate text-[0.8125rem] text-[var(--native-foreground)]">
-                            {user.name || user.preferred_username}
+                            {user.displayName || user.name}
                           </div>
-                          <div class="truncate text-[12px] text-[var(--native-muted)]">{user.email}</div>
+                          <div class="truncate text-[12px] text-[var(--native-muted)]">{(user as any).email ?? ""}</div>
                         </div>
                       </div>
                       <Icon name="plus-small" size="small" class="shrink-0 text-[var(--native-muted)]" />
@@ -404,6 +404,9 @@ export function DistributionWizardDialog(props: Props) {
         {/* Step 3: permission + message */}
         <div class="flex flex-col gap-2">
           <span class={fieldLabel}>{language.t("admin.distributions.wizard.stepOptions")}</span>
+          <span class="text-[12px] text-[var(--native-muted)]">
+            {language.t("admin.distributions.wizard.permissionLabel")}
+          </span>
           <div class="flex gap-1.5">
             <For each={PERMISSION_OPTIONS}>
               {(opt) => (
@@ -417,6 +420,15 @@ export function DistributionWizardDialog(props: Props) {
               )}
             </For>
           </div>
+          {/* Clarify what 强制 / 可移除 actually mean for the recipient (UX: meaning was opaque) */}
+          <p class="text-[12px] leading-snug text-[var(--native-muted)]">
+            {store.permissionMode === "readonly"
+              ? language.t("admin.distributions.permission.readonlyDesc")
+              : language.t("admin.distributions.permission.dismissibleDesc")}
+          </p>
+          <span class="mt-1 text-[12px] text-[var(--native-muted)]">
+            {language.t("admin.distributions.wizard.messageLabel")}
+          </span>
           <textarea
             class={`${inputCls} h-auto min-h-[3.5rem] py-2`}
             placeholder={language.t("admin.distributions.wizard.messagePlaceholder")}

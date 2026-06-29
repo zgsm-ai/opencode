@@ -29,8 +29,8 @@ export default function ProjectInviteDialog(props: Props) {
 
   let timer: ReturnType<typeof setTimeout> | undefined
 
-  const userDisplayName = (user: SearchedUser) => user.name || user.preferred_username || user.display_name || user.username || user.id
-  const userAvatar = (user: SearchedUser) => user.avatarUrl || user.picture || user.avatar_url
+  const userDisplayName = (user: SearchedUser) => user.displayName || user.name || user.id
+  const userAvatar = (user: SearchedUser) => user.avatarUrl
 
   const search = (q: string) => {
     clearTimeout(timer)
@@ -122,9 +122,6 @@ export default function ProjectInviteDialog(props: Props) {
                         </Show>
                         <div class="min-w-0">
                           <div class="truncate text-sm font-medium text-text-strong">{userDisplayName(user)}</div>
-                          <Show when={user.email}>
-                            <div class="truncate text-xs text-text-weak">{user.email}</div>
-                          </Show>
                         </div>
                       </div>
                     <Button

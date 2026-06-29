@@ -3,7 +3,7 @@ import type { PermissionRequest, QuestionRequest, Session } from "@opencode-ai/s
 function sessionTreeIDs(session: Session[], sessionID?: string) {
   if (!sessionID) return [] as string[]
 
-  const map = session.reduce((acc, item) => {
+  const parentMap = session.reduce((acc, item) => {
     if (!item.parentID) return acc
     const list = acc.get(item.parentID)
     if (list) list.push(item.id)
@@ -11,16 +11,33 @@ function sessionTreeIDs(session: Session[], sessionID?: string) {
     return acc
   }, new Map<string, string[]>())
 
+  const childMap = new Map<string, string>()
+  for (const item of session) {
+    if (item.parentID) childMap.set(item.id, item.parentID)
+  }
+
   const seen = new Set([sessionID])
-  const ids = [sessionID]
+  const ids: string[] = [sessionID]
+
+  // Walk down to children
   for (const id of ids) {
-    const list = map.get(id)
+    const list = parentMap.get(id)
     if (!list) continue
     for (const child of list) {
       if (seen.has(child)) continue
       seen.add(child)
       ids.push(child)
     }
+  }
+
+  // Walk up to parent chain (bidirectional tree access)
+  let cur = sessionID
+  while (true) {
+    const p = childMap.get(cur)
+    if (!p || seen.has(p)) break
+    seen.add(p)
+    ids.push(p)
+    cur = p
   }
 
   return ids

@@ -24,6 +24,7 @@ import type {
 } from "@opencode-ai/sdk/v2/client"
 import type { Path } from "@opencode-ai/sdk/v2/client"
 import { legacyProvider } from "@/utils/legacy-provider"
+import { DeviceSessionProvider } from "@/context/device-session"
 import { DeviceSessionViewHeader, type HeaderState } from "./device-session-view-header"
 import { env } from "@/lib/env"
 
@@ -178,42 +179,6 @@ export function DeviceSessionView(props: {
     }
   })
 
-  let reconcileTimer: ReturnType<typeof setTimeout> | undefined
-  let wasActive = false
-
-  createEffect(() => {
-    const cid = currentSessionID()
-    if (!cid) {
-      wasActive = false
-      return
-    }
-    const active = isWorking()
-    if (wasActive && !active) {
-      if (reconcileTimer) clearTimeout(reconcileTimer)
-      const targetId = cid
-      reconcileTimer = setTimeout(() => {
-        reconcileTimer = undefined
-        if (currentSessionID() !== targetId) return
-        reconcileSessionData(targetId)
-      }, 150)
-    }
-    wasActive = active
-  })
-
-  onCleanup(() => {
-    if (reconcileTimer) {
-      clearTimeout(reconcileTimer)
-      reconcileTimer = undefined
-    }
-  })
-
-  const reconcileSessionData = async (targetId: string) => {
-    try {
-      await chat.loadMessages(targetId)
-      requestAnimationFrame(() => resumeScroll())
-    } catch {}
-  }
-
   const effectiveParts = createMemo(() => {
     return chat.parts()
   })
@@ -306,28 +271,36 @@ export function DeviceSessionView(props: {
     const raw = effectiveMessages()
     if (!raw || raw.length === 0) return raw ?? []
     const parts = effectiveParts()
+    const seen = new Set<string>()
+    const deduped = raw.filter((m) => {
+      if (seen.has(m.id)) return false
+      seen.add(m.id)
+      return true
+    })
     const userIDs = new Set<string>()
-    for (const m of raw) {
+    for (const m of deduped) {
       if (m.role === "user") userIDs.add(m.id)
     }
     const parentIDs = new Set<string>()
-    for (const m of raw) {
+    for (const m of deduped) {
       if (m.role === "assistant" && (m as any).parentID) parentIDs.add((m as any).parentID)
     }
     let orphanID: string | undefined
     let orphanCreated = false
-    const orphan = {
-      id: "",
-      sessionID: currentSessionID() ?? "",
-      role: "user",
-      time: { created: 0 },
-    } as any
     const enriched: any[] = []
-    for (const m of raw) {
+    for (const m of deduped) {
       if (m.role === "assistant" && m.parentID && !userIDs.has(m.parentID)) {
+        if (!orphanCreated || m.parentID !== orphanID) {
+          orphanCreated = false
+        }
         if (!orphanCreated) {
-          orphan.id = m.parentID
-          orphan.time = { created: m.time?.created ?? 0 }
+          const orphan = {
+            id: m.parentID,
+            sessionID: currentSessionID() ?? "",
+            role: "user",
+            synthetic: true,
+            time: { created: m.time?.created ?? 0 },
+          }
           orphanID = m.parentID
           enriched.push(orphan)
           userIDs.add(m.parentID)
@@ -338,7 +311,6 @@ export function DeviceSessionView(props: {
           continue
         }
       }
-      if (m.role === "user" && !parts[m.id]?.length && !parentIDs.has(m.id)) continue
       enriched.push(m)
     }
     return enriched
@@ -426,7 +398,7 @@ export function DeviceSessionView(props: {
         string,
         Message[]
       >,
-      part: { ...parts } as Record<string, Part[]>,
+      part: parts as Record<string, Part[]>,
       partProgress: chat.partProgress(),
     }
   })
@@ -445,6 +417,7 @@ export function DeviceSessionView(props: {
   }
 
   return (
+    <DeviceSessionProvider sessionID={sid()}>
         <PromptProvider>
             <PromptSeeder seed={props.promptSeed} />
               <DataProvider
@@ -545,5 +518,6 @@ export function DeviceSessionView(props: {
                           </FileComponentProvider>
                         </DataProvider>
                   </PromptProvider>
+    </DeviceSessionProvider>
   )
 }

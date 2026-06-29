@@ -128,14 +128,10 @@ export interface RepoMember {
 }
 
 export interface SearchedUser {
-  email: string
   id: string
   name: string
-  owner: string
-  picture: string
-  preferred_username: string
-  sub: string
-  subject_id?: string
+  displayName?: string
+  avatarUrl?: string
 }
 
 export interface Invitation {

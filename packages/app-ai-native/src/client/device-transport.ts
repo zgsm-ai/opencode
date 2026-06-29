@@ -116,7 +116,7 @@ export function createDeviceTransport(opts: TransportOpts) {
         payload = payload.error
       }
       if (payload && typeof payload === "object") {
-        throw new DeviceHttpError(payload.error ?? payload.message ?? String(payload), res.status, payload.code ?? "UNKNOWN")
+        throw new DeviceHttpError(payload.message ?? payload.error ?? String(payload), res.status, payload.code ?? "UNKNOWN")
       }
       throw new DeviceHttpError(`Request failed: ${res.status}`, res.status, "UNKNOWN")
     }

@@ -20,7 +20,6 @@ import { pickItemDescription } from "../lib/item-description"
 import SecurityTag, { VerdictTag, type Verdict } from "./security-tag"
 import HealthRadar from "./health-radar"
 import { SubscribeButton } from "./subscribe-button"
-import { mcpListSubscribeBlocked } from "./store-capability-table"
 import { matchEnterprise, matchEnterpriseByName, type EnterpriseInfo } from "../lib/enterprise"
 import { useLogoColor } from "../lib/use-logo-color"
 import { StoreIcon } from "../lib/store-icons"
@@ -844,7 +843,7 @@ export default function ItemDetailContent(props: ItemDetailContentProps) {
                         favoriteCount={props.favoriteCount ?? data().favoriteCount ?? 0}
                         pending={props.favoritePending}
                         authenticated={!!props.isAuthenticated}
-                        disabled={mcpPluginRuntimeBlocks() || mcpGateBlocks() || mcpListSubscribeBlocked(data())}
+                        disabled={mcpPluginRuntimeBlocks() || mcpGateBlocks()}
                         onToggle={() => void props.onToggleFavorite?.()}
                         labels={{
                           subscribe: language.t("store.detail.favorite"),

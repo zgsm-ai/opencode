@@ -319,6 +319,7 @@ export function Markdown(
   let copyCleanup: (() => void) | undefined
   let pendingRaf: number | undefined
   let prevContent: string | undefined
+  let prevText: string | undefined
 
   const render = (container: HTMLDivElement, content: string) => {
     const labels = {
@@ -359,7 +360,11 @@ export function Markdown(
 
   createEffect(() => {
     const container = root()
-    const content = local.text ? (html.latest ?? html() ?? "") : ""
+    // Always call html() to ensure resource signal is tracked as a dependency.
+    // Without this, when html.latest already has a value (recycled component),
+    // the resource signal is never tracked and the effect won't re-run on resolve.
+    const res = html()
+    const content = local.text ? (html.latest ?? res ?? "") : ""
     const isStreaming = local.streaming ?? false
 
     if (!container) return
@@ -368,15 +373,17 @@ export function Markdown(
     if (!content) {
       container.innerHTML = ""
       prevContent = ""
+      prevText = ""
       return
     }
 
-    if (content === prevContent) return
+    if (content === prevContent && local.text === prevText) return
 
     // 非流式场景（初始化加载、切换消息等）：立即全量渲染
     if (!isStreaming) {
       render(container, content)
       prevContent = content
+      prevText = local.text
       return
     }
 
@@ -390,6 +397,7 @@ export function Markdown(
       if (currentContent === prevContent) return
       render(container, currentContent)
       prevContent = currentContent
+      prevText = local.text
     })
   })
 

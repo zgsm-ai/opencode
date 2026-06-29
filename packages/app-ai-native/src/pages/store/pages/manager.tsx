@@ -1,8 +1,8 @@
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { Icon } from "@opencode-ai/ui/icon"
 import { showToast } from "@opencode-ai/ui/toast"
-import { useNavigate } from "@solidjs/router"
-import { createEffect, createMemo, createResource, For, onCleanup, Show, Suspense } from "solid-js"
+import { useNavigate, useSearchParams } from "@solidjs/router"
+import { createEffect, createMemo, createResource, For, onCleanup, Show, Suspense, untrack } from "solid-js"
 import { createStore, produce, reconcile } from "solid-js/store"
 import { useItemFilterOptions } from "@/context/item-filter-options"
 import { useLanguage } from "@/context/language"
@@ -16,6 +16,7 @@ import { ItemDetailLoadingSkeleton } from "@/pages/store/components/item-detail-
 import { MoveCapabilityDialog } from "@/pages/store/components/move-capability-dialog"
 import { formatCompact, formatStoreDate, formatStoreTablePaginationSummary, StoreTableFooter } from "@/pages/store/components/store-capability-table"
 import { ManagerListView } from "@/pages/store/components/manager-list-view"
+import { StoreFilterBar } from "@/pages/store/components/store-filter-bar"
 import { useAuth } from "@/pages/store/hooks/use-auth"
 import { behaviorApi, distributionApi, itemApi, repoApi, userApi, type CapabilityItem, type DistributionResult, type ItemOrder, type ItemSort, type Repository, type SecurityRiskGroup } from "@/pages/store/lib/api"
 import { getLoginUrl } from "@/pages/store/lib/auth"
@@ -71,6 +72,7 @@ export default function StoreManagerPage() {
   const language = useLanguage()
   const itemFilterOptions = useItemFilterOptions()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const auth = useAuth()
 
   const [selectedItemId, setSelectedItemId] = createStore<{ value: string | null }>({ value: null })
@@ -108,23 +110,13 @@ export default function StoreManagerPage() {
     sentLoaded: false,
     sentError: "",
     repos: [] as Repository[],
-    typeFilterOpen: false,
-    typeFilterQuery: "",
+    // Point-to-apply filters (no pending→apply two-stage): toggling writes straight
+    // to applied* and triggers a refresh, matching the store home filter bar.
     appliedTypeFilters: [] as StoreType[],
-    pendingTypeFilters: [] as StoreType[],
-    categoryFilterOpen: false,
-    sourceFilterOpen: false,
-    securityFilterOpen: false,
-    categoryFilterQuery: "",
-    sourceFilterQuery: "",
-    securityFilterQuery: "",
     appliedTagFilters: [] as string[],
     appliedCategoryFilters: [] as string[],
-    pendingCategoryFilters: [] as string[],
     appliedSourceFilters: [] as string[],
-    pendingSourceFilters: [] as string[],
     appliedSecurityFilters: [] as SecurityFilterValue[],
-    pendingSecurityFilters: [] as SecurityFilterValue[],
     sort: { by: "favoriteCount" as ItemSort | undefined, order: "desc" as ItemOrder | undefined },
     favoriteActionItemId: null as string | null,
   })
@@ -249,6 +241,32 @@ export default function StoreManagerPage() {
       scheduleSearchFocusRecovery("restoreIfNeeded")
     })
   }
+
+  // ── Filter option sources (mirror store home: type from STORE_TYPES, the rest
+  // from useItemFilterOptions; tag has no finite catalog so it is derived from the
+  // tags present on the currently-loaded rows, unioned with any applied tags so a
+  // selected tag stays toggle-able even after it narrows the result set). ──────────
+  const typeOptions = createMemo(() => STORE_TYPES.map((entry) => ({ value: entry.value, label: language.t(entry.labelKey) })))
+  const categoryOptions = createMemo(() => itemFilterOptions.categories().map((category) => ({
+    value: category.slug,
+    label: itemFilterOptions.categoryLabel(category.slug, category),
+  })))
+  const securityOptions = createMemo(() => itemFilterOptions.securityRiskGroups().map((option) => ({
+    value: option.value,
+    label: itemFilterOptions.securityRiskGroupLabel(option.value as SecurityFilterValue, option),
+  })))
+  const sourceOptions = createMemo(() => itemFilterOptions.sources().map((source) => ({
+    value: source.value,
+    label: itemFilterOptions.sourceLabel(source.value, source) || source.value,
+  })))
+  const tagOptions = createMemo(() => {
+    const slugs = new Set<string>()
+    for (const item of activeItems()) {
+      for (const tag of item.tags ?? []) slugs.add(tag.slug)
+    }
+    for (const slug of state.appliedTagFilters) slugs.add(slug)
+    return [...slugs].sort().map((slug) => ({ value: slug, label: slug }))
+  })
 
   const buildListParams = () => ({
     type: state.appliedTypeFilters.length === 1 ? state.appliedTypeFilters[0] : undefined,
@@ -685,6 +703,10 @@ export default function StoreManagerPage() {
     if (state.tab === tab) return
     setSelectedItemId("value", null)
     setState("tab", tab)
+    // Keep the URL in sync with the active tab so it's the single source of truth:
+    // without this a manual switch leaves a stale ?tab=, and re-clicking the push
+    // toast's「查看」(navigate to the same ?tab=received) would be a no-op.
+    setSearchParams({ tab }, { replace: true })
     if (tab === "created") {
       if (!state.createdLoaded) void loadCreated()
       return
@@ -699,6 +721,67 @@ export default function StoreManagerPage() {
     }
     if (!state.receivedLoaded) void loadReceived()
   }
+
+  // Honor a deep-link like /store/manager?tab=received (e.g. the skill-push toast CTA).
+  // Reacts to URL changes so it also works when already on the manager page.
+  createEffect(() => {
+    const requestedTab = searchParams.tab
+    if (requestedTab === "created" || requestedTab === "favorited" || requestedTab === "received" || requestedTab === "sent") {
+      // untrack so the effect depends ONLY on searchParams.tab — switchTab reads
+      // state.tab, and tracking that would re-run this effect (and force the tab
+      // back to the URL value) whenever the user manually switches tabs.
+      untrack(() => switchTab(requestedTab))
+    }
+  })
+
+  // ── Point-to-apply filter handlers (StoreFilterBar) ──────────────────────────
+  // Toggling writes straight to applied*, resets pagination, drops the open detail
+  // selection and refreshes both card-list tabs (filters affect created+favorited).
+  const afterFilterChange = () => {
+    setSelectedItemId("value", null)
+    setState("itemPage", 1)
+    setState("favoritedPage", 1)
+    refreshBothTabs()
+  }
+  const toggleTypeFilter = (value: StoreType) => {
+    setState("appliedTypeFilters", (current) => current.includes(value) ? current.filter((item) => item !== value) : [...current, value])
+    afterFilterChange()
+  }
+  const toggleCategoryFilter = (value: string) => {
+    setState("appliedCategoryFilters", (current) => current.includes(value) ? current.filter((item) => item !== value) : [...current, value])
+    afterFilterChange()
+  }
+  const toggleSecurityFilter = (value: SecurityFilterValue) => {
+    setState("appliedSecurityFilters", (current) => current.includes(value) ? current.filter((item) => item !== value) : [...current, value])
+    afterFilterChange()
+  }
+  const toggleSourceFilter = (value: string) => {
+    setState("appliedSourceFilters", (current) => current.includes(value) ? current.filter((item) => item !== value) : [...current, value])
+    afterFilterChange()
+  }
+  const toggleTagFilter = (value: string) => {
+    setState("appliedTagFilters", (current) => current.includes(value) ? current.filter((item) => item !== value) : [...current, value])
+    afterFilterChange()
+  }
+  const clearAllFilters = () => {
+    setState("appliedTypeFilters", [])
+    setState("appliedCategoryFilters", [])
+    setState("appliedSecurityFilters", [])
+    setState("appliedSourceFilters", [])
+    setState("appliedTagFilters", [])
+    afterFilterChange()
+  }
+
+  const filterBarLabels = createMemo(() => ({
+    type: language.t("store.console.capabilities.type"),
+    category: language.t("store.home.filters.category"),
+    security: language.t("store.home.filters.risk"),
+    source: language.t("store.home.filters.source"),
+    tag: language.t("store.home.table.tag"),
+    clear: language.t("store.home.filters.clear"),
+    noOptions: language.t("store.noResults"),
+    totalCount: (count: number) => language.t("store.home.filters.totalCount", { count }),
+  }))
 
   const handlePageChange = (nextPage: number) => {
     if (nextPage === activePage() || nextPage < 1 || nextPage > totalPages()) return
@@ -930,6 +1013,62 @@ export default function StoreManagerPage() {
             </div>
 
           <section class={cn(sx.section, "flex min-h-0 flex-1 flex-col px-2 sm:px-3")}>
+            {/* Filter bar — only the card-list tabs (created/favorited) hit the
+                filtered item list; received/sent are unfiltered distribution tables. */}
+            <Show when={state.tab === "created" || state.tab === "favorited"}>
+              <div class="mx-auto mb-2.5 w-full max-w-[64rem] px-4">
+                <StoreFilterBar
+                  type={{
+                    options: typeOptions(),
+                    appliedValues: state.appliedTypeFilters,
+                    toggle: (value) => toggleTypeFilter(value as StoreType),
+                    reset: () => {
+                      setState("appliedTypeFilters", [])
+                      afterFilterChange()
+                    },
+                  }}
+                  category={{
+                    options: categoryOptions(),
+                    appliedValues: state.appliedCategoryFilters,
+                    toggle: toggleCategoryFilter,
+                    reset: () => {
+                      setState("appliedCategoryFilters", [])
+                      afterFilterChange()
+                    },
+                  }}
+                  security={{
+                    options: securityOptions(),
+                    appliedValues: state.appliedSecurityFilters,
+                    toggle: (value) => toggleSecurityFilter(value as SecurityFilterValue),
+                    reset: () => {
+                      setState("appliedSecurityFilters", [])
+                      afterFilterChange()
+                    },
+                  }}
+                  source={{
+                    options: sourceOptions(),
+                    appliedValues: state.appliedSourceFilters,
+                    toggle: toggleSourceFilter,
+                    reset: () => {
+                      setState("appliedSourceFilters", [])
+                      afterFilterChange()
+                    },
+                  }}
+                  tag={{
+                    options: tagOptions(),
+                    appliedValues: state.appliedTagFilters,
+                    toggle: toggleTagFilter,
+                    reset: () => {
+                      setState("appliedTagFilters", [])
+                      afterFilterChange()
+                    },
+                  }}
+                  totalItems={activeTotal()}
+                  onClearAll={clearAllFilters}
+                  labels={filterBarLabels()}
+                />
+              </div>
+            </Show>
             <Show when={selectableTab() && selectedCount() > 0}>
               <div class="mx-auto mb-2.5 flex w-full max-w-[64rem] flex-wrap items-center gap-x-4 gap-y-2 rounded-[0.875rem] bg-[color:color-mix(in_oklab,var(--native-primary)_8%,var(--native-panel))] px-4 py-2.5 ring-1 ring-inset ring-[color:color-mix(in_oklab,var(--native-primary)_18%,transparent)] shadow-[0_6px_16px_-8px_color-mix(in_oklab,var(--native-primary)_45%,transparent)]">
                 <span class="inline-flex items-center gap-2 text-[0.8125rem] font-semibold text-[var(--native-primary)]">

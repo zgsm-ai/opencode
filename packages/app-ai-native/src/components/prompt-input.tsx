@@ -1217,13 +1217,6 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
         return
       }
 
-      if (working()) {
-        abort()
-        event.preventDefault()
-        event.stopPropagation()
-        return
-      }
-
       editorRef.blur()
       event.preventDefault()
       event.stopPropagation()

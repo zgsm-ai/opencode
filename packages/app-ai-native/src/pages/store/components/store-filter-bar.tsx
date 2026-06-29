@@ -72,9 +72,13 @@ export type FilterGroup<V extends string = string> = {
 }
 
 export type StoreFilterBarLabels = {
+  /** 「类型」下拉（仅 manager 等需要 type 组时提供） */
+  type?: string
   category: string
   security: string
   source: string
+  /** 「标签」下拉（仅 manager 等需要 tag 组时提供） */
+  tag?: string
   /** 「清除筛选」 */
   clear: string
   /** 「没有匹配项」下拉空态 */
@@ -84,9 +88,13 @@ export type StoreFilterBarLabels = {
 }
 
 export type StoreFilterBarProps = {
+  /** 可选：类型过滤组（home 不传，manager 传）。 */
+  type?: FilterGroup
   category: FilterGroup
   security: FilterGroup
   source: FilterGroup
+  /** 可选：标签过滤组（home 不传，manager 传）。 */
+  tag?: FilterGroup
   totalItems: number
   onClearAll: () => void
   labels: StoreFilterBarLabels
@@ -100,7 +108,7 @@ const RISK_GROUP_DOT: Record<string, string> = {
   high: "rgb(234,88,12)",
 }
 
-type GroupKind = "category" | "security" | "source"
+type GroupKind = "type" | "category" | "security" | "source" | "tag"
 
 function FilterDropdown(props: {
   kind: GroupKind
@@ -127,7 +135,7 @@ function FilterDropdown(props: {
       >
         {/* .fc — 主色圆 badge（出现在 label 前，对应 #bi-* 注入位） */}
         <Show when={active()}>
-          <span class="inline-flex h-4 min-w-4 items-center justify-center rounded-[99px] bg-[var(--native-primary)] px-1 text-[10.5px] font-extrabold leading-none text-white [font-variant-numeric:tabular-nums]">
+          <span class="inline-flex h-4 min-w-4 items-center justify-center rounded-[99px] bg-[var(--native-primary)] px-1 text-[10.5px] font-extrabold leading-none text-[var(--native-primary-foreground)] [font-variant-numeric:tabular-nums]">
             {count()}
           </span>
         </Show>
@@ -157,7 +165,7 @@ function FilterDropdown(props: {
                   class={cn(
                     "flex size-[17px] shrink-0 items-center justify-center rounded-[5px] border-[1.5px] transition-colors",
                     isSelected(option.value)
-                      ? "border-[var(--native-primary)] bg-[var(--native-primary)] text-white"
+                      ? "border-[var(--native-primary)] bg-[var(--native-primary)] text-[var(--native-primary-foreground)]"
                       : "border-[color:color-mix(in_oklab,var(--native-border)_64%,transparent)] text-transparent",
                   )}
                 >
@@ -224,6 +232,16 @@ export function StoreFilterBar(props: StoreFilterBarProps) {
   type Chip = { key: string; label: string; dotColor?: string; onRemove: () => void }
   const chips = (): Chip[] => {
     const result: Chip[] = []
+    const typeGroup = props.type
+    if (typeGroup) {
+      for (const value of typeGroup.appliedValues) {
+        result.push({
+          key: `type:${value}`,
+          label: labelFor(typeGroup, value),
+          onRemove: () => typeGroup.toggle(value),
+        })
+      }
+    }
     for (const value of props.category.appliedValues) {
       result.push({
         key: `cat:${value}`,
@@ -246,6 +264,16 @@ export function StoreFilterBar(props: StoreFilterBarProps) {
         onRemove: () => props.source.toggle(value),
       })
     }
+    const tagGroup = props.tag
+    if (tagGroup) {
+      for (const value of tagGroup.appliedValues) {
+        result.push({
+          key: `tag:${value}`,
+          label: labelFor(tagGroup, value),
+          onRemove: () => tagGroup.toggle(value),
+        })
+      }
+    }
     return result
   }
 
@@ -257,6 +285,16 @@ export function StoreFilterBar(props: StoreFilterBarProps) {
       {/* keyframe for chip pop-in (scoped via inline <style>, mirrors设计稿 chipIn) */}
       <style>{`@keyframes store-chip-in{from{opacity:0;transform:scale(.8)}to{opacity:1;transform:none}}`}</style>
 
+      <Show when={props.type}>
+        {(group) => (
+          <FilterDropdown
+            kind="type"
+            label={props.labels.type ?? ""}
+            group={group()}
+            noOptionsLabel={props.labels.noOptions}
+          />
+        )}
+      </Show>
       <FilterDropdown
         kind="category"
         label={props.labels.category}
@@ -275,6 +313,16 @@ export function StoreFilterBar(props: StoreFilterBarProps) {
         group={props.source}
         noOptionsLabel={props.labels.noOptions}
       />
+      <Show when={props.tag}>
+        {(group) => (
+          <FilterDropdown
+            kind="tag"
+            label={props.labels.tag ?? ""}
+            group={group()}
+            noOptionsLabel={props.labels.noOptions}
+          />
+        )}
+      </Show>
 
       <Show when={hasAny()}>
         {/* #chips — 内联 chip 组 */}

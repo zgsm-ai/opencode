@@ -6,8 +6,12 @@ import { useActiveWorkspace } from "../active-workspace"
 import { useLanguage } from "@/context/language"
 import { WorkspaceCard, getPrimaryDirectory, getDeviceStatusDot } from "../components/workspace-card"
 import type { Workspace } from "../types"
+import WorkspaceHome from "../pages/home"
 
 export function MobileWorkspaceHome() {
+  const preview = import.meta.env.DEV && new URLSearchParams(window.location.search).has("preview")
+  if (preview) return <WorkspaceHome />
+
   const language = useLanguage()
   const t = language.t
   const navigate = useNavigate()

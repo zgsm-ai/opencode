@@ -42,10 +42,6 @@ export function DeviceSessionChatProvider(props: ParentProps) {
     loadTodo: (id) => store.todo(id),
     historyLoading: (id) => store.historyLoading(id),
     clearUnread: (id) => workspace.session.clearUnread(id),
-    refreshMessages: (id) => {
-      const current = store.data.messages[id] ?? []
-      store.data.messages[id] = [...current]
-    },
 
     getSession: (id) => workspace.session.get(id),
     renameSession: (id, title) =>

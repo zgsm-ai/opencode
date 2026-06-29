@@ -20,6 +20,12 @@ function groupBy<T extends { id?: string; sessionID?: string }>(items: T[]): Rec
   return map
 }
 
+function arr<T>(res: unknown, key?: string): T[] {
+  if (Array.isArray(res)) return res as T[]
+  if (key && res && typeof res === "object" && Array.isArray((res as any)[key])) return (res as any)[key] as T[]
+  return []
+}
+
 type WorkspaceData = {
   status: "loading" | "ready" | "unavailable"
   agent: Agent[]
@@ -165,7 +171,10 @@ export function DeviceWorkspaceProvider(props: ParentProps<{ workspaceId?: strin
         workspaceApi.get(props.workspaceId)
           .then((res) => {
             const val = (res?.workspace?.settings as Record<string, any>)?.autoAccept
-            if (val === true) setAutoAcceptSignal(true)
+            if (val === true) {
+              setAutoAcceptSignal(true)
+              respondAllPermissions()
+            }
           })
           .catch(() => {})
       }
@@ -191,15 +200,15 @@ export function DeviceWorkspaceProvider(props: ParentProps<{ workspaceId?: strin
         setStore("sessionStatus", reconcile((sessionStatusRes as Record<string, SessionStatus>) ?? {}))
         setStore("sessionTotal", rootSessions.length)
         setStore("vcs", vcsRes as VcsInfo | undefined)
-        setStore("questions", reconcile(groupBy(Array.isArray(questionsRes) ? questionsRes : [])))
-        setStore("permissions", reconcile(groupBy(Array.isArray(permsRes) ? permsRes : [])))
+        setStore("questions", reconcile(groupBy(arr<QuestionRequest>(questionsRes))))
+        setStore("permissions", reconcile(groupBy(arr<PermissionRequest>(permsRes, "permissions"))))
         setStore("status", "ready")
         if (props.workspaceId) {
           syncSummary(props.workspaceId, {
             vcs: vcsRes as VcsInfo | undefined,
             sessionStatus: (sessionStatusRes as Record<string, SessionStatus>) ?? {},
-            questions: groupBy(Array.isArray(questionsRes) ? questionsRes : []),
-            permissions: groupBy(Array.isArray(permsRes) ? permsRes : []),
+            questions: groupBy(arr<QuestionRequest>(questionsRes)),
+            permissions: groupBy(arr<PermissionRequest>(permsRes, "permissions")),
           })
         }
       })
@@ -211,6 +220,9 @@ export function DeviceWorkspaceProvider(props: ParentProps<{ workspaceId?: strin
           setStore("provider", reconcile(providerData, { key: "id" }))
         })
       })
+
+      // If auto-accept was already enabled before permissions were stored, respond now
+      if (autoAcceptSignal()) respondAllPermissions()
 
       void startEventStream()
     } catch {
@@ -306,6 +318,24 @@ export function DeviceWorkspaceProvider(props: ParentProps<{ workspaceId?: strin
     setStore("permissions", sessionID, produce((draft: PermissionRequest[]) => {
       draft.splice(idx, 1)
     }))
+  }
+
+  const respondAllPermissions = () => {
+    for (const [sid, list] of Object.entries(store.permissions)) {
+      if (!Array.isArray(list)) continue
+      for (const perm of list) {
+        device.client.permission
+          .respond(perm.id, { decision: "once" })
+          .then(() => {
+            removePermission(sid, perm.id)
+            scheduleSummarySync()
+          })
+          .catch(() => {
+            removePermission(sid, perm.id)
+            scheduleSummarySync()
+          })
+      }
+    }
   }
 
   const fetchSessions = async (count = 10) => {
@@ -482,14 +512,14 @@ export function DeviceWorkspaceProvider(props: ParentProps<{ workspaceId?: strin
       setStore("sessionStatus", reconcile((sessionStatusRes as Record<string, SessionStatus>) ?? {}))
       setStore("sessionTotal", rootSessions.length)
       setStore("vcs", vcsRes as VcsInfo | undefined)
-      setStore("questions", reconcile(groupBy(Array.isArray(questionsRes) ? questionsRes : [])))
-      setStore("permissions", reconcile(groupBy(Array.isArray(permsRes) ? permsRes : [])))
+      setStore("questions", reconcile(groupBy(arr<QuestionRequest>(questionsRes))))
+      setStore("permissions", reconcile(groupBy(arr<PermissionRequest>(permsRes, "permissions"))))
       if (props.workspaceId) {
         syncSummary(props.workspaceId, {
           vcs: vcsRes as VcsInfo | undefined,
           sessionStatus: (sessionStatusRes as Record<string, SessionStatus>) ?? {},
-          questions: groupBy(Array.isArray(questionsRes) ? questionsRes : []),
-          permissions: groupBy(Array.isArray(permsRes) ? permsRes : []),
+          questions: groupBy(arr<QuestionRequest>(questionsRes)),
+          permissions: groupBy(arr<PermissionRequest>(permsRes, "permissions")),
         })
       }
     })
@@ -619,9 +649,45 @@ export function DeviceWorkspaceProvider(props: ParentProps<{ workspaceId?: strin
   }
 
   let streamAbort: AbortController | undefined
+  let streamAliveTimer: ReturnType<typeof setTimeout> | undefined
   let streamDisposed = false
+  let streamFailures = 0
+
+  const STREAM_MAX_FAILURES = 5
+  const STREAM_ALIVE_TIMEOUT_MS = 30_000
 
   const PROXY_FATAL_CODES = new Set(["FILTER_ERROR"])
+
+  const disarmAliveTimer = () => {
+    if (streamAliveTimer) {
+      clearTimeout(streamAliveTimer)
+      streamAliveTimer = undefined
+    }
+  }
+
+  const onAliveTimeout = () => {
+    streamAliveTimer = undefined
+    streamFailed()
+  }
+
+  const armAliveTimer = () => {
+    disarmAliveTimer()
+    streamAliveTimer = setTimeout(onAliveTimeout, STREAM_ALIVE_TIMEOUT_MS)
+  }
+
+  const streamFailed = () => {
+    disarmAliveTimer()
+    streamFailures += 1
+    if (streamFailures > STREAM_MAX_FAILURES) {
+      streamDisposed = true
+      streamAbort?.abort()
+      streamAbort = undefined
+      clearDebounceTimers()
+      setStore("status", "unavailable")
+      return
+    }
+    void rebootstrap()
+  }
 
   const startEventStream = async () => {
     streamAbort?.abort()
@@ -636,7 +702,7 @@ export function DeviceWorkspaceProvider(props: ParentProps<{ workspaceId?: strin
           if (proxyCode) {
             setProxyError(proxyCode)
             if (!PROXY_FATAL_CODES.has(proxyCode)) {
-              void rebootstrap()
+              streamFailed()
             }
           }
         },
@@ -644,8 +710,11 @@ export function DeviceWorkspaceProvider(props: ParentProps<{ workspaceId?: strin
       const readLoop = async () => {
         try {
           setProxyError(undefined)
+          streamFailures = 0
+          armAliveTimer()
           for await (const event of stream as any) {
             if (signal.aborted) break
+            armAliveTimer()
             if (!event) continue
             const payload = (event.payload ?? event) as EventPayload
             if (!payload?.type) continue
@@ -747,9 +816,18 @@ export function DeviceWorkspaceProvider(props: ParentProps<{ workspaceId?: strin
                     const added = addPermission(p)
                     if (added) summaryChanged = true
                     if (added && autoAcceptSignal()) {
-                      device.client.permission.respond(p.id, { decision: "once" }).catch(() => {
-                        removePermission(p.sessionID ?? "", p.id)
-                      })
+                      const sid = p.sessionID ?? ""
+                      const pid = p.id
+                      device.client.permission
+                        .respond(pid, { decision: "once" })
+                        .then(() => {
+                          removePermission(sid, pid)
+                          scheduleSummarySync()
+                        })
+                        .catch(() => {
+                          removePermission(sid, pid)
+                          scheduleSummarySync()
+                        })
                     }
                   }
                   break
@@ -821,17 +899,19 @@ export function DeviceWorkspaceProvider(props: ParentProps<{ workspaceId?: strin
             })
           }
           if (!signal.aborted) {
-            void rebootstrap()
+            streamFailed()
           }
         } catch (e) {
+          disarmAliveTimer()
           if ((e as any)?.name === "AbortError") return
-          void rebootstrap()
+          streamFailed()
         }
       }
       void readLoop()
     } catch (e) {
+      disarmAliveTimer()
       if ((e as any)?.name === "AbortError") return
-      void rebootstrap()
+      streamFailed()
     }
   }
 
@@ -839,6 +919,7 @@ export function DeviceWorkspaceProvider(props: ParentProps<{ workspaceId?: strin
     streamDisposed = true
     streamAbort?.abort()
     streamAbort = undefined
+    disarmAliveTimer()
     clearDebounceTimers()
     if (props.workspaceId) clearSummary(props.workspaceId)
   })

@@ -1,8 +1,10 @@
 import { createContext, useContext, type ParentProps } from "solid-js"
 import { batch, createEffect, createMemo, onCleanup } from "solid-js"
 import { createStore, produce } from "solid-js/store"
+import { showToast } from "@opencode-ai/ui/toast"
 import { useDeviceSDK } from "./device-sdk"
 import { useDeviceWorkspace } from "./device-workspace"
+import { useLanguage } from "./language"
 import type { Message, Part, Session, SessionStatus, FileDiff, Todo, PermissionRequest, QuestionRequest } from "@opencode-ai/sdk/v2/client"
 
 export type SessionError = {
@@ -25,6 +27,18 @@ export type TaskState = {
   endTime?: number
 }
 
+// ── Session Channel Gatekeeper ──
+// Prevents SSE and loadMessages from racing by tracking per-session
+// streaming state. During streaming only SSE writes; after stream ends
+// a single atomic loadMessages replaces the session data.
+
+type SessionChannel =
+  | { mode: "idle" }
+  | { mode: "streaming" }
+  | { mode: "reconciling"; cached: { messages: object[]; parts: Record<string, object[]> } }
+
+const sessionChannels = new Map<string, SessionChannel>()
+
 type SessionSlice = {
   session: Session | undefined
   messages: Record<string, Message[]>
@@ -38,6 +52,7 @@ type SessionSlice = {
   toolProgress: Record<string, string>
   partProgress: Record<string, string[]>
   tasks: Record<string, Record<string, TaskState>>
+  updating: Record<string, boolean>
 }
 
 type StoreValue = {
@@ -111,6 +126,8 @@ type DeviceSessionValue = {
 }
 
 const MESSAGE_PAGE_SIZE = 50
+const MESSAGE_INITIAL_LIMIT = 100
+const MESSAGE_INCREMENTAL_LIMIT = 20
 const idle: SessionStatus = { type: "idle" }
 
 // ── Shared Store Context ──
@@ -170,6 +187,7 @@ export function treeEvent(input: {
 export function DeviceSessionStoreProvider(props: ParentProps) {
   const device = useDeviceSDK()
   const workspace = useDeviceWorkspace()
+  const language = useLanguage()
 
   const [store, setStore] = createStore<SessionSlice>({
     session: undefined,
@@ -184,9 +202,12 @@ export function DeviceSessionStoreProvider(props: ParentProps) {
     toolProgress: {},
     partProgress: {},
     tasks: {},
+    updating: {},
   })
 
   const inflight = new Map<string, Promise<void>>()
+  const loadingSessions = new Set<string>()
+
   const runInflight = (key: string, task: () => Promise<void>) => {
     const pending = inflight.get(key)
     if (pending) return pending
@@ -197,12 +218,32 @@ export function DeviceSessionStoreProvider(props: ParentProps) {
 
   const BATCH_SIZE = 10
 
+  const partsFingerprint = (parts: Part[] | undefined): string => {
+    if (!parts || parts.length === 0) return ""
+    return parts
+      .filter(p => (p as any).type === "text")
+      .map(p => ((p as any).text ?? "").trim())
+      .filter(t => t.length > 0)
+      .join("\n")
+  }
+
   const loadMessages = async (sessionID: string, limit?: number) => {
+    // Gatekeeper: skip redundant loads during active streaming.
+    // Always allow first load (store empty) so the user sees existing messages.
+    const existingMessages = store.messages[sessionID]
+    const ch = sessionChannels.get(sessionID)
+    if (ch?.mode === "streaming" && existingMessages?.length) return
+
     return runInflight(`messages:${sessionID}`, async () => {
+      loadingSessions.add(sessionID)
+      sessionChannels.set(sessionID, { mode: "reconciling", cached: { messages: [], parts: {} } })
       try {
-        const result = await device.client.conversation.messages(sessionID, { limit: limit ?? MESSAGE_PAGE_SIZE })
+        const loadLimit = limit ?? (existingMessages?.length ? MESSAGE_INCREMENTAL_LIMIT : MESSAGE_INITIAL_LIMIT)
+        const result = await device.client.conversation.messages(sessionID, { limit: loadLimit })
         if (!result) return
         const raw = Array.isArray(result) ? result : []
+
+        // Build lookup from API response
         const fetched = new Map<string, { info: Message; parts?: Part[] }>()
         for (const item of raw as any[]) {
           if (!item?.info?.id) continue
@@ -212,91 +253,97 @@ export function DeviceSessionStoreProvider(props: ParentProps) {
           })
         }
 
-        batch(() => {
-          for (const [mid, data] of fetched) {
-            if (data.parts && data.parts.length > 0) {
-              const existing = store.parts[mid]
-              if (!existing || existing.length !== data.parts.length) {
-                setStore("parts", mid, data.parts)
-              } else {
-                for (let i = 0; i < data.parts.length; i++) {
-                  const existingPart = existing[i] as any
-                  const newPart = data.parts[i] as any
-                  if (existingPart?.state?.status === "running" && newPart?.state?.status !== "running") {
-                    continue
-                  }
-                  setStore("parts", mid, i, newPart)
-                }
-              }
+        // Incremental update: preserve existing references for SolidJS <For> tracking.
+        // Only replace a message reference when its fields actually changed.
+        const currentMessages = store.messages[sessionID]
+        const dupIDs = new Set<string>()
+        if (!currentMessages) {
+          const msgs = [...fetched.values()].map(d => d.info)
+          msgs.sort((a, b) => (a.time?.created ?? 0) - (b.time?.created ?? 0))
+          setStore("messages", sessionID, msgs)
+        } else {
+          const existing = [...currentMessages]
+          const kept = new Set(fetched.keys())
+          const next = [...existing]
+          let changed = false
+
+          for (let i = 0; i < next.length; i++) {
+            const data = fetched.get(next[i].id)
+            if (!data) continue
+            const cur = next[i] as any
+            const inc = data.info as any
+            if (
+              cur.content !== inc.content ||
+              cur.role !== inc.role ||
+              (cur.time?.completed ?? 0) !== (inc.time?.completed ?? 0) ||
+              cur.error !== inc.error ||
+              cur.status !== inc.status
+            ) {
+              next[i] = data.info
+              changed = true
             }
           }
-        })
 
-        const entries = [...fetched]
-        if (!store.messages[sessionID]) {
-          setStore("messages", sessionID, [])
-        }
-        for (let i = 0; i < entries.length; i += BATCH_SIZE) {
-          const chunk = entries.slice(i, i + BATCH_SIZE)
-          batch(() => {
-            setStore("messages", sessionID, produce((draft: Message[]) => {
-              const index = new Map(draft.map((m, j) => [m.id, j]))
-              for (const [mid, data] of chunk) {
-                const idx = index.get(mid)
-                if (idx !== undefined) {
-                  const existing = draft[idx] as Record<string, unknown> | undefined
-                  const incoming = data.info as Record<string, unknown> | undefined
-                  if (
-                    existing?.time && typeof existing.time === "object" && (existing.time as Record<string, unknown>)?.created &&
-                    incoming?.time && typeof incoming.time === "object" && !(incoming.time as Record<string, unknown>)?.created
-                  ) {
-                    draft[idx] = { ...data.info, time: { created: (existing.time as Record<string, unknown>).created, ...incoming.time } } as Message
-                  } else {
-                    draft[idx] = data.info
-                  }
-                } else {
-                  // Dedup: check if an assistant message with same parentID+timestamp already exists
-                  // (streamed path SSE ID may differ from API response ID)
-                  const incomingInfo = data.info as Record<string, unknown> | undefined
-                  let dedupIdx = -1
-                  if (incomingInfo?.role === "assistant") {
-                    const created = (incomingInfo.time as Record<string, unknown> | undefined)?.created as number | undefined
-                    if (created) {
-                      const incomingPID = incomingInfo.parentID as string | undefined
-                      for (let j = 0; j < draft.length; j++) {
-                        const m = draft[j] as Record<string, unknown>
-                        if (m.role !== "assistant") continue
-                        const mCreated = ((m.time as Record<string, unknown> | undefined)?.created as number | undefined) ?? 0
-                        if (mCreated <= 0) continue
-                        if (Math.abs(mCreated - created) >= 5000) continue
-                        // Match by parentID equality, or by time proximity alone
-                        // (SSE streamed version may lack parentID entirely)
-                        if (!incomingPID || !m.parentID || incomingPID === m.parentID) {
-                          dedupIdx = j
-                          break
-                        }
-                      }
-                    }
-                  }
-                  if (dedupIdx !== -1) {
-                    // Buffer message duplicates existing SSE entry (same parentID+time).
-                    // SSE entry has parts stored under its ID; skip buffer version
-                    // to preserve parts linkage. Buffer content is typically empty
-                    // for streamed responses (content already delivered via SSE).
-                    continue
-                  } else {
-                    draft.push(data.info)
-                  }
+          // Append new messages
+          const existingIDs = new Set(next.map(m => m.id))
+          for (const [mid, data] of fetched) {
+            if (!existingIDs.has(mid)) {
+              const inc = data.info as any
+              const incFP = partsFingerprint(data.parts)
+              const matchByContent = (m: Message): boolean => {
+                const ex = m as any
+                if (ex.role !== inc.role) return false
+                if (ex.role === "assistant" && inc.role === "assistant") {
+                  if (ex.parentID && inc.parentID && ex.parentID !== inc.parentID) return false
                 }
+                if (incFP) {
+                  const exFP = partsFingerprint(store.parts[m.id])
+                  if (exFP && exFP === incFP) return true
+                }
+                return false
               }
-              draft.sort((a, b) => (a.time?.created ?? 0) - (b.time?.created ?? 0))
-            }))
-          })
-          if (i + BATCH_SIZE < entries.length) {
-            await new Promise<void>(r => requestAnimationFrame(() => r()))
+              const dup = next.find(matchByContent)
+              if (dup) {
+                dupIDs.add(mid)
+                continue
+              }
+              next.push(data.info)
+              changed = true
+            }
+          }
+
+          if (changed) {
+            next.sort((a, b) => (a.time?.created ?? 0) - (b.time?.created ?? 0))
+            setStore("messages", sessionID, next)
           }
         }
-      } catch {}
+
+        // Update parts
+        for (const [mid, data] of fetched) {
+          if (data.parts && data.parts.length > 0) {
+            if (dupIDs.has(mid)) continue
+            const existing = store.parts[mid]
+            if (!existing || existing.length === 0) {
+              setStore("parts", mid, data.parts)
+            } else if (data.parts.length !== existing.length) {
+              setStore("parts", mid, data.parts)
+            }
+          }
+        }
+
+        // Check if session re-entered streaming during fetch
+        const current = sessionChannels.get(sessionID)
+        if (current?.mode === "reconciling") {
+          sessionChannels.set(sessionID, { mode: "idle" })
+        }
+      } catch {
+        const current = sessionChannels.get(sessionID)
+        if (current?.mode === "reconciling") {
+          sessionChannels.set(sessionID, { mode: "idle" })
+        }
+      } finally {
+        loadingSessions.delete(sessionID)
+      }
     })
   }
 
@@ -413,6 +460,19 @@ export function DeviceSessionStoreProvider(props: ParentProps) {
           if (!info?.id) break
           const msgSID = eventSID ?? info.sessionID
           if (!msgSID) break
+
+          if (info.role === "assistant" && !info.time?.completed) {
+            const ch = sessionChannels.get(msgSID)
+            if (!ch || ch.mode === "idle" || ch.mode === "reconciling") {
+              sessionChannels.set(msgSID, { mode: "streaming" })
+            }
+          } else if (info.role === "assistant" && info.time?.completed) {
+            const ch = sessionChannels.get(msgSID)
+            if (ch?.mode === "streaming") {
+              sessionChannels.set(msgSID, { mode: "idle" })
+            }
+          }
+
           if (info.role === "user" && store.errors[msgSID]) setStore("errors", msgSID, undefined as any)
           if (!store.messages[msgSID]) setStore("messages", msgSID, [])
           setStore("messages", msgSID, produce((draft: Message[]) => {
@@ -428,7 +488,9 @@ export function DeviceSessionStoreProvider(props: ParentProps) {
               } else {
                 draft[idx] = info
               }
-            } else draft.push(info)
+            } else {
+              draft.push(info)
+            }
           }))
           break
         }
@@ -521,8 +583,17 @@ export function DeviceSessionStoreProvider(props: ParentProps) {
           break
         }
         case "session.error": {
-          const props = payload.properties as { sessionID?: string; error?: SessionError }
-          if (props.error && eventSID) setStore("errors", eventSID, props.error)
+          const props = payload.properties as { sessionID?: string; error?: string | SessionError; message?: string }
+          if (!eventSID) break
+          const err: SessionError = typeof props.error === "object" && props.error !== null
+            ? props.error
+            : { message: props.message }
+          setStore("errors", eventSID, err)
+          // showToast({
+          //   variant: "error",
+          //   title: language.t("notification.session.error.title"),
+          //   description: err.message ?? language.t("notification.session.error.fallbackDescription"),
+          // })
           break
         }
         case "tool.progress": {

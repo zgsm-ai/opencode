@@ -275,12 +275,7 @@ export function SessionTurn(
         if (!item) continue
         if (item.role === "user") break
         if (item.role === "assistant") {
-          const pid = item.parentID
-          if (pid === userID) {
-            result.push(item as AssistantMessage)
-          } else if (!pid || result.length > 0) {
-            result.push(item as AssistantMessage)
-          }
+          result.push(item as AssistantMessage)
         }
       }
       return result

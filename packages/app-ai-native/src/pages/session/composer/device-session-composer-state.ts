@@ -24,9 +24,11 @@ export function createDeviceSessionComposerState(deps: ComposerDeps, options?: {
 
   const permissionRequest = createMemo((): PermissionRequest | undefined => {
     const sid = deps.sessionID()
-    return sessionPermissionRequest(deps.chat.sessions(), deps.chat.permissions(), sid, () => {
-      return !deps.isAutoAccepting()
-    })
+    const perms = deps.chat.permissions()
+    const sessions = deps.chat.sessions()
+    const include = () => !deps.isAutoAccepting()
+
+    return sessionPermissionRequest(sessions, perms, sid, include)
   })
 
   const blocked = createMemo(() => {
@@ -59,7 +61,7 @@ export function createDeviceSessionComposerState(deps: ComposerDeps, options?: {
       .catch((err: unknown) => {
         const description = err instanceof Error ? err.message : String(err)
         showToast({ title: language.t("common.requestFailed"), description })
-        if (sid) deps.chat.removePermission(sid, perm.id)
+        if (perm.sessionID) deps.chat.removePermission(perm.sessionID, perm.id)
       })
       .finally(() => {
         setStore("responding", (id) => (id === perm.id ? undefined : id))

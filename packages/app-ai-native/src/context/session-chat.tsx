@@ -61,7 +61,6 @@ export interface SessionChatBackend {
   loadTodo: (id: string) => Promise<void>
   historyLoading: (id: string) => boolean
   clearUnread: (id: string) => void
-  refreshMessages: (id: string) => void
 
   getSession: (id: string) => Session | undefined
   renameSession: (id: string, title: string) => Promise<void>
