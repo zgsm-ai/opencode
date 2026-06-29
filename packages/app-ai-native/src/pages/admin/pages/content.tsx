@@ -1,8 +1,8 @@
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { Icon } from "@opencode-ai/ui/icon"
 import { showToast } from "@opencode-ai/ui/toast"
-import { createMemo, For, onMount, Show } from "solid-js"
-import { createStore } from "solid-js/store"
+import { createEffect, createMemo, For, onMount, Show } from "solid-js"
+import { createStore, produce, reconcile } from "solid-js/store"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { useLanguage } from "@/context/language"
 import { ConfirmDialog } from "@/pages/store/components/confirm-dialog"
@@ -14,6 +14,10 @@ const STATUS_FILTERS = ["", "active", "archived"] as const
 // Coarse security risk groups understood by the backend (expanded server-side).
 const SECURITY_FILTERS = ["", "low", "medium", "high", "unknown"] as const
 const PAGE_SIZE = 20
+// Mirrors the backend's per-request batch-delete cap (adminitem.maxBatchDelete).
+// "Select all matching" pulls at most this many ids; a larger result set is
+// trimmed to the first MAX_BATCH_DELETE with an explicit warning in the confirm.
+const MAX_BATCH_DELETE = 200
 
 export default function AdminContent() {
   const language = useLanguage()
@@ -43,6 +47,17 @@ export default function AdminContent() {
 
   // Per-row action loading guard.
   const [actionLoading, setActionLoading] = createStore<Record<string, boolean>>({})
+
+  // Multi-select state. `selected` holds explicitly-checked row ids (accumulates
+  // across pages so a manual cross-page selection is possible). `allMatching`
+  // is the "select all matching the current filter" mode — its effective id set
+  // is resolved lazily at delete time (one filtered list call), not stored here.
+  const [selected, setSelected] = createStore<Record<string, boolean>>({})
+  const [batch, setBatch] = createStore<{ allMatching: boolean; deleting: boolean; preparing: boolean }>({
+    allMatching: false,
+    deleting: false,
+    preparing: false,
+  })
 
   // Detail drawer state.
   const [detail, setDetail] = createStore<{ open: boolean; item: AdminItem | null }>({
@@ -89,9 +104,56 @@ export default function AdminContent() {
 
   onMount(() => void load())
 
+  // ── Selection ──────────────────────────────────────────────────────────────
+  const selectedIdList = createMemo(() => Object.keys(selected).filter((id) => selected[id]))
+  const selectedCount = createMemo(() => (batch.allMatching ? state.total : selectedIdList().length))
+  const pageSelectedCount = createMemo(() => state.items.filter((i) => selected[i.id]).length)
+  const allOnPageSelected = createMemo(() => state.items.length > 0 && pageSelectedCount() === state.items.length)
+  const someOnPageSelected = createMemo(() => pageSelectedCount() > 0 && !allOnPageSelected())
+  // Offer "select all matching" only once the whole visible page is checked and
+  // there are more rows beyond this page.
+  const canSelectAllMatching = createMemo(
+    () => !batch.allMatching && allOnPageSelected() && state.total > state.items.length,
+  )
+
+  function clearSelection() {
+    setSelected(reconcile({}))
+    setBatch("allMatching", false)
+  }
+
+  function toggleRow(id: string, checked: boolean) {
+    // Unchecking a row while in "all matching" mode: materialize the current
+    // page as the explicit selection minus this row, then leave the mode. A
+    // precise cross-page exclusion isn't supported, so other pages' implied
+    // selection is intentionally dropped (the user can re-select).
+    if (batch.allMatching && !checked) {
+      setSelected(
+        produce((s) => {
+          for (const item of state.items) s[item.id] = true
+          s[id] = false
+        }),
+      )
+      setBatch("allMatching", false)
+      return
+    }
+    setSelected(id, checked)
+    // Narrowing the selection drops out of "all matching" mode.
+    if (!checked) setBatch("allMatching", false)
+  }
+
+  function togglePage(checked: boolean) {
+    setSelected(
+      produce((s) => {
+        for (const item of state.items) s[item.id] = checked
+      }),
+    )
+    if (!checked) setBatch("allMatching", false)
+  }
+
   function setFilter(key: "type" | "status" | "security", value: string) {
     setState(key, value)
     setState("page", 1)
+    clearSelection()
     void load()
   }
 
@@ -101,6 +163,7 @@ export default function AdminContent() {
     searchTimer = setTimeout(() => {
       setState("debouncedSearch", value.trim())
       setState("page", 1)
+      clearSelection()
       void load()
     }, 300)
   }
@@ -184,6 +247,157 @@ export default function AdminContent() {
         onConfirm={() => removeItem(item)}
       />
     ))
+
+  async function doBatchRemove(ids: string[]) {
+    setBatch("deleting", true)
+    try {
+      const res = await adminItemApi.batchRemove(ids)
+      if (detail.item && ids.includes(detail.item.id)) setDetail({ open: false, item: null })
+      clearSelection()
+      setState("page", 1)
+      await load()
+      showToast({
+        variant: "success",
+        title:
+          res.skipped > 0
+            ? language.t("admin.content.toast.batchDeletedWithSkipped", {
+                deleted: String(res.deleted),
+                skipped: String(res.skipped),
+              })
+            : language.t("admin.content.toast.batchDeleted", { deleted: String(res.deleted) }),
+      })
+    } catch (err) {
+      showToast({
+        variant: "error",
+        title: language.t("admin.content.toast.batchDeleteFailed"),
+        description: err instanceof Error ? err.message : String(err),
+      })
+    } finally {
+      setBatch("deleting", false)
+    }
+  }
+
+  async function startBatchDelete() {
+    if (batch.deleting || batch.preparing) return
+    let ids: string[]
+    let knownItems: AdminItem[]
+    if (batch.allMatching) {
+      // Resolve the full matching set (capped at MAX_BATCH_DELETE) with one
+      // filtered list call, so the delete targets explicit ids rather than a
+      // server-side filter re-interpretation. `preparing` guards re-entry while
+      // this async fetch is in flight (batch.deleting is only set later).
+      setBatch("preparing", true)
+      try {
+        const res = await adminItemApi.list({
+          type: state.type || undefined,
+          status: state.status || undefined,
+          securityStatus: state.security || undefined,
+          search: state.debouncedSearch || undefined,
+          page: 1,
+          pageSize: MAX_BATCH_DELETE,
+        })
+        knownItems = res.items ?? []
+      } catch (err) {
+        showToast({
+          variant: "error",
+          title: language.t("admin.content.toast.batchDeleteFailed"),
+          description: err instanceof Error ? err.message : String(err),
+        })
+        return
+      } finally {
+        setBatch("preparing", false)
+      }
+      ids = knownItems.map((i) => i.id)
+    } else {
+      ids = selectedIdList()
+      knownItems = state.items.filter((i) => selected[i.id])
+    }
+    if (ids.length === 0) return
+
+    const pluginCount = knownItems.filter((i) => i.itemType === "plugin").length
+    const capped = batch.allMatching && state.total > MAX_BATCH_DELETE
+    let description = language.t("admin.content.confirm.batchDelete.description", { count: String(ids.length) })
+    if (pluginCount > 0) {
+      description += " " + language.t("admin.content.confirm.batchDelete.withPlugins", { plugins: String(pluginCount) })
+    }
+    if (capped) {
+      description +=
+        " " +
+        language.t("admin.content.confirm.batchDelete.capped", {
+          total: String(state.total),
+          max: String(MAX_BATCH_DELETE),
+        })
+    }
+    dialog.show(() => (
+      <ConfirmDialog
+        title={language.t("admin.content.confirm.batchDelete.title")}
+        description={description}
+        confirm={language.t("admin.content.batch.delete")}
+        variant="danger"
+        onConfirm={() => doBatchRemove(ids)}
+      />
+    ))
+  }
+
+  // Batch take items online/offline. Status changes are reversible, so unlike
+  // delete this runs directly (no strong confirm) and reports the result.
+  async function doBatchStatus(status: AdminItemStatus) {
+    if (batch.deleting || batch.preparing) return
+    let ids: string[]
+    let capped = false
+    if (batch.allMatching) {
+      setBatch("preparing", true)
+      try {
+        const res = await adminItemApi.list({
+          type: state.type || undefined,
+          status: state.status || undefined,
+          securityStatus: state.security || undefined,
+          search: state.debouncedSearch || undefined,
+          page: 1,
+          pageSize: MAX_BATCH_DELETE,
+        })
+        ids = (res.items ?? []).map((i) => i.id)
+        capped = state.total > MAX_BATCH_DELETE
+      } catch (err) {
+        showToast({
+          variant: "error",
+          title: language.t("admin.content.toast.batchStatusFailed"),
+          description: err instanceof Error ? err.message : String(err),
+        })
+        return
+      } finally {
+        setBatch("preparing", false)
+      }
+    } else {
+      ids = selectedIdList()
+    }
+    if (ids.length === 0) return
+
+    setBatch("deleting", true)
+    try {
+      const res = await adminItemApi.batchSetStatus(ids, status)
+      clearSelection()
+      await load()
+      showToast({
+        variant: "success",
+        title: language.t(
+          status === "archived" ? "admin.content.toast.batchArchived" : "admin.content.toast.batchActivated",
+          { count: String(res.updated) },
+        ),
+        description: capped
+          ? language.t("admin.content.toast.batchStatusCapped", { total: String(state.total), max: String(MAX_BATCH_DELETE) })
+          : undefined,
+      })
+    } catch (err) {
+      showToast({
+        variant: "error",
+        title: language.t("admin.content.toast.batchStatusFailed"),
+        description: err instanceof Error ? err.message : String(err),
+      })
+    } finally {
+      setBatch("deleting", false)
+    }
+  }
 
   function openDetail(item: AdminItem) {
     setDetail({ open: true, item })
@@ -300,6 +514,59 @@ export default function AdminContent() {
         </div>
       </div>
 
+      {/* Bulk action toolbar */}
+      <Show when={selectedCount() > 0}>
+        <div class="mb-3 flex flex-wrap items-center gap-3 rounded-[var(--native-radius-md)] border border-[color:color-mix(in_oklab,var(--native-border)_40%,transparent)] bg-[color:color-mix(in_oklab,var(--native-primary)_6%,transparent)] px-3 py-2">
+          <span class="text-[0.8125rem] font-medium text-[var(--native-foreground)]">
+            {batch.allMatching
+              ? language.t("admin.content.batch.allMatchingSelected", { count: String(state.total) })
+              : language.t("admin.content.batch.selected", { count: String(selectedCount()) })}
+          </span>
+          <Show when={canSelectAllMatching()}>
+            <button
+              type="button"
+              class="cursor-pointer text-[0.8125rem] text-[var(--native-primary)] transition-colors hover:underline"
+              onClick={() => setBatch("allMatching", true)}
+            >
+              {language.t("admin.content.batch.selectAllMatching", { count: String(state.total) })}
+            </button>
+          </Show>
+          <div class="ml-auto flex items-center gap-3">
+            <button
+              type="button"
+              class="cursor-pointer rounded-[var(--native-radius-md)] border border-[color:color-mix(in_oklab,var(--native-border)_60%,transparent)] px-3 py-1.5 text-[0.8125rem] text-[var(--native-muted)] transition-colors hover:text-[var(--native-foreground)] disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={batch.deleting || batch.preparing}
+              onClick={() => void doBatchStatus("archived")}
+            >
+              {language.t("admin.content.batch.archive")}
+            </button>
+            <button
+              type="button"
+              class="cursor-pointer rounded-[var(--native-radius-md)] border border-[color:color-mix(in_oklab,var(--native-border)_60%,transparent)] px-3 py-1.5 text-[0.8125rem] text-[var(--native-muted)] transition-colors hover:text-[var(--native-foreground)] disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={batch.deleting || batch.preparing}
+              onClick={() => void doBatchStatus("active")}
+            >
+              {language.t("admin.content.batch.activate")}
+            </button>
+            <button
+              type="button"
+              class="cursor-pointer rounded-[var(--native-radius-md)] border border-[var(--native-error)] px-3 py-1.5 text-[0.8125rem] text-[var(--native-error)] transition-colors hover:bg-[color:color-mix(in_oklab,var(--native-error)_10%,transparent)] disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={batch.deleting || batch.preparing}
+              onClick={() => void startBatchDelete()}
+            >
+              {language.t("admin.content.batch.delete")}
+            </button>
+            <button
+              type="button"
+              class="cursor-pointer text-[0.8125rem] text-[var(--native-muted)] transition-colors hover:text-[var(--native-foreground)] hover:underline"
+              onClick={clearSelection}
+            >
+              {language.t("admin.content.batch.clear")}
+            </button>
+          </div>
+        </div>
+      </Show>
+
       {/* Table */}
       <div class={sx.tableShell} aria-busy={state.loading}>
         <Show when={state.loading}>
@@ -312,6 +579,18 @@ export default function AdminContent() {
         <table class={sx.dtStatic}>
           <thead>
             <tr>
+              <th class="w-10">
+                <input
+                  type="checkbox"
+                  class="cursor-pointer align-middle"
+                  aria-label={language.t("admin.content.select.allOnPage")}
+                  checked={batch.allMatching ? state.items.length > 0 : allOnPageSelected()}
+                  ref={(el) =>
+                    createEffect(() => (el.indeterminate = !batch.allMatching && someOnPageSelected()))
+                  }
+                  onChange={(e) => togglePage(e.currentTarget.checked)}
+                />
+              </th>
               <th>{language.t("admin.content.columns.name")}</th>
               <th class="w-24">{language.t("admin.content.columns.type")}</th>
               <th class="w-24">{language.t("admin.content.columns.status")}</th>
@@ -326,6 +605,15 @@ export default function AdminContent() {
             <For each={state.items}>
               {(item) => (
                 <tr>
+                  <td class="w-10">
+                    <input
+                      type="checkbox"
+                      class="cursor-pointer align-middle"
+                      aria-label={language.t("admin.content.select.row")}
+                      checked={batch.allMatching || !!selected[item.id]}
+                      onChange={(e) => toggleRow(item.id, e.currentTarget.checked)}
+                    />
+                  </td>
                   <td class="font-semibold text-[var(--native-foreground)]">
                     <button
                       type="button"
