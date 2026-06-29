@@ -330,7 +330,10 @@ export default function StoreManagerPage() {
   const [receivedActionLoading, setReceivedActionLoading] = createStore<Record<string, boolean>>({})
   const [sentActionLoading, setSentActionLoading] = createStore<Record<string, boolean>>({})
 
-  const loadReceived = async () => {
+  // silent=true (eager mount prefetch for the sidebar badge): record the error in
+  // state (shown inline when the tab is opened) but skip the toast, so a background
+  // count prefetch never pops an error toast while the user is on another tab.
+  const loadReceived = async (silent = false) => {
     if (state.receivedLoading) return
     setState({ receivedLoading: true, receivedError: "" })
     try {
@@ -340,18 +343,20 @@ export default function StoreManagerPage() {
     catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       setState({ receivedLoaded: true, receivedError: message || language.t("store.received.toast.loadFailed") })
-      showToast({
-        variant: "error",
-        title: language.t("store.received.toast.loadFailed"),
-        description: message,
-      })
+      if (!silent) {
+        showToast({
+          variant: "error",
+          title: language.t("store.received.toast.loadFailed"),
+          description: message,
+        })
+      }
     }
     finally {
       setState("receivedLoading", false)
     }
   }
 
-  const loadSent = async () => {
+  const loadSent = async (silent = false) => {
     if (state.sentLoading) return
     setState({ sentLoading: true, sentError: "" })
     try {
@@ -361,11 +366,13 @@ export default function StoreManagerPage() {
     catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       setState({ sentLoaded: true, sentError: message || language.t("store.sent.toast.loadFailed") })
-      showToast({
-        variant: "error",
-        title: language.t("store.sent.toast.loadFailed"),
-        description: message,
-      })
+      if (!silent) {
+        showToast({
+          variant: "error",
+          title: language.t("store.sent.toast.loadFailed"),
+          description: message,
+        })
+      }
     }
     finally {
       setState("sentLoading", false)
@@ -466,8 +473,8 @@ export default function StoreManagerPage() {
     // on first paint (received/sent lists are unfiltered, so their length is the
     // real total; created/favorited get a dedicated unfiltered count request).
     void refreshTabCounts()
-    void loadReceived()
-    void loadSent()
+    void loadReceived(true)
+    void loadSent(true)
   })
 
   createEffect(() => {
