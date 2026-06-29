@@ -1,6 +1,7 @@
 import { Navigate, Route, useLocation } from "@solidjs/router"
 import { Component, Show, lazy, Suspense, type JSX } from "solid-js"
 import AuthGuard from "@/components/auth-guard"
+import { DistributionPushWatcher } from "@/components/distribution-push-watcher"
 import { PageLoadingSkeleton } from "@/components/page-loading-skeleton"
 import { useAuth } from "@/context/auth"
 import { appPath } from "@/lib/router"
@@ -102,6 +103,7 @@ export const RootLayoutRoute: Component<{ children?: JSX.Element }> = (props) =>
 
   return (
     <Suspense fallback={<Loading />}>
+      <DistributionPushWatcher />
       <Show when={path() !== "/"} fallback={props.children}>
         <RootLayout>{props.children}</RootLayout>
       </Show>

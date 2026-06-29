@@ -2,8 +2,8 @@ import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { Icon, type IconProps } from "@opencode-ai/ui/icon"
 import { showToast } from "@opencode-ai/ui/toast"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
-import { useNavigate } from "@solidjs/router"
-import { createEffect, createMemo, createResource, For, onCleanup, Show, Suspense } from "solid-js"
+import { useNavigate, useSearchParams } from "@solidjs/router"
+import { createEffect, createMemo, createResource, For, onCleanup, Show, Suspense, untrack } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useItemFilterOptions } from "@/context/item-filter-options"
 import { useLanguage } from "@/context/language"
@@ -78,6 +78,7 @@ export default function StoreManagerPage() {
   const language = useLanguage()
   const itemFilterOptions = useItemFilterOptions()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const auth = useAuth()
 
   const [selectedItemId, setSelectedItemId] = createStore<{ value: string | null }>({ value: null })
@@ -642,6 +643,10 @@ export default function StoreManagerPage() {
     if (state.tab === tab) return
     setSelectedItemId("value", null)
     setState("tab", tab)
+    // Keep the URL in sync with the active tab so it's the single source of truth:
+    // without this a manual switch leaves a stale ?tab=, and re-clicking the push
+    // toast's「查看」(navigate to the same ?tab=received) would be a no-op.
+    setSearchParams({ tab }, { replace: true })
     if (tab === "created") {
       if (!state.createdLoaded) void loadCreated()
       return
@@ -656,6 +661,18 @@ export default function StoreManagerPage() {
     }
     if (!state.receivedLoaded) void loadReceived()
   }
+
+  // Honor a deep-link like /store/manager?tab=received (e.g. the skill-push toast CTA).
+  // Reacts to URL changes so it also works when already on the manager page.
+  createEffect(() => {
+    const requestedTab = searchParams.tab
+    if (requestedTab === "created" || requestedTab === "favorited" || requestedTab === "received" || requestedTab === "sent") {
+      // untrack so the effect depends ONLY on searchParams.tab — switchTab reads
+      // state.tab, and tracking that would re-run this effect (and force the tab
+      // back to the URL value) whenever the user manually switches tabs.
+      untrack(() => switchTab(requestedTab))
+    }
+  })
 
   const togglePendingTypeFilter = (value: string) => {
     const type = value as StoreType

@@ -101,6 +101,17 @@ export default function AdminDistributions() {
     (ids) => (ids.length ? userApi.getNames(ids) : Promise.resolve({} as Record<string, string>)),
   )
 
+  // Resolve target usernames for user-scoped distributions on the current page,
+  // so the table/drawer show a human name instead of the raw subject id (the
+  // wizard picks targets by username). Org-scoped targets keep their raw id.
+  const [targetNames] = createResource(
+    () => state.items.filter((d) => d.scopeType === "user").map((d) => d.targetId).filter(Boolean),
+    (ids) => (ids.length ? userApi.getNames(ids) : Promise.resolve({} as Record<string, string>)),
+  )
+
+  const targetDisplay = (scopeType: string, targetId: string) =>
+    scopeType === "user" ? (targetNames()?.[targetId] ?? targetId) : targetId
+
   // Stats from the current page result. Active count comes from the unfiltered total
   // when no status filter is applied; otherwise reflects the filtered view.
   const stats = createMemo(() => {
@@ -333,18 +344,29 @@ export default function AdminDistributions() {
               {(d) => (
                 <tr>
                   <td class="font-semibold text-[var(--native-foreground)]">
-                    <button
-                      type="button"
-                      class="cursor-pointer text-left hover:underline"
-                      onClick={() => void openDetail(d)}
-                    >
-                      {d.item?.name ?? d.itemId}
-                    </button>
+                    <span class="inline-flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        class="cursor-pointer text-left hover:underline"
+                        onClick={() => void openDetail(d)}
+                      >
+                        {d.item?.name ?? d.itemId}
+                      </button>
+                      <Show when={d.message}>
+                        <span
+                          class="inline-flex shrink-0 text-[var(--native-muted)]"
+                          title={language.t("admin.distributions.detail.message")}
+                          aria-label={language.t("admin.distributions.detail.message")}
+                        >
+                          <Icon name="speech-bubble" size="small" />
+                        </span>
+                      </Show>
+                    </span>
                   </td>
                   <td class="text-[var(--native-muted)]">{distributorNames()?.[d.distributorId] ?? d.distributorId}</td>
                   <td class="text-[var(--native-muted)]">
                     <span class="text-[12px] uppercase tracking-[0.04em]">{scopeLabel(d.scopeType)}</span>
-                    <div class="truncate text-[var(--native-foreground)]">{d.targetId}</div>
+                    <div class="truncate text-[var(--native-foreground)]">{targetDisplay(d.scopeType, d.targetId)}</div>
                   </td>
                   <td class="text-[var(--native-muted)]">
                     {language.t(`admin.distributions.permission.${d.permissionMode}` as `admin.distributions.permission.readonly`)}
@@ -476,7 +498,7 @@ export default function AdminDistributions() {
                       {language.t("admin.distributions.columns.target")}
                     </div>
                     <div class="mt-0.5 truncate text-[var(--native-foreground)]">
-                      {scopeLabel(d().scopeType)} · {d().targetId}
+                      {scopeLabel(d().scopeType)} · {targetDisplay(d().scopeType, d().targetId)}
                     </div>
                   </div>
                   <div>
@@ -490,8 +512,13 @@ export default function AdminDistributions() {
                 </div>
 
                 <Show when={d().message}>
-                  <div class="rounded-[var(--native-radius-md)] border border-[color:color-mix(in_oklab,var(--native-border)_40%,transparent)] bg-[color:color-mix(in_oklab,var(--native-panel)_80%,transparent)] px-3 py-2 text-[0.8125rem] text-[var(--native-foreground)]">
-                    {d().message}
+                  <div class="flex flex-col gap-1">
+                    <div class="text-[12px] uppercase tracking-[0.06em] text-[var(--native-muted)]">
+                      {language.t("admin.distributions.detail.message")}
+                    </div>
+                    <div class="whitespace-pre-wrap rounded-[var(--native-radius-md)] border border-[color:color-mix(in_oklab,var(--native-border)_40%,transparent)] bg-[color:color-mix(in_oklab,var(--native-panel)_80%,transparent)] px-3 py-2 text-[0.8125rem] text-[var(--native-foreground)]">
+                      {d().message}
+                    </div>
                   </div>
                 </Show>
 
