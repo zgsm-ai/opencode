@@ -53,6 +53,8 @@ export function DeviceSessionChatProvider(props: ParentProps) {
       device.client.permission.respond(id, { decision }).then(() => {}),
     removePermission: (sessionId, permId) =>
       workspace.session.removePermission(sessionId, permId),
+    removeQuestion: (sessionId, requestId) =>
+      workspace.session.removeQuestion(sessionId, requestId),
 
     autoAccept: {
       enabled: () => workspace.autoAccept.enabled(),

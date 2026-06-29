@@ -2,6 +2,7 @@ import { createContext, useContext, type ParentProps } from "solid-js"
 import { batch, createEffect, createMemo, onCleanup } from "solid-js"
 import { createStore, produce } from "solid-js/store"
 import { showToast } from "@opencode-ai/ui/toast"
+import { isNotFoundError } from "@/client/device-transport"
 import { useDeviceSDK } from "./device-sdk"
 import { useDeviceWorkspace } from "./device-workspace"
 import { useLanguage } from "./language"
@@ -653,7 +654,19 @@ export function DeviceSessionStoreProvider(props: ParentProps) {
     if (!workspace.agentAvailable()) return
     device.client.permission.respond(input.permissionID, {
       decision: input.response,
-    }).catch(() => {})
+    }).catch((err: unknown) => {
+      if (isNotFoundError(err)) {
+        const perms = workspace.data.permissions
+        for (const [sid, list] of Object.entries(perms)) {
+          if (!Array.isArray(list)) continue
+          const idx = list.findIndex((p) => p.id === input.permissionID)
+          if (idx !== -1) {
+            workspace.session.removePermission(sid, input.permissionID)
+            break
+          }
+        }
+      }
+    })
   }
 
   const historyLoading = (sessionID?: string) => {
