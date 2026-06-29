@@ -494,6 +494,12 @@ export function DeviceWorkspaceProvider(props: ParentProps<{ workspaceId?: strin
     // Fire-and-forget: version query may be slow, don't block rebootstrap
     checkAgentVersion()
 
+    const agentPromise = Promise.all([
+      device.client.agent.sessionModes().catch(() => undefined),
+      device.client.agent.models().catch(() => undefined),
+      device.client.agent.commands().catch(() => undefined),
+    ])
+
     // Refresh session list, status, permissions, questions, vcs
     const [sessionsRes, vcsRes] = await Promise.all([
       device.client.conversation.list({ roots: "true", limit: 50, directory: device.directory }).catch(() => undefined),
@@ -526,6 +532,15 @@ export function DeviceWorkspaceProvider(props: ParentProps<{ workspaceId?: strin
           permissions: groupBy(arr<PermissionRequest>(permsRes, "permissions")),
         })
       }
+    })
+
+    agentPromise.then(([agentsRes, providersRes, commandsRes]) => {
+      batch(() => {
+        setStore("agent", reconcile((agentsRes as Agent[]) ?? [], { key: "name" }))
+        const providerData = (providersRes as ProviderCapabilitiesResponse) ?? { connected: [] }
+        setStore("provider", reconcile(providerData, { key: "id" }))
+        setStore("command", reconcile((commandsRes as Command[]) ?? [], { key: "name" }))
+      })
     })
 
     startEventStream()
