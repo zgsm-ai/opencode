@@ -227,6 +227,7 @@ export function WorkspaceSidebar(props: { hide?: () => void } = {}) {
           isCollapsed={isDeviceListCollapsed}
           onToggleCollapse={() => setIsDeviceListCollapsed((v) => !v)}
           onUpgradeCompleted={work.refreshDevices}
+          onRefresh={work.refreshDevices}
         />
       </div>
     </aside>

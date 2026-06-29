@@ -739,16 +739,6 @@ export function DeviceWorkspaceProvider(props: ParentProps<{ workspaceId?: strin
                     }
                   }))
                   summaryChanged = true
-                  // Schedule notification channel prompt after a new session is created
-                  const texts: NotifPromptTexts = {
-                    title: language.t("workspace.notifPrompt.title"),
-                    description: language.t("workspace.notifPrompt.description"),
-                    configure: language.t("workspace.notifPrompt.configure"),
-                    dismiss: language.t("workspace.notifPrompt.dismiss"),
-                  }
-                  scheduleNotifPromptCheck((path) => {
-                    window.location.assign(path)
-                  }, texts)
                   break
                 }
                 // ── session.updated: debounce per sessionID with field merge ──
@@ -802,12 +792,23 @@ export function DeviceWorkspaceProvider(props: ParentProps<{ workspaceId?: strin
                     break
                   }
                   // busy/retry: debounce
+                  const wasIdle = !store.sessionStatus[id] || store.sessionStatus[id]?.type === "idle"
                   pendingStatus.set(id, sp.status)
                   const existingTimer = statusTimers.get(id)
                   if (existingTimer) clearTimeout(existingTimer)
                   statusTimers.set(id, setTimeout(() => {
                     statusTimers.delete(id)
                     flushStatus(id)
+                    if (wasIdle) {
+                      scheduleNotifPromptCheck((path) => {
+                        window.location.assign(path)
+                      }, {
+                        title: language.t("workspace.notifPrompt.title"),
+                        description: language.t("workspace.notifPrompt.description"),
+                        configure: language.t("workspace.notifPrompt.configure"),
+                        dismiss: language.t("workspace.notifPrompt.dismiss"),
+                      })
+                    }
                   }, STATUS_DEBOUNCE_MS))
                   break
                 }
