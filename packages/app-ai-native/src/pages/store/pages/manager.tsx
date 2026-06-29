@@ -95,6 +95,11 @@ export default function StoreManagerPage() {
     favoritedPage: 1,
     items: [] as CapabilityItem[],
     totalItems: 0,
+    // Unfiltered, filter/search-independent grand totals powering the sidebar tab
+    // badges. Kept separate from totalItems/favoritedTotal (which stay filtered for
+    // pagination + "select all matching"). Refreshed via refreshTabCounts().
+    createdCount: 0,
+    favoritedCount: 0,
     loadingItems: false,
     createdLoaded: false,
     favoritedItems: [] as CapabilityItem[],
@@ -158,8 +163,11 @@ export default function StoreManagerPage() {
   })
   const totalPages = createMemo(() => Math.max(1, Math.ceil(activeTotal() / PAGE_SIZE)))
   const tabCount = (key: TabKey) => {
-    if (key === "created") return state.totalItems
-    if (key === "favorited") return state.favoritedTotal
+    // Badges show the tab's TRUE grand total, independent of the active filters /
+    // search and of which tab is currently open (received/sent are eager-loaded at
+    // mount so their unfiltered array length is correct on first paint).
+    if (key === "created") return state.createdCount
+    if (key === "favorited") return state.favoritedCount
     if (key === "received") return state.receivedItems.length
     return state.sentItems.length
   }
@@ -431,11 +439,35 @@ export default function StoreManagerPage() {
     if (state.sentLoaded || state.tab === "sent") void loadSent()
   }
 
+  // Sidebar badge totals for created/favorited, fetched WITHOUT any filter/search so
+  // the badges reflect the real grand total (received/sent badges use their array
+  // length instead). pageSize:1 keeps these count-only requests cheap. Called at
+  // mount and after any mutation that changes those totals.
+  const refreshTabCounts = async () => {
+    if (!userId()) return
+    try {
+      const [createdRes, favoritedRes] = await Promise.all([
+        itemApi.listMy({ page: 1, pageSize: 1 }),
+        itemApi.list({ page: 1, pageSize: 1, favorited: true, paginated: true }),
+      ])
+      setState({ createdCount: createdRes.total ?? 0, favoritedCount: favoritedRes.total ?? 0 })
+    }
+    catch {
+      // Non-fatal: leave badges at their last known value rather than surfacing an error.
+    }
+  }
+
   createEffect(() => {
     const currentUserId = userId()
     if (!currentUserId || initializedForUser === currentUserId) return
     initializedForUser = currentUserId
     void loadCreated()
+    // Eager-load every tab's totals up front so all four sidebar badges are correct
+    // on first paint (received/sent lists are unfiltered, so their length is the
+    // real total; created/favorited get a dedicated unfiltered count request).
+    void refreshTabCounts()
+    void loadReceived()
+    void loadSent()
   })
 
   createEffect(() => {
@@ -509,6 +541,7 @@ export default function StoreManagerPage() {
       setDetailState("favoriteCount", result.favoriteCount)
       patchItemEverywhere(data.id, (item) => ({ ...item, favorited: result.favorited, favoriteCount: result.favoriteCount }))
       refreshBothTabs()
+      void refreshTabCounts()
     } catch (err) {
       if (detailState.favorited) {
         showToast({
@@ -544,6 +577,7 @@ export default function StoreManagerPage() {
           await itemApi.delete(id)
           showToast({ title: language.t("store.console.capabilities.toast.deleteSuccess") })
           void loadCreated()
+          void refreshTabCounts()
         }}
       />
     ))
@@ -610,6 +644,7 @@ export default function StoreManagerPage() {
       clearSelection()
       setState("itemPage", 1)
       await loadCreated()
+      void refreshTabCounts()
       const parts = [language.t("store.console.capabilities.toast.batchDeleted", { deleted: String(res.deleted) })]
       if (res.skipped > 0 || res.forbidden > 0) {
         parts.push(language.t("store.console.capabilities.toast.batchDeleteSkipped", { skipped: String(res.skipped + res.forbidden) }))
@@ -913,6 +948,7 @@ export default function StoreManagerPage() {
                           defaultItemType="plugin"
                           onCreated={(item) => {
                             void loadCreated()
+                            void refreshTabCounts()
                             setSelectedItemId("value", item.id)
                           }}
                         />
@@ -1411,6 +1447,7 @@ export default function StoreManagerPage() {
                         onDeleted={() => {
                           setSelectedItemId("value", null)
                           refreshBothTabs()
+                          void refreshTabCounts()
                         }}
                         onSelectItem={(id) => setSelectedItemId("value", id)}
                         favorited={detailState.favorited}
