@@ -511,15 +511,18 @@ export default function StoreManagerPage() {
     setDetailState("item", item)
   }
 
-  const toggleFavorite = async () => {
+  const toggleFavorite = async (invokeMode?: "auto" | "manual") => {
     const data = detailState.item
     if (!data || !auth.user() || auth.loading() || detailState.favoritePending) return
 
     setDetailState("favoritePending", true)
     try {
-      const result = detailState.favorited
-        ? await behaviorApi.unfavorite(data.id)
-        : await behaviorApi.favorite(data.id)
+      // invokeMode present = subscribe-or-switch (upsert mode); absent = plain toggle.
+      const result = invokeMode
+        ? await behaviorApi.favorite(data.id, invokeMode)
+        : detailState.favorited
+          ? await behaviorApi.unfavorite(data.id)
+          : await behaviorApi.favorite(data.id)
       setDetailState("favorited", result.favorited)
       setDetailState("favoriteCount", result.favoriteCount)
       patchItemEverywhere(data.id, (item) => ({ ...item, favorited: result.favorited, favoriteCount: result.favoriteCount }))

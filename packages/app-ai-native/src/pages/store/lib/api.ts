@@ -274,6 +274,8 @@ export interface CapabilityItem {
   installCount?: number
   favoriteCount?: number
   favorited?: boolean
+  /** Per-user subscription invoke mode (skill-family only); present when favorited. */
+  invokeMode?: "auto" | "manual"
   securityStatus?: SecurityStatus
   lastScanId?: string
   experienceScore?: number
@@ -1096,11 +1098,19 @@ export const behaviorApi = {
       body: JSON.stringify(body),
     }),
 
-  favorite: (itemId: string) =>
-    apiFetch<{ favorited: boolean; created?: boolean; favoriteCount: number }>(`/api/items/${itemId}/favorite`, {
-      method: "POST",
-      credentials: "include",
-    }),
+  // invokeMode (skill-family only) sets the per-user "AI auto-invoke" vs "manual /name"
+  // preference. Omitting it keeps the backend default ("auto"). Idempotent: re-calling
+  // for an already-favorited item upserts the mode.
+  favorite: (itemId: string, invokeMode?: "auto" | "manual") =>
+    apiFetch<{ favorited: boolean; created?: boolean; favoriteCount: number; invokeMode?: "auto" | "manual" }>(
+      `/api/items/${itemId}/favorite`,
+      {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(invokeMode ? { invokeMode } : {}),
+      },
+    ),
 
   unfavorite: (itemId: string) =>
     apiFetch<{ favorited: boolean; removed?: boolean; favoriteCount: number }>(`/api/items/${itemId}/favorite`, {
