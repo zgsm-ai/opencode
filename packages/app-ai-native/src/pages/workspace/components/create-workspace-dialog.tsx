@@ -84,7 +84,8 @@ export function CreateWorkspaceDialogContent(props: CreateWorkspaceDialogProps) 
 
   return (
     <Dialog
-      class="w-full max-w-[520px] mx-auto min-h-auto"
+      class="w-full max-w-[624px] mx-auto min-h-auto"
+      size="large"
       title={
         <div class="flex items-center gap-2.5">
           <div class="flex items-center justify-center size-8 rounded-lg bg-surface-raised-base">
@@ -99,7 +100,7 @@ export function CreateWorkspaceDialogContent(props: CreateWorkspaceDialogProps) 
         </div>
       }
     >
-      <div class="flex flex-col gap-4 px-5 pb-5">
+      <div class="flex flex-col gap-4 px-5 pb-5 flex-1 min-h-0">
         <Show
           when={!browse()}
           fallback={
@@ -131,11 +132,12 @@ export function CreateWorkspaceDialogContent(props: CreateWorkspaceDialogProps) 
               </div>
               <button
                 type="button"
-                class="flex items-center justify-center size-9 rounded-lg border border-border-weak-base bg-surface-base hover:bg-surface-base-hover transition-colors shrink-0"
+                class="flex items-center gap-1.5 h-9 px-3 rounded-lg border border-border-weak-base bg-surface-base hover:bg-surface-base-hover hover:border-border-strong-base transition-colors shrink-0 text-13-medium text-text-strong"
                 title={t("workspace.directory.browse")}
                 onClick={() => setBrowse(true)}
               >
                 <Icon name="file-tree" class="size-4 text-text-weak" />
+                <span>{t("workspace.directory.browse")}</span>
               </button>
             </div>
             <Show when={path().trim() && !valid()}>

@@ -65,6 +65,16 @@ export const deviceFileApi = {
     }
   },
 
+  listRoots: async (deviceId: string): Promise<FileEntry[]> => {
+    try {
+      return await client(deviceId).runtime.roots()
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      showToast({ title: "无法读取盘符", description: msg })
+      throw err
+    }
+  },
+
   read: async (deviceId: string, absolutePath: string): Promise<FileContent> => {
     try {
       const res = await client(deviceId).runtime.fileRead(absolutePath)

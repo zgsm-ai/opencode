@@ -37,11 +37,15 @@ function trimTrailing(input: string) {
 }
 
 function getParentPath(path: string): string | null {
-  const trimmed = trimTrailing(path)
+  if (path === "") return null
+  const trimmed = trimTrailing(normalizePath(path))
   if (trimmed === "/") return null
+  if (/^[A-Za-z]:$/.test(trimmed)) return ""
   const lastSlash = trimmed.lastIndexOf("/")
   if (lastSlash <= 0) return "/"
-  return trimmed.slice(0, lastSlash) || "/"
+  const parent = trimmed.slice(0, lastSlash)
+  if (/^[A-Za-z]:$/.test(parent)) return parent + "/"
+  return parent || "/"
 }
 
 function displayPath(absolute: string) {
@@ -129,7 +133,9 @@ export function RemoteDirectorySelector(props: RemoteDirectorySelectorProps) {
     if (notSupported()) return
     setLoading(true)
     try {
-      const result = await dirCache.fetch(path)
+      const result = path === ""
+        ? await deviceFileApi.listRoots(props.device.deviceId)
+        : await dirCache.fetch(path)
       const dirs = result.filter((item) => item.type === "directory")
       setDirectories(dirs)
     } catch (err) {
@@ -200,19 +206,25 @@ export function RemoteDirectorySelector(props: RemoteDirectorySelectorProps) {
 
   const navigateUp = () => {
     const parent = getParentPath(currentPath())
-    if (parent) {
+    if (parent !== null) {
       navigateTo(parent)
     }
   }
 
   const currentPathDisplay = createMemo(() => {
     const path = currentPath()
+    if (path === "") return t("workspace.directory.thisPC")
     if (path === "/") return "/"
     return trimTrailing(path)
   })
 
   const highlightedPath = createMemo(() => {
     return selectedPath() || currentPath()
+  })
+
+  const highlightedLabel = createMemo(() => {
+    const p = highlightedPath()
+    return p === "" ? t("workspace.directory.thisPC") : p
   })
 
   function resolve(absolute: string) {
@@ -232,16 +244,17 @@ export function RemoteDirectorySelector(props: RemoteDirectorySelectorProps) {
   }
 
   return (
-    <div class="flex flex-col" style={{ height: "360px", "max-height": "70vh" }}>
+    <div class="flex flex-col h-[480px]">
       {/* Path bar */}
       <div class="flex items-center gap-2 px-3 py-1.5 border-b border-border-weak-base shrink-0">
         <button
           type="button"
-          class="p-1 rounded hover:bg-surface-base-hover disabled:opacity-40 transition-colors"
+          class="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-surface-base-hover disabled:opacity-40 transition-colors text-11-medium text-text-weak shrink-0"
           onClick={navigateUp}
-          disabled={currentPath() === "/" || !!notSupported()}
+          disabled={getParentPath(currentPath()) === null || !!notSupported()}
         >
           <Icon name="arrow-up" class="size-3.5" />
+          <span>{t("workspace.directory.goUp")}</span>
         </button>
         <div class="flex items-center gap-1.5 text-12-regular text-text-weak flex-1 min-w-0">
           <Icon name="folder" class="size-3.5 shrink-0" />
@@ -296,14 +309,14 @@ export function RemoteDirectorySelector(props: RemoteDirectorySelectorProps) {
             if (!path) return
             setSelectedPath(path.absolute)
           }}
-          class="h-full overflow-y-auto"
+          class="h-full overflow-y-auto directory-selector-list"
         >
           {(item: Row) => {
             const path = displayPath(item.absolute)
             const isSelected = highlightedPath() === item.absolute
             return (
               <div
-                class={`w-full flex items-center justify-between rounded-md cursor-pointer ${isSelected ? "bg-surface-base-active" : ""}`}
+                class={`group w-full flex items-center justify-between rounded-md cursor-pointer ${isSelected ? "bg-surface-base-active" : ""}`}
                 onDblClick={() => {
                   navigateTo(item.absolute)
                 }}
@@ -318,6 +331,10 @@ export function RemoteDirectorySelector(props: RemoteDirectorySelectorProps) {
                     <span class="text-text-weak whitespace-nowrap">/</span>
                   </div>
                 </div>
+                <span class="shrink-0 flex items-center gap-1 pr-1 opacity-0 group-hover:opacity-100 transition-opacity text-text-weaker">
+                  <span class="text-11-regular whitespace-nowrap">{t("workspace.directory.doubleClickHint")}</span>
+                  <Icon name="chevron-right" class="size-3" />
+                </span>
               </div>
             )
           }}
@@ -328,7 +345,7 @@ export function RemoteDirectorySelector(props: RemoteDirectorySelectorProps) {
       <div class="flex items-center justify-between gap-2 px-3 py-2 border-t border-border-weak-base shrink-0">
         <div class="flex-1 min-w-0 flex items-center gap-1.5 text-12-regular text-text-weak">
           <Icon name="folder" class="size-3.5 shrink-0 text-text-strong" />
-          <span class="text-text-strong truncate">{highlightedPath()}</span>
+          <span class="text-text-strong truncate">{highlightedLabel()}</span>
         </div>
         <div class="flex items-center gap-2 shrink-0">
           <Button
@@ -349,7 +366,7 @@ export function RemoteDirectorySelector(props: RemoteDirectorySelectorProps) {
             variant="primary"
             size="small"
             onClick={() => resolve(highlightedPath())}
-            disabled={!!notSupported()}
+            disabled={!!notSupported() || highlightedPath() === ""}
           >
             {t("workspace.directory.select")}
           </Button>

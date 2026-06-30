@@ -8,3 +8,32 @@
 .safe-area-bottom {
   padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
 }
+
+/* The shared List component hides its scrollbar (scrollbar-width: none +
+   ::-webkit-scrollbar { display: none }) on [data-slot="list-scroll"].
+   Restore a visible thin scrollbar for the remote directory selector so
+   users can see there is more content to scroll. Equal-specificity selectors
+   win by source order, and this file loads after the UI library styles. */
+.directory-selector-list[data-component="list"] [data-slot="list-scroll"] {
+  scrollbar-width: thin;
+  -ms-overflow-style: auto;
+
+  &::-webkit-scrollbar {
+    display: block;
+    width: 8px;
+    height: 8px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: var(--border-weak-base);
+    border-radius: 4px;
+  }
+
+  &::-webkit-scrollbar-thumb:hover {
+    background: var(--border-strong-base);
+  }
+}
