@@ -9,6 +9,7 @@ import { useLanguage } from "@/context/language"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { cn } from "@/lib/utils"
+import { DistributionWizardDialog } from "@/pages/admin/components/distribution-wizard-dialog"
 import { ConfirmDialog } from "@/pages/store/components/confirm-dialog"
 import { CreateCapabilityDialog } from "@/pages/store/components/create-capability-dialog"
 import ItemDetailContent from "@/pages/store/components/item-detail-content"
@@ -74,6 +75,26 @@ export default function StoreManagerPage() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const auth = useAuth()
+
+  // The caller's distribution reach: platform admins (unlimited) plus department
+  // managers (lead ≥1 department subtree) may open the distribution wizard. Loaded
+  // once; failures degrade to "cannot distribute" so the entry simply stays hidden.
+  const [distAuthority] = createResource(() =>
+    distributionApi.myAuthority().catch(() => ({ unlimited: false, departments: [] })),
+  )
+  const canDistribute = createMemo(() => {
+    const a = distAuthority()
+    return !!a && (a.unlimited || (a.departments?.length ?? 0) > 0)
+  })
+  const openDistributeWizard = () =>
+    dialog.show(() => (
+      <DistributionWizardDialog
+        onCreated={() => {
+          void loadSent()
+          void refreshTabCounts()
+        }}
+      />
+    ))
 
   const [selectedItemId, setSelectedItemId] = createStore<{ value: string | null }>({ value: null })
   const [detailState, setDetailState] = createStore({
@@ -942,6 +963,18 @@ export default function StoreManagerPage() {
                     <Icon name="plus" class="size-4" style={{ color: "#ffffff" }} />
                     {language.t("store.console.capabilities.create")}
                   </Button>
+                  <Show when={canDistribute()}>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      class="h-8 gap-1.5 px-3"
+                      onClick={openDistributeWizard}
+                    >
+                      <Icon name="share" size="small" />
+                      {language.t("store.sent.distribute")}
+                    </Button>
+                  </Show>
                   <Button
                     type="button"
                     variant="outline"

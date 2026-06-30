@@ -130,6 +130,7 @@ export const dict = {
 
   "store.sent.title": "Sent Distributions",
   "store.sent.description": "Manage skills you've pushed to your team or individuals",
+  "store.sent.distribute": "New Distribution",
   "store.sent.empty": "No distributions sent yet",
   "store.sent.emptyDesc": "You can push skills to team members",
   "store.sent.target": "Recipient",
@@ -3055,6 +3056,8 @@ export const dict = {
   "admin.distributions.wizard.searching": "Searching...",
   "admin.distributions.wizard.deptHint": "Select a department to distribute to all members of it and every sub-department.",
   "admin.distributions.wizard.deptEmpty": "No departments.",
+  "admin.distributions.wizard.deptNoManaged": "You have no departments to manage, so you cannot distribute by department.",
+  "admin.distributions.wizard.targetOutOfScope": "The distribution target is outside the departments you manage.",
   "admin.distributions.wizard.deptUnavailable": "The department directory service is unavailable; the department tree cannot be loaded.",
   "admin.distributions.wizard.deptLoadFailed": "Failed to load the department tree.",
   "admin.distributions.wizard.deptRetry": "Retry",

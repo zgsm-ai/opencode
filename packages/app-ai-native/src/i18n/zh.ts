@@ -1069,6 +1069,7 @@ export const dict = {
 
   "store.sent.title": "我下发的",
   "store.sent.description": "管理您推送给团队或个人的技能",
+  "store.sent.distribute": "新建下发",
   "store.sent.empty": "暂无下发记录",
   "store.sent.emptyDesc": "您可以将技能推送给团队成员",
   "store.sent.target": "接收方",
@@ -2998,6 +2999,8 @@ export const dict = {
   "admin.distributions.wizard.searching": "搜索中...",
   "admin.distributions.wizard.deptHint": "选择一个部门，将下发给该部门及其所有下级部门的全部成员。",
   "admin.distributions.wizard.deptEmpty": "暂无部门。",
+  "admin.distributions.wizard.deptNoManaged": "你没有可管理的部门，无法按部门下发。",
+  "admin.distributions.wizard.targetOutOfScope": "下发目标超出了你的管辖范围。",
   "admin.distributions.wizard.deptUnavailable": "部门目录服务不可用，无法加载部门树。",
   "admin.distributions.wizard.deptLoadFailed": "加载部门树失败。",
   "admin.distributions.wizard.deptRetry": "重试",
