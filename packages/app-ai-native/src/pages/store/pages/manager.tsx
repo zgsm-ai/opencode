@@ -19,7 +19,7 @@ import { formatCompact, formatStoreDate, formatStoreTablePaginationSummary, Stor
 import { ManagerListView } from "@/pages/store/components/manager-list-view"
 import { StoreFilterBar } from "@/pages/store/components/store-filter-bar"
 import { useAuth } from "@/pages/store/hooks/use-auth"
-import { behaviorApi, distributionApi, itemApi, repoApi, userApi, type CapabilityItem, type DistributionResult, type ItemOrder, type ItemSort, type Repository, type SecurityRiskGroup } from "@/pages/store/lib/api"
+import { adminDeptApi, behaviorApi, distributionApi, itemApi, repoApi, userApi, type AdminDept, type CapabilityItem, type DistributionResult, type ItemOrder, type ItemSort, type Repository, type SecurityRiskGroup } from "@/pages/store/lib/api"
 import { getLoginUrl } from "@/pages/store/lib/auth"
 import { sx } from "@/pages/store/lib/styles"
 import { typeKey } from "@/pages/store/lib/constants"
@@ -452,6 +452,30 @@ export default function StoreManagerPage() {
     },
     (ids) => userApi.getInfo(ids),
   )
+
+  const [departmentTree] = createResource(
+    () => {
+      const authority = distAuthority()
+      return state.sentItems.some((d) => d.scopeType === "department") && authority?.unlimited
+    },
+    (needsFullTree) => (needsFullTree ? adminDeptApi.tree() : Promise.resolve({ departments: [] as AdminDept[] })),
+  )
+
+  const departmentPaths = createMemo(() => {
+    const map = new Map<string, string>()
+    const walk = (nodes: AdminDept[]) => {
+      for (const node of nodes) {
+        const label = node.deptPath.replace(/^\/+/, "") || node.deptName || node.deptId
+        map.set(node.deptId, label)
+        if (node.children?.length) walk(node.children)
+      }
+    }
+    walk([...(distAuthority()?.departments ?? []), ...(departmentTree()?.departments ?? [])])
+    return map
+  })
+
+  const distributionTargetLabel = (dist: DistributionResult["distribution"]) =>
+    dist.scopeType === "department" ? (departmentPaths().get(dist.targetId) ?? dist.targetId) : dist.targetId
 
   const refreshActiveTab = () => {
     if (state.tab === "created") return void loadCreated()
@@ -1387,7 +1411,11 @@ export default function StoreManagerPage() {
                                 </td>
                                 <td class={sx.td}>
                                   <span class="inline-flex items-center rounded-[var(--native-radius-sm)] border px-2 py-0.5 text-[11px] font-medium" style={{ color: "var(--native-muted)", "border-color": "color-mix(in oklab, var(--native-border) 50%, transparent)" }}>
-                                    {dist.scopeType === "user" ? language.t("store.distribute.scope.user") : language.t("store.distribute.scope.organization")}: {dist.targetId}
+                                    {dist.scopeType === "department"
+                                      ? language.t("store.distribute.scope.department")
+                                      : dist.scopeType === "user"
+                                        ? language.t("store.distribute.scope.user")
+                                        : dist.scopeType}: {distributionTargetLabel(dist)}
                                   </span>
                                 </td>
                                 <td class={sx.td}>

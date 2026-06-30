@@ -691,8 +691,8 @@ export function seedAdminDistributions(): (DistributionResult["distribution"] & 
     },
     {
       id: "adist-2", itemId: pick(1).id, distributorId: "demo-user-001",
-      permissionMode: "dismissible", status: "active", scopeType: "organization",
-      targetId: "研发一部", message: "测试用例自动生成器，提升覆盖率",
+      permissionMode: "dismissible", status: "active", scopeType: "department",
+      targetId: "1416", message: "测试用例自动生成器，提升覆盖率",
       createdAt: daysAgoIso(3), item: pick(1),
     },
     {
@@ -703,8 +703,8 @@ export function seedAdminDistributions(): (DistributionResult["distribution"] & 
     },
     {
       id: "adist-4", itemId: pick(3).id, distributorId: "demo-user-001",
-      permissionMode: "dismissible", status: "revoked", scopeType: "organization",
-      targetId: "平台架构组", message: "文档生成器（已收回，等待新版本）",
+      permissionMode: "dismissible", status: "revoked", scopeType: "department",
+      targetId: "6560", message: "文档生成器（已收回，等待新版本）",
       createdAt: daysAgoIso(12), item: pick(3),
     },
     {

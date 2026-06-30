@@ -8,9 +8,11 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { useLanguage } from "@/context/language"
 import { ConfirmDialog } from "@/pages/store/components/confirm-dialog"
 import {
+  adminDeptApi,
   adminDistributionApi,
   distributionApi,
   userApi,
+  type AdminDept,
   type DistributionReceipt,
   type DistributionResult,
 } from "@/pages/store/lib/api"
@@ -20,7 +22,7 @@ import { sx, st } from "../lib/styles"
 type Distribution = DistributionResult["distribution"] & { status: string }
 
 const STATUS_FILTERS = ["", "active", "paused", "revoked"] as const
-const SCOPE_FILTERS = ["", "user", "organization", "department"] as const
+const SCOPE_FILTERS = ["", "user", "department"] as const
 const PAGE_SIZE = 20
 
 export default function AdminDistributions() {
@@ -103,14 +105,33 @@ export default function AdminDistributions() {
 
   // Resolve target usernames for user-scoped distributions on the current page,
   // so the table/drawer show a human name instead of the raw subject id (the
-  // wizard picks targets by username). Org-scoped targets keep their raw id.
+  // wizard picks targets by username). Department targets are resolved from the
+  // dept-sync tree into readable paths.
   const [targetNames] = createResource(
     () => state.items.filter((d) => d.scopeType === "user").map((d) => d.targetId).filter(Boolean),
     (ids) => (ids.length ? userApi.getNames(ids) : Promise.resolve({} as Record<string, string>)),
   )
 
+  const [departmentTree] = createResource(
+    () => state.items.some((d) => d.scopeType === "department"),
+    (needsDepartments) => (needsDepartments ? adminDeptApi.tree() : Promise.resolve({ departments: [] as AdminDept[] })),
+  )
+
+  const departmentPaths = createMemo(() => {
+    const map = new Map<string, string>()
+    const walk = (nodes: AdminDept[]) => {
+      for (const node of nodes) {
+        const label = node.deptPath.replace(/^\/+/, "") || node.deptName || node.deptId
+        map.set(node.deptId, label)
+        if (node.children?.length) walk(node.children)
+      }
+    }
+    walk(departmentTree()?.departments ?? [])
+    return map
+  })
+
   const targetDisplay = (scopeType: string, targetId: string) =>
-    scopeType === "user" ? (targetNames()?.[targetId] ?? targetId) : targetId
+    scopeType === "user" ? (targetNames()?.[targetId] ?? targetId) : scopeType === "department" ? (departmentPaths().get(targetId) ?? targetId) : targetId
 
   // Stats from the current page result. Active count comes from the unfiltered total
   // when no status filter is applied; otherwise reflects the filtered view.
@@ -221,7 +242,10 @@ export default function AdminDistributions() {
   const openWizard = () => dialog.show(() => <DistributionWizardDialog onCreated={() => void load()} />)
 
   const statusLabel = (s: string) => language.t(`admin.distributions.status.${s}` as `admin.distributions.status.active`)
-  const scopeLabel = (s: string) => language.t(`admin.distributions.scope.${s}` as `admin.distributions.scope.user`)
+  const scopeLabel = (s: string) =>
+    s === "user" || s === "department"
+      ? language.t(`admin.distributions.scope.${s}` as `admin.distributions.scope.user`)
+      : s
 
   const statusDot = (s: string) =>
     s === "active"
