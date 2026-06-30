@@ -994,7 +994,7 @@ export const itemApi = {
 }
 
 export interface DistributionTarget {
-  scopeType: "user" | "organization"
+  scopeType: "user" | "organization" | "department"
   targetId: string
 }
 
@@ -1033,6 +1033,13 @@ export const distributionApi = {
 
   listMyReceived: () =>
     apiFetch<{ receipts: { id: string; distributionId: string; userId: string; receiptStatus: string; forkedItemId?: string; distribution: DistributionResult["distribution"] & { item?: CapabilityItem } }[] }>("/api/distributions/my/received"),
+
+  // The caller's own distribution reach, used to gate the distribute entry and
+  // scope the department picker. unlimited === true for platform admins (full tree
+  // + organization scope); otherwise departments lists the subtrees the user leads
+  // (manages) — empty means the user may not distribute at all.
+  myAuthority: () =>
+    apiFetch<{ unlimited: boolean; departments: AdminDept[] }>("/api/distributions/my/authority"),
 
   update: (id: string, data: { status?: string; permissionMode?: string; message?: string }) =>
     apiFetch<DistributionResult["distribution"]>(`/api/distributions/${id}`, {

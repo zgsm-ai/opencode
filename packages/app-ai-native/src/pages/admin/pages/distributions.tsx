@@ -20,7 +20,7 @@ import { sx, st } from "../lib/styles"
 type Distribution = DistributionResult["distribution"] & { status: string }
 
 const STATUS_FILTERS = ["", "active", "paused", "revoked"] as const
-const SCOPE_FILTERS = ["", "user", "organization"] as const
+const SCOPE_FILTERS = ["", "user", "organization", "department"] as const
 const PAGE_SIZE = 20
 
 export default function AdminDistributions() {

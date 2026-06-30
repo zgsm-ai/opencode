@@ -3,14 +3,16 @@ import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { Dialog } from "@opencode-ai/ui/dialog"
 import { Icon } from "@opencode-ai/ui/icon"
 import { showToast } from "@opencode-ai/ui/toast"
-import { For, Show } from "solid-js"
+import { For, Show, createMemo, createSignal, onMount } from "solid-js"
 import { createStore } from "solid-js/store"
 import AvatarDisplay from "@/components/avatar-display"
 import { useLanguage } from "@/context/language"
 import {
+  adminDeptApi,
   distributionApi,
   itemApi,
   userApi,
+  type AdminDept,
   type CapabilityItem,
   type SearchedUser,
 } from "@/pages/store/lib/api"
@@ -27,7 +29,13 @@ const PERMISSION_OPTIONS = [
 const SCOPE_OPTIONS = [
   { value: "user", label: "admin.distributions.scope.user" },
   { value: "organization", label: "admin.distributions.scope.organization" },
+  { value: "department", label: "admin.distributions.scope.department" },
 ] as const
+
+// Matches the dept-sync "service unavailable" signal used by the members /
+// permissions pages so the wizard renders a calm notice instead of a hard error
+// when dept-sync is not configured.
+const DEPT_UNAVAILABLE_CODE = "dept_sync_unavailable"
 
 export function DistributionWizardDialog(props: Props) {
   const language = useLanguage()
@@ -40,13 +48,25 @@ export function DistributionWizardDialog(props: Props) {
     itemSearching: false,
     selectedItems: [] as CapabilityItem[],
     // step 2: targets
-    scopeType: "user" as "user" | "organization",
+    scopeType: "user" as "user" | "organization" | "department",
     targetQuery: "",
     targetResults: [] as SearchedUser[],
     targetSearching: false,
     selectedUsers: [] as SearchedUser[],
     orgInput: "",
     selectedOrgs: [] as string[],
+    // department scope: dept-sync tree (lazy-loaded) + single selected dept
+    selectedDepts: [] as { id: string; name: string }[],
+    deptTree: [] as AdminDept[],
+    deptTreeLoaded: false,
+    deptTreeLoading: false,
+    deptTreeError: "",
+    // distribution authority: unlimited (platform admin) sees the full tree + every
+    // scope; otherwise the operator may only push within the department subtrees they
+    // lead (authorityDepts), and the organization scope is hidden.
+    unlimited: false,
+    authorityDepts: [] as AdminDept[],
+    authorityLoaded: false,
     // step 3: options
     permissionMode: "readonly" as "readonly" | "dismissible",
     message: "",
@@ -55,6 +75,37 @@ export function DistributionWizardDialog(props: Props) {
 
   let itemTimer: ReturnType<typeof setTimeout>
   let targetTimer: ReturnType<typeof setTimeout>
+
+  // Resolve the caller's distribution reach up front so the scope options and the
+  // department picker reflect what they may actually do. Best-effort: on any error
+  // we leave the conservative defaults (not unlimited, no managed departments).
+  onMount(async () => {
+    try {
+      const res = await distributionApi.myAuthority()
+      setStore("unlimited", !!res.unlimited)
+      setStore("authorityDepts", res.departments ?? [])
+    } catch {
+      // keep defaults (non-admin, no managed departments)
+    } finally {
+      setStore("authorityLoaded", true)
+    }
+  })
+
+  // Organization scope is a company-wide, cross-subtree target — only platform admins
+  // (unlimited) may use it. Department managers see just user + department.
+  const scopeOptions = createMemo(() =>
+    store.unlimited ? SCOPE_OPTIONS : SCOPE_OPTIONS.filter((o) => o.value !== "organization"),
+  )
+
+  // The department picker's data is the full org tree for platform admins (lazily
+  // fetched) but the managed subtrees for a department manager (already resolved into
+  // authorityDepts via /distributions/my/authority). Deriving the rendered tree +
+  // loading/empty state from authority for non-admins avoids any race with the async
+  // authority load and guarantees a manager can never even see an out-of-reach dept.
+  const displayedDepts = createMemo(() => (store.unlimited ? store.deptTree : store.authorityDepts))
+  const deptLoading = createMemo(() => (store.unlimited ? store.deptTreeLoading : !store.authorityLoaded))
+  const deptError = createMemo(() => (store.unlimited ? store.deptTreeError : ""))
+  const deptLoaded = createMemo(() => (store.unlimited ? store.deptTreeLoaded : store.authorityLoaded))
 
   const searchItems = (q: string) => {
     clearTimeout(itemTimer)
@@ -143,8 +194,59 @@ export function DistributionWizardDialog(props: Props) {
     setStore("orgInput", "")
   }
 
+  // Department tree: collapse state per node (default expanded), mirroring the
+  // admin members page tree.
+  const [collapsed, setCollapsed] = createSignal<Record<string, boolean>>({})
+  const isCollapsed = (id: string) => collapsed()[id] === true
+  const toggleCollapse = (id: string) => setCollapsed((c) => ({ ...c, [id]: !c[id] }))
+
+  // Lazily fetch the dept-sync tree the first time the user picks the department
+  // scope. A 503 (dept-sync not configured) is surfaced as an inline notice
+  // rather than a toast, consistent with the members/permissions pages.
+  const loadDeptTree = async () => {
+    if (store.deptTreeLoading) return
+    // Department managers (not unlimited) pick from the subtrees they manage, already
+    // resolved into authorityDepts — no extra fetch, and they can never see (or push
+    // to) departments outside their reach. Platform admins (unlimited) load the full
+    // org tree.
+    if (!store.unlimited) {
+      setStore("deptTree", store.authorityDepts)
+      setStore("deptTreeLoaded", true)
+      return
+    }
+    setStore("deptTreeLoading", true)
+    setStore("deptTreeError", "")
+    try {
+      const res = await adminDeptApi.tree()
+      setStore("deptTree", res.departments ?? [])
+      setStore("deptTreeLoaded", true)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      if (msg.includes(DEPT_UNAVAILABLE_CODE) || msg.includes("department service")) {
+        setStore("deptTreeError", language.t("admin.distributions.wizard.deptUnavailable"))
+      } else {
+        setStore("deptTreeError", language.t("admin.distributions.wizard.deptLoadFailed"))
+      }
+    } finally {
+      setStore("deptTreeLoading", false)
+    }
+  }
+
+  // Single-select: clicking the selected dept clears it; clicking another replaces it.
+  const toggleDept = (d: AdminDept) => {
+    if (store.selectedDepts[0]?.id === d.deptId) {
+      setStore("selectedDepts", [])
+    } else {
+      setStore("selectedDepts", [{ id: d.deptId, name: d.deptName }])
+    }
+  }
+
   const targetCount = () =>
-    store.scopeType === "user" ? store.selectedUsers.length : store.selectedOrgs.length
+    store.scopeType === "user"
+      ? store.selectedUsers.length
+      : store.scopeType === "organization"
+        ? store.selectedOrgs.length
+        : store.selectedDepts.length
 
   const submit = async () => {
     if (store.selectedItems.length === 0) {
@@ -162,7 +264,9 @@ export function DistributionWizardDialog(props: Props) {
             scopeType: "user" as const,
             targetId: u.id,
           }))
-        : store.selectedOrgs.map((org) => ({ scopeType: "organization" as const, targetId: org }))
+        : store.scopeType === "organization"
+          ? store.selectedOrgs.map((org) => ({ scopeType: "organization" as const, targetId: org }))
+          : store.selectedDepts.map((d) => ({ scopeType: "department" as const, targetId: d.id }))
 
     setStore("submitting", true)
     try {
@@ -209,6 +313,59 @@ export function DistributionWizardDialog(props: Props) {
     "inline-flex items-center gap-1.5 rounded-[var(--native-radius-full)] border border-[color:color-mix(in_oklab,var(--native-primary)_22%,transparent)] bg-[color:color-mix(in_oklab,var(--native-primary)_8%,transparent)] py-0.5 pl-2.5 pr-1.5 text-[12px] text-[var(--native-foreground)]"
   const resultRow =
     "flex w-full cursor-pointer items-center justify-between gap-3 rounded-[var(--native-radius-sm)] border border-[color:color-mix(in_oklab,var(--native-border)_40%,transparent)] bg-transparent px-2.5 py-2 text-left transition-colors hover:border-[color:color-mix(in_oklab,var(--native-primary)_30%,transparent)] hover:bg-[color:color-mix(in_oklab,var(--native-primary)_4%,transparent)]"
+
+  // Recursive dept-sync tree node: collapse toggle + selectable name. Selecting a
+  // parent distributes to its whole subtree (resolved server-side).
+  function DeptTreeNode(props: { node: AdminDept; depth: number }) {
+    const node = () => props.node
+    const hasChildren = () => !!node().children && node().children!.length > 0
+    const selected = () => store.selectedDepts[0]?.id === node().deptId
+    return (
+      <li role="treeitem" aria-expanded={hasChildren() ? !isCollapsed(node().deptId) : undefined} aria-selected={selected()}>
+        <div
+          class={`flex items-center gap-1 rounded-[var(--native-radius-sm)] transition-colors ${
+            selected()
+              ? "bg-[color:color-mix(in_oklab,var(--native-primary)_12%,transparent)]"
+              : "hover:bg-[color:color-mix(in_oklab,var(--native-border)_22%,transparent)]"
+          }`}
+          style={{ "padding-left": `${props.depth * 16}px` }}
+        >
+          <Show when={hasChildren()} fallback={<span class="inline-block w-5 shrink-0" aria-hidden="true" />}>
+            <button
+              type="button"
+              class="flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded-[var(--native-radius-sm)] text-[var(--native-muted)] transition-colors hover:text-[var(--native-foreground)]"
+              aria-label={
+                isCollapsed(node().deptId)
+                  ? language.t("admin.distributions.wizard.deptExpand")
+                  : language.t("admin.distributions.wizard.deptCollapse")
+              }
+              onClick={(e) => {
+                e.stopPropagation()
+                toggleCollapse(node().deptId)
+              }}
+            >
+              <Icon name={isCollapsed(node().deptId) ? "chevron-right" : "chevron-down"} size="small" />
+            </button>
+          </Show>
+          <button
+            type="button"
+            class={`flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 py-1 pr-2 text-left text-[0.8125rem] transition-colors ${
+              selected() ? "font-semibold text-[var(--native-primary)]" : "text-[var(--native-foreground)]"
+            }`}
+            onClick={() => toggleDept(node())}
+          >
+            <Icon name="folder" size="small" class="shrink-0 text-[var(--native-muted)]" />
+            <span class="truncate">{node().deptName}</span>
+          </button>
+        </div>
+        <Show when={hasChildren() && !isCollapsed(node().deptId)}>
+          <ul role="group">
+            <For each={node().children}>{(child) => <DeptTreeNode node={child} depth={props.depth + 1} />}</For>
+          </ul>
+        </Show>
+      </li>
+    )
+  }
 
   return (
     <Dialog title={language.t("admin.distributions.wizard.title")} class="w-full max-w-[560px] mx-auto">
@@ -270,7 +427,7 @@ export function DistributionWizardDialog(props: Props) {
         <div class="flex flex-col gap-2">
           <span class={fieldLabel}>{language.t("admin.distributions.wizard.stepTargets")}</span>
           <div class="flex gap-1.5">
-            <For each={SCOPE_OPTIONS}>
+            <For each={scopeOptions()}>
               {(opt) => (
                 <button
                   type="button"
@@ -279,6 +436,17 @@ export function DistributionWizardDialog(props: Props) {
                     setStore("scopeType", opt.value)
                     setStore("targetResults", [])
                     setStore("targetQuery", "")
+                    // Reset every scope's selection so switching scopes never leaves
+                    // stale targets that could be submitted under another scope.
+                    setStore("selectedUsers", [])
+                    setStore("selectedOrgs", [])
+                    setStore("selectedDepts", [])
+                    setStore("orgInput", "")
+                    // Platform admins lazily fetch the full org tree; managers already
+                    // have their managed subtrees from authority (rendered reactively).
+                    if (opt.value === "department" && store.unlimited && !store.deptTreeLoaded && !store.deptTreeLoading) {
+                      void loadDeptTree()
+                    }
                   }}
                 >
                   {language.t(opt.label)}
@@ -397,6 +565,60 @@ export function DistributionWizardDialog(props: Props) {
                   )}
                 </For>
               </div>
+            </Show>
+          </Show>
+
+          <Show when={store.scopeType === "department"}>
+            <p class="text-[12px] leading-snug text-[var(--native-muted)]">
+              {language.t("admin.distributions.wizard.deptHint")}
+            </p>
+            <Show when={store.selectedDepts.length > 0}>
+              <div class="flex flex-wrap gap-1.5">
+                <For each={store.selectedDepts}>
+                  {(dept) => (
+                    <span class={chip}>
+                      <span class="max-w-[14rem] truncate">{dept.name}</span>
+                      <button
+                        type="button"
+                        class="flex h-4 w-4 cursor-pointer items-center justify-center rounded-full text-[var(--native-muted)] hover:text-[var(--native-foreground)]"
+                        aria-label={language.t("admin.distributions.wizard.remove")}
+                        onClick={() => setStore("selectedDepts", [])}
+                      >
+                        <Icon name="close-small" size="small" />
+                      </button>
+                    </span>
+                  )}
+                </For>
+              </div>
+            </Show>
+            <Show when={deptLoading()}>
+              <div class="py-2 text-center text-[0.8125rem] text-[var(--native-muted)]">
+                {language.t("admin.distributions.wizard.searching")}
+              </div>
+            </Show>
+            <Show when={!deptLoading() && deptError()}>
+              <div class="flex flex-col items-center gap-2 rounded-[var(--native-radius-sm)] border border-[color:color-mix(in_oklab,var(--native-border)_40%,transparent)] bg-transparent px-3 py-4 text-center">
+                <span class="text-[0.8125rem] text-[var(--native-muted)]">{deptError()}</span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="normal"
+                  class="cursor-pointer"
+                  onClick={() => void loadDeptTree()}
+                >
+                  {language.t("admin.distributions.wizard.deptRetry")}
+                </Button>
+              </div>
+            </Show>
+            <Show when={!deptLoading() && !deptError() && deptLoaded() && displayedDepts().length === 0}>
+              <div class="py-3 text-center text-[0.8125rem] text-[var(--native-muted)]">
+                {language.t(store.unlimited ? "admin.distributions.wizard.deptEmpty" : "admin.distributions.wizard.deptNoManaged")}
+              </div>
+            </Show>
+            <Show when={!deptLoading() && !deptError() && displayedDepts().length > 0}>
+              <ul role="tree" class="flex max-h-64 flex-col overflow-y-auto py-1">
+                <For each={displayedDepts()}>{(node) => <DeptTreeNode node={node} depth={0} />}</For>
+              </ul>
             </Show>
           </Show>
         </div>
