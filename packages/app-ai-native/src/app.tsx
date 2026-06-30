@@ -15,6 +15,7 @@ import { LanguageProvider } from "@/context/language"
 import { SettingsProvider } from "@/context/settings"
 import { AuthProvider } from "@/context/auth"
 import { SessionExpiredProvider } from "@/lib/session-expired"
+import { RateLimitToastProvider } from "@/lib/rate-limit-toast"
 import { ItemFilterOptionsProvider } from "@/context/item-filter-options"
 import { ErrorPage } from "./pages/error"
 import { useTheme } from "@opencode-ai/ui/theme"
@@ -55,13 +56,15 @@ export function AppBaseProviders(props: ParentProps) {
                 <ErrorBoundary fallback={(error) => <ErrorPage error={error} />}>
                   <DialogProvider>
                     <SessionExpiredProvider>
-                      <MarkedProviderWithNativeParser>
+                      <RateLimitToastProvider>
+                        <MarkedProviderWithNativeParser>
                         <FileComponentProvider component={File}>
                           <AuthProvider>
                             <ItemFilterOptionsProvider>{props.children}</ItemFilterOptionsProvider>
                           </AuthProvider>
                         </FileComponentProvider>
                       </MarkedProviderWithNativeParser>
+                      </RateLimitToastProvider>
                     </SessionExpiredProvider>
                   </DialogProvider>
                 </ErrorBoundary>

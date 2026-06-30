@@ -505,6 +505,8 @@ export const dict = {
   "toast.multica.openSession.title": "无法打开会话",
   "toast.multica.openSession.notFound": "该会话不在你任何一台在线设备上。",
   "toast.multica.openSession.failed": "打开会话失败，请重试。",
+  "toast.rateLimit.title": "请求过于频繁",
+  "toast.rateLimit.description": "当前请求频率过高，可能影响使用，请稍后再试。",
   "file.preview.binaryUnsupported": "暂不支持非文本类文件预览",
   "file.preview.runtimeDisabled.title": "文件内容访问已禁用",
   "file.preview.runtimeDisabled.description": "出于安全考虑，运行时文件访问已被限制。",

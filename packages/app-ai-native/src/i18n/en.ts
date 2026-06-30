@@ -1377,6 +1377,8 @@ export const dict = {
   "toast.multica.openSession.title": "Couldn't open session",
   "toast.multica.openSession.notFound": "This session isn't on any of your online devices.",
   "toast.multica.openSession.failed": "Failed to open the session. Please try again.",
+  "toast.rateLimit.title": "Too Many Requests",
+  "toast.rateLimit.description": "You're sending requests too fast and it may affect usage. Please try again later.",
   "file.preview.binaryUnsupported": "Preview not supported for non-text files",
   "file.preview.runtimeDisabled.title": "File content access disabled",
   "file.preview.runtimeDisabled.description": "Runtime file access has been restricted for security.",

@@ -1,4 +1,5 @@
 import { onUnauthorized } from "@/lib/session-expired"
+import { onRateLimited } from "@/lib/rate-limit-toast"
 
 export type TransportOpts = {
   baseUrl: string
@@ -116,6 +117,7 @@ export function createDeviceTransport(opts: TransportOpts) {
 
     if (!res.ok) {
       if (res.status === 401) onUnauthorized(path)
+      if (res.status === 429) onRateLimited()
       let payload = data
       if (payload && typeof payload === "object" && "ok" in payload && "error" in payload) {
         payload = payload.error
