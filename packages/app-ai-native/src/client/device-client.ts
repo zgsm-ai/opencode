@@ -99,6 +99,7 @@ export type DeviceClient = {
     path: () => Promise<unknown>
     vcs: () => Promise<unknown>
     fileList: (path: string) => Promise<Array<{ name: string; path: string; absolute: string; type: "directory" | "file"; ignored: boolean }>>
+    roots: () => Promise<Array<{ name: string; path: string; absolute: string; type: "directory" | "file"; ignored: boolean }>>
     fileMeta: (path: string) => Promise<FileMetaData>
     fileRead: (path: string, input?: { offset?: number; limit?: number }) => Promise<FileReadData>
     findFiles: (query: string, dirs: "true" | "false") => Promise<unknown>
@@ -201,6 +202,16 @@ export function createDeviceClient(opts: ClientOpts): DeviceClient {
           name: e.name,
           path: basePath === "/" ? `/${e.name}` : `${basePath}/${e.name}`,
           absolute: basePath === "/" ? `/${e.name}` : `${basePath}/${e.name}`,
+          type: e.type === "directory" ? "directory" as const : "file" as const,
+          ignored: false,
+        }))
+      }),
+      roots: () => http.get<{ entries?: Array<{ name: string; type: string }> }>("/api/v1/runtime/files", { roots: "true" }).then((res) => {
+        const entries = res?.entries ?? []
+        return entries.map((e) => ({
+          name: e.name,
+          path: e.name,
+          absolute: e.name,
           type: e.type === "directory" ? "directory" as const : "file" as const,
           ignored: false,
         }))

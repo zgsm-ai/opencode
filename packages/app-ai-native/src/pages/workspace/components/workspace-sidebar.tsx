@@ -1,5 +1,5 @@
 import { createSignal, createMemo, For, Show } from "solid-js"
-import { useParams } from "@solidjs/router"
+import { useNavigate, useParams } from "@solidjs/router"
 import { Icon } from "@opencode-ai/ui/icon"
 import { IconButton } from "@opencode-ai/ui/icon-button"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
@@ -38,6 +38,7 @@ export function WorkspaceSidebar(props: { hide?: () => void } = {}) {
   } = work
 
   const params = useParams()
+  const navigate = useNavigate()
   const { navigateToNewSession } = useWorkspaceNavigate()
 
   const isEnabled = (workspace: Workspace) => enabledWorkspaceIds().includes(workspace.id)
@@ -189,6 +190,7 @@ export function WorkspaceSidebar(props: { hide?: () => void } = {}) {
                       disableWorkspace(id)
                     }
                     if (active.id && ids.includes(active.id)) active.clear()
+                    navigate("/workspace")
                   }}
                   aria-label={t("workspace.closeAllRunning")}
                 />
