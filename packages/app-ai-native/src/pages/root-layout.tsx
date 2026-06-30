@@ -170,12 +170,13 @@ export default function RootLayout(props: ParentProps) {
                 onClick={() => navigate("/multica")}
               />
             </Show>
-            {/* 效能看板入口暂时隐藏，恢复时改回 auth.canAccessMenu("kanban") */}
-            <Show when={false && auth.canAccessMenu("kanban")}>
+            {/* 效能看板已迁移到独立前端，点击在新标签页打开同源 /kanban/。
+                入口可见性由后端权限快照 menus 控制（管理员角色或被授予 kanban scope）。 */}
+            <Show when={auth.canAccessMenu("kanban")}>
               <NavButton
                 label={language.t("sidebar.kanban")}
                 active={isKanban()}
-                onClick={() => navigate("/kanban")}
+                onClick={() => window.open("/kanban/", "_blank", "noopener,noreferrer")}
                 node={<Gauge size={18} strokeWidth={1.75} aria-hidden="true" />}
               />
             </Show>
