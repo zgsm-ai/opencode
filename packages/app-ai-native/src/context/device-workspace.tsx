@@ -1,6 +1,7 @@
 import { createContext, createSignal, useContext, type ParentProps } from "solid-js"
 import { batch, createEffect, createMemo, onCleanup } from "solid-js"
 import { createStore, produce, reconcile } from "solid-js/store"
+import { useNavigate } from "@solidjs/router"
 import { useDeviceSDK } from "./device-sdk"
 import { syncSummary, clearSummary } from "./workspace-summary-store"
 import { getDirectory } from "@opencode-ai/util/path"
@@ -101,6 +102,7 @@ export { DeviceWorkspaceContext }
 export function DeviceWorkspaceProvider(props: ParentProps<{ workspaceId?: string }>) {
   const device = useDeviceSDK()
   const language = useLanguage()
+  const navigate = useNavigate()
 
   const [store, setStore] = createStore<WorkspaceData>({
     status: "loading",
@@ -816,7 +818,7 @@ export function DeviceWorkspaceProvider(props: ParentProps<{ workspaceId?: strin
                     flushStatus(id)
                     if (wasIdle) {
                       scheduleNotifPromptCheck((path) => {
-                        window.location.assign(path)
+                        navigate(path)
                       }, {
                         title: language.t("workspace.notifPrompt.title"),
                         description: language.t("workspace.notifPrompt.description"),
