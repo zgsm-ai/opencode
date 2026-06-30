@@ -36,6 +36,23 @@ const SCOPE_ALL_CODE = "kanban.scope.all"
 const SCOPE_DEPT_CODE = "kanban.scope.dept"
 type ScopePreset = "all" | "dept"
 
+const RESOURCE_LABEL_KEYS = {
+  repositories: "admin.permissions.resources.repositories",
+  projects: "admin.permissions.resources.projects",
+  capabilities: "admin.permissions.resources.capabilities",
+  devices: "admin.permissions.resources.devices",
+  notifications: "admin.permissions.resources.notifications",
+  kanban: "admin.permissions.resources.kanban",
+  admin: "admin.permissions.resources.admin",
+  "admin.system-roles": "admin.permissions.resources.adminSystemRoles",
+  "admin.notification-channels": "admin.permissions.resources.adminNotificationChannels",
+  "api.kanban.overview": "admin.permissions.resources.apiKanbanOverview",
+  "kanban/admin": "admin.permissions.resources.kanbanAdmin",
+  "kanban/reader": "admin.permissions.resources.kanbanReader",
+  [SCOPE_ALL_CODE]: "admin.permissions.resources.kanbanScopeAll",
+  [SCOPE_DEPT_CODE]: "admin.permissions.resources.kanbanScopeDept",
+} as const
+
 // Flatten the nested department tree into depth-tagged rows for an indented picker.
 interface FlatDept {
   dept: AdminDept
@@ -59,6 +76,12 @@ export default function AdminPermissions() {
 
   const roleLabel = (role: SystemRole) =>
     language.t(`admin.permissions.role.${role}` as "admin.permissions.role.platform_admin")
+  const resourceLabel = (code: string) => {
+    const key = RESOURCE_LABEL_KEYS[code as keyof typeof RESOURCE_LABEL_KEYS]
+    return key ? language.t(key as "admin.permissions.resources.repositories") : code
+  }
+  const resourceTypeLabel = (type: ResourcePermission["resourceType"]) =>
+    language.t(`admin.permissions.resourceTypes.${type}` as "admin.permissions.resourceTypes.menu")
 
   // ── Resource permission matrix ─────────────────────────────────────────────
   const [matrix, setMatrix] = createStore<{
@@ -463,10 +486,13 @@ export default function AdminPermissions() {
                 <For each={matrix.rows}>
                   {(row) => (
                     <tr>
-                      <td class="font-semibold text-[var(--native-foreground)]">{row.resourceCode}</td>
+                      <td class="text-[var(--native-foreground)]" title={row.resourceCode}>
+                        <div class="font-semibold">{resourceLabel(row.resourceCode)}</div>
+                        <div class="mt-0.5 text-[12px] font-normal text-[var(--native-muted)]">{row.resourceCode}</div>
+                      </td>
                       <td>
                         <span class="inline-flex items-center rounded-[var(--native-radius-full)] bg-[color:color-mix(in_oklab,var(--native-surface)_70%,transparent)] px-2 py-0.5 text-[11px] uppercase tracking-[0.04em] text-[var(--native-muted)]">
-                          {row.resourceType}
+                          {resourceTypeLabel(row.resourceType)}
                         </span>
                       </td>
                       <For each={ROLES}>
@@ -477,7 +503,7 @@ export default function AdminPermissions() {
                               class="size-4 cursor-pointer accent-[var(--native-primary)] disabled:cursor-not-allowed disabled:opacity-50"
                               checked={rowHasRole(row, role)}
                               disabled={matrix.savingCode === row.resourceCode}
-                              aria-label={`${row.resourceCode} · ${roleLabel(role)}`}
+                              aria-label={`${resourceLabel(row.resourceCode)} · ${roleLabel(role)}`}
                               onChange={() => void toggleMatrixRole(row, role)}
                             />
                           </td>
@@ -882,8 +908,9 @@ export default function AdminPermissions() {
                   <For each={grants.rows}>
                     {(g) => (
                       <tr>
-                        <td class="font-semibold text-[var(--native-foreground)]">
-                          <div>{g.permissionCode}</div>
+                        <td class="font-semibold text-[var(--native-foreground)]" title={g.permissionCode}>
+                          <div>{resourceLabel(g.permissionCode)}</div>
+                          <div class="mt-0.5 text-[12px] font-normal text-[var(--native-muted)]">{g.permissionCode}</div>
                           <Show when={scopeDescription(g)}>
                             {(desc) => (
                               <div class="mt-0.5 text-[12px] font-normal text-[var(--native-primary)]">{desc()}</div>
@@ -957,8 +984,11 @@ export default function AdminPermissions() {
                         <div class="flex flex-wrap gap-1.5">
                           <For each={group.values}>
                             {(v) => (
-                              <span class="inline-flex items-center rounded-[var(--native-radius-sm)] bg-[color:color-mix(in_oklab,var(--native-primary)_8%,transparent)] px-2 py-0.5 text-[12px] text-[var(--native-foreground)]">
-                                {v}
+                              <span
+                                class="inline-flex items-center rounded-[var(--native-radius-sm)] bg-[color:color-mix(in_oklab,var(--native-primary)_8%,transparent)] px-2 py-0.5 text-[12px] text-[var(--native-foreground)]"
+                                title={v}
+                              >
+                                {resourceLabel(v)}
                               </span>
                             )}
                           </For>

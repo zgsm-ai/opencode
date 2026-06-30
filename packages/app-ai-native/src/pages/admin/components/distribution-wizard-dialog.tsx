@@ -11,7 +11,6 @@ import {
   adminDeptApi,
   distributionApi,
   itemApi,
-  userApi,
   type AdminDept,
   type CapabilityItem,
   type SearchedUser,
@@ -28,7 +27,6 @@ const PERMISSION_OPTIONS = [
 
 const SCOPE_OPTIONS = [
   { value: "user", label: "admin.distributions.scope.user" },
-  { value: "organization", label: "admin.distributions.scope.organization" },
   { value: "department", label: "admin.distributions.scope.department" },
 ] as const
 
@@ -48,22 +46,19 @@ export function DistributionWizardDialog(props: Props) {
     itemSearching: false,
     selectedItems: [] as CapabilityItem[],
     // step 2: targets
-    scopeType: "user" as "user" | "organization" | "department",
+    scopeType: "user" as "user" | "department",
     targetQuery: "",
     targetResults: [] as SearchedUser[],
     targetSearching: false,
     selectedUsers: [] as SearchedUser[],
-    orgInput: "",
-    selectedOrgs: [] as string[],
     // department scope: dept-sync tree (lazy-loaded) + single selected dept
     selectedDepts: [] as { id: string; name: string }[],
     deptTree: [] as AdminDept[],
     deptTreeLoaded: false,
     deptTreeLoading: false,
     deptTreeError: "",
-    // distribution authority: unlimited (platform admin) sees the full tree + every
-    // scope; otherwise the operator may only push within the department subtrees they
-    // lead (authorityDepts), and the organization scope is hidden.
+    // distribution authority: unlimited (platform admin) sees the full department tree;
+    // otherwise the operator may only push within the department subtrees they lead.
     unlimited: false,
     authorityDepts: [] as AdminDept[],
     authorityLoaded: false,
@@ -91,13 +86,9 @@ export function DistributionWizardDialog(props: Props) {
     }
   })
 
-  // Organization scope is a company-wide, cross-subtree target — only platform admins
-  // (unlimited) may use it. Department managers see just user + department.
-  const scopeOptions = createMemo(() =>
-    store.unlimited ? SCOPE_OPTIONS : SCOPE_OPTIONS.filter((o) => o.value !== "organization"),
-  )
+  const scopeOptions = createMemo(() => SCOPE_OPTIONS)
 
-  // The department picker's data is the full org tree for platform admins (lazily
+  // The department picker's data is the full department tree for platform admins (lazily
   // fetched) but the managed subtrees for a department manager (already resolved into
   // authorityDepts via /distributions/my/authority). Deriving the rendered tree +
   // loading/empty state from authority for non-admins avoids any race with the async
@@ -156,7 +147,7 @@ export function DistributionWizardDialog(props: Props) {
     targetTimer = setTimeout(async () => {
       setStore("targetSearching", true)
       try {
-        const res = await userApi.search(trimmed)
+        const res = await distributionApi.searchEligibleUsers(trimmed)
         const existing = new Set(store.selectedUsers.map((u) => u.id))
         setStore(
           "targetResults",
@@ -183,15 +174,6 @@ export function DistributionWizardDialog(props: Props) {
       setStore("targetResults", store.targetResults.filter((u) => u.id !== user.id))
       setStore("targetQuery", "")
     }
-  }
-
-  const addOrg = () => {
-    const org = store.orgInput.trim()
-    if (!org) return
-    if (!store.selectedOrgs.includes(org)) {
-      setStore("selectedOrgs", [...store.selectedOrgs, org])
-    }
-    setStore("orgInput", "")
   }
 
   // Department tree: collapse state per node (default expanded), mirroring the
@@ -241,12 +223,7 @@ export function DistributionWizardDialog(props: Props) {
     }
   }
 
-  const targetCount = () =>
-    store.scopeType === "user"
-      ? store.selectedUsers.length
-      : store.scopeType === "organization"
-        ? store.selectedOrgs.length
-        : store.selectedDepts.length
+  const targetCount = () => (store.scopeType === "user" ? store.selectedUsers.length : store.selectedDepts.length)
 
   const submit = async () => {
     if (store.selectedItems.length === 0) {
@@ -264,9 +241,7 @@ export function DistributionWizardDialog(props: Props) {
             scopeType: "user" as const,
             targetId: u.id,
           }))
-        : store.scopeType === "organization"
-          ? store.selectedOrgs.map((org) => ({ scopeType: "organization" as const, targetId: org }))
-          : store.selectedDepts.map((d) => ({ scopeType: "department" as const, targetId: d.id }))
+        : store.selectedDepts.map((d) => ({ scopeType: "department" as const, targetId: d.id }))
 
     setStore("submitting", true)
     try {
@@ -439,10 +414,8 @@ export function DistributionWizardDialog(props: Props) {
                     // Reset every scope's selection so switching scopes never leaves
                     // stale targets that could be submitted under another scope.
                     setStore("selectedUsers", [])
-                    setStore("selectedOrgs", [])
                     setStore("selectedDepts", [])
-                    setStore("orgInput", "")
-                    // Platform admins lazily fetch the full org tree; managers already
+                    // Platform admins lazily fetch the full department tree; managers already
                     // have their managed subtrees from authority (rendered reactively).
                     if (opt.value === "department" && store.unlimited && !store.deptTreeLoaded && !store.deptTreeLoading) {
                       void loadDeptTree()
@@ -523,45 +496,6 @@ export function DistributionWizardDialog(props: Props) {
                       </div>
                       <Icon name="plus-small" size="small" class="shrink-0 text-[var(--native-muted)]" />
                     </button>
-                  )}
-                </For>
-              </div>
-            </Show>
-          </Show>
-
-          <Show when={store.scopeType === "organization"}>
-            <div class="flex gap-1.5">
-              <input
-                class={inputCls}
-                placeholder={language.t("admin.distributions.wizard.orgPlaceholder")}
-                value={store.orgInput}
-                onInput={(e) => setStore("orgInput", e.currentTarget.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault()
-                    addOrg()
-                  }
-                }}
-              />
-              <Button type="button" variant="ghost" size="normal" onClick={addOrg} class="cursor-pointer shrink-0">
-                {language.t("admin.distributions.wizard.orgAdd")}
-              </Button>
-            </div>
-            <Show when={store.selectedOrgs.length > 0}>
-              <div class="flex flex-wrap gap-1.5">
-                <For each={store.selectedOrgs}>
-                  {(org) => (
-                    <span class={chip}>
-                      <span class="max-w-[14rem] truncate">{org}</span>
-                      <button
-                        type="button"
-                        class="flex h-4 w-4 cursor-pointer items-center justify-center rounded-full text-[var(--native-muted)] hover:text-[var(--native-foreground)]"
-                        aria-label={language.t("admin.distributions.wizard.remove")}
-                        onClick={() => setStore("selectedOrgs", store.selectedOrgs.filter((o) => o !== org))}
-                      >
-                        <Icon name="close-small" size="small" />
-                      </button>
-                    </span>
                   )}
                 </For>
               </div>

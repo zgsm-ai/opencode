@@ -18,17 +18,11 @@ const PERMISSION_OPTIONS = [
   { value: "dismissible", label: "store.distribute.permission.dismissible", desc: "store.distribute.permission.dismissibleDesc" },
 ] as const
 
-const SCOPE_OPTIONS = [
-  { value: "user", label: "store.distribute.scope.user" },
-  { value: "organization", label: "store.distribute.scope.organization" },
-] as const
-
 export function DistributeDialog(props: Props) {
   const language = useLanguage()
   const dialog = useDialog()
   const [store, setStore] = createStore({
     permissionMode: "readonly" as "readonly" | "dismissible",
-    scopeType: "user" as "user" | "organization",
     query: "",
     results: [] as SearchedUser[],
     searching: false,
@@ -97,7 +91,7 @@ export function DistributeDialog(props: Props) {
     setStore("submitting", true)
     try {
       const targets = store.selected.map((user) => ({
-        scopeType: store.scopeType,
+        scopeType: "user" as const,
         targetId: user.id,
       }))
       const res = await distributionApi.distribute(props.itemId, {
@@ -164,29 +158,6 @@ export function DistributeDialog(props: Props) {
                   classList={{ on: store.permissionMode === opt.value }}
                   onClick={() => setStore("permissionMode", opt.value)}
                   title={language.t(opt.desc)}
-                >
-                  {language.t(opt.label)}
-                </button>
-              )}
-            </For>
-          </div>
-        </div>
-
-        {/* Scope type */}
-        <div class="modal-section">
-          <div class="modal-section-title">{language.t("store.distribute.scope.title")}</div>
-          <div class="modal-toggle-group" style={{ "max-width": "280px" }}>
-            <For each={SCOPE_OPTIONS}>
-              {(opt) => (
-                <button
-                  class="modal-toggle"
-                  classList={{ on: store.scopeType === opt.value }}
-                  onClick={() => {
-                    setStore("scopeType", opt.value)
-                    setStore("selected", [])
-                    setStore("results", [])
-                    setStore("query", "")
-                  }}
                 >
                   {language.t(opt.label)}
                 </button>
