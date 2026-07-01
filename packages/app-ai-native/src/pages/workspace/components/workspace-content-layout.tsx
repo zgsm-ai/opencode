@@ -785,7 +785,7 @@ function ContentSidebar(props: { directory: string; autoExpandGroup?: () => { gr
                             }}
                           >
                             <span class="shrink-0 w-4 h-4 flex items-center justify-center text-[10px] rounded-[3px]" style={{ ...statusBadgeStyle(file.status), color: "#ffffff", "font-weight": 700 }}>{statusLabel(file.status)}</span>
-                            <span class="truncate flex-1 min-w-0">{file.path}</span>
+                            <span class="truncate flex-1 min-w-0" title={file.path}>{file.path}</span>
                             <Show when={file.additions > 0 || file.deletions > 0}>
                               <span class="shrink-0 text-11-regular tabular-nums flex items-center gap-0.5">
                                 <Show when={file.additions > 0}>
@@ -825,7 +825,7 @@ function ContentSidebar(props: { directory: string; autoExpandGroup?: () => { gr
                             }}
                           >
                             <span class="shrink-0 w-4 h-4 flex items-center justify-center text-[10px] rounded-[3px]" style={{ ...statusBadgeStyle(file.status), color: "#ffffff", "font-weight": 700 }}>{statusLabel(file.status)}</span>
-                            <span class="truncate flex-1 min-w-0">{file.path}</span>
+                            <span class="truncate flex-1 min-w-0" title={file.path}>{file.path}</span>
                             <Show when={file.additions > 0 || file.deletions > 0}>
                               <span class="shrink-0 text-11-regular tabular-nums flex items-center gap-0.5">
                                 <Show when={file.additions > 0}>
@@ -865,7 +865,7 @@ function ContentSidebar(props: { directory: string; autoExpandGroup?: () => { gr
                             }}
                           >
                             <span class="shrink-0 w-4 h-4 flex items-center justify-center text-[10px] rounded-[3px]" style={{ ...statusBadgeStyle(file.status), color: "#ffffff", "font-weight": 700 }}>{statusLabel(file.status)}</span>
-                            <span class="truncate flex-1 min-w-0">{file.path}</span>
+                            <span class="truncate flex-1 min-w-0" title={file.path}>{file.path}</span>
                             <Show when={file.additions > 0 || file.deletions > 0}>
                               <span class="shrink-0 text-11-regular tabular-nums flex items-center gap-0.5">
                                 <Show when={file.additions > 0}>
