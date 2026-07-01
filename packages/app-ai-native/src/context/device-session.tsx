@@ -28,18 +28,6 @@ export type TaskState = {
   endTime?: number
 }
 
-// ── Session Channel Gatekeeper ──
-// Prevents SSE and loadMessages from racing by tracking per-session
-// streaming state. During streaming only SSE writes; after stream ends
-// a single atomic loadMessages replaces the session data.
-
-type SessionChannel =
-  | { mode: "idle" }
-  | { mode: "streaming" }
-  | { mode: "reconciling"; cached: { messages: object[]; parts: Record<string, object[]> } }
-
-const sessionChannels = new Map<string, SessionChannel>()
-
 type SessionSlice = {
   session: Session | undefined
   messages: Record<string, Message[]>
@@ -128,7 +116,6 @@ type DeviceSessionValue = {
 
 const MESSAGE_PAGE_SIZE = 50
 const MESSAGE_INITIAL_LIMIT = 200
-const MESSAGE_INCREMENTAL_LIMIT = 20
 const idle: SessionStatus = { type: "idle" }
 
 // ── Shared Store Context ──
@@ -219,32 +206,16 @@ export function DeviceSessionStoreProvider(props: ParentProps) {
 
   const BATCH_SIZE = 10
 
-  const partsFingerprint = (parts: Part[] | undefined): string => {
-    if (!parts || parts.length === 0) return ""
-    return parts
-      .filter(p => (p as any).type === "text")
-      .map(p => ((p as any).text ?? "").trim())
-      .filter(t => t.length > 0)
-      .join("\n")
-  }
-
   const loadMessages = async (sessionID: string, limit?: number) => {
-    // Gatekeeper: skip redundant loads during active streaming.
-    // Always allow first load (store empty) so the user sees existing messages.
-    const existingMessages = store.messages[sessionID]
-    const ch = sessionChannels.get(sessionID)
-    if (ch?.mode === "streaming" && existingMessages?.length) return
-
+    if (store.messages[sessionID]?.length) return
     return runInflight(`messages:${sessionID}`, async () => {
       loadingSessions.add(sessionID)
-      sessionChannels.set(sessionID, { mode: "reconciling", cached: { messages: [], parts: {} } })
       try {
-        const loadLimit = limit ?? (existingMessages?.length ? MESSAGE_INCREMENTAL_LIMIT : MESSAGE_INITIAL_LIMIT)
+        const loadLimit = limit ?? MESSAGE_INITIAL_LIMIT
         const result = await device.client.conversation.messages(sessionID, { limit: loadLimit })
         if (!result) return
         const raw = Array.isArray(result) ? result : []
 
-        // Build lookup from API response
         const fetched = new Map<string, { info: Message; parts?: Part[] }>()
         for (const item of raw as any[]) {
           if (!item?.info?.id) continue
@@ -254,93 +225,14 @@ export function DeviceSessionStoreProvider(props: ParentProps) {
           })
         }
 
-        // Incremental update: preserve existing references for SolidJS <For> tracking.
-        // Only replace a message reference when its fields actually changed.
-        const currentMessages = store.messages[sessionID]
-        const dupIDs = new Set<string>()
-        if (!currentMessages) {
-          const msgs = [...fetched.values()].map(d => d.info)
-          msgs.sort((a, b) => (a.time?.created ?? 0) - (b.time?.created ?? 0))
-          setStore("messages", sessionID, msgs)
-        } else {
-          const existing = [...currentMessages]
-          const kept = new Set(fetched.keys())
-          const next = [...existing]
-          let changed = false
+        const msgs = [...fetched.values()].map((d) => d.info)
+        msgs.sort((a, b) => (a.time?.created ?? 0) - (b.time?.created ?? 0))
+        setStore("messages", sessionID, msgs)
 
-          for (let i = 0; i < next.length; i++) {
-            const data = fetched.get(next[i].id)
-            if (!data) continue
-            const cur = next[i] as any
-            const inc = data.info as any
-            if (
-              cur.content !== inc.content ||
-              cur.role !== inc.role ||
-              (cur.time?.completed ?? 0) !== (inc.time?.completed ?? 0) ||
-              cur.error !== inc.error ||
-              cur.status !== inc.status
-            ) {
-              next[i] = data.info
-              changed = true
-            }
-          }
-
-          // Append new messages
-          const existingIDs = new Set(next.map(m => m.id))
-          for (const [mid, data] of fetched) {
-            if (!existingIDs.has(mid)) {
-              const inc = data.info as any
-              const incFP = partsFingerprint(data.parts)
-              const matchByContent = (m: Message): boolean => {
-                const ex = m as any
-                if (ex.role !== inc.role) return false
-                if (ex.role === "assistant" && inc.role === "assistant") {
-                  if (ex.parentID && inc.parentID && ex.parentID !== inc.parentID) return false
-                }
-                if (incFP) {
-                  const exFP = partsFingerprint(store.parts[m.id])
-                  if (exFP && exFP === incFP) return true
-                }
-                return false
-              }
-              const dup = next.find(matchByContent)
-              if (dup) {
-                dupIDs.add(mid)
-                continue
-              }
-              next.push(data.info)
-              changed = true
-            }
-          }
-
-          if (changed) {
-            next.sort((a, b) => (a.time?.created ?? 0) - (b.time?.created ?? 0))
-            setStore("messages", sessionID, next)
-          }
-        }
-
-        // Update parts
         for (const [mid, data] of fetched) {
           if (data.parts && data.parts.length > 0) {
-            if (dupIDs.has(mid)) continue
-            const existing = store.parts[mid]
-            if (!existing || existing.length === 0) {
-              setStore("parts", mid, data.parts)
-            } else if (data.parts.length !== existing.length) {
-              setStore("parts", mid, data.parts)
-            }
+            setStore("parts", mid, data.parts)
           }
-        }
-
-        // Check if session re-entered streaming during fetch
-        const current = sessionChannels.get(sessionID)
-        if (current?.mode === "reconciling") {
-          sessionChannels.set(sessionID, { mode: "idle" })
-        }
-      } catch {
-        const current = sessionChannels.get(sessionID)
-        if (current?.mode === "reconciling") {
-          sessionChannels.set(sessionID, { mode: "idle" })
         }
       } finally {
         loadingSessions.delete(sessionID)
@@ -461,18 +353,6 @@ export function DeviceSessionStoreProvider(props: ParentProps) {
           if (!info?.id) break
           const msgSID = eventSID ?? info.sessionID
           if (!msgSID) break
-
-          if (info.role === "assistant" && !info.time?.completed) {
-            const ch = sessionChannels.get(msgSID)
-            if (!ch || ch.mode === "idle" || ch.mode === "reconciling") {
-              sessionChannels.set(msgSID, { mode: "streaming" })
-            }
-          } else if (info.role === "assistant" && info.time?.completed) {
-            const ch = sessionChannels.get(msgSID)
-            if (ch?.mode === "streaming") {
-              sessionChannels.set(msgSID, { mode: "idle" })
-            }
-          }
 
           if (info.role === "user" && store.errors[msgSID]) setStore("errors", msgSID, undefined as any)
           if (!store.messages[msgSID]) setStore("messages", msgSID, [])
@@ -695,6 +575,10 @@ export function DeviceSessionStoreProvider(props: ParentProps) {
     historyMore: (sessionID: string) => (store.messages[sessionID]?.length ?? 0) >= MESSAGE_PAGE_SIZE,
     historyLoading,
     historyLoadMore: async (sessionID: string, count?: number) => {
+      // No-op once cached: loadMessages only writes on cold start (no cache),
+      // so this is effective only for the very first load. After that SSE is
+      // the sole writer. To re-enable incremental history loading, loadMessages
+      // needs a bypass flag or this needs its own fetch path.
       const current = store.messages[sessionID]?.length ?? 0
       await loadMessages(sessionID, current + (count ?? MESSAGE_PAGE_SIZE))
     },
