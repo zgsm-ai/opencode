@@ -1,5 +1,6 @@
 import { showToast } from "@opencode-ai/ui/toast"
 import { channelApi } from "@/pages/store/lib/api"
+import { isMobile } from "@/lib/mobile"
 
 const DISMISS_KEY = "costrict:notif_prompt_dismissed"
 
@@ -36,6 +37,7 @@ export function scheduleNotifPromptCheck(
   delayMs = 8000,
 ) {
   if (isDismissed()) return
+  if (isMobile()) return
   if (Date.now() - lastShownAt < MIN_INTERVAL_MS) return
 
   if (pendingTimer) {
