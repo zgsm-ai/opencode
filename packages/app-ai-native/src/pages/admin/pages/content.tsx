@@ -6,7 +6,7 @@ import { createStore, produce, reconcile } from "solid-js/store"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { useLanguage } from "@/context/language"
 import { ConfirmDialog } from "@/pages/store/components/confirm-dialog"
-import { adminItemApi, type AdminItem, type AdminItemStatus } from "@/pages/store/lib/api"
+import { adminItemApi, downloadViaFetch, type AdminItem, type AdminItemStatus } from "@/pages/store/lib/api"
 import { sx, st } from "../lib/styles"
 
 const TYPE_FILTERS = ["", "skill", "plugin", "subagent", "command", "mcp"] as const
@@ -30,6 +30,8 @@ export default function AdminContent() {
     type: string
     status: string
     security: string
+    missingSecurityEval: boolean
+    missingScore: boolean
     search: string
     debouncedSearch: string
     page: number
@@ -40,6 +42,8 @@ export default function AdminContent() {
     type: "",
     status: "",
     security: "",
+    missingSecurityEval: false,
+    missingScore: false,
     search: "",
     debouncedSearch: "",
     page: 1,
@@ -83,6 +87,8 @@ export default function AdminContent() {
         type: state.type || undefined,
         status: state.status || undefined,
         securityStatus: state.security || undefined,
+        missingSecurityEval: state.missingSecurityEval || undefined,
+        missingScore: state.missingScore || undefined,
         search: state.debouncedSearch || undefined,
         page: state.page,
         pageSize: PAGE_SIZE,
@@ -155,6 +161,39 @@ export default function AdminContent() {
     setState("page", 1)
     clearSelection()
     void load()
+  }
+
+  // Data-quality toggles (缺少安全评估 / 缺少评分). Booleans that AND-combine with
+  // the other filters; toggling resets the page + selection like any other filter.
+  function toggleMissing(key: "missingSecurityEval" | "missingScore") {
+    setState(key, !state[key])
+    setState("page", 1)
+    clearSelection()
+    void load()
+  }
+
+  // Export the current filtered view as CSV, honoring the same filters as the
+  // visible list. Fetches the file as a blob (session cookie) rather than
+  // navigating an <a href> to /api/*, which the dev SPA fallback would serve as
+  // a blank index.html page.
+  async function exportCsv() {
+    const url = adminItemApi.exportCsvUrl({
+      type: state.type || undefined,
+      status: state.status || undefined,
+      securityStatus: state.security || undefined,
+      missingSecurityEval: state.missingSecurityEval || undefined,
+      missingScore: state.missingScore || undefined,
+      search: state.debouncedSearch || undefined,
+    })
+    try {
+      await downloadViaFetch(url, "items-export.csv")
+    } catch (err) {
+      showToast({
+        variant: "error",
+        title: language.t("admin.content.exportFailed"),
+        description: err instanceof Error ? err.message : String(err),
+      })
+    }
   }
 
   function onSearchInput(value: string) {
@@ -496,7 +535,26 @@ export default function AdminContent() {
               )}
             </For>
           </div>
+          <div class="flex flex-wrap gap-1" aria-label={language.t("admin.content.filter.qualityGroup")}>
+            <button
+              type="button"
+              class={st.filter(state.missingSecurityEval)}
+              aria-pressed={state.missingSecurityEval}
+              onClick={() => toggleMissing("missingSecurityEval")}
+            >
+              {language.t("admin.content.filter.missingSecurityEval")}
+            </button>
+            <button
+              type="button"
+              class={st.filter(state.missingScore)}
+              aria-pressed={state.missingScore}
+              onClick={() => toggleMissing("missingScore")}
+            >
+              {language.t("admin.content.filter.missingScore")}
+            </button>
+          </div>
         </div>
+        <div class="flex items-center gap-2">
         <div class={sx.searchWrap}>
           <svg class={sx.searchIcon} viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
             <g transform="scale(0.833333)">
@@ -511,6 +569,15 @@ export default function AdminContent() {
             aria-label={language.t("admin.content.searchPlaceholder")}
             onInput={(e) => onSearchInput(e.currentTarget.value)}
           />
+        </div>
+          <button
+            type="button"
+            class="cursor-pointer inline-flex shrink-0 items-center gap-1.5 rounded-[var(--native-radius-md)] border border-[color:color-mix(in_oklab,var(--native-border)_60%,transparent)] px-3 py-1.5 text-[0.8125rem] text-[var(--native-muted)] transition-colors hover:text-[var(--native-foreground)]"
+            onClick={exportCsv}
+          >
+            <Icon name="download" size="small" />
+            {language.t("admin.content.export")}
+          </button>
         </div>
       </div>
 
