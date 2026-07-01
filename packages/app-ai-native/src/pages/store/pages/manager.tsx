@@ -14,12 +14,11 @@ import { ConfirmDialog } from "@/pages/store/components/confirm-dialog"
 import { CreateCapabilityDialog } from "@/pages/store/components/create-capability-dialog"
 import ItemDetailContent from "@/pages/store/components/item-detail-content"
 import { ItemDetailLoadingSkeleton } from "@/pages/store/components/item-detail-loading-skeleton"
-import { MoveCapabilityDialog } from "@/pages/store/components/move-capability-dialog"
 import { formatCompact, formatStoreDate, formatStoreTablePaginationSummary, StoreTableFooter } from "@/pages/store/components/store-capability-table"
 import { ManagerListView } from "@/pages/store/components/manager-list-view"
 import { StoreFilterBar } from "@/pages/store/components/store-filter-bar"
 import { useAuth } from "@/pages/store/hooks/use-auth"
-import { adminDeptApi, behaviorApi, distributionApi, itemApi, repoApi, userApi, type AdminDept, type CapabilityItem, type DistributionResult, type ItemOrder, type ItemSort, type Repository, type SecurityRiskGroup } from "@/pages/store/lib/api"
+import { adminDeptApi, behaviorApi, distributionApi, itemApi, userApi, type AdminDept, type CapabilityItem, type DistributionResult, type ItemOrder, type ItemSort, type Repository, type SecurityRiskGroup } from "@/pages/store/lib/api"
 import { getLoginUrl } from "@/pages/store/lib/auth"
 import { sx } from "@/pages/store/lib/styles"
 import { typeKey } from "@/pages/store/lib/constants"
@@ -608,15 +607,36 @@ export default function StoreManagerPage() {
     }
   }
 
-  const openEditCapability = (item: CapabilityItem) => {
-    navigate(`/capabilities/${item.id}/edit`)
+  // 订阅/取消订阅自己名下的能力(含 fork 副本)。fork 不再自动分发,用户在此主动订阅
+  // 才推送到设备,避免"fork 来改"的场景被误分发。
+  const toggleSubscribe = async (item: CapabilityItem) => {
+    // 防重复:同一项有 in-flight 请求时忽略(SubscribeButton 也据此进入 pending 态)。
+    if (state.favoriteActionItemId === item.id) return
+    const wasFav = Boolean(item.favorited)
+    setState("favoriteActionItemId", item.id)
+    // 乐观更新:立即翻转本地 favorited,按钮即时响应;失败再回滚。
+    patchItemEverywhere(item.id, (it) => ({ ...it, favorited: !wasFav }))
+    try {
+      const result = wasFav
+        ? await behaviorApi.unfavorite(item.id)
+        : await behaviorApi.favorite(item.id)
+      // 计数乐观翻不了(只知本地),以服务端权威 favorited/favoriteCount 校正,
+      // 避免按钮上的订阅数停留在旧值(off-by-one)直到整页刷新。
+      patchItemEverywhere(item.id, (it) => ({ ...it, favorited: result.favorited, favoriteCount: result.favoriteCount }))
+    } catch (err) {
+      patchItemEverywhere(item.id, (it) => ({ ...it, favorited: wasFav }))
+      showToast({
+        title: language.t("store.console.capabilities.subscribeFailed"),
+        description: err instanceof Error ? err.message : String(err),
+      })
+    }
+    finally {
+      setState("favoriteActionItemId", null)
+    }
   }
 
-  const openMoveCapability = (item: CapabilityItem) => {
-    void repoApi.listMy().then((res) => {
-      setState("repos", res.repositories ?? [])
-      dialog.show(() => <MoveCapabilityDialog item={item} repositories={res.repositories ?? []} onMoved={() => void loadCreated()} />)
-    })
+  const openEditCapability = (item: CapabilityItem) => {
+    navigate(`/capabilities/${item.id}/edit`)
   }
 
   const handleDeleteItem = (id: string) => {
@@ -905,11 +925,17 @@ export default function StoreManagerPage() {
           onToggleAll={togglePage}
           selectAllLabel={language.t("store.console.capabilities.selectAll")}
           selectRowLabel={language.t("store.console.capabilities.selectRow")}
+          onSubscribe={selectableTab() ? toggleSubscribe : undefined}
           onEdit={selectableTab() ? openEditCapability : undefined}
-          onMove={selectableTab() ? openMoveCapability : undefined}
           onDelete={selectableTab() ? (item) => handleDeleteItem(item.id) : undefined}
+          authenticated={!!auth.user() && !auth.loading()}
+          favoriteLabels={{
+            subscribe: language.t("store.detail.favorite"),
+            subscribed: language.t("store.detail.unfavorite"),
+            tooltip: language.t("store.distribute.tooltip"),
+          }}
+          favoriteActionItemId={state.favoriteActionItemId}
           editLabel={language.t("store.console.capabilities.edit")}
-          moveLabel={language.t("store.console.capabilities.move")}
           deleteLabel={language.t("store.console.capabilities.delete")}
         />
     )

@@ -13,6 +13,7 @@ import { pickItemDescription } from "../lib/item-description"
 import { HighlightText } from "./store-capability-table"
 import SecurityTag from "./security-tag"
 import FromPluginBadge from "./from-plugin-badge"
+import { SubscribeButton } from "./subscribe-button"
 import { StoreIcon, type StoreIconName } from "../lib/store-icons"
 
 const TYPE_ICON_NAMES = new Set<StoreIconName>(["skill", "subagent", "command", "mcp", "plugin"])
@@ -39,18 +40,23 @@ export interface ManagerListViewProps {
   onToggleAll?: (checked: boolean) => void
   selectAllLabel?: string
   selectRowLabel?: string
-  // Management actions (shown on hover). Any subset may be provided.
+  // Row actions. onSubscribe renders the home-style SubscribeButton pinned rightmost
+  // (always visible, primary action); onEdit/onDelete are secondary and show on hover
+  // to its left. Any subset may be provided.
+  onSubscribe?: (item: CapabilityItem) => void
   onEdit?: (item: CapabilityItem) => void
-  onMove?: (item: CapabilityItem) => void
   onDelete?: (item: CapabilityItem) => void
+  // Passed through to the SubscribeButton so it matches the home list view 1:1.
+  authenticated?: boolean
+  favoriteLabels?: { subscribe: string; subscribed: string; tooltip: string }
+  favoriteActionItemId?: string | null
   editLabel?: string
-  moveLabel?: string
   deleteLabel?: string
 }
 
 export function ManagerListView(props: ManagerListViewProps): JSX.Element {
   const language = useLanguage()
-  const hasActions = createMemo(() => Boolean(props.onEdit || props.onMove || props.onDelete))
+  const hasActions = createMemo(() => Boolean(props.onSubscribe || props.onEdit || props.onDelete))
 
   return (
     <Show
@@ -194,38 +200,45 @@ function ManagerListRow(props: {
         </div>
       </div>
 
-      {/* 右侧管理操作：默认半隐，hover/选中时显现，与主页"评分+订阅"形成区别 */}
+      {/* 右侧行操作（对齐主页 .smetrics gap/对齐风格）：编辑/删除=次要 hover 半隐（左），
+          订阅=主操作常显、最右，复用主页同款 SubscribeButton */}
       <Show when={props.hasActions}>
         <div
-          class="relative z-[1] flex shrink-0 items-center gap-1 opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100"
+          class="relative z-[1] flex shrink-0 items-center gap-[0.625rem]"
           onClick={(e) => e.stopPropagation()}
         >
-          <Show when={view.onEdit}>
-            <button
-              type="button"
-              class="cursor-pointer rounded-[var(--native-radius-md)] px-2.5 py-1 text-[12px] font-semibold text-[var(--native-muted)] transition-colors hover:bg-[color:color-mix(in_oklab,var(--native-foreground)_6%,transparent)] hover:text-[var(--native-foreground)]"
-              onClick={() => view.onEdit?.(item())}
-            >
-              {view.editLabel}
-            </button>
-          </Show>
-          <Show when={view.onMove}>
-            <button
-              type="button"
-              class="cursor-pointer rounded-[var(--native-radius-md)] px-2.5 py-1 text-[12px] font-semibold text-[var(--native-muted)] transition-colors hover:bg-[color:color-mix(in_oklab,var(--native-foreground)_6%,transparent)] hover:text-[var(--native-foreground)]"
-              onClick={() => view.onMove?.(item())}
-            >
-              {view.moveLabel}
-            </button>
-          </Show>
-          <Show when={view.onDelete}>
-            <button
-              type="button"
-              class="cursor-pointer rounded-[var(--native-radius-md)] px-2.5 py-1 text-[12px] font-semibold text-[var(--native-error)] transition-colors hover:bg-[color:color-mix(in_oklab,var(--native-error)_10%,transparent)]"
-              onClick={() => view.onDelete?.(item())}
-            >
-              {view.deleteLabel}
-            </button>
+          {/* 编辑/删除:次要操作,默认半隐,hover/聚焦时显现（放订阅左侧） */}
+          <div class="flex items-center gap-1 opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100">
+            <Show when={view.onEdit}>
+              <button
+                type="button"
+                class="cursor-pointer rounded-[var(--native-radius-md)] px-2.5 py-1 text-[12px] font-semibold text-[var(--native-muted)] transition-colors hover:bg-[color:color-mix(in_oklab,var(--native-foreground)_6%,transparent)] hover:text-[var(--native-foreground)]"
+                onClick={() => view.onEdit?.(item())}
+              >
+                {view.editLabel}
+              </button>
+            </Show>
+            <Show when={view.onDelete}>
+              <button
+                type="button"
+                class="cursor-pointer rounded-[var(--native-radius-md)] px-2.5 py-1 text-[12px] font-semibold text-[var(--native-error)] transition-colors hover:bg-[color:color-mix(in_oklab,var(--native-error)_10%,transparent)]"
+                onClick={() => view.onDelete?.(item())}
+              >
+                {view.deleteLabel}
+              </button>
+            </Show>
+          </div>
+          {/* 订阅:主操作,常显、最右——fork 后来这主动订阅,用主页同款 SubscribeButton */}
+          <Show when={view.onSubscribe}>
+            <SubscribeButton
+              item={item()}
+              favorited={Boolean(item().favorited)}
+              favoriteCount={item().favoriteCount ?? 0}
+              pending={view.favoriteActionItemId === item().id}
+              authenticated={view.authenticated ?? false}
+              onToggle={() => view.onSubscribe?.(item())}
+              labels={view.favoriteLabels ?? { subscribe: "", subscribed: "", tooltip: "" }}
+            />
           </Show>
         </div>
       </Show>
