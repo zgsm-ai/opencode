@@ -47,6 +47,28 @@ export async function apiFetch<T>(path: string, options?: RequestInit): Promise<
   return res.json()
 }
 
+// downloadViaFetch fetches an authenticated file (cookie session) as a blob and
+// triggers a browser download. Use this instead of navigating an <a href> to an
+// /api/... URL: a top-level navigation to /api/* hits the Vite SPA fallback (dev)
+// and lands on a blank index.html page, and it also can't carry non-cookie auth.
+// Going through fetch rides the same proxy + credentials path as apiFetch.
+export async function downloadViaFetch(url: string, filename: string): Promise<void> {
+  const res = await fetch(url, { credentials: "include" })
+  if (!res.ok) {
+    if (res.status === 401) onUnauthorized(url)
+    throw new Error(`Download failed: ${res.status}`)
+  }
+  const blob = await res.blob()
+  const objUrl = URL.createObjectURL(blob)
+  const a = document.createElement("a")
+  a.href = objUrl
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(objUrl)
+}
+
 export interface Repository {
   id: string
   name: string
@@ -1541,28 +1563,50 @@ export interface AdminItem {
   createdAt: string
 }
 
+// Shared filter fields for the admin item list + CSV export. `missingSecurityEval`
+// narrows to items NEVER security-evaluated (security_status=unscanned — a
+// stricter set than the "unknown" group); `missingScore` to items with no
+// positive experience score. Both AND-combine with the type/status/security
+// filters, server-side.
+export interface AdminItemFilter {
+  type?: string
+  status?: string
+  securityStatus?: string
+  search?: string
+  createdBy?: string
+  missingSecurityEval?: boolean
+  missingScore?: boolean
+}
+
+function adminItemFilterParams(filter?: AdminItemFilter): URLSearchParams {
+  const p = new URLSearchParams()
+  if (filter?.type) p.set("type", filter.type)
+  if (filter?.status) p.set("status", filter.status)
+  if (filter?.securityStatus) p.set("securityStatus", filter.securityStatus)
+  if (filter?.search) p.set("search", filter.search)
+  if (filter?.createdBy) p.set("createdBy", filter.createdBy)
+  if (filter?.missingSecurityEval) p.set("missingSecurityEval", "true")
+  if (filter?.missingScore) p.set("missingScore", "true")
+  return p
+}
+
 export const adminItemApi = {
-  list: (filter?: {
-    type?: string
-    status?: string
-    securityStatus?: string
-    search?: string
-    createdBy?: string
-    page?: number
-    pageSize?: number
-  }) => {
-    const p = new URLSearchParams()
-    if (filter?.type) p.set("type", filter.type)
-    if (filter?.status) p.set("status", filter.status)
-    if (filter?.securityStatus) p.set("securityStatus", filter.securityStatus)
-    if (filter?.search) p.set("search", filter.search)
-    if (filter?.createdBy) p.set("createdBy", filter.createdBy)
+  list: (filter?: AdminItemFilter & { page?: number; pageSize?: number }) => {
+    const p = adminItemFilterParams(filter)
     if (filter?.page) p.set("page", String(filter.page))
     if (filter?.pageSize) p.set("pageSize", String(filter.pageSize))
     const qs = p.toString()
     return apiFetch<{ items: AdminItem[]; total: number; page: number; pageSize: number }>(
       `/api/admin/items${qs ? `?${qs}` : ""}`,
     )
+  },
+
+  // Build a browser-navigable CSV export URL honoring the same filters as list().
+  // Downloaded via an <a download> click — auth rides the session cookie, so no
+  // apiFetch wrapper is involved. Not paginated: the backend streams all matches.
+  exportCsvUrl: (filter?: AdminItemFilter) => {
+    const qs = adminItemFilterParams(filter).toString()
+    return `${API_BASE}/api/admin/items/export.csv${qs ? `?${qs}` : ""}`
   },
 
   setStatus: (id: string, status: AdminItemStatus) =>
@@ -1589,6 +1633,128 @@ export const adminItemApi = {
       "/api/admin/items/batch-status",
       { method: "POST", body: JSON.stringify({ ids, status }) },
     ),
+}
+
+// ── Admin · Catalog bundle import ───────────────────────────────────────────
+// Platform-admin surface to import a catalog bundle (skills / MCP / plugins) by
+// re-fetchable URL (preferred) or file upload, preview it as a dry-run, then
+// confirm to apply. Backed by /api/admin/import-* (platform_admin gated). The
+// import runs asynchronously on a leader-elected runner, so the flow is
+// submit → poll → (previewed) → confirm → poll → (success|failed).
+export type ImportJobStatus =
+  | "pending"
+  | "running"
+  | "previewed"
+  | "success"
+  | "failed"
+  | "expired"
+  | "cancelled"
+
+// camelCase projection of the backend IngestResult. On a freshly-queued job the
+// server returns an empty object, so every field is treated as optional here.
+export interface ImportResult {
+  bundleEntries?: number
+  added?: number
+  updated?: number
+  metadataUpdated?: number
+  skipped?: number
+  deleted?: number
+  failed?: number
+  incomplete?: number
+  errors?: string[]
+  incompleteErrors?: string[]
+  manifestSha256?: string
+  generatedAt?: string
+  durationMs?: number
+}
+
+export interface CapabilityImportJob {
+  id: string
+  sourceKind: "url" | "upload"
+  sourceUrl?: string
+  filename: string
+  fileSize: number
+  status: ImportJobStatus
+  dryRun: boolean
+  reparse: boolean
+  triggerUser: string
+  result: ImportResult
+  errorMessage?: string
+  retryCount: number
+  maxAttempts: number
+  scheduledAt: string
+  startedAt?: string
+  finishedAt?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ImportStatsRow {
+  itemType: string
+  count: number
+}
+
+// Error thrown by adminImportApi.confirm carrying the backend `code` so the
+// caller can special-case `large_delete_unconfirmed` (apiFetch discards it).
+export interface ImportConfirmError extends Error {
+  code?: string
+  status?: number
+}
+
+export const adminImportApi = {
+  stats: () => apiFetch<{ byType: ImportStatsRow[]; total: number }>("/api/admin/import-stats"),
+
+  createFromUrl: (sourceUrl: string, reparse: boolean) =>
+    apiFetch<{ jobId: string; status: string }>("/api/admin/import-jobs", {
+      method: "POST",
+      body: JSON.stringify({ sourceUrl, reparse }),
+    }),
+
+  createFromFile: (file: File, reparse: boolean) => {
+    const form = new FormData()
+    form.append("file", file)
+    form.append("reparse", reparse ? "true" : "false")
+    return apiFetch<{ jobId: string; status: string }>("/api/admin/import-jobs", {
+      method: "POST",
+      body: form,
+    })
+  },
+
+  get: (id: string) => apiFetch<CapabilityImportJob>(`/api/admin/import-jobs/${encodeURIComponent(id)}`),
+
+  list: (page = 1, pageSize = 20) => {
+    const p = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
+    return apiFetch<{ items: CapabilityImportJob[]; total: number; page: number; pageSize: number }>(
+      `/api/admin/import-jobs?${p.toString()}`,
+    )
+  },
+
+  // Promote a previewed dry-run to the real import. A 409 with
+  // code=large_delete_unconfirmed means the take-offline ratio is high and the
+  // caller must retry with confirmLargeDelete=true. That code lives only on the
+  // raw response body (apiFetch discards it), so this does its own fetch and
+  // rethrows an Error carrying `.code`.
+  confirm: async (id: string, confirmLargeDelete = false): Promise<{ status: string }> => {
+    const path = `/api/admin/import-jobs/${encodeURIComponent(id)}/confirm`
+    const res = await fetch(`${API_BASE}${path}`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ confirmLargeDelete }),
+    })
+    if (!res.ok) {
+      if (res.status === 401) onUnauthorized(path)
+      const err = await res.json().catch(() => ({ error: res.statusText }))
+      const wrapped: ImportConfirmError = Object.assign(
+        new Error(err.error || err.message || `Request failed: ${res.status}`),
+        { code: err.code as string | undefined, status: res.status },
+      )
+      throw wrapped
+    }
+    return res.json()
+  },
+
+  errorsLogUrl: (id: string) => `${API_BASE}/api/admin/import-jobs/${encodeURIComponent(id)}/errors.log`,
 }
 
 // ── Admin · Ops (M5): system notification channels ─────────────────────────
