@@ -41,6 +41,7 @@ import {
   MOCK_USER,
   MOCK_PERMISSIONS,
 } from "./mock-data"
+import { uuid } from "@/utils/uuid"
 import type {
   AdminAuditLog,
   AdminItem,
@@ -591,7 +592,7 @@ export async function mockApiFetch<T>(url: string, options?: RequestInit): Promi
     const body = options?.body ? JSON.parse(options.body as string) : {}
     const now = new Date().toISOString()
     const channel: SystemNotificationChannel = {
-      id: crypto.randomUUID(),
+      id: uuid(),
       type: body.type ?? "wecom",
       name: body.name ?? "",
       workspaceId: body.workspaceId ?? "ws-default",
@@ -653,7 +654,7 @@ export async function mockApiFetch<T>(url: string, options?: RequestInit): Promi
     const scopeType = body?.scope?.type ?? "all"
     const sentCount = scopeType === "user" ? 1 : scopeType === "organization" ? 24 : adminUsers.length
     auditLogs.unshift({
-      id: crypto.randomUUID(),
+      id: uuid(),
       actorId: MOCK_USER.id,
       action: "announcement.send",
       targetType: "announcement",
@@ -719,7 +720,7 @@ export async function mockApiFetch<T>(url: string, options?: RequestInit): Promi
   if (path.endsWith("/api/admin/enterprise-customers") && method === "POST") {
     const body = options?.body ? JSON.parse(options.body as string) : {}
     const c: DemoEnterpriseCustomer = {
-      id: crypto.randomUUID(),
+      id: uuid(),
       name: body.name,
       logo: body.logo,
       ids: body.ids ?? [],

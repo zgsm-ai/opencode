@@ -9,6 +9,7 @@ import type { Session, Command, Agent, VcsInfo, SessionStatus, PermissionRequest
 import type { ProviderCapabilitiesResponse } from "./global-sync/types"
 import { workspaceApi } from "@/pages/workspace/lib/api"
 import { scheduleNotifPromptCheck, type NotifPromptTexts } from "@/utils/notification-prompt"
+import { uuid } from "@/utils/uuid"
 import { useLanguage } from "./language"
 
 
@@ -549,7 +550,7 @@ export function DeviceWorkspaceProvider(props: ParentProps<{ workspaceId?: strin
   }
 
   const restartAgent = async () => {
-    const id = crypto.randomUUID()
+    const id = uuid()
     const maxTime = Date.now() + 30_000
     setRestarting({ active: true, phase: "", message: "Sending restart command..." })
 
