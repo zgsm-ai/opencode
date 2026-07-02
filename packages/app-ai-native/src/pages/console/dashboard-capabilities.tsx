@@ -12,7 +12,6 @@ import ItemDetailContent from "@/pages/store/components/item-detail-content"
 import FromPluginBadge from "@/pages/store/components/from-plugin-badge"
 import { behaviorApi, itemApi, repoApi, type CapabilityItem, type Repository } from "@/pages/store/lib/api"
 import { ConfirmDialog } from "@/pages/store/components/confirm-dialog"
-import { MoveCapabilityDialog } from "@/pages/store/components/move-capability-dialog"
 import { TYPE_COLORS, typeKey } from "@/pages/store/lib/constants"
 import { cn } from "@/lib/utils"
 import { st, sx } from "@/pages/store/lib/styles"
@@ -149,10 +148,6 @@ export default function DashboardCapabilities() {
 
   const openEditCapability = (item: CapabilityItem) => {
     navigate(`/capabilities/${item.id}/edit`)
-  }
-
-  const openMoveCapability = (item: CapabilityItem) => {
-    dialog.show(() => <MoveCapabilityDialog item={item} repositories={state.repos} onMoved={() => void loadItems()} />)
   }
 
   const handleDeleteItem = (id: string) => {
@@ -427,16 +422,6 @@ export default function DashboardCapabilities() {
                                   onClick={() => setSelectedItemId(item.id)}
                                 >
                                   <Icon name="arrow-right" size="small" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  type="button"
-                                  aria-label={language.t("store.console.capabilities.move")}
-                                  title={language.t("store.console.capabilities.move")}
-                                  onClick={() => openMoveCapability(item)}
-                                >
-                                  <Icon name="share" size="small" />
                                 </Button>
                                 <Button
                                   variant="ghost"

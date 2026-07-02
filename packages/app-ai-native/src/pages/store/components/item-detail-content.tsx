@@ -631,7 +631,14 @@ export default function ItemDetailContent(props: ItemDetailContentProps) {
     setForking(true)
     try {
       const forked = await itemApi.fork(data.id)
-      showToast({ title: language.t("store.detail.forkSuccess") })
+      // Fork only creates a DB copy — it deliberately does NOT auto-subscribe /
+      // distribute to devices, so a "fork to edit" flow isn't pushed out
+      // unexpectedly (BUG#2). We guide the user to subscribe from the capability
+      // manager page when they actually want it enabled.
+      showToast({
+        title: language.t("store.detail.forkSuccess"),
+        description: language.t("store.detail.forkSubscribedHint"),
+      })
       navigate(`/capabilities/${forked.id}/edit`)
     } catch (err) {
       showToast({
