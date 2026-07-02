@@ -36,6 +36,7 @@ import { StoreIcon } from "../lib/store-icons"
 import { StoreCardGrid, type StoreItemViewProps } from "../components/store-card-grid"
 import { StoreListView } from "../components/store-list-view"
 import { StoreFilterBar } from "../components/store-filter-bar"
+import { SearchTokenBox } from "../components/search-token-box"
 import { withViewTransition, applyStagger } from "../lib/view-transition"
 import { ensureEnterpriseLoaded } from "../lib/enterprise"
 import {
@@ -151,7 +152,7 @@ export default function Home() {
   let pendingBlurRefocusTimer: ReturnType<typeof setTimeout> | undefined
   const [listCache, setListCache] = createSignal<{ key: string; data: ListData } | null>(null)
   const [sort, setSort] = createStore<{ by?: ItemSort; order?: ItemOrder }>({ by: "favoriteCount", order: "desc" })
-  const [appliedTagFilters] = createSignal<string[]>([])
+  const [appliedTagFilters, setAppliedTagFilters] = createSignal<string[]>([])
   const [appliedCategoryFilters, setAppliedCategoryFilters] = createSignal<string[]>([])
   const [appliedSourceFilters, setAppliedSourceFilters] = createSignal<string[]>([])
   const [appliedSecurityFilters, setAppliedSecurityFilters] = createSignal<SecurityFilterValue[]>([])
@@ -273,6 +274,45 @@ export default function Home() {
     setSearchText("")
     setDebouncedSearch("")
     setPage(1)
+    requestAnimationFrame(() => restoreSearchFocus())
+  }
+  // Enter 命中「按名称搜索」行时立即 flush debounce（无需等 300ms）。
+  const submitSearch = () => {
+    clearTimeout(searchTimer)
+    setDebouncedSearch(searchText().trim())
+    setPage(1)
+  }
+  // IME 组合开始时取消已排下的去抖搜索/回填焦点定时器：否则组合前 latin 键排的那次 setDebouncedSearch
+  // 会在组合中触发列表刷新→输入框 blur→restoreSearchFocus 的 focus()+setSelectionRange 打断中文组合。
+  const cancelPendingSearch = () => {
+    clearTimeout(searchTimer)
+    clearTimeout(pendingBlurRefocusTimer)
+  }
+  // 搜索框 blur→refocus：列表重取 / 详情开合可能瞬时抢焦点，短暂窗口内自愈回填焦点。
+  const handleSearchBlur = (e: FocusEvent) => {
+    if (e.relatedTarget || Date.now() > allowSearchRefocusUntil) return
+    clearTimeout(pendingBlurRefocusTimer)
+    pendingBlurRefocusTimer = setTimeout(() => {
+      if (!searchInputRef) return
+      if (document.activeElement && document.activeElement !== document.body) return
+      restoreSearchFocus()
+    }, 0)
+  }
+  // tag 芯片作用域：点选候选 → 去重 append；消费掉输入文本（该文本本就是 tag 查询）。
+  const addTagFilter = (slug: string) => {
+    setAppliedTagFilters((xs) => (xs.includes(slug) ? xs : [...xs, slug]))
+    clearTimeout(searchTimer)
+    allowSearchRefocusUntil = Date.now() + 600
+    setSearchText("")
+    setDebouncedSearch("")
+    setPage(1)
+    requestAnimationFrame(() => restoreSearchFocus())
+  }
+  const removeTagFilter = (slug: string) => {
+    setAppliedTagFilters((xs) => xs.filter((s) => s !== slug))
+    setPage(1)
+    // 鼠标点芯片 ✕ 会把焦点落到即将卸载的按钮上 → 回填到搜索框，保持连续输入。
+    allowSearchRefocusUntil = Date.now() + 600
     requestAnimationFrame(() => restoreSearchFocus())
   }
 
@@ -503,6 +543,7 @@ export default function Home() {
     setAppliedCategoryFilters([])
     setAppliedSourceFilters([])
     setAppliedSecurityFilters([])
+    setAppliedTagFilters([])
     afterFilterChange()
   }
 
@@ -610,10 +651,11 @@ export default function Home() {
     setActiveType(type)
     setSearchText("")
     setDebouncedSearch("")
-    // 切类型时一并清空四组 applied 过滤器，避免「从技能切到 MCP 仍套用技能的筛选」的静默约束。
+    // 切类型时一并清空 applied 过滤器（含 tag 芯片作用域），避免「从技能切到 MCP 仍套用技能的筛选」的静默约束。
     setAppliedCategoryFilters([])
     setAppliedSourceFilters([])
     setAppliedSecurityFilters([])
+    setAppliedTagFilters([])
     setPage(1)
     setSelectedItemId(null)
   }
@@ -677,11 +719,14 @@ export default function Home() {
     setAppliedCategoryFilters([])
     setAppliedSecurityFilters([])
     setAppliedSourceFilters([])
+    setAppliedTagFilters([])
     afterFilterChange()
   }
 
   // ─── 生效筛选 chips（T2-4）───
-  // 把四组 applied 过滤器摊平成可单独删除的 chip 列表（值已解析为可读 label），主视图据此渲染。
+  // 把 filter-bar 的三组 applied 过滤器（分类/来源/风险）摊平成可单独删除的 chip 列表（值已解析为
+  // 可读 label），主视图据此渲染。tag 芯片作用域刻意不进这里——它内联在搜索框内（见 SearchTokenBox），
+  // 避免同一 tag 出现两处芯片来源。
   type ActiveFilterChip = { id: string; label: string; remove: () => void }
   const activeFilterChips = createMemo<ActiveFilterChip[]>(() => {
     const chips: ActiveFilterChip[] = []
@@ -986,41 +1031,21 @@ export default function Home() {
         {/* 居中列容器：第一行=搜索 + 控件，第二行（T2-4）=生效筛选 chips（仅有生效筛选时才渲染） */}
         <div class="mx-auto flex w-full max-w-[1200px] flex-col gap-3 px-[26px] max-[640px]:gap-2 max-[640px]:px-4">
         <div class="flex w-full items-center gap-3 max-[640px]:gap-2">
-            {/* 搜索框：对齐设计稿 .search input（h 42 / rounded 13 / native-border / native-panel） */}
-            <div class="relative min-w-0 flex-1 max-w-[560px] rounded-[13px] transition-shadow hover:shadow-[0_2px_6px_-3px_color-mix(in_srgb,var(--native-primary)_22%,rgba(15,23,42,0.3))] focus-within:shadow-[0_2px_6px_-3px_color-mix(in_srgb,var(--native-primary)_22%,rgba(15,23,42,0.3))]">
-            <div class="pointer-events-none absolute inset-y-0 left-0 z-10 flex items-center pl-[13px] text-[color:color-mix(in_srgb,var(--native-muted)_82%,white)]">
-              <StoreIcon name="search" size={16} />
-            </div>
-            <input
-              ref={searchInputRef}
-              type="text"
-              inputmode="search"
-              placeholder={language.t(searchPlaceholderKey())}
+            {/* 搜索框（令牌化）：输入 → 下拉候选 → 点选标签提升为 tag 芯片作用域（模型 A）。
+                芯片内联在框内（Finder 式），多 tag = AND；焦点 blur→refocus 机制沿用 home 侧。 */}
+            <SearchTokenBox
               value={searchText()}
-              onInput={(e: InputEvent) => handleSearchInput((e.currentTarget as HTMLInputElement).value)}
-              onBlur={(e) => {
-                if (e.relatedTarget || Date.now() > allowSearchRefocusUntil) return
-                clearTimeout(pendingBlurRefocusTimer)
-                pendingBlurRefocusTimer = setTimeout(() => {
-                  if (!searchInputRef) return
-                  if (document.activeElement && document.activeElement !== document.body) return
-                  restoreSearchFocus()
-                }, 0)
-              }}
-              class="h-[42px] w-full rounded-[13px] border border-[var(--native-border)] bg-[var(--native-panel)] pr-10 pl-10 text-sm font-medium !text-[var(--native-foreground)] caret-[var(--native-primary)] placeholder:font-normal placeholder:text-[color:color-mix(in_srgb,var(--native-muted)_72%,white)] transition-[border-color,box-shadow] focus-visible:border-[color:color-mix(in_srgb,var(--native-primary)_55%,transparent)] focus-visible:!text-[var(--native-foreground)] focus-visible:placeholder:text-[color:color-mix(in_srgb,var(--native-muted)_36%,white)] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[color:color-mix(in_srgb,var(--native-primary)_15%,transparent)] focus-visible:ring-offset-0"
+              onInput={handleSearchInput}
+              onClear={clearSearchInput}
+              onSubmit={submitSearch}
+              onBlur={handleSearchBlur}
+              onCompositionStart={cancelPendingSearch}
+              placeholder={language.t(searchPlaceholderKey())}
+              tags={appliedTagFilters()}
+              onAddTag={addTagFilter}
+              onRemoveTag={removeTagFilter}
+              inputRef={(el) => (searchInputRef = el)}
             />
-            <Show when={searchText().length > 0}>
-              <button
-                type="button"
-                aria-label={language.t("common.clear")}
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={clearSearchInput}
-                class="absolute inset-y-0 right-0 flex h-full w-10 cursor-pointer items-center justify-center rounded-r-[13px] text-[color:color-mix(in_srgb,var(--native-muted)_78%,white)] transition-colors hover:text-[var(--native-foreground)]"
-              >
-                <StoreIcon name="x" size={16} />
-              </button>
-            </Show>
-            </div>
 
           {/* 右侧控件组：显示Fork / 隐藏插件子集 / 排序 / 卡片|列式 seg 整体靠最右（对齐设计稿
               .right：margin-left:auto; display:flex; gap:10px）。搜索框 flex-1 占左、本组 ml-auto 居右。 */}

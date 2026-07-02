@@ -980,6 +980,8 @@ export const dict = {
   "store.searchMcpServers": "搜索 MCP 服务器...",
   "store.searchPlugins": "搜索插件...",
   "store.searchAll": "搜索技能、MCP、插件、标签…",
+  "store.search.searchByName": "按名称搜索 \"{{query}}\"",
+  "store.search.tagsGroup": "标签",
   "store.item.userUploaded": "用户上传",
   "store.item.fromPlugin": "来自插件 {{name}}",
   "store.item.fromPluginLabel": "来自插件",
