@@ -917,6 +917,15 @@ export function DeviceWorkspaceProvider(props: ParentProps<{ workspaceId?: strin
                   summaryChanged = true
                   break
                 }
+                case "host.git.stash.changed": {
+                  const p = payload.properties as { repo_path?: string }
+                  const eventRepoPath = p.repo_path ? getDirectory(p.repo_path) : ""
+                  const currentRepoPath = getDirectory(device.directory)
+                  if (eventRepoPath !== currentRepoPath) break
+                  refreshVcs()
+                  summaryChanged = true
+                  break
+                }
                 // ── agent.runtime.restarted: server-driven, triggers rebootstrap for all workspaces ──
                 case "agent.runtime.restarted": {
                   // Emitted after new agent is fully initialized; brief delay for stability
