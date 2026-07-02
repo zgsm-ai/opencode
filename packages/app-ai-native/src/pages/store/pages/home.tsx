@@ -810,7 +810,7 @@ export default function Home() {
             {/* ═══ HOME MODE ═══ */}
             {/* 顶栏底色对齐设计稿 .topbar：中性浅色半透明 + 毛玻璃 + 底部细边线（无 primary 蓝调），
                 深浅主题均用 --native-* token 自适应。 */}
-            <header class="relative overflow-hidden border-b border-[color:color-mix(in_srgb,var(--native-border)_50%,transparent)] bg-[color:color-mix(in_srgb,var(--native-panel)_85%,var(--native-bg))] backdrop-blur-[14px]">
+            <header class="sticky top-0 z-30 overflow-hidden border-b border-[color:color-mix(in_srgb,var(--native-border)_50%,transparent)] bg-[color:color-mix(in_srgb,var(--native-panel)_85%,var(--native-bg))] backdrop-blur-[14px]">
               <div class="relative flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-4 px-4 md:px-5 py-3 lg:gap-6">
                 <div class="min-w-0 flex flex-col md:flex-row md:flex-1 md:items-center gap-0.5 md:gap-4">
                   <h1 class="relative m-0 shrink-0 text-[1.625rem] leading-[1.15] font-extrabold tracking-[-0.035em] text-[var(--native-foreground)]">
