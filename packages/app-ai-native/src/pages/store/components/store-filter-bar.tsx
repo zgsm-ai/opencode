@@ -197,11 +197,11 @@ function FilterDropdown(props: {
   )
 }
 
-function FilterChip(props: { label: string; dotColor?: string; onRemove: () => void }) {
-  // .fchip — chipIn 弹入（scale .8 → 1，spring）
-  const chipIn: JSX.CSSProperties = {
-    animation: "store-chip-in 0.26s cubic-bezier(0.34,1.56,0.64,1)",
-  }
+export function FilterChip(props: { label: string; dotColor?: string; onRemove: () => void; animate?: boolean }) {
+  // .fchip — chipIn 弹入（scale .8 → 1，spring）。默认开启；令牌化搜索框里的芯片传 animate={false}：
+  // 那里的搜索行会在每次列表刷新时被短暂 detach/re-attach，常驻的 CSS 入场动画会随之反复重放（bug）。
+  const chipIn: JSX.CSSProperties =
+    props.animate === false ? {} : { animation: "store-chip-in 0.26s cubic-bezier(0.34,1.56,0.64,1)" }
   return (
     <span
       // .fchip — height 30 / gap 6 / pl 11 pr 6 / rounded 99 / primary-bg / border primary 40% / color primary

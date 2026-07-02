@@ -34,6 +34,8 @@ export const dict = {
   "store.searchMcpServers": "Search MCP servers...",
   "store.searchPlugins": "Search plugins...",
   "store.searchAll": "Search all capabilities...",
+  "store.search.searchByName": "Search by name \"{{query}}\"",
+  "store.search.tagsGroup": "Tags",
   "store.item.userUploaded": "Uploaded by a user",
   "store.item.fromPlugin": "From plugin {{name}}",
   "store.item.fromPluginLabel": "From plugin",
