@@ -7,7 +7,7 @@ import { channelApi, type ChannelConfig } from "@/pages/store/lib/api"
 import { Button } from "@/components/ui/button"
 import { channelService } from "../lib/channel-service"
 import { ConfirmDialog } from "@/pages/store/components/confirm-dialog"
-import { startBind } from "../lib/identity-api"
+import { listIdentities, startBind } from "../lib/identity-api"
 
 type TD = {
   id: string
@@ -27,10 +27,8 @@ export function NotificationChannelsSection() {
   const [availableTypes] = createResource(async () => channelService.getAvailableTypes())
   const [allChannels, chActs] = createResource(async () => channelApi.list())
 
-  const hasIdTrust = () => {
-    const chs = allChannels() ?? []
-    return chs.some(ch => ch.channelType === "wecom")
-  }
+  const [identities] = createResource(async () => (await listIdentities()) ?? [])
+  const hasIdTrust = () => (identities() ?? []).some(i => i.provider === "idtrust")
 
   const channelsByType = (typeId: string) =>
     (allChannels() ?? []).filter(ch => ch.channelType === typeId)
@@ -164,7 +162,8 @@ type ChannelTypeSectionProps = {
 function ChannelTypeSection(props: ChannelTypeSectionProps) {
   const language = useLanguage()
   const dialog = useDialog()
-  const available = () => props.td.id !== "wecom-app" || props.hasIdTrust
+  const needsIdTrust = () => props.td.id === "wecom-app" || props.td.id === "wecom-bot"
+  const available = () => !needsIdTrust() || props.hasIdTrust
   const [toggling, setToggling] = createSignal(false)
   const [testing, setTesting] = createSignal(false)
   const first = () => props.channels[0]
@@ -280,7 +279,7 @@ function ChannelTypeSection(props: ChannelTypeSectionProps) {
         </div>
 
         <div class="flex items-center gap-2">
-          <Show when={first() && isBound()}>
+          <Show when={first()?.enabled && isBound()}>
             <Button
               variant="outline"
               size="sm"
@@ -308,9 +307,9 @@ function ChannelTypeSection(props: ChannelTypeSectionProps) {
         </div>
       </div>
 
-      {/* IDTrust 警告 — 仅对 wecom-app 类型 */}
-      <Show when={props.td.id === "wecom-app" && !props.hasIdTrust}>
-        <div class="mb-4 rounded-md border border-dashed border-[color:color-mix(in_srgb,#ef4444_20%,transparent)] bg-[color:color-mix(in_srgb,#ef4444_5%,transparent)] px-4 py-6 text-center">
+      {/* IDTrust 警告 — wecom-app / wecom-bot 未绑定身份时引导 */}
+      <Show when={needsIdTrust() && !props.hasIdTrust}>
+        <div class="rounded-md border border-dashed border-[color:color-mix(in_srgb,#ef4444_20%,transparent)] bg-[color:color-mix(in_srgb,#ef4444_5%,transparent)] px-4 py-6 text-center">
           <div class="text-sm font-medium text-[#ef4444]">{language.t("console.wecomApp.unavailable.title")}</div>
           <div class="mt-2 text-xs text-[var(--native-muted)]">{language.t("console.wecomApp.unavailable.description")}</div>
           <div class="mt-3">
@@ -351,7 +350,7 @@ function ChannelTypeSection(props: ChannelTypeSectionProps) {
 
       {/* 错误信息 */}
       <Show when={props.channels.length === 0}>
-        <div class="rounded-md border border-dashed border-[color:color-mix(in_srgb,var(--native-border)_20%,transparent)] px-4 py-6 text-center text-sm text-[var(--native-muted)]">
+        <div class="mt-4 rounded-md border border-dashed border-[color:color-mix(in_srgb,var(--native-border)_20%,transparent)] px-4 py-6 text-center text-sm text-[var(--native-muted)]">
           {language.t("channels.notConfigured")}
         </div>
       </Show>
