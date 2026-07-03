@@ -1000,14 +1000,14 @@ export default function StoreManagerPage() {
                   <p class="relative m-0 min-w-0 max-w-[38rem] text-[0.8125rem] leading-6 text-[var(--native-muted)]">{language.t(state.tab === "received" ? "store.received.description" : state.tab === "sent" ? "store.sent.description" : "store.console.capabilities.description")}</p>
                 </div>
                 <div class="flex shrink-0 items-center justify-end gap-3">
-                  <Button type="button" variant="outline" size="sm" class="h-8 px-3" onClick={() => navigate("/store")}>
+                  <Button type="button" variant="outline" size="sm" class="h-8 cursor-pointer px-3" onClick={() => navigate("/store")}>
                     <Icon name="chevron-left" size="small" />
                     {language.t("store.console.capabilities.backToHome")}
                   </Button>
                   <Button
                     type="button"
                     size="sm"
-                    class="h-8 gap-1.5 bg-[var(--native-primary)] !text-white hover:bg-[var(--native-primary-hover)]"
+                    class="h-8 cursor-pointer gap-1.5 bg-[var(--native-primary)] !text-white hover:bg-[var(--native-primary-hover)]"
                     onClick={() => navigate("/capabilities/new")}
                   >
                     <Icon name="plus" class="size-4" style={{ color: "#ffffff" }} />
@@ -1018,7 +1018,7 @@ export default function StoreManagerPage() {
                       type="button"
                       variant="outline"
                       size="sm"
-                      class="h-8 gap-1.5 px-3"
+                      class="h-8 cursor-pointer gap-1.5 px-3"
                       onClick={openDistributeWizard}
                     >
                       <Icon name="share" size="small" />
@@ -1029,7 +1029,7 @@ export default function StoreManagerPage() {
                     type="button"
                     variant="outline"
                     size="sm"
-                    class="h-8 gap-1.5 px-3"
+                    class="h-8 cursor-pointer gap-1.5 px-3"
                     onClick={() => {
                       dialog.show(() => (
                         <CreateCapabilityDialog
