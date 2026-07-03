@@ -424,7 +424,7 @@ function ShareButton(props: { itemId: string; itemName: string }) {
     <Popover>
       <PopoverTrigger
         as="button"
-        class="inline-flex items-center gap-1.5 rounded-lg border border-border-weak-base px-3 py-1.5 text-12-regular text-text-weak transition-colors duration-150 hover:bg-bg-muted hover:text-text-strong"
+        class="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-border-weak-base px-3 py-1.5 text-12-regular text-text-weak transition-colors duration-150 hover:bg-bg-muted hover:text-text-strong"
         title={language.t("store.detail.share")}
       >
         <Icon name="share" size="small" />
@@ -438,7 +438,7 @@ function ShareButton(props: { itemId: string; itemName: string }) {
           <span class="text-xs text-text-weak">{language.t("store.detail.share.qrcode")}</span>
           <button
             onClick={() => void copy()}
-            class="flex w-full items-center justify-center gap-1.5 rounded-lg border border-border-weak-base px-3 py-2 text-12-regular text-text-weak transition-colors duration-150 hover:bg-bg-muted hover:text-text-strong"
+            class="flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-border-weak-base px-3 py-2 text-12-regular text-text-weak transition-colors duration-150 hover:bg-bg-muted hover:text-text-strong"
           >
             <Icon name={copied() ? "check" : "link"} size="small" />
             <span>{copied() ? language.t("store.detail.share.copied") : language.t("store.detail.share.copyLink")}</span>
@@ -863,7 +863,7 @@ export default function ItemDetailContent(props: ItemDetailContentProps) {
                       <button
                         onClick={() => void doFork()}
                         disabled={!props.isAuthenticated || forking()}
-                        class="inline-flex items-center gap-1.5 rounded-lg border border-border-weak-base px-3 py-1.5 text-12-regular text-text-weak transition-colors duration-150 hover:bg-bg-muted hover:text-text-strong disabled:cursor-not-allowed disabled:opacity-60"
+                        class="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-border-weak-base px-3 py-1.5 text-12-regular text-text-weak transition-colors duration-150 hover:bg-bg-muted hover:text-text-strong disabled:cursor-not-allowed disabled:opacity-60"
                         title={
                           !props.isAuthenticated
                             ? language.t("store.detail.forkSignInTooltip")
@@ -915,7 +915,7 @@ export default function ItemDetailContent(props: ItemDetailContentProps) {
                               />
                             ))
                           }}
-                          class="inline-flex items-center gap-1.5 rounded-lg border border-border-weak-base px-3 py-1.5 text-12-regular text-text-weak transition-colors duration-150 hover:bg-bg-muted hover:text-text-strong"
+                          class="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-border-weak-base px-3 py-1.5 text-12-regular text-text-weak transition-colors duration-150 hover:bg-bg-muted hover:text-text-strong"
                           title={
                             data().isBuiltIn
                               ? language.t("store.detail.cancelBuiltInPlugin")
@@ -939,7 +939,7 @@ export default function ItemDetailContent(props: ItemDetailContentProps) {
                             />
                           ))
                         }
-                        class="inline-flex items-center gap-1.5 rounded-lg border border-border-weak-base px-3 py-1.5 text-12-regular text-text-weak transition-colors duration-150 hover:bg-bg-muted hover:text-text-strong"
+                        class="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-border-weak-base px-3 py-1.5 text-12-regular text-text-weak transition-colors duration-150 hover:bg-bg-muted hover:text-text-strong"
                         title={language.t("store.distribute.tooltip")}
                       >
                         <LocalIcon name="send" size="small" />

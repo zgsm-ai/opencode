@@ -2640,7 +2640,7 @@ export default function CapabilityEditorPage() {
               </div>
 
               <div class="flex shrink-0 items-center gap-2">
-                <Button type="button" size="sm" variant="outline" class="h-8 px-3" onClick={() => navigate("/store/manager")}>
+                <Button type="button" size="sm" variant="outline" class="h-8 cursor-pointer px-3" onClick={() => navigate("/store/manager")}>
                   {language.t("store.capabilityEditor.backToManagement")}
                 </Button>
                 {/* AI-create toolbar toggle: always shown. With an online device
@@ -2660,7 +2660,7 @@ export default function CapabilityEditorPage() {
                   title={language.t("store.skillWriter.expand")}
                   aria-pressed={hasOnlineDevice() && !layout.chatCollapsed}
                   classList={{
-                    "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border px-3 text-sm font-medium transition-all duration-150": true,
+                    "inline-flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-md border px-3 text-sm font-medium transition-all duration-150": true,
                     "border-[color:color-mix(in_srgb,var(--native-primary)_60%,transparent)] bg-[color:color-mix(in_srgb,var(--native-primary)_14%,transparent)] text-[var(--native-primary)]": hasOnlineDevice() && !layout.chatCollapsed,
                     "border-[color:color-mix(in_srgb,var(--native-border)_48%,transparent)] text-[var(--native-muted)] hover:bg-[var(--native-hover)] hover:text-[var(--native-foreground)]": !hasOnlineDevice() || layout.chatCollapsed,
                   }}
@@ -2671,22 +2671,22 @@ export default function CapabilityEditorPage() {
                 <Show
                   when={!isEdit()}
                   fallback={
-                    <Button type="button" size="sm" class="h-8 px-3" style={{ color: "white" }} onClick={() => void handleSubmit()} disabled={loading() || form.saving || isViewingHistoricalVersion()}>
+                    <Button type="button" size="sm" class="h-8 cursor-pointer px-3" style={{ color: "white" }} onClick={() => void handleSubmit()} disabled={loading() || form.saving || isViewingHistoricalVersion()}>
                       {form.saving ? language.t("common.saving") : language.t("store.capabilityEditor.saveAndReturn")}
                     </Button>
                   }
                 >
                   <div class="flex items-center gap-2">
-                    <Button type="button" size="sm" variant="outline" class="h-8 px-3" onClick={confirmResetDraft} disabled={loading() || form.saving || isViewingHistoricalVersion()}>
+                    <Button type="button" size="sm" variant="outline" class="h-8 cursor-pointer px-3" onClick={confirmResetDraft} disabled={loading() || form.saving || isViewingHistoricalVersion()}>
                       {language.t("common.reset")}
                     </Button>
                     <div class="flex items-center overflow-hidden rounded-[8px]">
-                    <Button type="button" size="sm" class="h-8 rounded-r-none px-3" style={{ color: "white" }} onClick={() => void handleSubmit("return")} disabled={loading() || form.saving || isViewingHistoricalVersion()}>
+                    <Button type="button" size="sm" class="h-8 cursor-pointer rounded-r-none px-3" style={{ color: "white" }} onClick={() => void handleSubmit("return")} disabled={loading() || form.saving || isViewingHistoricalVersion()}>
                       {form.saving ? language.t("common.saving") : language.t("store.capabilityEditor.createAction")}
                     </Button>
                     <DropdownMenu placement="bottom-end" gutter={4}>
                       <DropdownMenu.Trigger
-                        class="inline-flex h-8 items-center justify-center border-l border-[color:color-mix(in_srgb,var(--native-border)_28%,transparent)] bg-[var(--native-primary)] px-2 text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                        class="inline-flex h-8 cursor-pointer items-center justify-center border-l border-[color:color-mix(in_srgb,var(--native-border)_28%,transparent)] bg-[var(--native-primary)] px-2 text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
                         disabled={loading() || form.saving || isViewingHistoricalVersion()}
                         aria-label={language.t("store.capabilityEditor.createOptions")}
                       >
