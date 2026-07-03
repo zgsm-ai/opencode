@@ -158,7 +158,7 @@ export function DeviceFileProvider(props: DeviceFileProviderProps) {
       : undefined) as Record<string, unknown> | undefined
 
     // Handle cs-cloud host events only
-    if (type === "host.git.commit" || type === "host.git.status.changed") {
+    if (type === "host.git.commit" || type === "host.git.status.changed" || type === "host.git.stash.changed") {
       if (diffScheduler.active && !diff.state().loading) {
         void diff.load()
         diffScheduler.touch()

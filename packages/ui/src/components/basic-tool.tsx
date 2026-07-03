@@ -189,12 +189,12 @@ export function BasicTool(props: BasicToolProps) {
               </Switch>
             </div>
           </div>
-          <Show when={props.children && !props.hideDetails && !props.locked && !pending()}>
+          <Show when={!props.hideDetails && !props.locked && !pending()}>
             <Collapsible.Arrow />
           </Show>
         </div>
       </Collapsible.Trigger>
-      <Show when={props.animated && props.children && !props.hideDetails}>
+      <Show when={props.animated && !props.hideDetails}>
         <div
           ref={contentRef}
           data-slot="collapsible-content"
@@ -207,7 +207,7 @@ export function BasicTool(props: BasicToolProps) {
           {props.children}
         </div>
       </Show>
-      <Show when={!props.animated && props.children && !props.hideDetails}>
+      <Show when={!props.animated && !props.hideDetails}>
         <Collapsible.Content>
           <Show when={!props.defer || ready()}>{props.children}</Show>
         </Collapsible.Content>

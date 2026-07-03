@@ -241,6 +241,15 @@ export function DeviceSessionView(props: {
     return !!chat.sessions().find((s) => s.id === id) && !chat.historyLoading(id)
   })
 
+  const messagesLoading = createMemo(() => {
+    if (isWorking()) return false
+    if (isNew()) return false
+    const id = currentSessionID()
+    if (!id) return false
+    const p = phase[id]
+    return p !== "ready" && p !== "error" && effectiveMessages().length === 0
+  })
+
   const autoScroll = createAutoScroll({
     working: () => true,
     overflowAnchor: "dynamic",
@@ -440,7 +449,15 @@ export function DeviceSessionView(props: {
                                         when={!isNew()}
                                         fallback={<NewSessionView />}
                                       >
-                                        <MessageTimeline
+                                        <Show
+                                          when={!messagesLoading()}
+                                          fallback={
+                                            <div class="flex h-full items-center justify-center">
+                                              <div class="size-5 rounded-full border-2 border-border-base border-t-text-dimmed animate-spin" />
+                                            </div>
+                                          }
+                                        >
+                                          <MessageTimeline
                                         hideHeader
                                         mobileChanges={false}
                                         mobileFallback={<div />}
@@ -469,6 +486,7 @@ export function DeviceSessionView(props: {
                                         onRegisterMessage={scrollSpy.register}
                                         onUnregisterMessage={scrollSpy.unregister}
                                       />
+                                        </Show>
                                     </Show>
                                   </div>
                                   </Show>

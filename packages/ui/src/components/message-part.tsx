@@ -1276,13 +1276,28 @@ export const ToolRegistry = {
 
 function ToolFileAccordion(props: { path: string; actions?: JSX.Element; children: JSX.Element }) {
   const value = createMemo(() => props.path || "tool-file")
+  const [expanded, setExpanded] = createSignal<string[]>([value()])
+  const active = createMemo(() => expanded().includes(value()))
+  const [visible, setVisible] = createSignal(false)
+
+  createEffect(() => {
+    if (!active()) {
+      setVisible(false)
+      return
+    }
+    requestAnimationFrame(() => {
+      if (!active()) return
+      setVisible(true)
+    })
+  })
 
   return (
     <Accordion
       multiple
       data-scope="apply-patch"
       style={{ "--sticky-accordion-offset": "40px" }}
-      defaultValue={[value()]}
+      value={expanded()}
+      onChange={(v) => setExpanded(Array.isArray(v) ? v : v ? [v] : [])}
     >
       <Accordion.Item value={value()}>
         <StickyAccordionHeader>
@@ -1304,7 +1319,9 @@ function ToolFileAccordion(props: { path: string; actions?: JSX.Element; childre
             </div>
           </Accordion.Trigger>
         </StickyAccordionHeader>
-        <Accordion.Content>{props.children}</Accordion.Content>
+        <Accordion.Content>
+          <Show when={visible()}>{props.children}</Show>
+        </Accordion.Content>
       </Accordion.Item>
     </Accordion>
   )
@@ -2240,15 +2257,6 @@ ToolRegistry.register({
       return list[0]
     })
     const [expanded, setExpanded] = createSignal<string[]>([])
-    let seeded = false
-
-    createEffect(() => {
-      const list = files()
-      if (list.length === 0) return
-      if (seeded) return
-      seeded = true
-      setExpanded(list.filter((f) => f.type !== "delete").map((f) => f.filePath))
-    })
 
     const subtitle = createMemo(() => {
       const count = files().length

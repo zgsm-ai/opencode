@@ -313,7 +313,7 @@ export function WorkspaceCard(props: WorkspaceCardProps) {
                     </div>
                   </Show>
                 </div>
-                <div class="flex items-center gap-2">
+                <div class="flex items-center gap-2" title={device()?.displayName || ""}>
                   <span class="shrink-0 w-2 flex items-center justify-center text-sidebar-foreground/40">
                     <Icon name="folder" size="small" class="size-3" />
                   </span>

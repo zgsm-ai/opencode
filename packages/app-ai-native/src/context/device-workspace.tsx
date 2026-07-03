@@ -9,6 +9,7 @@ import type { Session, Command, Agent, VcsInfo, SessionStatus, PermissionRequest
 import type { ProviderCapabilitiesResponse } from "./global-sync/types"
 import { workspaceApi } from "@/pages/workspace/lib/api"
 import { scheduleNotifPromptCheck, type NotifPromptTexts } from "@/utils/notification-prompt"
+import { uuid } from "@/utils/uuid"
 import { useLanguage } from "./language"
 
 
@@ -549,7 +550,7 @@ export function DeviceWorkspaceProvider(props: ParentProps<{ workspaceId?: strin
   }
 
   const restartAgent = async () => {
-    const id = crypto.randomUUID()
+    const id = uuid()
     const maxTime = Date.now() + 30_000
     setRestarting({ active: true, phase: "", message: "Sending restart command..." })
 
@@ -910,6 +911,15 @@ export function DeviceWorkspaceProvider(props: ParentProps<{ workspaceId?: strin
                 }
                 case "host.git.remote.changed": {
                   const p = payload.properties as { repo_path?: string; branch?: string; old_head?: string; new_head?: string }
+                  const eventRepoPath = p.repo_path ? getDirectory(p.repo_path) : ""
+                  const currentRepoPath = getDirectory(device.directory)
+                  if (eventRepoPath !== currentRepoPath) break
+                  refreshVcs()
+                  summaryChanged = true
+                  break
+                }
+                case "host.git.stash.changed": {
+                  const p = payload.properties as { repo_path?: string }
                   const eventRepoPath = p.repo_path ? getDirectory(p.repo_path) : ""
                   const currentRepoPath = getDirectory(device.directory)
                   if (eventRepoPath !== currentRepoPath) break
