@@ -217,6 +217,14 @@ function ContentTabPanel() {
   const dw = useDeviceWorkspace()
   const visible = useWorkspaceVisible()
 
+  const [contentId, setContentId] = createSignal(tabStore.activeId())
+  createEffect(() => {
+    const id = tabStore.activeId()
+    if (id === contentId()) return
+    const frame = requestAnimationFrame(() => setContentId(id))
+    onCleanup(() => cancelAnimationFrame(frame))
+  })
+
   const handleTabSwitch = (e: KeyboardEvent) => {
     if (!visible()) return
     if (!e.ctrlKey) return
@@ -331,27 +339,34 @@ function ContentTabPanel() {
             </div>
             <Tabs.List class="flex-1 min-w-0 h-full border-l [&::after]:border-b-0 overflow-x-auto scrollbar-none" onWheel={(e) => { e.currentTarget.scrollLeft += e.deltaY }}>
               <For each={tabStore.tabs()}>
-                {(tab) => (
-                  <Tabs.Trigger
-                    value={tab.id}
-                    class="group h-full w-[160px] shrink-0 !bg-background-weak !border-b-0 has-[[data-selected]]:!bg-background-base has-[[data-selected]]:!border-b has-[[data-selected]]:before:absolute has-[[data-selected]]:before:top-0 has-[[data-selected]]:before:left-0 has-[[data-selected]]:before:right-0 has-[[data-selected]]:before:h-[2px] has-[[data-selected]]:before:bg-icon-strong-base [&>[data-slot=tabs-trigger]]:h-full [&>[data-slot=tabs-trigger]]:w-full [&>[data-slot=tabs-trigger]]:px-2 [&>[data-slot=tabs-trigger]]:gap-1.5 [&>[data-slot=tabs-trigger]]:justify-start flex items-center gap-1.5 text-13-regular text-text-weak hover:text-text-base has-[[data-selected]]:text-text-base transition-colors relative"
-                  >
-                    <Show when={tab.kind === "session"} fallback={<TabIcon tab={tab} />}>
-                      <SessionTabIcon tab={tab} />
-                    </Show>
-                    <span class="truncate flex-1 min-w-0 text-left">{tab.title}</span>
-                    <button
-                      class="flex items-center justify-center size-5 rounded-[4px] w-0 overflow-hidden group-hover:w-5 shrink-0 opacity-0 group-hover:opacity-100 transition-[width,opacity] hover:bg-[var(--surface-base-hover)] hover:ring-1 hover:ring-border"
-                      onPointerDown={(e) => e.stopPropagation()}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        closeTab(tab.id)
+                {(tab) => {
+                  const selected = createMemo(() => tabStore.activeId() === tab.id)
+                  return (
+                    <Tabs.Trigger
+                      value={tab.id}
+                      class="group h-full w-[160px] shrink-0 !border-b-0 [&>[data-slot=tabs-trigger]]:h-full [&>[data-slot=tabs-trigger]]:w-full [&>[data-slot=tabs-trigger]]:px-2 [&>[data-slot=tabs-trigger]]:gap-1.5 [&>[data-slot=tabs-trigger]]:justify-start flex items-center gap-1.5 text-13-regular text-text-weak hover:text-text-base transition-colors relative"
+                      classList={{
+                        "!bg-background-base !border-b before:absolute before:top-0 before:left-0 before:right-0 before:h-[2px] before:bg-icon-strong-base text-text-base": selected(),
+                        "!bg-background-weak": !selected(),
                       }}
                     >
-                      <Icon name={"close-small" as any} size="small" class="text-text-weak" />
-                    </button>
-                  </Tabs.Trigger>
-                )}
+                      <Show when={tab.kind === "session"} fallback={<TabIcon tab={tab} />}>
+                        <SessionTabIcon tab={tab} />
+                      </Show>
+                      <span class="truncate flex-1 min-w-0 text-left">{tab.title}</span>
+                      <button
+                        class="flex items-center justify-center size-5 rounded-[4px] w-0 overflow-hidden group-hover:w-5 shrink-0 opacity-0 group-hover:opacity-100 transition-[width,opacity] hover:bg-[var(--surface-base-hover)] hover:ring-1 hover:ring-border"
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          closeTab(tab.id)
+                        }}
+                      >
+                        <Icon name={"close-small" as any} size="small" class="text-text-weak" />
+                      </button>
+                    </Tabs.Trigger>
+                  )
+                }}
               </For>
             </Tabs.List>
             <div class="shrink-0 flex items-center px-2">
@@ -376,7 +391,7 @@ function ContentTabPanel() {
           </div>
           <For each={tabStore.tabs()}>
             {(tab) => (
-              <Show when={tabStore.activeId() === tab.id}>
+              <Show when={contentId() === tab.id}>
                 <Tabs.Content value={tab.id} class="flex-1 min-h-0">
                   <TabContent tab={tab} />
                 </Tabs.Content>
