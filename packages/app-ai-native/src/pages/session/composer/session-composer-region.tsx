@@ -183,6 +183,7 @@ export function SessionComposerRegion(props: {
             class="w-full overflow-hidden"
             classList={{
               "pointer-events-none": value() < 0.98,
+              "pointer-events-auto": value() >= 0.98,
               "md:max-w-200 md:mx-auto 2xl:max-w-[1000px]": props.centered,
             }}
             style={{
