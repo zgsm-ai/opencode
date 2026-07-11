@@ -1,4 +1,4 @@
-import { createSignal, onMount, onCleanup } from "solid-js"
+import { createEffect, createSignal, onMount, onCleanup } from "solid-js"
 import { useNavigate } from "@solidjs/router"
 import { showToast } from "@opencode-ai/ui/toast"
 import type { Session } from "@opencode-ai/sdk/v2/client"
@@ -8,6 +8,7 @@ import { workspaceApi, deviceApi } from "@/pages/workspace/lib/api"
 import { getProxyUrl } from "@/pages/workspace/lib/url"
 import { createDeviceClient } from "@/client/device-client"
 import { env } from "@/lib/env"
+import { fetchCostrictUniversalId, postCostrictIdentity } from "./identity-handoff"
 import { openSessionById } from "./open-session-by-id"
 
 function getMulticaUrl(): string {
@@ -22,6 +23,8 @@ export default function MulticaPage() {
   const t = useLanguage().t
   const [isLoading, setIsLoading] = createSignal(true)
   const [hasError, setHasError] = createSignal(false)
+  const [multicaReadyCount, setMulticaReadyCount] = createSignal(0)
+  const [costrictUniversalId, setCostrictUniversalId] = createSignal<string | null>(null)
 
   const url = getMulticaUrl()
 
@@ -39,6 +42,10 @@ export default function MulticaPage() {
   }
 
   let iframeRef: HTMLIFrameElement | undefined
+
+  const postIdentityToMultica = () => {
+    postCostrictIdentity(iframeRef?.contentWindow, new URL(url).origin, costrictUniversalId())
+  }
 
   const handleLoad = () => {
     setIsLoading(false)
@@ -104,15 +111,27 @@ export default function MulticaPage() {
 
     if (event.data.type === "multica:ready") {
       setIsLoading(false)
+      setMulticaReadyCount((count) => count + 1)
     }
   }
 
   onMount(() => {
     window.addEventListener("message", handleMessage)
+    void fetchCostrictUniversalId(env.API_PREFIX ?? "").then((universalId) => {
+      if (universalId) {
+        setCostrictUniversalId(universalId)
+      }
+    })
   })
 
   onCleanup(() => {
     window.removeEventListener("message", handleMessage)
+  })
+
+  createEffect(() => {
+    if (multicaReadyCount() === 0) return
+    if (!costrictUniversalId()) return
+    postIdentityToMultica()
   })
 
   return (
