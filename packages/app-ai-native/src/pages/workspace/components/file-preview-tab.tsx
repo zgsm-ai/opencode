@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createSignal, Match, onCleanup, onMount, Show, Switch } from "solid-js"
+import { createEffect, createMemo, createSignal, For, Match, onCleanup, onMount, Show, Switch } from "solid-js"
 import { ScrollView } from "@opencode-ai/ui/scroll-view"
 import { Markdown } from "@opencode-ai/ui/markdown"
 import "@/styles/vscode-markdown.css"
@@ -336,8 +336,86 @@ export function FilePreviewTab(props: { tab: ContentTab }) {
 
   const languageLabel = createMemo(() => languageLabelForPath(path() ?? ""))
 
+  const previewActive = createMemo(() => md() && preview() && markdownPreviewEnabled())
+  const [outlineOpen, setOutlineOpen] = createSignal(true)
+  const [headings, setHeadings] = createSignal<{ level: number; text: string; el: HTMLElement }[]>([])
+  const [activeIdx, setActiveIdx] = createSignal(-1)
+  let markdownEl: HTMLDivElement | undefined
+  let activeTick: number | undefined
+
+  const updateActive = () => {
+    activeTick = undefined
+    const vp = viewportEl
+    const list = headings()
+    if (!vp || list.length === 0) {
+      setActiveIdx(-1)
+      return
+    }
+    const threshold = vp.getBoundingClientRect().top + 32
+    let idx = -1
+    for (let i = 0; i < list.length; i++) {
+      if (list[i].el.getBoundingClientRect().top <= threshold) idx = i
+      else break
+    }
+    setActiveIdx(idx)
+  }
+
+  const scrollToHeading = (el: HTMLElement) => {
+    const vp = viewportEl
+    if (!vp) return
+    const top = el.getBoundingClientRect().top - vp.getBoundingClientRect().top + vp.scrollTop - 12
+    vp.scrollTo({ top, behavior: "smooth" })
+  }
+
+  const scanHeadings = () => {
+    if (!markdownEl) {
+      setHeadings([])
+      setActiveIdx(-1)
+      return
+    }
+    const els = Array.from(markdownEl.querySelectorAll("h1, h2, h3, h4, h5, h6")) as HTMLElement[]
+    setHeadings(
+      els.map((el) => ({
+        level: Number(el.tagName.slice(1)),
+        text: el.textContent?.trim() ?? "",
+        el,
+      })),
+    )
+    requestAnimationFrame(updateActive)
+  }
+
+  createEffect(() => {
+    const _ = contents()
+    const visible = previewActive()
+    if (!visible) {
+      setHeadings([])
+      setActiveIdx(-1)
+      return
+    }
+    const el = markdownEl
+    if (!el) return
+    scanHeadings()
+    const observer = new MutationObserver(scanHeadings)
+    observer.observe(el, { childList: true, subtree: true })
+    onCleanup(() => observer.disconnect())
+  })
+
+  createEffect(() => {
+    const el = viewportEl
+    if (!el) return
+    const handler = () => {
+      if (activeTick != null) cancelAnimationFrame(activeTick)
+      activeTick = requestAnimationFrame(updateActive)
+    }
+    el.addEventListener("scroll", handler, { passive: true })
+    onCleanup(() => {
+      el.removeEventListener("scroll", handler)
+      if (activeTick != null) cancelAnimationFrame(activeTick)
+    })
+  })
+
   const renderMarkdown = (source: string) => (
-    <div class="px-6 py-4 max-w-none">
+    <div ref={markdownEl} class="px-6 py-4 max-w-none">
       <Markdown text={source} class="vscode-markdown text-14-regular" />
     </div>
   )
@@ -381,6 +459,20 @@ export function FilePreviewTab(props: { tab: ContentTab }) {
               </button>
             </Tooltip>
           </Show>
+          <Show when={previewActive()}>
+            <Tooltip
+              value={outlineOpen() ? language.t("workspace.content.outline.hide") : language.t("workspace.content.outline.show")}
+              placement="bottom"
+            >
+              <button
+                class="shrink-0 ml-2 flex items-center justify-center h-5 w-5 rounded hover:bg-background-stronger transition-colors"
+                classList={{ "border border-border-base": outlineOpen() }}
+                onClick={() => setOutlineOpen((v) => !v)}
+              >
+                <Icon name="bullet-list" size="small" class="text-text-weak" />
+              </button>
+            </Tooltip>
+          </Show>
         </div>
       </Show>
       <Switch>
@@ -406,6 +498,7 @@ export function FilePreviewTab(props: { tab: ContentTab }) {
           )}
         </Match>
         <Match when={state()?.loaded}>
+          <div class="flex-1 flex min-h-0">
           <ScrollView class="flex-1 min-h-0" viewportRef={(el) => { viewportEl = el }}>
             <Show
               when={md() && preview() && markdownPreviewEnabled()}
@@ -465,6 +558,35 @@ export function FilePreviewTab(props: { tab: ContentTab }) {
               </div>
             </Show>
           </ScrollView>
+          <Show when={previewActive() && outlineOpen()}>
+            <aside class="shrink-0 w-56 border-l flex flex-col bg-background-base">
+              <div class="shrink-0 h-8 px-3 flex items-center text-12-medium text-text-weak border-b">
+                {language.t("workspace.content.outline.title")}
+              </div>
+              <div class="flex-1 overflow-y-auto thin-scrollbar py-2">
+                <Show
+                  when={headings().length > 0}
+                  fallback={<div class="px-3 py-2 text-12-regular text-text-weak">{language.t("workspace.content.outline.empty")}</div>}
+                >
+                  <For each={headings()}>
+                    {(h, i) => (
+                      <button
+                        type="button"
+                        class="block w-full text-left px-3 py-1 text-13-regular hover:bg-background-stronger transition-colors truncate"
+                        classList={{ "text-primary font-medium bg-background-stronger/50": activeIdx() === i() }}
+                        style={{ "padding-left": `${12 + (h.level - 1) * 12}px` }}
+                        onClick={() => scrollToHeading(h.el)}
+                        title={h.text}
+                      >
+                        {h.text}
+                      </button>
+                    )}
+                  </For>
+                </Show>
+              </div>
+            </aside>
+          </Show>
+          </div>
           <div class="shrink-0 flex items-center justify-between border-t bg-background-base px-4 py-1.5 text-12-medium text-text-weak">
             <div class="min-w-0 truncate font-mono">{relativePath()}</div>
             <div class="flex shrink-0 items-center gap-4">
