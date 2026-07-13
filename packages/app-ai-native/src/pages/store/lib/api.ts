@@ -1537,6 +1537,14 @@ export interface AdminDeptMember {
 export const adminDeptApi = {
   tree: () => apiFetch<{ departments: AdminDept[] }>("/api/admin/departments/tree"),
 
+  // Lazy-load one level of the department tree: the direct children of `parentId`
+  // (depth-1, each carrying childDeptCount so the UI can show an expand affordance).
+  // Omit parentId for the top-level roots.
+  children: (parentId?: string) =>
+    apiFetch<{ departments: AdminDept[] }>(
+      `/api/admin/departments/children${parentId ? `?parentId=${encodeURIComponent(parentId)}` : ""}`,
+    ),
+
   deptUsers: (id: string) =>
     apiFetch<{ members: AdminDeptMember[] }>(`/api/admin/departments/${encodeURIComponent(id)}/users`),
 }
