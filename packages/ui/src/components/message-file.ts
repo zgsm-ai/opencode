@@ -1,7 +1,10 @@
 import type { FilePart } from "@opencode-ai/sdk/v2"
 
 export function attached(part: FilePart) {
-  return part.url.startsWith("data:")
+  // Browsers can directly render `data:` URIs and `http(s):` URLs. Local
+  // `file:` URLs are filtered out here because cross-origin https pages
+  // can't load them — those are treated as inline references instead.
+  return part.url.startsWith("data:") || /^https?:\/\//.test(part.url)
 }
 
 export function inline(part: FilePart) {
