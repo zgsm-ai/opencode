@@ -27,6 +27,7 @@ describe("buildRequestParts", () => {
       messageID: "msg_1",
       sessionID: "ses_1",
       sessionDirectory: "/repo",
+      attachmentBaseUrl: "http://localhost:8080",
     })
 
     expect(result.requestParts[0]?.type).toBe("text")
@@ -63,6 +64,7 @@ describe("buildRequestParts", () => {
       messageID: "msg_2",
       sessionID: "ses_2",
       sessionDirectory: "/repo",
+      attachmentBaseUrl: "http://localhost:8080",
     })
 
     const fooFiles = result.requestParts.filter(
@@ -85,6 +87,7 @@ describe("buildRequestParts", () => {
       messageID: "msg_win_1",
       sessionID: "ses_win_1",
       sessionDirectory: "D:\\projects\\myapp", // Windows path
+      attachmentBaseUrl: "http://localhost:8080",
     })
 
     // Should create valid file URLs
@@ -111,6 +114,7 @@ describe("buildRequestParts", () => {
       messageID: "msg_win_2",
       sessionID: "ses_win_2",
       sessionDirectory: "C:\\Users\\test\\Documents", // Windows path
+      attachmentBaseUrl: "http://localhost:8080",
     })
 
     const filePart = result.requestParts.find((part) => part.type === "file")
@@ -136,6 +140,7 @@ describe("buildRequestParts", () => {
       messageID: "msg_linux_1",
       sessionID: "ses_linux_1",
       sessionDirectory: "/home/user/project",
+      attachmentBaseUrl: "http://localhost:8080",
     })
 
     const filePart = result.requestParts.find((part) => part.type === "file")
@@ -159,6 +164,7 @@ describe("buildRequestParts", () => {
       messageID: "msg_mac_1",
       sessionID: "ses_mac_1",
       sessionDirectory: "/Users/kelvin/Projects/opencode",
+      attachmentBaseUrl: "http://localhost:8080",
     })
 
     const filePart = result.requestParts.find((part) => part.type === "file")
@@ -185,6 +191,7 @@ describe("buildRequestParts", () => {
       messageID: "msg_win_ctx",
       sessionID: "ses_win_ctx",
       sessionDirectory: "D:\\workspace\\app",
+      attachmentBaseUrl: "http://localhost:8080",
     })
 
     const fileParts = result.requestParts.filter((part) => part.type === "file")
@@ -212,6 +219,7 @@ describe("buildRequestParts", () => {
       messageID: "msg_abs",
       sessionID: "ses_abs",
       sessionDirectory: "C:\\current\\project",
+      attachmentBaseUrl: "http://localhost:8080",
     })
 
     const filePart = result.requestParts.find((part) => part.type === "file")
@@ -243,6 +251,7 @@ describe("buildRequestParts", () => {
       messageID: "msg_sel",
       sessionID: "ses_sel",
       sessionDirectory: "C:\\project",
+      attachmentBaseUrl: "http://localhost:8080",
     })
 
     const filePart = result.requestParts.find((part) => part.type === "file")
@@ -272,6 +281,7 @@ describe("buildRequestParts", () => {
       messageID: "msg_dots",
       sessionID: "ses_dots",
       sessionDirectory: "C:\\projects\\myapp\\src",
+      attachmentBaseUrl: "http://localhost:8080",
     })
 
     const filePart = result.requestParts.find((part) => part.type === "file")

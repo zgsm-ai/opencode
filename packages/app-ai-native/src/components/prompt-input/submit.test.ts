@@ -52,6 +52,7 @@ beforeAll(async () => {
   mock.module("@solidjs/router", () => ({
     useNavigate: () => () => undefined,
     useParams: () => ({}),
+    useLocation: () => ({ pathname: "/", search: "", hash: "", state: null }),
   }))
 
   mock.module("@opencode-ai/sdk/v2/client", () => ({
@@ -81,6 +82,68 @@ beforeAll(async () => {
       agent: {
         current: () => ({ name: "agent" }),
       },
+    }),
+  }))
+
+  // submit.ts reads model/agent/session from the device-local context
+  // (post-refactor), so mock the same shape useLocal used to expose.
+  mock.module("@/context/device-local", () => ({
+    useDeviceLocal: () => ({
+      slug: () => "device",
+      activeSessionID: () => undefined,
+      setActiveSession: () => undefined,
+      onSessionCreated: () => undefined,
+      navigateBack: () => undefined,
+      setOnSessionCreated: () => undefined,
+      setNavigateBack: () => undefined,
+      agent: {
+        list: () => [{ name: "agent" }],
+        current: () => ({ name: "agent" }),
+        set: () => undefined,
+        move: () => undefined,
+      },
+      model: {
+        ready: () => true,
+        current: () => model,
+        set: () => undefined,
+        list: () => [model],
+        recent: () => [model],
+        cycle: () => undefined,
+        visible: () => true,
+        setVisibility: () => undefined,
+        variant: {
+          configured: () => undefined,
+          selected: () => undefined,
+          current: () => undefined,
+          list: () => [],
+          set: () => undefined,
+          cycle: () => undefined,
+        },
+      },
+    }),
+  }))
+
+  mock.module("@/context/device-workspace", () => ({
+    useDeviceWorkspace: () => ({
+      status: () => "ready",
+      data: { command: [] },
+      command: { load: async () => [] },
+      autoAccept: {
+        enabled: () => false,
+        enable: () => {
+          enabledAutoAccept.push(1)
+        },
+        disable: () => undefined,
+        toggle: () => undefined,
+      },
+      session: { setStatus: () => undefined },
+    }),
+  }))
+
+  mock.module("@/context/device-session", () => ({
+    useDeviceSessionStore: () => ({
+      optimisticAdd: () => undefined,
+      optimisticRemove: () => undefined,
     }),
   }))
 
@@ -252,7 +315,59 @@ describe("prompt submit worktree selection", () => {
     expect(enabledAutoAccept).toEqual([1])
   })
 
-  test("blocks image attachments while native upload is unsupported", async () => {
+  test("blocks image attachments when the selected model lacks image support", async () => {
+    model = {
+      id: "model",
+      provider: { id: "provider" },
+      capabilities: {
+        attachment: true,
+        input: { image: false, pdf: true },
+      },
+    }
+    let history = 0
+    const submit = createPromptSubmit({
+      info: () => undefined,
+      imageAttachments: () => [
+        {
+          type: "image",
+          id: "img",
+          filename: "image.png",
+          mime: "image/png",
+          dataUrl: "data:image/png;base64,AA==",
+        },
+      ],
+      autoAccept: () => true,
+      mode: () => "normal",
+      working: () => false,
+      editor: () => undefined,
+      queueScroll: () => undefined,
+      promptLength: (value) => value.reduce((sum, part) => sum + ("content" in part ? part.content.length : 0), 0),
+      addToHistory: () => {
+        history += 1
+      },
+      resetHistoryNavigation: () => undefined,
+      setMode: () => undefined,
+      setPopover: () => undefined,
+      newSessionWorktree: () => selected,
+      onNewSessionWorktreeReset: () => undefined,
+      onSubmit: () => undefined,
+    })
+
+    const event = { preventDefault: () => undefined } as unknown as Event
+
+    await submit.handleSubmit(event)
+
+    expect(history).toBe(0)
+    expect(createdSessions).toEqual([])
+    expect(toasts).toEqual([
+      {
+        title: "prompt.toast.attachmentUnsupported.title",
+        description: "prompt.toast.attachmentUnsupported.imageDescription",
+      },
+    ])
+  })
+
+  test("lets image attachments through when the selected model supports them", async () => {
     model = {
       id: "model",
       provider: { id: "provider" },
@@ -294,12 +409,60 @@ describe("prompt submit worktree selection", () => {
 
     await submit.handleSubmit(event)
 
+    expect(toasts).toEqual([])
+    expect(history).toBe(1)
+    expect(createdSessions.length).toBe(1)
+  })
+
+  test("refuses to send when an attachment is in unsupported (404) state", async () => {
+    model = {
+      id: "model",
+      provider: { id: "provider" },
+      capabilities: {
+        attachment: true,
+        input: { image: true, pdf: true },
+      },
+    }
+    let history = 0
+    const submit = createPromptSubmit({
+      info: () => undefined,
+      imageAttachments: () => [
+        {
+          type: "image",
+          id: "img",
+          filename: "image.png",
+          mime: "image/png",
+          dataUrl: "data:image/png;base64,AA==",
+          uploadState: "unsupported",
+        },
+      ],
+      autoAccept: () => true,
+      mode: () => "normal",
+      working: () => false,
+      editor: () => undefined,
+      queueScroll: () => undefined,
+      promptLength: (value) => value.reduce((sum, part) => sum + ("content" in part ? part.content.length : 0), 0),
+      addToHistory: () => {
+        history += 1
+      },
+      resetHistoryNavigation: () => undefined,
+      setMode: () => undefined,
+      setPopover: () => undefined,
+      newSessionWorktree: () => selected,
+      onNewSessionWorktreeReset: () => undefined,
+      onSubmit: () => undefined,
+    })
+
+    const event = { preventDefault: () => undefined } as unknown as Event
+
+    await submit.handleSubmit(event)
+
     expect(history).toBe(0)
     expect(createdSessions).toEqual([])
     expect(toasts).toEqual([
       {
-        title: "prompt.toast.imageUnsupported.title",
-        description: "prompt.toast.imageUnsupported.description",
+        title: "prompt.toast.attachmentUpgradeRequired.title",
+        description: "prompt.toast.attachmentUpgradeRequired.description",
       },
     ])
   })

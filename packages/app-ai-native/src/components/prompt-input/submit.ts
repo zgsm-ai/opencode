@@ -16,7 +16,7 @@ import { useDeviceSDK } from "@/context/device-sdk"
 import { useConversationAdapter } from "@/context/device-adapter"
 import { Identifier } from "@/utils/id"
 import { Worktree as WorktreeState } from "@/utils/worktree"
-import { buildRequestParts } from "./build-request-parts"
+import { attachmentImageUrl, buildRequestParts } from "./build-request-parts"
 import { setCursorPosition } from "./editor-dom"
 import { formatServerError } from "@/utils/server-errors"
 
@@ -116,27 +116,39 @@ export function createPromptSubmit(input: PromptSubmitInput) {
       return
     }
 
-    const image = images.some((file) => file.mime.startsWith("image/"))
-    if (image) {
+    // Server doesn't have the attachment endpoint deployed (404 on upload).
+    // Refuse to send rather than falling back to inline data URLs — the
+    // user must remove the attachment or upgrade the server.
+    const hasUnsupported = images.some((file) => file.uploadState === "unsupported")
+    if (hasUnsupported) {
       showToast({
-        title: language.t("prompt.toast.imageUnsupported.title"),
-        description: language.t("prompt.toast.imageUnsupported.description"),
+        title: language.t("prompt.toast.attachmentUpgradeRequired.title"),
+        description: language.t("prompt.toast.attachmentUpgradeRequired.description"),
       })
       return
     }
 
+    // Model-aware attachment capability check. When capabilities are unknown
+    // we don't block — same behavior as before. Otherwise we figure out
+    // which attachment kinds the current model can't ingest and surface a
+    // single targeted toast.
     const cap = currentModel.capabilities
-    const bad = images.some((file) => {
-      if (!cap) return false
-      if (!cap.attachment) return true
-      if (file.mime === "application/pdf") return !cap.input.pdf
-      if (file.mime.startsWith("image/")) return !cap.input.image
-      return true
-    })
-    if (bad) {
+    const attachmentEnabled = cap?.attachment !== false
+    const hasImage = images.some((file) => file.mime.startsWith("image/"))
+    const hasPdf = images.some((file) => file.mime === "application/pdf")
+    const imageBlocked = (hasImage && !attachmentEnabled) || (hasImage && cap && !cap.input.image)
+    const pdfBlocked = (hasPdf && !attachmentEnabled) || (hasPdf && cap && !cap.input.pdf)
+
+    if (imageBlocked || pdfBlocked) {
+      const descriptionKey =
+        imageBlocked && pdfBlocked
+          ? "prompt.toast.attachmentUnsupported.mixedDescription"
+          : imageBlocked
+            ? "prompt.toast.attachmentUnsupported.imageDescription"
+            : "prompt.toast.attachmentUnsupported.pdfDescription"
       showToast({
         title: language.t("prompt.toast.attachmentUnsupported.title"),
-        description: language.t("prompt.toast.attachmentUnsupported.description"),
+        description: language.t(descriptionKey),
       })
       return
     }
@@ -295,7 +307,7 @@ export function createPromptSubmit(input: PromptSubmitInput) {
               id: Identifier.ascending("part"),
               type: "file" as const,
               mime: attachment.mime,
-              url: attachment.dataUrl,
+              url: attachmentImageUrl(attachment, sdk.client.baseUrl),
               filename: attachment.filename,
             })),
           })
@@ -331,6 +343,7 @@ export function createPromptSubmit(input: PromptSubmitInput) {
       sessionID: session.id,
       messageID,
       sessionDirectory,
+      attachmentBaseUrl: sdk.client.baseUrl,
     })
 
     const optimisticMessage: Message = {

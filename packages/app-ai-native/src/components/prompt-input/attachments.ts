@@ -2,6 +2,10 @@ import { onCleanup, onMount } from "solid-js"
 import { showToast } from "@opencode-ai/ui/toast"
 import { usePrompt, type ContentPart, type ImageAttachmentPart } from "@/context/prompt"
 import { useLanguage } from "@/context/language"
+import { useDeviceSDK } from "@/context/device-sdk"
+import { uploadAttachment } from "@/client/attachment-client"
+import { DeviceHttpError } from "@/client/device-transport"
+import { onUnauthorized } from "@/lib/session-expired"
 import { uuid } from "@/utils/uuid"
 import { getCursorPosition } from "./editor-dom"
 
@@ -34,6 +38,7 @@ type PromptAttachmentsInput = {
 export function createPromptAttachments(input: PromptAttachmentsInput) {
   const prompt = usePrompt()
   const language = useLanguage()
+  const sdk = useDeviceSDK()
 
   const addImageAttachment = async (file: File) => {
     if (!ACCEPTED_FILE_TYPES.includes(file.type)) return
@@ -43,15 +48,69 @@ export function createPromptAttachments(input: PromptAttachmentsInput) {
       const editor = input.editor()
       if (!editor) return
       const dataUrl = reader.result as string
+      const id = uuid()
       const attachment: ImageAttachmentPart = {
         type: "image",
-        id: uuid(),
+        id,
         filename: file.name,
         mime: file.type,
         dataUrl,
+        uploadState: "uploading",
       }
       const cursorPosition = prompt.cursor() ?? getCursorPosition(editor)
       prompt.set([...prompt.current(), attachment], cursorPosition)
+
+      // Best-effort upload: on success, store the cs-cloud attachment ID.
+      // The wire format emits `${baseUrl}/api/v1/attachments/${id}` for
+      // browser rendering; cs-cloud's proxy rewrites it to
+      // `file://${absPath}` when forwarding to csc on the same device.
+      uploadAttachment(file, {
+        baseUrl: sdk.client.baseUrl,
+        directory: sdk.directory,
+        onUnauthorized,
+      })
+        .then((uploaded) => {
+          const current = prompt.current()
+          const idx = current.findIndex((part) => part.type === "image" && part.id === id)
+          if (idx < 0) return
+          const next = current.slice()
+          next[idx] = {
+            ...(next[idx] as ImageAttachmentPart),
+            attachmentId: uploaded.id,
+            uploadState: "uploaded",
+          }
+          prompt.set(next, prompt.cursor())
+        })
+        .catch((err) => {
+          const endpointMissing =
+            err instanceof DeviceHttpError && err.code === "ENDPOINT_NOT_FOUND"
+          console.warn(
+            endpointMissing
+              ? "[attachment] upload endpoint not deployed, refusing send"
+              : "[attachment] upload failed, falling back to inline data URL",
+            err,
+          )
+          const current = prompt.current()
+          const idx = current.findIndex((part) => part.type === "image" && part.id === id)
+          if (idx < 0) return
+          const next = current.slice()
+          next[idx] = {
+            ...(next[idx] as ImageAttachmentPart),
+            uploadState: endpointMissing ? "unsupported" : "error",
+          }
+          prompt.set(next, prompt.cursor())
+          showToast(
+            endpointMissing
+              ? {
+                  title: language.t("prompt.toast.attachmentUpgradeRequired.title"),
+                  description: language.t("prompt.toast.attachmentUpgradeRequired.description"),
+                }
+              : {
+                  title: language.t("prompt.toast.attachmentUploadFailed.title"),
+                  description: language.t("prompt.toast.attachmentUploadFailed.description"),
+                },
+          )
+        })
     }
     reader.readAsDataURL(file)
   }

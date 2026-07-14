@@ -907,7 +907,7 @@ function ContentSidebar(props: { directory: string; autoExpandGroup?: () => { gr
               </Show>
             </Show>
           </div>
-          <div class="shrink-0 flex items-center gap-1 px-3 py-1.5 border-t text-11-regular text-native-dim min-h-[32px]">
+          <div class="shrink-0 h-8 flex items-center gap-1 px-3 border-t text-12-medium text-native-dim overflow-hidden">
             <Show when={dw.data.agentInfo}>
               <span class="truncate">Powered by {dw.data.agentInfo!.name}</span>
               <Show when={dw.data.agentInfo!.version}>
@@ -915,16 +915,17 @@ function ContentSidebar(props: { directory: string; autoExpandGroup?: () => { gr
               </Show>
             </Show>
             <Show when={dw.restarting().active}>
-              <span class="ml-auto text-11-regular text-text-warning animate-pulse">{(dw.restarting() as any).message}</span>
+              <span class="ml-auto text-12-medium text-text-warning animate-pulse">{(dw.restarting() as any).message}</span>
             </Show>
             <div class="ml-auto">
               <DropdownMenu>
                 <DropdownMenu.Trigger
                   as={IconButton}
                   icon="dot-grid"
+                  size="small"
                   variant="ghost"
                   disabled={dw.restarting().active}
-                  class="size-5 rounded cursor-pointer text-sidebar-foreground/70 hover:text-sidebar-foreground"
+                  class="!size-5 rounded cursor-pointer text-sidebar-foreground/70 hover:text-sidebar-foreground"
                 />
                 <DropdownMenu.Portal>
                   <DropdownMenu.Content class="min-w-36 bg-sidebar shadow-md">
