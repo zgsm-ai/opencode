@@ -223,7 +223,11 @@ export const routeConfig: RouteConfig[] = [
     ],
   },
   {
-    path: "/multica",
+    // Trailing multica path is captured into `rest` (e.g. "/workflow/ipd-1/issues/x"
+    // → rest="ipd-1/issues/x"). The bare "/workflow" also matches, with rest="".
+    // Verified against @solidjs/router 0.15.4 matcher: matchSegment("", undefined)
+    // returns true, so "/workflow/*rest" matches "/workflow".
+    path: "/workflow/*rest",
     component: MulticaPage,
     auth: true,
   },
