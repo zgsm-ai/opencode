@@ -12,6 +12,7 @@ import { createPathHelpers } from "./file/path"
 import { createFileTreeStore } from "./file/tree-store"
 import { createDiffStore } from "./file/diff-store"
 import { createRefreshScheduler } from "./file/refresh-scheduler"
+import { createFileRefresh } from "./file/file-refresh"
 import { invalidateFromHostWatcher } from "./file/watcher"
 import {
   approxBytes,
@@ -87,6 +88,12 @@ export function DeviceFileProvider(props: DeviceFileProviderProps) {
     file: {},
   })
 
+  const refresh = createFileRefresh({
+    normalize: path.normalize,
+    getChunk: (file) => store.file[file]?.chunk,
+    load: (file, opts) => void load(file, opts),
+  })
+
   const tree = createFileTreeStore({
     scope,
     normalizeDir: path.normalizeDir,
@@ -141,6 +148,7 @@ export function DeviceFileProvider(props: DeviceFileProviderProps) {
   createEffect(() => {
     scope()
     inflight.clear()
+    refresh.cancelAll()
     resetFileContentLru()
     batch(() => {
       setStore("file", reconcile({}))
@@ -173,7 +181,7 @@ export function DeviceFileProvider(props: DeviceFileProviderProps) {
         {
           normalize: path.normalize,
           hasFile: (f) => Boolean(store.file[f]),
-          loadFile: (f) => void load(f, { force: true }),
+          loadFile: (f) => void refresh.schedule(f),
           node: tree.node,
           isDirLoaded: tree.isLoaded,
           refreshDir: (d) => void tree.listDir(d, { force: true }),
@@ -196,7 +204,7 @@ export function DeviceFileProvider(props: DeviceFileProviderProps) {
           void tree.listDir(parent, { force: true })
         }
         if (store.file[normalized]) {
-          void load(normalized, { force: true })
+          void refresh.schedule(normalized)
         }
       }
       if (diffScheduler.active && !diff.state().loading) {
@@ -396,6 +404,7 @@ export function DeviceFileProvider(props: DeviceFileProviderProps) {
     treeScheduler.stop()
     diffScheduler.stop()
     treePollingRef = undefined
+    refresh.cancelAll()
   })
 
   const value = {

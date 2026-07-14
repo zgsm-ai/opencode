@@ -1,5 +1,5 @@
-import { createEffect, createSignal, onMount, onCleanup } from "solid-js"
-import { useNavigate } from "@solidjs/router"
+import { createSignal, createEffect, onMount, onCleanup } from "solid-js"
+import { useNavigate, useParams } from "@solidjs/router"
 import { showToast } from "@opencode-ai/ui/toast"
 import type { Session } from "@opencode-ai/sdk/v2/client"
 import { useAuth } from "@/context/auth"
@@ -10,6 +10,7 @@ import { createDeviceClient } from "@/client/device-client"
 import { env } from "@/lib/env"
 import { fetchCostrictUniversalId, postCostrictIdentity } from "./identity-handoff"
 import { openSessionById } from "./open-session-by-id"
+import { decideSyncAction } from "./sync-action"
 
 function getMulticaUrl(): string {
   // Runtime-configurable via VITE_MULTICA_WEB_URL (window.__ENV__ injected by
@@ -20,6 +21,7 @@ function getMulticaUrl(): string {
 export default function MulticaPage() {
   const auth = useAuth()
   const navigate = useNavigate()
+  const params = useParams<{ rest?: string }>()
   const t = useLanguage().t
   const [isLoading, setIsLoading] = createSignal(true)
   const [hasError, setHasError] = createSignal(false)
@@ -28,18 +30,22 @@ export default function MulticaPage() {
 
   const url = getMulticaUrl()
 
-  // Build the iframe URL with an auth hint so multica-web can
-  // recognise it is running inside an iframe and skip its own
-  // login wall when the parent already has a session.
-  const iframeSrc = () => {
-    const u = new URL(url)
-    u.searchParams.set("embedded", "opencode")
-    const email = auth.user()?.email
-    if (email) {
-      u.searchParams.set("preferred_email", email)
-    }
-    return u.toString()
-  }
+  // The multica sub-path captured at mount. Never updated after mount — later
+  // navigations go through postMessage, not src rewriting (which would reload
+  // the iframe). A hard reload of the parent remounts this component, so the
+  // splat is re-read and the iframe re-opens at the right path.
+  const rest = () => params.rest ?? ""
+  const initialSubPath = rest() === "" ? "" : `/${rest()}`
+  const lastChildPath = { current: initialSubPath === "" ? "/" : initialSubPath }
+
+  // Build the iframe URL with an auth hint so multica-web can recognise it is
+  // running inside an iframe, plus the initial multica sub-path for deep links.
+  const baseIframe = new URL(url)
+  baseIframe.pathname = baseIframe.pathname.replace(/\/+$/, "") + initialSubPath
+  baseIframe.searchParams.set("embedded", "opencode")
+  const email = auth.user()?.email
+  if (email) baseIframe.searchParams.set("preferred_email", email)
+  const iframeSrc = baseIframe.toString()
 
   let iframeRef: HTMLIFrameElement | undefined
 
@@ -91,14 +97,14 @@ export default function MulticaPage() {
         }),
     })
 
-  // Post-message bridge: listen for navigation requests from the
-  // embedded app so we can handle deep-links back to the parent.
+  // Post-message bridge: listen for navigation/location requests from the
+  // embedded app so we can mirror its path in our URL and deep-link back.
   const handleMessage = (event: MessageEvent) => {
     if (event.origin !== new URL(url).origin) return
     if (typeof event.data !== "object" || event.data === null) return
 
     if (event.data.type === "multica:navigate") {
-      // New contract: open a csc session by id.
+      // Open a csc session by id.
       if (event.data.target === "session" && typeof event.data.sessionId === "string") {
         void openSession(event.data.sessionId)
         return
@@ -107,6 +113,17 @@ export default function MulticaPage() {
       if (typeof event.data.href === "string") {
         console.log("[Multica_embed] navigate request:", event.data.href)
       }
+      return
+    }
+
+    if (event.data.type === "multica:location" && typeof event.data.path === "string") {
+      const action = decideSyncAction(
+        { currentSplat: rest(), lastChildPath: lastChildPath.current },
+        { kind: "childLocation", path: event.data.path },
+      )
+      if (action.lastChildPath !== undefined) lastChildPath.current = action.lastChildPath
+      if (action.updateUrl) navigate(action.updateUrl, { replace: true })
+      return
     }
 
     if (event.data.type === "multica:ready") {
@@ -114,6 +131,24 @@ export default function MulticaPage() {
       setMulticaReadyCount((count) => count + 1)
     }
   }
+
+  // When the splat changes externally (browser back/forward, manual edit, or an
+  // in-app link), ask the embedded multica to navigate. No-op on mount and
+  // whenever the splat already matches where the child is (loop guard).
+  createEffect(() => {
+    const splat = rest()
+    const action = decideSyncAction(
+      { currentSplat: splat, lastChildPath: lastChildPath.current },
+      { kind: "splatChange", splat },
+    )
+    if (action.lastChildPath !== undefined) lastChildPath.current = action.lastChildPath
+    if (action.postRoute) {
+      iframeRef?.contentWindow?.postMessage(
+        { type: "multica:route", path: action.postRoute },
+        "*",
+      )
+    }
+  })
 
   onMount(() => {
     window.addEventListener("message", handleMessage)
@@ -169,7 +204,7 @@ export default function MulticaPage() {
 
       <iframe
         ref={iframeRef}
-        src={iframeSrc()}
+        src={iframeSrc}
         title="Multica"
         class="h-full w-full border-0"
         sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"

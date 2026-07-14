@@ -27,6 +27,9 @@ type BuildRequestPartsInput = {
   messageID: string
   sessionID: string
   sessionDirectory: string
+  // cs-cloud base URL (e.g. http://localhost:8080). Used to construct
+  // attachment URLs that the browser can render and csc can fetch.
+  attachmentBaseUrl: string
 }
 
 const absolute = (directory: string, path: string) => {
@@ -42,6 +45,21 @@ const fileQuery = (selection: FileSelection | undefined) =>
 const isFileAttachment = (part: Prompt[number]): part is FileAttachmentPart => part.type === "file"
 const isAgentAttachment = (part: Prompt[number]): part is AgentPart => part.type === "agent"
 const isWorkspaceAttachment = (part: Prompt[number]): part is WorkspacePart => part.type === "workspace"
+
+// Build the wire URL for an uploaded image attachment. When the file has
+// been uploaded to cs-cloud, emit the GET endpoint URL — browsers render
+// it directly for previews, and cs-cloud's proxy rewrites it to
+// `file://${absPath}` when forwarding the prompt body to a same-device
+// csc so the compat layer reads bytes from disk without an HTTP fetch.
+// Fall back to the inline data URL when no attachment id is available.
+export function attachmentImageUrl(
+  attachment: ImageAttachmentPart,
+  baseUrl: string,
+): string {
+  return attachment.attachmentId
+    ? `${baseUrl.replace(/\/$/, "")}/api/v1/attachments/${encodeURIComponent(attachment.attachmentId)}`
+    : attachment.dataUrl
+}
 
 const toOptimisticPart = (part: PromptRequestPart, sessionID: string, messageID: string): Part => {
   if (part.type === "text") {
@@ -177,7 +195,7 @@ export function buildRequestParts(input: BuildRequestPartsInput) {
       id: Identifier.ascending("part"),
       type: "file",
       mime: attachment.mime,
-      url: attachment.dataUrl,
+      url: attachmentImageUrl(attachment, input.attachmentBaseUrl),
       filename: attachment.filename,
     } satisfies PromptRequestPart
   })

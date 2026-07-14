@@ -41,6 +41,19 @@ export interface ImageAttachmentPart {
   filename: string
   mime: string
   dataUrl: string
+  // cs-cloud attachment ID returned by POST /api/v1/attachments. When
+  // present, the prompt wire format emits `${baseUrl}/api/v1/attachments/${id}`
+  // — browsers can render this directly, and cs-cloud's proxy rewrites it
+  // to `file://${absPath}` when forwarding to csc on the same device.
+  // Absent for fallback inline attachments (the wire format then falls back
+  // to dataUrl).
+  attachmentId?: string
+  // Visible upload lifecycle on the chip. "uploading" → spinner overlay;
+  // "uploaded" → no decoration (attachmentId ready); "error" → warning badge
+  // and the chip falls back to inline data URL on submit; "unsupported" →
+  // server returned 404 for /api/v1/attachments (endpoint not deployed),
+  // submit refuses to send and surfaces an upgrade-required toast.
+  uploadState?: "uploading" | "uploaded" | "error" | "unsupported"
 }
 
 export type ContentPart = TextPart | FileAttachmentPart | AgentPart | WorkspacePart | ImageAttachmentPart

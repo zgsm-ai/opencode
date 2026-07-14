@@ -1381,6 +1381,9 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
           }
           onRemove={removeImageAttachment}
           removeLabel={language.t("prompt.attachment.remove")}
+          uploadingLabel={language.t("prompt.attachment.uploading")}
+          errorLabel={language.t("prompt.attachment.uploadError")}
+          unsupportedLabel={language.t("prompt.attachment.requiresUpgrade")}
         />
         <div
           class="relative"
