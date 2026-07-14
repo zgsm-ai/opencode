@@ -45,7 +45,8 @@ export default function AdminMembers() {
     search: string
     debouncedSearch: string
     page: number
-    // Department-tree (org) tab.
+    // Department-tree (org) tab. `tree` holds only the top-level roots; deeper
+    // levels are lazy-loaded per node (see childrenOf/nodeState below).
     tree: AdminDept[]
     treeLoading: boolean
     treeLoaded: boolean
@@ -73,10 +74,56 @@ export default function AdminMembers() {
     deptMembersLoading: false,
   })
 
-  // Collapsible state for tree nodes (default: expanded).
-  const [collapsed, setCollapsed] = createSignal<Record<string, boolean>>({})
-  const isCollapsed = (id: string) => collapsed()[id] === true
-  const toggleCollapse = (id: string) => setCollapsed((c) => ({ ...c, [id]: !c[id] }))
+  // Lazy department tree: `state.tree` holds the top-level roots, which are
+  // auto-expanded on load so the first level shows by default; deeper levels are
+  // fetched on first expand and cached in `childrenOf`, keyed by dept id.
+  // `nodeState` tracks per-node expand/loading/loaded/error so re-collapsing then
+  // re-expanding never refetches.
+  const [childrenOf, setChildrenOf] = createStore<Record<string, AdminDept[]>>({})
+  const [nodeState, setNodeState] = createStore<
+    Record<string, { expanded?: boolean; loading?: boolean; loaded?: boolean; error?: boolean }>
+  >({})
+  const isExpanded = (id: string) => nodeState[id]?.expanded === true
+
+  // Fetch (or refetch, on retry) one node's direct children. On completion we
+  // merge only load flags (createStore shallow-merges), NOT `expanded`, so if the
+  // user collapsed the node mid-load their intent is preserved (no surprise reopen).
+  async function loadChildren(node: AdminDept) {
+    const id = node.deptId
+    setNodeState(id, { expanded: true, loading: true, error: false })
+    try {
+      const res = await adminDeptApi.children(id)
+      setChildrenOf(id, res.departments ?? [])
+      setNodeState(id, { loading: false, loaded: true, error: false })
+    } catch (err) {
+      setNodeState(id, { loading: false, loaded: false, error: true })
+      if (isDeptUnavailable(err)) {
+        setState("treeUnavailable", true)
+      } else {
+        showToast({
+          variant: "error",
+          title: language.t("admin.members.org.childrenFailed"),
+          description: err instanceof Error ? err.message : String(err),
+        })
+      }
+    }
+  }
+
+  // Toggle a node: collapse (keep cache), or open it. Opening reuses cached children
+  // (loaded) or an already in-flight fetch (loading) without starting a duplicate
+  // request; only a never-loaded node kicks off loadChildren.
+  function toggleExpand(node: AdminDept) {
+    const st = nodeState[node.deptId]
+    if (st?.expanded) {
+      setNodeState(node.deptId, "expanded", false)
+      return
+    }
+    if (st?.loaded || st?.loading) {
+      setNodeState(node.deptId, "expanded", true)
+      return
+    }
+    void loadChildren(node)
+  }
 
   // Per-row status-action loading guard.
   const [actionLoading, setActionLoading] = createStore<Record<string, boolean>>({})
@@ -130,9 +177,14 @@ export default function AdminMembers() {
     setState("treeLoading", true)
     setState("treeUnavailable", false)
     try {
-      const res = await adminDeptApi.tree()
-      setState("tree", res.departments ?? [])
+      // Load the top-level roots, then auto-expand them so the first level (each
+      // root's direct children) shows by default. Deeper levels stay lazy — they
+      // load on expand. loadChildren swallows its own errors (per-node retry row).
+      const res = await adminDeptApi.children()
+      const roots = res.departments ?? []
+      setState("tree", roots)
       setState("treeLoaded", true)
+      await Promise.all(roots.filter((r) => r.childDeptCount > 0).map((r) => loadChildren(r)))
     } catch (err) {
       if (isDeptUnavailable(err)) {
         setState("treeUnavailable", true)
@@ -355,14 +407,17 @@ export default function AdminMembers() {
     return Number.isNaN(d.getTime()) ? "—" : d.toLocaleString(language.locale() === "zh" ? "zh-CN" : "en-US")
   }
 
-  // Recursive department-tree node. Renders a row (collapse toggle + name) and,
-  // when expanded, its children indented one level deeper.
+  // Recursive department-tree node. Whether a node can expand is decided by
+  // childDeptCount (no need to pre-load a level); its direct children are fetched
+  // lazily on first expand and rendered from childrenOf, indented one level deeper.
   function DeptTreeNode(props: { node: AdminDept; depth: number }) {
     const node = () => props.node
-    const hasChildren = () => !!node().children && node().children!.length > 0
+    const hasChildren = () => node().childDeptCount > 0
+    const expanded = () => isExpanded(node().deptId)
+    const nstate = () => nodeState[node().deptId]
     const selected = () => state.selectedDeptId === node().deptId
     return (
-      <li role="treeitem" aria-expanded={hasChildren() ? !isCollapsed(node().deptId) : undefined} aria-selected={selected()}>
+      <li role="treeitem" aria-expanded={hasChildren() ? expanded() : undefined} aria-selected={selected()}>
         <div
           class={`flex items-center gap-1 rounded-[var(--native-radius-sm)] transition-colors ${
             selected()
@@ -379,14 +434,22 @@ export default function AdminMembers() {
               type="button"
               class="flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded-[var(--native-radius-sm)] text-[var(--native-muted)] transition-colors hover:text-[var(--native-foreground)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--native-primary)]"
               aria-label={
-                isCollapsed(node().deptId) ? language.t("admin.members.org.expand") : language.t("admin.members.org.collapse")
+                expanded() ? language.t("admin.members.org.collapse") : language.t("admin.members.org.expand")
               }
               onClick={(e) => {
                 e.stopPropagation()
-                toggleCollapse(node().deptId)
+                toggleExpand(node())
               }}
             >
-              <Icon name={isCollapsed(node().deptId) ? "chevron-right" : "chevron-down"} size="small" />
+              <Show
+                when={nstate()?.loading}
+                fallback={<Icon name={expanded() ? "chevron-down" : "chevron-right"} size="small" />}
+              >
+                <span
+                  class="h-3 w-3 animate-spin rounded-full border border-[var(--native-muted)] border-t-transparent"
+                  aria-hidden="true"
+                />
+              </Show>
             </button>
           </Show>
           <button
@@ -400,9 +463,26 @@ export default function AdminMembers() {
             <span class="truncate">{node().deptName}</span>
           </button>
         </div>
-        <Show when={hasChildren() && !isCollapsed(node().deptId)}>
+        <Show when={hasChildren() && expanded()}>
           <ul role="group">
-            <For each={node().children}>{(child) => <DeptTreeNode node={child} depth={props.depth + 1} />}</For>
+            <Show when={nstate()?.error}>
+              <li
+                class="flex items-center gap-2 py-1 pr-2 text-[0.75rem] text-[var(--native-muted)]"
+                style={{ "padding-left": `${(props.depth + 1) * 16 + 20}px` }}
+              >
+                <span>{language.t("admin.members.org.childrenFailed")}</span>
+                <button
+                  type="button"
+                  class="cursor-pointer text-[var(--native-primary)] underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--native-primary)]"
+                  onClick={() => void loadChildren(node())}
+                >
+                  {language.t("admin.members.org.retry")}
+                </button>
+              </li>
+            </Show>
+            <For each={childrenOf[node().deptId] ?? []}>
+              {(child) => <DeptTreeNode node={child} depth={props.depth + 1} />}
+            </For>
           </ul>
         </Show>
       </li>

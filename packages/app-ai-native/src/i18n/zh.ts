@@ -2960,6 +2960,7 @@ export const dict = {
   "admin.members.org.retry": "重试",
   "admin.members.org.expand": "展开",
   "admin.members.org.collapse": "收起",
+  "admin.members.org.childrenFailed": "加载下级部门失败",
   "admin.members.toast.treeFailed": "加载部门树失败",
   "admin.members.toast.deptUsersFailed": "加载部门成员失败",
   "admin.members.pagination.summary": "第 {{page}} / {{total}} 页 · 共 {{count}} 名成员",

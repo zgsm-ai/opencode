@@ -551,6 +551,23 @@ export async function mockApiFetch<T>(url: string, options?: RequestInit): Promi
   if (path.endsWith("/api/admin/departments/tree") && method === "GET") {
     return { departments: seedAdminDeptTree() } as T
   }
+  // GET /api/admin/departments/children?parentId= — depth-1 lazy load (empty = roots).
+  // Mirrors the backend: slice the seeded full tree to one level, dropping deeper
+  // children so the org tab's lazy expand works the same in demo mode.
+  if (path.endsWith("/api/admin/departments/children") && method === "GET") {
+    const parentId = params.get("parentId") ?? ""
+    const tree = seedAdminDeptTree()
+    const find = (nodes: typeof tree, id: string): (typeof tree)[number] | undefined => {
+      for (const n of nodes) {
+        if (n.deptId === id) return n
+        const hit = n.children && find(n.children, id)
+        if (hit) return hit
+      }
+      return undefined
+    }
+    const level = parentId ? (find(tree, parentId)?.children ?? []) : tree
+    return { departments: level.map((n) => ({ ...n, children: undefined })) } as T
+  }
   // GET /api/admin/departments/:id/users
   if (matchesSubResource(path, "/api/admin/departments/", "/users") && method === "GET") {
     const rest = path.slice("/api/admin/departments/".length)

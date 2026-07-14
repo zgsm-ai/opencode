@@ -3017,6 +3017,7 @@ export const dict = {
   "admin.members.org.retry": "Retry",
   "admin.members.org.expand": "Expand",
   "admin.members.org.collapse": "Collapse",
+  "admin.members.org.childrenFailed": "Failed to load sub-departments",
   "admin.members.toast.treeFailed": "Failed to load department tree",
   "admin.members.toast.deptUsersFailed": "Failed to load department members",
   "admin.members.pagination.summary": "Page {{page}} / {{total}} · {{count}} members",
