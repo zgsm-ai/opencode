@@ -139,7 +139,7 @@ export function WorkspaceSidebar(props: { hide?: () => void } = {}) {
               as={IconButton}
               icon="plus-small"
               variant="ghost"
-              class="size-8 shrink-0 rounded-[var(--native-radius-sm)] border border-sidebar-border cursor-pointer text-sidebar-foreground/70 hover:text-sidebar-foreground"
+              class="size-8 shrink-0 rounded-[var(--native-radius-sm)] border border-[color:color-mix(in_oklab,var(--native-primary)_24%,transparent)] cursor-pointer bg-[var(--native-primary-soft)] transition-colors duration-200 hover:bg-[color:color-mix(in_oklab,var(--native-primary-soft),var(--native-primary)_14%)] hover:border-[color:color-mix(in_oklab,var(--native-primary)_40%,transparent)] [&_[data-slot=icon-svg]]:text-[var(--native-primary)]"
               aria-label={t("workspace.createFromDevice")}
             />
             <DropdownMenu.Portal>
