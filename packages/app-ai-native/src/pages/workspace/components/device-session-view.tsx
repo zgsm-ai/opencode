@@ -299,6 +299,10 @@ export function DeviceSessionView(props: {
     const enriched: any[] = []
     for (const m of deduped) {
       if (m.role === "assistant" && m.parentID && !userIDs.has(m.parentID)) {
+        if (!parts?.[m.parentID]?.length) {
+          enriched.push(m)
+          continue
+        }
         if (!orphanCreated || m.parentID !== orphanID) {
           orphanCreated = false
         }
