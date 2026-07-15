@@ -407,6 +407,7 @@ function ContentTabPanel() {
 function FileTreeWithTabs(props: { path: string }) {
   const tabStore = useContentTabs()
   const file = useFile()
+  const diff = useDiff()
 
   const handleFileClick = (node: FileNode) => {
     if (node.type === "directory") return
@@ -422,7 +423,31 @@ function FileTreeWithTabs(props: { path: string }) {
     void file.load(path, { limit: filePreviewConfig.initialPreviewLines })
   }
 
-  return <FileTree path={props.path} onFileClick={handleFileClick} />
+  const kinds = createMemo(() => {
+    const s = diff.state()
+    const out = new Map<string, "add" | "del" | "mix">()
+    const fill = (files: { path: string; status: string }[]) => {
+      for (const f of files) {
+        if (f.status === "deleted") continue
+        out.set(file.normalize(f.path).replaceAll("\\", "/"), f.status === "untracked" || f.status === "added" ? "add" : "mix")
+      }
+    }
+    fill(s.untrackedFiles)
+    fill(s.unstagedFiles)
+    fill(s.stagedFiles)
+
+    for (const [path, kind] of [...out]) {
+      const parts = path.split("/")
+      for (let i = parts.length - 1; i > 0; i--) {
+        const dir = parts.slice(0, i).join("/")
+        if (kind === "mix") out.set(dir, "mix")
+        else if (!out.has(dir)) out.set(dir, "add")
+      }
+    }
+    return out
+  })
+
+  return <FileTree path={props.path} onFileClick={handleFileClick} kinds={kinds()} />
 }
 
 type SidebarSection = "sessions" | "files" | "diffs"
@@ -511,7 +536,7 @@ function ContentSidebar(props: { directory: string; autoExpandGroup?: () => { gr
   })
 
   createEffect(() => {
-    if (active() === "diffs") diff.scheduler.start()
+    if (active() === "diffs" || active() === "files") diff.scheduler.start()
     else diff.scheduler.stop()
   })
 

@@ -57,16 +57,27 @@ export function createDiffStore(options: DiffStoreOptions) {
       .fetch()
       .then((result) => {
         if (options.scope() !== directory) return
-        if (result) {
-          setState(
-            produce((draft) => {
-              draft.stagedFiles = result.stagedFiles ?? []
-              draft.unstagedFiles = result.unstagedFiles ?? []
-              draft.untrackedFiles = result.untrackedFiles ?? []
-              draft.branch = result.branch ?? ""
-            }),
-          )
+        if (!result) return
+        const next = {
+          stagedFiles: result.stagedFiles ?? [],
+          unstagedFiles: result.unstagedFiles ?? [],
+          untrackedFiles: result.untrackedFiles ?? [],
+          branch: result.branch ?? "",
         }
+        const unchanged =
+          state.branch === next.branch &&
+          JSON.stringify(state.stagedFiles) === JSON.stringify(next.stagedFiles) &&
+          JSON.stringify(state.unstagedFiles) === JSON.stringify(next.unstagedFiles) &&
+          JSON.stringify(state.untrackedFiles) === JSON.stringify(next.untrackedFiles)
+        if (unchanged) return
+        setState(
+          produce((draft) => {
+            draft.stagedFiles = next.stagedFiles
+            draft.unstagedFiles = next.unstagedFiles
+            draft.untrackedFiles = next.untrackedFiles
+            draft.branch = next.branch
+          }),
+        )
       })
       .catch((e) => {
         if (options.scope() !== directory) return

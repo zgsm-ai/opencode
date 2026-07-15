@@ -79,10 +79,10 @@ const kindDotColor = (kind: Kind) => {
   return "background-color: var(--icon-diff-modified-base)"
 }
 
-const visibleKind = (node: FileNode, kinds?: ReadonlyMap<string, Kind>, marks?: Set<string>) => {
-  const kind = kinds?.get(node.path)
+const visibleKind = (path: string, kinds?: ReadonlyMap<string, Kind>, marks?: Set<string>) => {
+  const kind = kinds?.get(path)
   if (!kind) return
-  if (!marks?.has(node.path)) return
+  if (!marks?.has(path)) return
   return kind
 }
 
@@ -135,7 +135,9 @@ const FileTreeNode = (
     "class",
     "classList",
   ])
-  const kind = () => visibleKind(local.node, local.kinds, local.marks)
+  const file = useFile()
+  const key = () => file.normalize(local.node.path).replaceAll("\\", "/")
+  const kind = () => visibleKind(key(), local.kinds, local.marks)
   const active = () => !!kind() && !local.node.ignored
   const color = () => {
     const value = kind()
@@ -390,7 +392,7 @@ export default function FileTree(props: {
         {(node) => {
           const expanded = () => file.tree.state(node.path)?.expanded ?? false
           const deep = () => deeps().get(node.path) ?? -1
-          const kind = () => visibleKind(node, kinds(), marks())
+          const kind = () => visibleKind(file.normalize(node.path).replaceAll("\\", "/"), kinds(), marks())
           const active = () => !!kind() && !node.ignored
 
           return (
