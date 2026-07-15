@@ -2105,7 +2105,7 @@ export const dict = {
   "workspace.running": "Running",
   "workspace.idle": "Idle",
   "workspace.empty": "No workspaces",
-  "workspace.emptyHint": "Create from device list below",
+  "workspace.emptyHint": "Click the + button above to create one",
   "workspace.close": "Close",
   "workspace.closeAllRunning": "Close all running",
   "workspace.run": "Run",
@@ -2137,6 +2137,7 @@ export const dict = {
   "workspace.device.offlineHint": "Device offline, cannot create workspace",
   "workspace.device.upgradeHint": "Upgrade available: v{{version}}",
   "workspace.device.refresh": "Refresh device list",
+  "workspace.device.manage": "Manage devices",
 
   "workspace.init.checking": "Checking workspace status...",
   "workspace.init.initializing": "Workspace is initializing",

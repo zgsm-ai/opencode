@@ -3,11 +3,12 @@ import { useNavigate, useParams } from "@solidjs/router"
 import { Icon } from "@opencode-ai/ui/icon"
 import { IconButton } from "@opencode-ai/ui/icon-button"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
-import { DropdownMenu } from "@opencode-ai/ui/dropdown-menu"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import type { Device, DeviceStatus, Workspace, WorkspaceDirectory } from "../types"
-import { DeviceList } from "./device-list"
+import { DeviceItem } from "./device-item"
 import { CreateWorkspaceDialogContent } from "./create-workspace-dialog"
+import { useDeviceUpgrade } from "./use-device-upgrade"
 import { useWorkspace } from "../context"
 import { useWorkspaceNavigate } from "@/hooks/use-workspace-navigate"
 import { useActiveWorkspace } from "../active-workspace"
@@ -56,8 +57,6 @@ export function WorkspaceSidebar(props: { hide?: () => void } = {}) {
   }
 
   const [workspaceSearchQuery, setWorkspaceSearchQuery] = createSignal("")
-  const [deviceSearchQuery, setDeviceSearchQuery] = createSignal("")
-  const [isDeviceListCollapsed, setIsDeviceListCollapsed] = createSignal(false)
 
   const filteredWorkspaces = createMemo(() => {
     const query = workspaceSearchQuery().toLowerCase()
@@ -84,7 +83,22 @@ export function WorkspaceSidebar(props: { hide?: () => void } = {}) {
 
   const onlineDevices = createMemo(() => devices().filter((d) => d.status === "online"))
 
+  const upgrade = useDeviceUpgrade({ devices, onUpgradeCompleted: work.refreshDevices })
+
+  const hasUpgradableDevices = createMemo(() =>
+    devices().some(
+      (d) =>
+        !!d.canUpdate &&
+        d.status === "online" &&
+        !upgrade.upgradeMap()[d.deviceId] &&
+        !upgrade.isRecentlyUpgraded(d.deviceId),
+    ),
+  )
+
+  const [createPopoverOpen, setCreatePopoverOpen] = createSignal(false)
+
   const handleCreateWorkspace = (device: Device) => {
+    setCreatePopoverOpen(false)
     dialog.show(() => (
       <CreateWorkspaceDialogContent
         device={device}
@@ -94,6 +108,29 @@ export function WorkspaceSidebar(props: { hide?: () => void } = {}) {
         }}
       />
     ))
+  }
+
+  const handleUpgrade = (device: Device) => {
+    setCreatePopoverOpen(false)
+    upgrade.upgradeDevice(device)
+  }
+
+  const handleManageDevices = () => {
+    setCreatePopoverOpen(false)
+    hide()
+    navigate("/console/devices")
+  }
+
+  const [deviceRefreshing, setDeviceRefreshing] = createSignal(false)
+  let lastDeviceRefreshTs = 0
+  const handleDeviceRefresh = () => {
+    if (deviceRefreshing()) return
+    const now = Date.now()
+    if (now - lastDeviceRefreshTs < 1000) return
+    lastDeviceRefreshTs = now
+    setDeviceRefreshing(true)
+    const minSpin = new Promise((r) => setTimeout(r, 600))
+    Promise.all([work.refreshDevices(), minSpin]).finally(() => setDeviceRefreshing(false))
   }
 
   return (
@@ -134,45 +171,86 @@ export function WorkspaceSidebar(props: { hide?: () => void } = {}) {
               </button>
             </Show>
           </div>
-          <DropdownMenu>
-            <DropdownMenu.Trigger
-              as={IconButton}
-              icon="plus-small"
-              variant="ghost"
-              class="size-8 shrink-0 rounded-[var(--native-radius-sm)] border border-[color:color-mix(in_oklab,var(--native-primary)_24%,transparent)] cursor-pointer bg-[var(--native-primary-soft)] transition-colors duration-200 hover:bg-[color:color-mix(in_oklab,var(--native-primary-soft),var(--native-primary)_14%)] hover:border-[color:color-mix(in_oklab,var(--native-primary)_40%,transparent)] [&_[data-slot=icon-svg]]:text-[var(--native-primary)]"
-              aria-label={t("workspace.createFromDevice")}
-            />
-            <DropdownMenu.Portal>
-              <DropdownMenu.Content class="w-56 bg-sidebar shadow-md">
-                <DropdownMenu.Group>
-                  <DropdownMenu.GroupLabel>{t("workspace.createFromDevice")}</DropdownMenu.GroupLabel>
-                  <Show
-                    when={onlineDevices().length > 0}
-                    fallback={
-                      <div class="flex flex-col items-center gap-1 px-2 py-4 text-center">
-                        <Icon name="server" class="size-6 text-sidebar-foreground/30" />
-                        <span class="text-xs text-sidebar-foreground/50">{t("workspace.createFromDevice.empty")}</span>
-                      </div>
-                    }
-                  >
-                    <DropdownMenu.Separator class="bg-sidebar-border" />
-                    <For each={onlineDevices()}>
-                      {(device) => (
-                        <DropdownMenu.Item class="hover:bg-sidebar-accent" onSelect={() => handleCreateWorkspace(device)}>
-                          <Icon name="server" size="small" class="size-4 shrink-0 text-sidebar-foreground/70" />
-                          <DropdownMenu.ItemLabel class="truncate">{device.displayName}</DropdownMenu.ItemLabel>
-                        </DropdownMenu.Item>
-                      )}
-                    </For>
-                  </Show>
-                </DropdownMenu.Group>
-              </DropdownMenu.Content>
-            </DropdownMenu.Portal>
-          </DropdownMenu>
+          <Popover
+            open={createPopoverOpen()}
+            onOpenChange={setCreatePopoverOpen}
+          >
+            <div class="relative">
+              <PopoverTrigger
+                as={IconButton}
+                icon="plus-small"
+                variant="ghost"
+                class="size-8 shrink-0 rounded-[var(--native-radius-sm)] border border-transparent cursor-pointer bg-[color:color-mix(in_oklab,var(--native-primary)_72%,var(--native-panel))] transition-colors duration-200 hover:bg-[var(--native-primary)] [&_[data-slot=icon-svg]]:text-[var(--native-primary-foreground)]"
+                aria-label={t("workspace.createFromDevice")}
+              />
+              <Show when={hasUpgradableDevices()}>
+                <span class="pointer-events-none absolute -right-0.5 -top-0.5 size-2 rounded-full bg-[#ff9800] ring-[1.5px] ring-[var(--native-panel)]" />
+              </Show>
+            </div>
+            <PopoverContent class="w-80 rounded-[var(--native-radius-md)] border border-sidebar-border bg-sidebar p-1.5 shadow-[var(--native-shadow-md)]">
+              <div class="flex items-center gap-1 px-2 py-1.5">
+                <span class="text-[11px] font-semibold uppercase tracking-[0.12em] text-sidebar-foreground/70">{t("workspace.createFromDevice")}</span>
+                <div class="ml-auto flex items-center gap-0.5">
+                  <Tooltip value={t("workspace.device.manage")} placement="bottom">
+                    <button
+                      type="button"
+                      class="flex size-6 items-center justify-center rounded-[var(--native-radius-sm)] text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors cursor-pointer focus:outline-none"
+                      onClick={handleManageDevices}
+                      aria-label={t("workspace.device.manage")}
+                    >
+                      <Icon name="configuration" size="small" />
+                    </button>
+                  </Tooltip>
+                  <Tooltip value={t("workspace.device.refresh")} placement="bottom">
+                    <button
+                      type="button"
+                      class="flex size-6 items-center justify-center rounded-[var(--native-radius-sm)] text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors cursor-pointer focus:outline-none"
+                      classList={{ "pointer-events-none": deviceRefreshing() }}
+                      onClick={handleDeviceRefresh}
+                      aria-label={t("workspace.device.refresh")}
+                    >
+                      <Icon name="arrows-rotate" size="small" classList={{ "animate-spin": deviceRefreshing() }} />
+                    </button>
+                  </Tooltip>
+                </div>
+              </div>
+              <Show
+                when={onlineDevices().length > 0}
+                fallback={
+                  <div class="flex flex-col items-center gap-1 px-2 py-6 text-center">
+                    <Icon name="server" class="size-6 text-sidebar-foreground/30" />
+                    <span class="text-xs text-sidebar-foreground/50">{t("workspace.createFromDevice.empty")}</span>
+                  </div>
+                }
+              >
+                <ul class="space-y-0.5">
+                  <For each={onlineDevices()}>
+                    {(device) => {
+                      const state = () => upgrade.upgradeMap()[device.deviceId]
+                      const hasUpgrade = () =>
+                        !!device.canUpdate &&
+                        device.status === "online" &&
+                        !state() &&
+                        !upgrade.isRecentlyUpgraded(device.deviceId)
+                      return (
+                        <DeviceItem
+                          device={device}
+                          upgradeState={state()}
+                          hasUpgrade={hasUpgrade()}
+                          onCreate={handleCreateWorkspace}
+                          onUpgrade={handleUpgrade}
+                        />
+                      )
+                    }}
+                  </For>
+                </ul>
+              </Show>
+            </PopoverContent>
+          </Popover>
         </div>
       </div>
 
-      <div class="thin-scrollbar min-h-0 overflow-y-auto py-1 pr-1" classList={{ "flex-1": isDeviceListCollapsed(), "flex-[3]": !isDeviceListCollapsed() }}>
+      <div class="thin-scrollbar min-h-0 flex-1 overflow-y-auto py-1 pr-1">
         <Show when={runningIds().length > 0}>
           <div class="mb-3 px-2">
             <div class="mb-1 flex items-center gap-1.5 px-2.5 py-1.5">
@@ -213,24 +291,14 @@ export function WorkspaceSidebar(props: { hide?: () => void } = {}) {
               <div class="flex flex-col items-center justify-center rounded-[var(--native-radius-lg)] border border-[color:color-mix(in_oklab,var(--native-border)_24%,transparent)] bg-[color:color-mix(in_oklab,var(--native-surface)_72%,var(--native-panel))] py-8 text-sidebar-foreground/50">
                 <Icon name="folder" class="mb-2 size-8 opacity-30" />
                 <span class="text-xs font-medium text-sidebar-foreground/65">{t("workspace.empty")}</span>
-                <span class="mt-1 text-[11px] leading-[1.5] text-sidebar-foreground/40">{t("workspace.emptyHint")}</span>
+                <span class="mt-1 flex items-center gap-1 text-[11px] leading-[1.5] text-sidebar-foreground/40">
+                  <Icon name="arrow-up" class="size-3" />
+                  {t("workspace.emptyHint")}
+                </span>
               </div>
             </Show>
           </div>
         </div>
-      </div>
-
-      <div class="thin-scrollbar min-h-0 overflow-y-auto pt-1" classList={{ "shrink-0": isDeviceListCollapsed(), "flex-[2]": !isDeviceListCollapsed() }}>
-        <DeviceList
-          devices={devices}
-          onCreateWorkspace={handleCreateWorkspace}
-          searchQuery={deviceSearchQuery}
-          onSearchChange={setDeviceSearchQuery}
-          isCollapsed={isDeviceListCollapsed}
-          onToggleCollapse={() => setIsDeviceListCollapsed((v) => !v)}
-          onUpgradeCompleted={work.refreshDevices}
-          onRefresh={work.refreshDevices}
-        />
       </div>
     </aside>
   )
