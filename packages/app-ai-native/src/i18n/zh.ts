@@ -1849,6 +1849,8 @@ export const dict = {
   "workspace.search.placeholder": "搜索工作空间...",
   "workspace.running": "运行中",
   "workspace.idle": "空闲",
+  "workspace.running.empty": "暂无运行中工作空间",
+  "workspace.running.emptyHint": "点击下方空闲工作空间以激活",
   "workspace.empty": "暂无工作空间",
   "workspace.emptyHint": "点击上方的 + 按钮创建",
   "workspace.close": "关闭",

@@ -251,32 +251,47 @@ export function WorkspaceSidebar(props: { hide?: () => void } = {}) {
       </div>
 
       <div class="thin-scrollbar min-h-0 flex-1 overflow-y-auto py-1 pr-1">
-        <Show when={runningIds().length > 0}>
+        <Show when={runningIds().length > 0 || idleIds().length > 0}>
           <div class="mb-3 px-2">
             <div class="mb-1 flex items-center gap-1.5 px-2.5 py-1.5">
               <span class="text-[11px] font-semibold uppercase tracking-[0.12em] text-sidebar-foreground/70">{t("workspace.running")}</span>
               <span class="ml-auto rounded-[var(--native-radius-full)] bg-[color:color-mix(in_oklab,var(--native-primary)_8%,transparent)] px-2 py-0.5 text-[11px] font-medium text-[var(--native-primary)]">{runningIds().length}</span>
-              <Tooltip value={t("workspace.closeAllRunning")} placement="bottom">
-                <IconButton
-                  icon="close"
-                  variant="ghost"
-                  iconSize="small"
-                  class="size-7 rounded-lg cursor-pointer text-sidebar-foreground/70 hover:text-sidebar-foreground"
-                  onClick={() => {
-                    const ids = runningIds()
-                    for (const id of ids) {
-                      disableWorkspace(id)
-                    }
-                    if (active.id && ids.includes(active.id)) active.clear()
-                    navigate("/workspace")
-                  }}
-                  aria-label={t("workspace.closeAllRunning")}
-                />
-              </Tooltip>
+              <Show when={runningIds().length > 0}>
+                <Tooltip value={t("workspace.closeAllRunning")} placement="bottom">
+                  <IconButton
+                    icon="close"
+                    variant="ghost"
+                    iconSize="small"
+                    class="size-7 rounded-lg cursor-pointer text-sidebar-foreground/70 hover:text-sidebar-foreground"
+                    onClick={() => {
+                      const ids = runningIds()
+                      for (const id of ids) {
+                        disableWorkspace(id)
+                      }
+                      if (active.id && ids.includes(active.id)) active.clear()
+                      navigate("/workspace")
+                    }}
+                    aria-label={t("workspace.closeAllRunning")}
+                  />
+                </Tooltip>
+              </Show>
             </div>
-            <div class="flex flex-col gap-1">
-              <For each={runningIds()}>{(id) => <WorkspaceCard id={id} isRunning={true} onOpen={handleOpenWorkspace} onClose={handleCloseWorkspace} />}</For>
-            </div>
+            <Show
+              when={runningIds().length > 0}
+              fallback={
+                <div class="flex flex-col items-center justify-center rounded-[var(--native-radius-md)] border border-[color:color-mix(in_oklab,var(--native-border)_24%,transparent)] bg-[color:color-mix(in_oklab,var(--native-surface)_60%,var(--native-panel))] px-3 py-4 text-center">
+                  <span class="text-[11px] font-medium text-sidebar-foreground/55">{t("workspace.running.empty")}</span>
+                  <span class="mt-1 flex items-center gap-1 text-[11px] leading-[1.5] text-sidebar-foreground/40">
+                    <Icon name="arrow-up" class="size-3 rotate-180" />
+                    {t("workspace.running.emptyHint")}
+                  </span>
+                </div>
+              }
+            >
+              <div class="flex flex-col gap-1">
+                <For each={runningIds()}>{(id) => <WorkspaceCard id={id} isRunning={true} onOpen={handleOpenWorkspace} onClose={handleCloseWorkspace} />}</For>
+              </div>
+            </Show>
           </div>
         </Show>
 

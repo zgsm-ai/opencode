@@ -2104,6 +2104,8 @@ export const dict = {
   "workspace.search.placeholder": "Search workspaces...",
   "workspace.running": "Running",
   "workspace.idle": "Idle",
+  "workspace.running.empty": "No running workspaces",
+  "workspace.running.emptyHint": "Click an idle workspace below to activate",
   "workspace.empty": "No workspaces",
   "workspace.emptyHint": "Click the + button above to create one",
   "workspace.close": "Close",
