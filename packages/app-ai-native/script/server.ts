@@ -92,7 +92,13 @@ const proxyHttp = async (req: Request) => {
   url.port = port
   url.protocol = "http:"
   url.pathname = rewrite(url.pathname)
-  return fetch(new Request(url.toString(), req))
+  // redirect:"manual" so 3xx responses pass through to the browser instead of
+  // being followed server-side. OAuth login (/api/auth/login → casdoor) and the
+  // login callback (/api/auth/callback, which sets the session cookie on a 302)
+  // rely on the browser receiving the redirect + Set-Cookie directly; following
+  // them here chases host-only URLs the container can't reach and swallows the
+  // Set-Cookie.
+  return fetch(new Request(url.toString(), req), { redirect: "manual" })
 }
 
 Bun.serve({
