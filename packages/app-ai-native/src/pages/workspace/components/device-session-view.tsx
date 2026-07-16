@@ -65,6 +65,8 @@ export function DeviceSessionView(props: {
   const chat = useSessionChat()
   const language = useLanguage()
 
+  console.debug(`[tab-debug] B2 DeviceSessionView mount sessionID=${props.sessionID} at T+${performance.now().toFixed(1)}ms`)
+
   let snapFrame: number | undefined
 
   const sid = createMemo(() => props.createdSessionID?.() ?? props.sessionID)
@@ -129,18 +131,6 @@ export function DeviceSessionView(props: {
 
   createEffect(() => {
     chat.setActiveSession(currentSessionID())
-  })
-
-  createEffect(() => {
-    if (isNew()) return
-    const msgs = effectiveMessages()
-    const last = [...msgs].reverse().find((m) => m.role === "user")
-    if (!last) return
-    if (last.agent) chat.agent.set(last.agent)
-    const lastModel = (last as any).model as { providerID: string; modelID: string } | undefined
-    if (lastModel && lastModel.providerID) {
-      chat.model.set(lastModel)
-    }
   })
 
   const effectiveMessages = createMemo(() => {
@@ -214,15 +204,6 @@ export function DeviceSessionView(props: {
     },
     isAutoAccepting: () => chat.autoAccept.enabled(),
     enableAutoAccept: () => chat.autoAccept.enable(),
-  })
-
-  const [composerMounted, setComposerMounted] = createSignal(true)
-  createEffect(() => {
-    const id = currentSessionID()
-    void id
-    setComposerMounted(false)
-    const frame = requestAnimationFrame(() => setComposerMounted(true))
-    onCleanup(() => cancelAnimationFrame(frame))
   })
 
   const [snap, setSnap] = createSignal(true)
@@ -494,10 +475,10 @@ export function DeviceSessionView(props: {
                                     </Show>
                                   </div>
                                   </Show>
-                                  <Show when={chat.agentAvailable() && composerMounted()}>
+                                  <Show when={chat.agentAvailable()}>
                                     <SessionComposerRegion
                                       state={composer}
-                                      ready={true}
+                                      sessionID={currentSessionID}
                                       centered={!props.inputOnly}
                                       compact={props.inputOnly}
                                       inputRef={(el: HTMLDivElement) => {

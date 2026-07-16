@@ -14,6 +14,7 @@ import { useDiff, useTreePolling } from "@/context/device-file"
 import { useDeviceWorkspace } from "@/context/device-workspace"
 import { sessionTreeIDs } from "@/pages/session/composer/session-request-tree"
 import { DeviceSessionStoreProvider } from "@/context/device-session"
+import { SessionComposerRegistryProvider } from "@/context/session-composer-registry"
 import { SessionTabProvider, useSessionTab } from "@/context/session-tab"
 import { DeviceSessionView } from "./device-session-view"
 import { DeviceSessionViewHeader } from "./device-session-view-header"
@@ -221,7 +222,12 @@ function ContentTabPanel() {
   createEffect(() => {
     const id = tabStore.activeId()
     if (id === contentId()) return
-    const frame = requestAnimationFrame(() => setContentId(id))
+    const t0 = performance.now()
+    console.debug(`[tab-debug] B1 activeId=${id} queued at T+${(t0).toFixed(1)}ms`)
+    const frame = requestAnimationFrame(() => {
+      console.debug(`[tab-debug] B1 contentId=${id} applied after ${(performance.now() - t0).toFixed(1)}ms`)
+      setContentId(id)
+    })
     onCleanup(() => cancelAnimationFrame(frame))
   })
 
@@ -1163,7 +1169,9 @@ export function WorkspaceContentLayout(props: { workspaceId: string; directory: 
             )}
           </Show>
           <DeviceSessionStoreProvider>
-            <ContentTabPanel />
+            <SessionComposerRegistryProvider>
+              <ContentTabPanel />
+            </SessionComposerRegistryProvider>
           </DeviceSessionStoreProvider>
         </div>
       </div>
