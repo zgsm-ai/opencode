@@ -935,12 +935,6 @@ function ContentSidebar(props: { directory: string; autoExpandGroup?: () => { gr
             </Show>
           </div>
           <div class="shrink-0 h-8 flex items-center gap-1 px-3 border-t text-12-medium text-native-dim overflow-hidden">
-            <Show when={dw.data.agentInfo}>
-              <span class="truncate">Powered by {dw.data.agentInfo!.name}</span>
-              <Show when={dw.data.agentInfo!.version}>
-                <span class="text-native-muted">{dw.data.agentInfo!.version}</span>
-              </Show>
-            </Show>
             <Show when={dw.restarting().active}>
               <span class="ml-auto text-12-medium text-text-warning animate-pulse">{(dw.restarting() as any).message}</span>
             </Show>
