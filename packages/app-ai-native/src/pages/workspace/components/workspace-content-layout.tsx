@@ -934,40 +934,6 @@ function ContentSidebar(props: { directory: string; autoExpandGroup?: () => { gr
               </Show>
             </Show>
           </div>
-          <div class="shrink-0 h-8 flex items-center gap-1 px-3 border-t text-12-medium text-native-dim overflow-hidden">
-            <Show when={dw.restarting().active}>
-              <span class="ml-auto text-12-medium text-text-warning animate-pulse">{(dw.restarting() as any).message}</span>
-            </Show>
-            <div class="ml-auto">
-              <DropdownMenu>
-                <DropdownMenu.Trigger
-                  as={IconButton}
-                  icon="dot-grid"
-                  size="small"
-                  variant="ghost"
-                  disabled={dw.restarting().active}
-                  class="!size-5 rounded cursor-pointer text-sidebar-foreground/70 hover:text-sidebar-foreground"
-                />
-                <DropdownMenu.Portal>
-                  <DropdownMenu.Content class="min-w-36 bg-sidebar shadow-md">
-                    <Show when={!dw.restarting().active && dw.data.agentInfo?.version} fallback={
-                      <Tooltip value={dw.restarting().active ? "" : language.t("workspace.agent.upgradeRequired")} placement="left">
-                        <DropdownMenu.Item class="opacity-40 cursor-not-allowed" onSelect={() => {}}>
-                          <Icon name="reset" size="small" class="size-4 text-sidebar-foreground/70" />
-                          <DropdownMenu.ItemLabel>{language.t("workspace.agent.restart")}</DropdownMenu.ItemLabel>
-                        </DropdownMenu.Item>
-                      </Tooltip>
-                    }>
-                      <DropdownMenu.Item class="hover:bg-sidebar-accent" onSelect={() => dw.restartAgent()}>
-                        <Icon name="reset" size="small" class="size-4 text-sidebar-foreground/70" />
-                        <DropdownMenu.ItemLabel>{language.t("workspace.agent.restart")}</DropdownMenu.ItemLabel>
-                      </DropdownMenu.Item>
-                    </Show>
-                  </DropdownMenu.Content>
-                </DropdownMenu.Portal>
-              </DropdownMenu>
-            </div>
-          </div>
         </Show>
       </div>
     </div>
