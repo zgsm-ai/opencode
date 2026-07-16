@@ -271,12 +271,35 @@ export function TimelineMessage(props: {
     () => isAssistant() && (props.message as AssistantMessage).error?.name === "MessageAbortedError",
   )
 
-  const turnDurationMs = createMemo(() => {
+  const durationMs = createMemo(() => {
     if (!isAssistant()) return undefined
-    const t = (props.message as AssistantMessage).time
-    if (typeof t.created !== "number" || typeof t.completed !== "number") return undefined
-    if (t.completed < t.created) return undefined
-    return t.completed - t.created
+    const self = props.message as AssistantMessage
+    const end = self.time.completed
+    if (typeof end !== "number") return undefined
+    const all = list(data.store.message?.[props.sessionID], [] as MessageType[])
+    const idx = all.findIndex((m) => m.id === props.message.id)
+    if (idx === -1) return undefined
+    let start: number | undefined
+    for (let i = idx - 1; i >= 0; i--) {
+      const m = all[i]
+      if (!m) continue
+      if (m.role === "assistant") {
+        const c = (m as AssistantMessage).time.completed
+        if (typeof c === "number") {
+          start = c
+          break
+        }
+      } else if (m.role === "user") {
+        const c = m.time.created
+        if (typeof c === "number") {
+          start = c
+          break
+        }
+      }
+    }
+    if (typeof start !== "number") return undefined
+    if (end < start) return undefined
+    return end - start
   })
 
   return (
@@ -415,7 +438,7 @@ export function TimelineMessage(props: {
         <div data-slot="session-turn-assistant-content" class={props.classes?.container}>
           <AssistantParts
             messages={[props.message as AssistantMessage]}
-            turnDurationMs={turnDurationMs()}
+            durationMs={durationMs()}
             working={working()}
             showReasoningSummaries={showReasoningSummaries()}
             showAssistantCopyPartID={assistantCopyPartID()}

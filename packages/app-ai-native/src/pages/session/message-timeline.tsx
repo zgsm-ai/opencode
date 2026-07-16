@@ -510,7 +510,7 @@ export function MessageTimeline(props: {
 
             <div
               role="log"
-              class="flex flex-col items-start justify-start pt-4 pb-16 transition-[margin]"
+              class="flex flex-col gap-2 items-start justify-start pt-4 pb-16 transition-[margin]"
               classList={{
                 "w-full": true,
                 "md:max-w-200 md:mx-auto 2xl:max-w-[1000px]": props.centered,
@@ -519,7 +519,7 @@ export function MessageTimeline(props: {
               }}
             >
               <Show when={props.turnStart > 0 || props.historyMore}>
-                <div class="w-full flex justify-center mb-3">
+                <div class="w-full flex justify-center">
                   <Button
                     variant="ghost"
                     size="large"
@@ -534,7 +534,7 @@ export function MessageTimeline(props: {
                 </div>
               </Show>
               <For each={rendered()}>
-                {(message, index) => {
+                {(message) => {
                   const messageID = message.id
                   const active = createMemo(() => {
                     const activeID = activeMessageID()
@@ -561,7 +561,6 @@ export function MessageTimeline(props: {
                       classList={{
                         "min-w-0 w-full max-w-full": true,
                         "md:max-w-200 2xl:max-w-[1000px]": props.centered,
-                        "mt-3": index() > 0 && message.role === "user",
                       }}
                     >
                       <Show when={commentCount() > 0}>

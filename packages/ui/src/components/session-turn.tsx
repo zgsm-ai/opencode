@@ -329,21 +329,6 @@ export function SessionTurn(
     if (working()) return null
     return showAssistantCopyPartID() ?? null
   })
-  const turnDurationMs = createMemo(() => {
-    const start = message()?.time.created
-    if (typeof start !== "number") return undefined
-
-    const end = assistantMessages().reduce<number | undefined>((max, item) => {
-      const completed = item.time.completed
-      if (typeof completed !== "number") return max
-      if (max === undefined) return completed
-      return Math.max(max, completed)
-    }, undefined)
-
-    if (typeof end !== "number") return undefined
-    if (end < start) return undefined
-    return end - start
-  })
   const assistantDerived = createMemo(() => {
     let visible = 0
     let tail: "text" | "other" | undefined
@@ -408,7 +393,6 @@ export function SessionTurn(
                   <AssistantParts
                     messages={assistantMessages()}
                     showAssistantCopyPartID={assistantCopyPartID()}
-                    turnDurationMs={turnDurationMs()}
                     working={working()}
                     showReasoningSummaries={showReasoningSummaries()}
                     shellToolDefaultOpen={props.shellToolDefaultOpen}

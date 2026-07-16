@@ -151,7 +151,7 @@ export interface MessagePartProps {
   defaultOpen?: boolean
   copy?: boolean
   showAssistantCopyPartID?: string | null
-  turnDurationMs?: number
+  durationMs?: number
 }
 
 export type PartComponent = Component<MessagePartProps>
@@ -552,7 +552,7 @@ function partDefaultOpen(part: PartType, shell = false, edit = false) {
 export function AssistantParts(props: {
   messages: AssistantMessage[]
   showAssistantCopyPartID?: string | null
-  turnDurationMs?: number
+  durationMs?: number
   working?: boolean
   showReasoningSummaries?: boolean
   shellToolDefaultOpen?: boolean
@@ -643,7 +643,7 @@ export function AssistantParts(props: {
                         part={item()!}
                         message={message()!}
                         showAssistantCopyPartID={props.showAssistantCopyPartID}
-                        turnDurationMs={props.turnDurationMs}
+                        durationMs={props.durationMs}
                         defaultOpen={partDefaultOpen(item()!, props.shellToolDefaultOpen, props.editToolDefaultOpen)}
                         copy={copy()}
                       />
@@ -1232,7 +1232,7 @@ export function Part(props: MessagePartProps) {
         hideDetails={props.hideDetails}
         defaultOpen={props.defaultOpen}
         showAssistantCopyPartID={props.showAssistantCopyPartID}
-        turnDurationMs={props.turnDurationMs}
+        durationMs={props.durationMs}
         copy={props.copy}
       />
     </Show>
@@ -1456,15 +1456,8 @@ PART_MAPPING["text"] = function TextPartDisplay(props) {
 
   const duration = createMemo(() => {
     if (props.message.role !== "assistant") return ""
-    const message = props.message as AssistantMessage
-    const completed = message.time.completed
-    const ms =
-      typeof props.turnDurationMs === "number"
-        ? props.turnDurationMs
-        : typeof completed === "number"
-          ? completed - message.time.created
-          : -1
-    if (!(ms >= 0)) return ""
+    const ms = typeof props.durationMs === "number" ? props.durationMs : -1
+    if (!(ms > 0)) return ""
     const total = Math.round(ms / 1000)
     if (total < 60) return i18n.t("ui.message.duration.seconds", { count: numfmt().format(total) })
     const minutes = Math.floor(total / 60)
