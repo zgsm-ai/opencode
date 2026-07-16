@@ -2,6 +2,7 @@ import { createSignal, createMemo, For, Show } from "solid-js"
 import { useNavigate, useParams } from "@solidjs/router"
 import { Icon } from "@opencode-ai/ui/icon"
 import { IconButton } from "@opencode-ai/ui/icon-button"
+import { Button } from "@opencode-ai/ui/button"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
@@ -13,7 +14,7 @@ import { useWorkspace } from "../context"
 import { useWorkspaceNavigate } from "@/hooks/use-workspace-navigate"
 import { useActiveWorkspace } from "../active-workspace"
 import { useLanguage } from "@/context/language"
-import { WorkspaceCard, getPrimaryDirectory } from "./workspace-card"
+import { WorkspaceCard } from "./workspace-card"
 
 export function WorkspaceSidebar(props: { hide?: () => void } = {}) {
   const language = useLanguage()
@@ -56,27 +57,13 @@ export function WorkspaceSidebar(props: { hide?: () => void } = {}) {
     if (active.id === workspace.id) active.clear()
   }
 
-  const [workspaceSearchQuery, setWorkspaceSearchQuery] = createSignal("")
-
-  const filteredWorkspaces = createMemo(() => {
-    const query = workspaceSearchQuery().toLowerCase()
-    const all = workspaces()
-    if (!query) return all
-    return all.filter(
-      (workspace) =>
-        workspace.name.toLowerCase().includes(query) ||
-        workspace.description?.toLowerCase().includes(query) ||
-        getPrimaryDirectory(workspace)?.path.toLowerCase().includes(query),
-    )
-  })
-
   const runningIds = createMemo(() =>
-    filteredWorkspaces()
+    workspaces()
       .filter((w) => isEnabled(w))
       .map((w) => w.id),
   )
   const idleIds = createMemo(() =>
-    filteredWorkspaces()
+    workspaces()
       .filter((w) => !isEnabled(w))
       .map((w) => w.id),
   )
@@ -151,103 +138,84 @@ export function WorkspaceSidebar(props: { hide?: () => void } = {}) {
       </div>
 
       <div class="shrink-0 px-3 py-2.5">
-        <div class="flex items-center gap-1">
-          <div class="flex h-8 flex-1 items-center rounded-[var(--native-radius-sm)] border border-sidebar-border bg-[color:color-mix(in_oklab,var(--native-panel)_82%,var(--native-bg-subtle))] shadow-[var(--native-shadow-sm)] transition-all duration-200 focus-within:border-sidebar-ring focus-within:ring-1 focus-within:ring-sidebar-ring">
-            <Icon name="magnifying-glass" class="size-4 text-sidebar-foreground/50 shrink-0 ml-3" />
-            <input
-              type="text"
-              placeholder={t("workspace.search.placeholder")}
-              value={workspaceSearchQuery()}
-              onInput={(e: Event) => setWorkspaceSearchQuery((e.target as HTMLInputElement).value)}
-              class="flex-1 min-w-0 h-full px-2 text-sm bg-transparent text-sidebar-foreground placeholder:text-sidebar-foreground/50 focus:outline-none"
-            />
-            <Show when={workspaceSearchQuery()}>
-              <button
-                type="button"
-                onClick={() => setWorkspaceSearchQuery("")}
-                class="flex items-center justify-center size-6 rounded-full text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors cursor-pointer mr-1"
-              >
-                <Icon name="close" class="size-3.5" />
-              </button>
+        <Popover
+          open={createPopoverOpen()}
+          onOpenChange={setCreatePopoverOpen}
+        >
+          <div class="relative">
+            <PopoverTrigger
+              as={Button}
+              variant="ghost"
+              icon="plus-small"
+              class="w-full h-8 shrink-0 justify-center gap-1.5 rounded-[var(--native-radius-sm)] border border-transparent cursor-pointer bg-[color:color-mix(in_oklab,var(--native-primary)_72%,var(--native-panel))] text-[var(--native-primary-foreground)] text-sm font-medium transition-colors duration-200 hover:bg-[var(--native-primary)] [&_[data-slot=icon-svg]]:text-[var(--native-primary-foreground)]"
+              aria-label={t("workspace.device.createWorkspace")}
+            >
+              {t("workspace.device.createWorkspace")}
+            </PopoverTrigger>
+            <Show when={hasUpgradableDevices()}>
+              <span class="pointer-events-none absolute -right-0.5 -top-0.5 size-2 rounded-full bg-[#ff9800] ring-[1.5px] ring-[var(--native-panel)]" />
             </Show>
           </div>
-          <Popover
-            open={createPopoverOpen()}
-            onOpenChange={setCreatePopoverOpen}
-          >
-            <div class="relative">
-              <PopoverTrigger
-                as={IconButton}
-                icon="plus-small"
-                variant="ghost"
-                class="size-8 shrink-0 rounded-[var(--native-radius-sm)] border border-transparent cursor-pointer bg-[color:color-mix(in_oklab,var(--native-primary)_72%,var(--native-panel))] transition-colors duration-200 hover:bg-[var(--native-primary)] [&_[data-slot=icon-svg]]:text-[var(--native-primary-foreground)]"
-                aria-label={t("workspace.createFromDevice")}
-              />
-              <Show when={hasUpgradableDevices()}>
-                <span class="pointer-events-none absolute -right-0.5 -top-0.5 size-2 rounded-full bg-[#ff9800] ring-[1.5px] ring-[var(--native-panel)]" />
-              </Show>
-            </div>
-            <PopoverContent class="w-80 rounded-[var(--native-radius-md)] border border-sidebar-border bg-sidebar p-1.5 shadow-[var(--native-shadow-md)]">
-              <div class="flex items-center gap-1 px-2 py-1.5">
-                <span class="text-[11px] font-semibold uppercase tracking-[0.12em] text-sidebar-foreground/70">{t("workspace.createFromDevice")}</span>
-                <div class="ml-auto flex items-center gap-0.5">
-                  <Tooltip value={t("workspace.device.manage")} placement="bottom">
-                    <button
-                      type="button"
-                      class="flex size-6 items-center justify-center rounded-[var(--native-radius-sm)] text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors cursor-pointer focus:outline-none"
-                      onClick={handleManageDevices}
-                      aria-label={t("workspace.device.manage")}
-                    >
-                      <Icon name="configuration" size="small" />
-                    </button>
-                  </Tooltip>
-                  <Tooltip value={t("workspace.device.refresh")} placement="bottom">
-                    <button
-                      type="button"
-                      class="flex size-6 items-center justify-center rounded-[var(--native-radius-sm)] text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors cursor-pointer focus:outline-none"
-                      classList={{ "pointer-events-none": deviceRefreshing() }}
-                      onClick={handleDeviceRefresh}
-                      aria-label={t("workspace.device.refresh")}
-                    >
-                      <Icon name="arrows-rotate" size="small" classList={{ "animate-spin": deviceRefreshing() }} />
-                    </button>
-                  </Tooltip>
-                </div>
+          <PopoverContent class="w-80 rounded-[var(--native-radius-md)] border border-sidebar-border bg-sidebar p-1.5 shadow-[var(--native-shadow-md)]">
+            <div class="flex items-center gap-1 px-2 py-1.5">
+              <span class="text-[11px] font-semibold uppercase tracking-[0.12em] text-sidebar-foreground/70">{t("workspace.createFromDevice")}</span>
+              <div class="ml-auto flex items-center gap-0.5">
+                <Tooltip value={t("workspace.device.manage")} placement="bottom">
+                  <button
+                    type="button"
+                    class="flex size-6 items-center justify-center rounded-[var(--native-radius-sm)] text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors cursor-pointer focus:outline-none"
+                    onClick={handleManageDevices}
+                    aria-label={t("workspace.device.manage")}
+                  >
+                    <Icon name="configuration" size="small" />
+                  </button>
+                </Tooltip>
+                <Tooltip value={t("workspace.device.refresh")} placement="bottom">
+                  <button
+                    type="button"
+                    class="flex size-6 items-center justify-center rounded-[var(--native-radius-sm)] text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors cursor-pointer focus:outline-none"
+                    classList={{ "pointer-events-none": deviceRefreshing() }}
+                    onClick={handleDeviceRefresh}
+                    aria-label={t("workspace.device.refresh")}
+                  >
+                    <Icon name="arrows-rotate" size="small" classList={{ "animate-spin": deviceRefreshing() }} />
+                  </button>
+                </Tooltip>
               </div>
-              <Show
-                when={onlineDevices().length > 0}
-                fallback={
-                  <div class="flex flex-col items-center gap-1 px-2 py-6 text-center">
-                    <Icon name="server" class="size-6 text-sidebar-foreground/30" />
-                    <span class="text-xs text-sidebar-foreground/50">{t("workspace.createFromDevice.empty")}</span>
-                  </div>
-                }
-              >
-                <ul class="space-y-0.5">
-                  <For each={onlineDevices()}>
-                    {(device) => {
-                      const state = () => upgrade.upgradeMap()[device.deviceId]
-                      const hasUpgrade = () =>
-                        !!device.canUpdate &&
-                        device.status === "online" &&
-                        !state() &&
-                        !upgrade.isRecentlyUpgraded(device.deviceId)
-                      return (
-                        <DeviceItem
-                          device={device}
-                          upgradeState={state()}
-                          hasUpgrade={hasUpgrade()}
-                          onCreate={handleCreateWorkspace}
-                          onUpgrade={handleUpgrade}
-                        />
-                      )
-                    }}
-                  </For>
-                </ul>
-              </Show>
-            </PopoverContent>
-          </Popover>
-        </div>
+            </div>
+            <Show
+              when={onlineDevices().length > 0}
+              fallback={
+                <div class="flex flex-col items-center gap-1 px-2 py-6 text-center">
+                  <Icon name="server" class="size-6 text-sidebar-foreground/30" />
+                  <span class="text-xs text-sidebar-foreground/50">{t("workspace.createFromDevice.empty")}</span>
+                </div>
+              }
+            >
+              <ul class="space-y-0.5">
+                <For each={onlineDevices()}>
+                  {(device) => {
+                    const state = () => upgrade.upgradeMap()[device.deviceId]
+                    const hasUpgrade = () =>
+                      !!device.canUpdate &&
+                      device.status === "online" &&
+                      !state() &&
+                      !upgrade.isRecentlyUpgraded(device.deviceId)
+                    return (
+                      <DeviceItem
+                        device={device}
+                        upgradeState={state()}
+                        hasUpgrade={hasUpgrade()}
+                        onCreate={handleCreateWorkspace}
+                        onUpgrade={handleUpgrade}
+                      />
+                    )
+                  }}
+                </For>
+              </ul>
+            </Show>
+          </PopoverContent>
+        </Popover>
       </div>
 
       <div class="thin-scrollbar min-h-0 flex-1 overflow-y-auto py-1 pr-1">
@@ -302,7 +270,7 @@ export function WorkspaceSidebar(props: { hide?: () => void } = {}) {
           </div>
           <div class="flex flex-col gap-1.5">
             <For each={idleIds()}>{(id) => <WorkspaceCard id={id} isRunning={false} onOpen={handleOpenWorkspace} onClose={handleCloseWorkspace} />}</For>
-            <Show when={filteredWorkspaces().length === 0}>
+            <Show when={workspaces().length === 0}>
               <div class="flex flex-col items-center justify-center rounded-[var(--native-radius-lg)] border border-[color:color-mix(in_oklab,var(--native-border)_24%,transparent)] bg-[color:color-mix(in_oklab,var(--native-surface)_72%,var(--native-panel))] py-8 text-sidebar-foreground/50">
                 <Icon name="folder" class="mb-2 size-8 opacity-30" />
                 <span class="text-xs font-medium text-sidebar-foreground/65">{t("workspace.empty")}</span>
