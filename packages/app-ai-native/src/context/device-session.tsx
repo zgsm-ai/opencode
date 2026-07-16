@@ -290,8 +290,8 @@ export function DeviceSessionStoreProvider(props: ParentProps) {
     if (!workspace.agentAvailable()) return
     return runInflight(`todo:${sessionID}`, async () => {
       try {
-        const result = await device.client.conversation.todo(sessionID)
-        const todos = Array.isArray(result) ? (result as Todo[]) : []
+        const result = await device.client.conversation.todo(sessionID) as Todo[] | { todos?: Todo[] } | undefined
+        const todos = Array.isArray(result) ? result : Array.isArray(result?.todos) ? result.todos : []
         setStore("todos", sessionID, todos)
       } catch {}
     })
