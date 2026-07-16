@@ -94,7 +94,7 @@ export function createDeviceSessionComposerState(deps: ComposerDeps, options?: {
 
   createEffect(() => {
     const sid = deps.sessionID()
-    const initialDock = deps.todos().length > 0
+    const initialDock = deps.todos().length > 0 && !done()
     registry.ensure(sid, { dock: initialDock, closing: false, opening: false })
   })
 
@@ -110,8 +110,9 @@ export function createDeviceSessionComposerState(deps: ComposerDeps, options?: {
 
   const scheduleClose = () => {
     if (timer) window.clearTimeout(timer)
+    const targetSid = deps.sessionID()
     timer = window.setTimeout(() => {
-      registry.set(deps.sessionID(), { dock: false, closing: false })
+      registry.set(targetSid, { dock: false, closing: false })
       timer = undefined
     }, closeMs())
   }
@@ -125,7 +126,6 @@ export function createDeviceSessionComposerState(deps: ComposerDeps, options?: {
 
         const sid = deps.sessionID()
         const ui = registry.get(sid)
-        const isInitial = !prev || prev[0] === 0
 
         if (count === 0) {
           if (timer) window.clearTimeout(timer)
@@ -134,7 +134,7 @@ export function createDeviceSessionComposerState(deps: ComposerDeps, options?: {
           return
         }
 
-        if (!complete || isInitial) {
+        if (!complete) {
           if (timer) window.clearTimeout(timer)
           timer = undefined
           const hidden = !ui.dock || ui.closing
@@ -156,8 +156,12 @@ export function createDeviceSessionComposerState(deps: ComposerDeps, options?: {
           return
         }
 
-        registry.set(sid, { dock: true, opening: false, closing: true })
-        scheduleClose()
+        if (ui.dock && !ui.closing) {
+          registry.set(sid, { dock: true, opening: false, closing: true })
+          scheduleClose()
+        } else {
+          registry.set(sid, { dock: false, closing: false, opening: false })
+        }
       },
     ),
   )
