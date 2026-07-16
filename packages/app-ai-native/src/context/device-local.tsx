@@ -70,22 +70,6 @@ export function DeviceLocalProvider(props: ParentProps<{ workspaceId?: string }>
   const device = useDeviceSDK()
   const sync = useDeviceWorkspace()
 
-  const storageKey = () => `opencode.device.model.${props.workspaceId ?? base64Encode(device.directory)}`
-
-  function loadPersistedModel(): ModelKey | undefined {
-    try {
-      const raw = localStorage.getItem(storageKey())
-      if (raw) return JSON.parse(raw) as ModelKey
-    } catch {}
-  }
-
-  function savePersistedModel(model: ModelKey | undefined) {
-    try {
-      if (model) localStorage.setItem(storageKey(), JSON.stringify(model))
-      else localStorage.removeItem(storageKey())
-    } catch {}
-  }
-
   const sessionModelsKey = () => `opencode.device.sessionModels.${props.workspaceId ?? base64Encode(device.directory)}`
 
   const sessionModels = (() => {
@@ -99,6 +83,22 @@ export function DeviceLocalProvider(props: ParentProps<{ workspaceId?: string }>
   function saveSessionModels() {
     try {
       localStorage.setItem(sessionModelsKey(), JSON.stringify(sessionModels))
+    } catch {}
+  }
+
+  const sessionAgentsKey = () => `opencode.device.sessionAgents.${props.workspaceId ?? base64Encode(device.directory)}`
+
+  const sessionAgents = (() => {
+    try {
+      const raw = localStorage.getItem(sessionAgentsKey())
+      if (raw) return JSON.parse(raw) as Record<string, string>
+    } catch {}
+    return {} as Record<string, string>
+  })()
+
+  function saveSessionAgents() {
+    try {
+      localStorage.setItem(sessionAgentsKey(), JSON.stringify(sessionAgents))
     } catch {}
   }
 
@@ -123,10 +123,12 @@ export function DeviceLocalProvider(props: ParentProps<{ workspaceId?: string }>
     if (prev === sessionID) return
     setActiveSessionID(sessionID)
     if (sessionID) {
-      const cached = sessionModels[sessionID]
-      if (cached && cached.providerID) {
-        setStore("currentModel", { ...cached })
-      }
+      const cachedModel = sessionModels[sessionID]
+      setStore("currentModel", cachedModel && cachedModel.providerID ? { ...cachedModel } : undefined)
+      setStore("currentAgent", sessionAgents[sessionID])
+    } else {
+      setStore("currentModel", undefined)
+      setStore("currentAgent", undefined)
     }
   }
 
@@ -155,6 +157,11 @@ export function DeviceLocalProvider(props: ParentProps<{ workspaceId?: string }>
     if (!value) return
     batch(() => {
       setStore("currentAgent", value.name)
+      const sid = activeSessionID()
+      if (sid) {
+        sessionAgents[sid] = value.name
+        saveSessionAgents()
+      }
       if (value.model && value.model.providerID) {
         setModel(value.model)
       }
@@ -207,17 +214,11 @@ export function DeviceLocalProvider(props: ParentProps<{ workspaceId?: string }>
       const resolved = resolveModel(providers, store.currentModel)
       if (resolved) return resolved
     }
-    const persisted = loadPersistedModel()
-    if (persisted) {
-      const resolved = resolveModel(providers, persisted)
-      if (resolved) return resolved
-    }
     return fallbackModel(providers)
   })
 
   const setModel = (model: ModelKey | undefined) => {
     setStore("currentModel", model)
-    savePersistedModel(model)
     const sid = activeSessionID()
     if (sid) {
       if (model && model.providerID) {
