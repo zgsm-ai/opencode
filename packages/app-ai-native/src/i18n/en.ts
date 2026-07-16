@@ -2105,7 +2105,7 @@ export const dict = {
   "workspace.running": "Running",
   "workspace.idle": "Idle",
   "workspace.running.empty": "No running workspaces",
-  "workspace.running.emptyHint": "Click an idle workspace below to activate",
+  "workspace.running.emptyHint": "Click an online idle workspace below to activate",
   "workspace.empty": "No workspaces",
   "workspace.emptyHint": "Click the + button above to create one",
   "workspace.close": "Close",
@@ -2128,7 +2128,7 @@ export const dict = {
   "workspace.content.closeAll": "Close All",
 
   "workspace.createFromDevice": "Create from",
-  "workspace.createFromDevice.empty": "Please register a device first",
+  "workspace.createFromDevice.empty": "Follow the guide on the home page to connect your device and complete registration",
   "workspace.device.list": "Device List",
   "workspace.device.search": "Search devices...",
   "workspace.device.notFound": "No devices found",
