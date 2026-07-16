@@ -252,6 +252,7 @@ export const { use: usePrompt, provider: PromptProvider, context: PromptContext 
     const cache = new Map<string, PromptCacheEntry>()
 
     const disposeAll = () => {
+      console.debug(`[tab-debug] B3 PromptProvider.disposeAll clearing cacheSize=${cache.size}`)
       for (const entry of cache.values()) {
         entry.dispose()
       }
@@ -272,7 +273,9 @@ export const { use: usePrompt, provider: PromptProvider, context: PromptContext 
 
     const load = (dir: string, id: string | undefined) => {
       const key = `${dir}:${id ?? WORKSPACE_KEY}`
+      const t0 = performance.now()
       const existing = cache.get(key)
+      console.debug(`[tab-debug] B3 prompt.load key=${key} cacheHit=${!!existing} cacheSize=${cache.size}`)
       if (existing) {
         cache.delete(key)
         cache.set(key, existing)
@@ -286,6 +289,7 @@ export const { use: usePrompt, provider: PromptProvider, context: PromptContext 
 
       cache.set(key, entry)
       prune()
+      console.debug(`[tab-debug] B3 prompt.load created new session in ${(performance.now() - t0).toFixed(1)}ms; ready=${entry.value.ready()}`)
       return entry.value
     }
 
