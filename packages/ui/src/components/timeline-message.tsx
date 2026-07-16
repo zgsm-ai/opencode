@@ -440,7 +440,7 @@ export function TimelineMessage(props: {
                 />
               </div>
               <Show when={interrupted()}>
-                <div data-slot="session-turn-interrupted">
+                <div data-slot="session-turn-compaction">
                   <MessageDivider label={i18n.t("ui.message.interrupted")} />
                 </div>
               </Show>
