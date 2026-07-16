@@ -65,8 +65,6 @@ export function DeviceSessionView(props: {
   const chat = useSessionChat()
   const language = useLanguage()
 
-  console.debug(`[tab-debug] B2 DeviceSessionView mount sessionID=${props.sessionID} at T+${performance.now().toFixed(1)}ms`)
-
   let snapFrame: number | undefined
 
   const sid = createMemo(() => props.createdSessionID?.() ?? props.sessionID)

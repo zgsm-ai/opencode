@@ -51,17 +51,6 @@ export function SessionComposerRegion(props: {
   const language = useLanguage()
   const registry = useSessionComposerRegistry()
 
-  console.debug(`[tab-debug] SessionComposerRegion mount at T+${performance.now().toFixed(1)}ms`)
-
-  let lastPromptReady: boolean | undefined
-  createEffect(() => {
-    const r = prompt.ready()
-    if (r !== lastPromptReady) {
-      console.debug(`[tab-debug] B5 prompt.ready()=${r} at T+${performance.now().toFixed(1)}ms`)
-      lastPromptReady = r
-    }
-  })
-
   const sessionKey = createMemo(() => "")
   const handoffPrompt = createMemo(() => getSessionHandoff(sessionKey())?.prompt)
 
@@ -235,10 +224,7 @@ export function SessionComposerRegion(props: {
                   }}
                 >
                   <PromptInput
-                    ref={(el: HTMLDivElement) => {
-                      console.debug(`[tab-debug] PromptInput DOM mounted at T+${performance.now().toFixed(1)}ms`)
-                      props.inputRef(el)
-                    }}
+                    ref={props.inputRef}
                     newSessionWorktree={props.newSessionWorktree}
                     onNewSessionWorktreeReset={props.onNewSessionWorktreeReset}
                     onSubmit={props.onSubmit}

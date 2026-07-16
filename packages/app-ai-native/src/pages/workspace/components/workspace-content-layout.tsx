@@ -222,12 +222,7 @@ function ContentTabPanel() {
   createEffect(() => {
     const id = tabStore.activeId()
     if (id === contentId()) return
-    const t0 = performance.now()
-    console.debug(`[tab-debug] B1 activeId=${id} queued at T+${(t0).toFixed(1)}ms`)
-    const frame = requestAnimationFrame(() => {
-      console.debug(`[tab-debug] B1 contentId=${id} applied after ${(performance.now() - t0).toFixed(1)}ms`)
-      setContentId(id)
-    })
+    const frame = requestAnimationFrame(() => setContentId(id))
     onCleanup(() => cancelAnimationFrame(frame))
   })
 

@@ -454,13 +454,10 @@ export function persisted<T>(
   const [state, setState, init] = makePersisted(store, { name: config.key, storage })
 
   const isAsync = init instanceof Promise
-  console.debug(`[tab-debug] B5 persisted key=${config.key} isAsync=${isAsync}`)
-  const tInit = performance.now()
   const [ready] = createResource(
     () => init,
     async (initValue) => {
       if (initValue instanceof Promise) await initValue
-      console.debug(`[tab-debug] B5 persisted key=${config.key} ready after ${(performance.now() - tInit).toFixed(1)}ms`)
       return true
     },
     { initialValue: !isAsync },
