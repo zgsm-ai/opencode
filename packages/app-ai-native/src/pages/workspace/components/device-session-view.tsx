@@ -7,7 +7,7 @@ import { FileComponentProvider } from "@opencode-ai/ui/context/file"
 import { File } from "@opencode-ai/ui/file"
 import { useSessionChat } from "@/context/session-chat"
 import { useLanguage } from "@/context/language"
-import { PromptProvider, usePrompt } from "@/context/prompt"
+import { usePrompt } from "@/context/prompt"
 
 import { NewSessionView } from "@/components/session/session-new-view"
 import { MessageTimeline } from "@/pages/session/message-timeline"
@@ -410,7 +410,6 @@ export function DeviceSessionView(props: {
 
   return (
     <DeviceSessionProvider sessionID={sid()}>
-        <PromptProvider>
             <PromptSeeder seed={props.promptSeed} />
               <DataProvider
                           data={dataProps()!}
@@ -518,7 +517,6 @@ export function DeviceSessionView(props: {
                             </div>
                           </FileComponentProvider>
                         </DataProvider>
-                  </PromptProvider>
     </DeviceSessionProvider>
   )
 }

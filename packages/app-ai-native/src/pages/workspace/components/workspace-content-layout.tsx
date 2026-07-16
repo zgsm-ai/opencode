@@ -14,6 +14,7 @@ import { useDiff, useTreePolling } from "@/context/device-file"
 import { useDeviceWorkspace } from "@/context/device-workspace"
 import { sessionTreeIDs } from "@/pages/session/composer/session-request-tree"
 import { DeviceSessionStoreProvider } from "@/context/device-session"
+import { PromptProvider } from "@/context/prompt"
 import { SessionComposerRegistryProvider } from "@/context/session-composer-registry"
 import { SessionTabProvider, useSessionTab } from "@/context/session-tab"
 import { DeviceSessionView } from "./device-session-view"
@@ -1164,9 +1165,11 @@ export function WorkspaceContentLayout(props: { workspaceId: string; directory: 
             )}
           </Show>
           <DeviceSessionStoreProvider>
-            <SessionComposerRegistryProvider>
-              <ContentTabPanel />
-            </SessionComposerRegistryProvider>
+            <PromptProvider>
+              <SessionComposerRegistryProvider>
+                <ContentTabPanel />
+              </SessionComposerRegistryProvider>
+            </PromptProvider>
           </DeviceSessionStoreProvider>
         </div>
       </div>
