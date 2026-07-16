@@ -8,9 +8,9 @@ import { IconButton } from "@opencode-ai/ui/icon-button"
 import { DropdownMenu } from "@opencode-ai/ui/dropdown-menu"
 import { Dialog } from "@opencode-ai/ui/dialog"
 import { InlineInput } from "@opencode-ai/ui/inline-input"
-import { SessionTurn } from "@opencode-ai/ui/session-turn"
+import { TimelineMessage } from "@opencode-ai/ui/timeline-message"
 import { ScrollView } from "@opencode-ai/ui/scroll-view"
-import type { AssistantMessage, Message as MessageType, Part, TextPart, UserMessage } from "@opencode-ai/sdk/v2"
+import type { AssistantMessage, Message as MessageType, Part, TextPart } from "@opencode-ai/sdk/v2"
 import { showToast } from "@opencode-ai/ui/toast"
 import { Binary } from "@opencode-ai/util/binary"
 import { getFilename } from "@opencode-ai/util/path"
@@ -33,10 +33,6 @@ type MessageComment = {
 
 const emptyMessages: MessageType[] = []
 const idle = { type: "idle" as const }
-
-const messageKey = (m: { id: string; role: string; time?: { created?: number }; agent?: string }) => {
-  return `${m.role}|${m.time?.created ?? 0}|${m.agent ?? ""}`
-}
 
 const messageComments = (parts: Part[]): MessageComment[] =>
   parts.flatMap((part) => {
@@ -88,102 +84,6 @@ const markBoundaryGesture = (input: {
   }
 }
 
-type StageConfig = {
-  init: number
-  batch: number
-}
-
-type TimelineStageInput = {
-  sessionKey: () => string
-  turnStart: () => number
-  messages: () => UserMessage[]
-  config: StageConfig
-}
-
-/**
- * Defer-mounts small timeline windows so revealing older turns does not
- * block first paint with a large DOM mount.
- *
- * Once staging completes for a session it never re-stages — backfill and
- * new messages render immediately.
- */
-function createTimelineStaging(input: TimelineStageInput) {
-  const [state, setState] = createStore({
-    activeSession: "",
-    completedSession: "",
-    count: 0,
-  })
-
-  const stagedCount = createMemo(() => {
-    const total = input.messages().length
-    if (state.completedSession === input.sessionKey()) return total
-    const init = Math.min(total, input.config.init)
-    if (state.count <= init) return init
-    if (state.count >= total) return total
-    return state.count
-  })
-
-  const stagedUserMessages = createMemo(() => {
-    const list = input.messages()
-    const count = stagedCount()
-    if (count >= list.length) return list
-    return list.slice(Math.max(0, list.length - count))
-  })
-
-  let frame: number | undefined
-  const cancel = () => {
-    if (frame === undefined) return
-    cancelAnimationFrame(frame)
-    frame = undefined
-  }
-
-  createEffect(
-    on(
-      () => [input.sessionKey(), input.messages().length] as const,
-      ([sessionKey, total]) => {
-        cancel()
-
-        const shouldStage =
-          total > input.config.init &&
-          state.completedSession !== sessionKey &&
-          state.activeSession !== sessionKey
-        if (!shouldStage) {
-          setState({ activeSession: "", count: total, ...(sessionKey ? { completedSession: sessionKey } : {}) })
-          return
-        }
-
-        let count = Math.min(total, input.config.init)
-        setState({ activeSession: sessionKey, count })
-
-        const step = () => {
-          if (input.sessionKey() !== sessionKey) {
-            frame = undefined
-            return
-          }
-          const currentTotal = input.messages().length
-          count = Math.min(currentTotal, count + input.config.batch)
-          setState("count", count)
-          if (count >= currentTotal) {
-            setState({ completedSession: sessionKey, activeSession: "" })
-            frame = undefined
-            return
-          }
-          frame = requestAnimationFrame(step)
-        }
-        frame = requestAnimationFrame(step)
-      },
-    ),
-  )
-
-  const isStaging = createMemo(() => {
-    const key = input.sessionKey()
-    return state.activeSession === key && state.completedSession !== key
-  })
-
-  onCleanup(cancel)
-  return { messages: stagedUserMessages, isStaging }
-}
-
 export function MessageTimeline(props: {
   mobileChanges: boolean
   mobileFallback: JSX.Element
@@ -204,7 +104,7 @@ export function MessageTimeline(props: {
   historyMore: boolean
   historyLoading: boolean
   onLoadEarlier: () => void
-  renderedUserMessages: UserMessage[]
+  renderedMessages: MessageType[]
   anchor: (id: string) => string
   onRegisterMessage: (el: HTMLDivElement, id: string) => void
   onUnregisterMessage: (id: string) => void
@@ -219,7 +119,28 @@ export function MessageTimeline(props: {
   const dialog = useDialog()
   const language = useLanguage()
 
-  const rendered = createMemo(() => props.renderedUserMessages.map((message) => message.id))
+  const rendered = createMemo(() => props.renderedMessages)
+
+  let scrollEl: HTMLDivElement | undefined
+  const setScrollRef = (el: HTMLDivElement | undefined) => {
+    scrollEl = el
+    props.setScrollRef(el)
+  }
+  const handleLoadEarlier = () => {
+    const scroller = scrollEl
+    if (!scroller) {
+      props.onLoadEarlier()
+      return
+    }
+    const prevTop = scroller.scrollTop
+    const prevHeight = scroller.scrollHeight
+    props.onLoadEarlier()
+    requestAnimationFrame(() => {
+      const delta = scroller.scrollHeight - prevHeight
+      if (delta > 0) scroller.scrollTop = prevTop + delta
+    })
+  }
+
   const sid = createMemo(() => chat.activeSessionID())
   const sessionKey = createMemo(() => {
     const id = sid()
@@ -268,14 +189,6 @@ export function MessageTimeline(props: {
   const titleValue = createMemo(() => info()?.title)
   const parentID = createMemo(() => info()?.parentID)
   const showHeader = createMemo(() => !props.hideHeader && !!(titleValue() || parentID()))
-  const stageCfg = { init: 5, batch: 10 }
-  const staging = createTimelineStaging({
-    sessionKey,
-    turnStart: () => props.turnStart,
-    messages: () => props.renderedUserMessages,
-    config: stageCfg,
-  })
-
   const [title, setTitle] = createStore({
     draft: "",
     editing: false,
@@ -418,9 +331,9 @@ export function MessageTimeline(props: {
           class="absolute left-1/2 -translate-x-1/2 bottom-6 z-[60] pointer-events-none transition-[opacity,transform] duration-200 ease-out"
           classList={{
             "opacity-100 translate-y-0 scale-100":
-              props.scroll.overflow && !props.scroll.bottom && !staging.isStaging(),
+              props.scroll.overflow && !props.scroll.bottom,
             "opacity-0 translate-y-2 scale-95 pointer-events-none":
-              !props.scroll.overflow || props.scroll.bottom || staging.isStaging(),
+              !props.scroll.overflow || props.scroll.bottom,
           }}
         >
           <button
@@ -431,7 +344,7 @@ export function MessageTimeline(props: {
           </button>
         </div>
         <ScrollView
-          viewportRef={props.setScrollRef}
+          viewportRef={setScrollRef}
           onWheel={(e) => {
             const root = e.currentTarget
             const delta = normalizeWheelDelta({
@@ -613,7 +526,7 @@ export function MessageTimeline(props: {
                     size="large"
                     class="text-12-medium opacity-50"
                     disabled={props.historyLoading}
-                    onClick={props.onLoadEarlier}
+                    onClick={handleLoadEarlier}
                   >
                     {props.historyLoading
                       ? language.t("session.messages.loadingEarlier")
@@ -622,8 +535,18 @@ export function MessageTimeline(props: {
                 </div>
               </Show>
               <For each={rendered()}>
-                {(messageID) => {
-                  const active = createMemo(() => activeMessageID() === messageID)
+                {(message) => {
+                  const messageID = message.id
+                  const active = createMemo(() => {
+                    const activeID = activeMessageID()
+                    if (!activeID) return false
+                    if (message.role === "user") return messageID === activeID
+                    if (message.role === "assistant") {
+                      const parentID = (message as { parentID?: string }).parentID
+                      return !!parentID && parentID === activeID
+                    }
+                    return false
+                  })
                   const queued = createMemo(() => {
                     if (active()) return false
                     const activeID = activeMessageID()
@@ -683,14 +606,12 @@ export function MessageTimeline(props: {
                           </div>
                         </div>
                       </Show>
-                      <MessageTransition
-                        messageID={messageID}
-                      >
-                        <SessionTurn
+                      <MessageTransition messageID={messageID}>
+                        <TimelineMessage
                           sessionID={sessionID() ?? ""}
-                          messageID={messageID}
+                          message={message}
                           active={active()}
-                          status={active() ? sessionStatus() : undefined}
+                          status={active() ? sessionStatus() : idle}
                           showReasoningSummaries={settings.general.showReasoningSummaries()}
                           shellToolDefaultOpen={settings.general.shellToolPartsExpanded()}
                           editToolDefaultOpen={settings.general.editToolPartsExpanded()}

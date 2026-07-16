@@ -28,8 +28,8 @@ import { DeviceSessionProvider } from "@/context/device-session"
 import { DeviceSessionViewHeader, type HeaderState } from "./device-session-view-header"
 import { env } from "@/lib/env"
 
-const emptyMessages: Message[] = []
 const busySinceMap = new Map<string, number>()
+const PAGE_SIZE = 20
 
 function PromptSeeder(props: { seed?: string }) {
   const prompt = usePrompt()
@@ -322,10 +322,25 @@ export function DeviceSessionView(props: {
     })
   })
 
-  const userMessages = createMemo(
-    () => enrichedMessages().filter((m) => m.role === "user") as any[],
-    emptyMessages as any[],
-  )
+  const [visibleCounts, setVisibleCounts] = createStore<Record<string, number>>({})
+  const visibleCount = createMemo(() => {
+    const cid = currentSessionID()
+    return cid ? visibleCounts[cid] ?? PAGE_SIZE : PAGE_SIZE
+  })
+  const totalCount = createMemo(() => enrichedMessages().length)
+  const paginatedMessages = createMemo(() => {
+    const all = enrichedMessages()
+    const n = visibleCount()
+    if (n >= all.length) return all
+    return all.slice(-n)
+  })
+  const historyMore = createMemo(() => totalCount() > visibleCount())
+  const turnStart = createMemo(() => Math.max(0, totalCount() - visibleCount()))
+  const onLoadEarlier = () => {
+    const cid = currentSessionID()
+    if (!cid) return
+    setVisibleCounts(cid, (visibleCounts[cid] ?? PAGE_SIZE) + PAGE_SIZE)
+  }
 
   const setScrollRef = (el: HTMLDivElement | undefined) => {
     scroller = el
@@ -459,11 +474,11 @@ export function DeviceSessionView(props: {
                                           content = el
                                           autoScroll.contentRef(el)
                                         }}
-                                        turnStart={0}
-                                        historyMore={false}
+                                        turnStart={turnStart()}
+                                        historyMore={historyMore()}
                                         historyLoading={false}
-                                        onLoadEarlier={() => {}}
-                                        renderedUserMessages={userMessages() as any[]}
+                                        onLoadEarlier={onLoadEarlier}
+                                        renderedMessages={paginatedMessages() as any[]}
                                         anchor={anchor}
                                         onRegisterMessage={scrollSpy.register}
                                         onUnregisterMessage={scrollSpy.unregister}
