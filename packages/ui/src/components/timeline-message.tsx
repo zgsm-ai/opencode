@@ -255,7 +255,6 @@ export function TimelineMessage(props: {
     const last = all[all.length - 1]
     if (!last || last.id !== props.message.id) return false
     if (last.role !== "assistant") return true
-    if (typeof (last as AssistantMessage).time.completed === "number") return true
     const lastParts = list(data.store.part?.[last.id], emptyParts)
     return !lastParts.some((p) => partVisible(p, showReasoningSummaries()))
   })
