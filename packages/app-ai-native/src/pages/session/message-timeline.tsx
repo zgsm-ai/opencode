@@ -20,7 +20,6 @@ import { useLanguage } from "@/context/language"
 import { useSettings } from "@/context/settings"
 import { useSessionChat } from "@/context/session-chat"
 import { parseCommentNote, readCommentMetadata } from "@/utils/comment-note"
-import { MessageTransition } from "./message-transition"
 
 type MessageComment = {
   path: string
@@ -511,7 +510,7 @@ export function MessageTimeline(props: {
 
             <div
               role="log"
-              class="flex flex-col gap-3 items-start justify-start pt-4 pb-16 transition-[margin]"
+              class="flex flex-col gap-2 items-start justify-start pt-4 pb-16 transition-[margin]"
               classList={{
                 "w-full": true,
                 "md:max-w-200 md:mx-auto 2xl:max-w-[1000px]": props.centered,
@@ -545,12 +544,6 @@ export function MessageTimeline(props: {
                       const parentID = (message as { parentID?: string }).parentID
                       return !!parentID && parentID === activeID
                     }
-                    return false
-                  })
-                  const queued = createMemo(() => {
-                    if (active()) return false
-                    const activeID = activeMessageID()
-                    if (activeID) return messageID > activeID
                     return false
                   })
                   const comments = createMemo(() => messageComments(chat.messageParts(messageID)), [], {
@@ -606,22 +599,19 @@ export function MessageTimeline(props: {
                           </div>
                         </div>
                       </Show>
-                      <MessageTransition messageID={messageID}>
-                        <TimelineMessage
-                          sessionID={sessionID() ?? ""}
-                          message={message}
-                          active={active()}
-                          status={active() ? sessionStatus() : idle}
-                          showReasoningSummaries={settings.general.showReasoningSummaries()}
-                          shellToolDefaultOpen={settings.general.shellToolPartsExpanded()}
-                          editToolDefaultOpen={settings.general.editToolPartsExpanded()}
-                          classes={{
-                            root: "min-w-0 w-full relative",
-                            content: "flex flex-col justify-between !overflow-visible",
-                            container: "w-full px-4 md:px-5",
-                          }}
-                        />
-                      </MessageTransition>
+                      <TimelineMessage
+                        sessionID={sessionID() ?? ""}
+                        message={message}
+                        active={active()}
+                        status={sessionStatus()}
+                        showReasoningSummaries={settings.general.showReasoningSummaries()}
+                        shellToolDefaultOpen={settings.general.shellToolPartsExpanded()}
+                        editToolDefaultOpen={settings.general.editToolPartsExpanded()}
+                        classes={{
+                          root: "min-w-0 w-full relative",
+                          container: "w-full px-4 md:px-5",
+                        }}
+                      />
                     </div>
                   )
                 }}

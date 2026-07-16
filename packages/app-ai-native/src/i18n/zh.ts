@@ -1850,7 +1850,7 @@ export const dict = {
   "workspace.running": "运行中",
   "workspace.idle": "空闲",
   "workspace.running.empty": "暂无运行中工作空间",
-  "workspace.running.emptyHint": "点击下方空闲工作空间以激活",
+  "workspace.running.emptyHint": "点击下方在线的空闲工作空间以激活",
   "workspace.empty": "暂无工作空间",
   "workspace.emptyHint": "点击上方的 + 按钮创建",
   "workspace.close": "关闭",
@@ -1873,7 +1873,7 @@ export const dict = {
   "workspace.content.closeAll": "关闭全部",
 
   "workspace.createFromDevice": "创建自",
-  "workspace.createFromDevice.empty": "请先完成设备注册",
+  "workspace.createFromDevice.empty": "请根据主页的引导连接开发设备，完成设备注册",
   "workspace.device.list": "设备列表",
   "workspace.device.search": "搜索设备...",
   "workspace.device.notFound": "未找到设备",
