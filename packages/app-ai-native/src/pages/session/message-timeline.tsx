@@ -603,7 +603,7 @@ export function MessageTimeline(props: {
                         sessionID={sessionID() ?? ""}
                         message={message}
                         active={active()}
-                        status={active() ? sessionStatus() : idle}
+                        status={sessionStatus()}
                         showReasoningSummaries={settings.general.showReasoningSummaries()}
                         shellToolDefaultOpen={settings.general.shellToolPartsExpanded()}
                         editToolDefaultOpen={settings.general.editToolPartsExpanded()}

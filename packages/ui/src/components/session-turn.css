@@ -230,3 +230,7 @@
 [data-slot="session-turn-list"] {
   gap: 12px;
 }
+
+[data-message-id]:not(:has(*)) {
+  display: none;
+}

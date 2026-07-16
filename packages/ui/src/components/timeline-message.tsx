@@ -249,11 +249,15 @@ export function TimelineMessage(props: {
   })
 
   const showThinking = createMemo(() => {
-    if (!working()) return false
+    if (status().type === "idle") return false
     if (status().type === "retry") return false
-    if (!isUser()) return false
-    if (showReasoningSummaries()) return !assistantHasVisible()
-    return true
+    const all = list(data.store.message?.[props.sessionID], [] as MessageType[])
+    const last = all[all.length - 1]
+    if (!last || last.id !== props.message.id) return false
+    if (last.role !== "assistant") return true
+    if (typeof (last as AssistantMessage).time.completed === "number") return true
+    const lastParts = list(data.store.part?.[last.id], emptyParts)
+    return !lastParts.some((p) => partVisible(p, showReasoningSummaries()))
   })
 
   const error = createMemo(() => {
@@ -270,6 +274,19 @@ export function TimelineMessage(props: {
   const interrupted = createMemo(
     () => isAssistant() && (props.message as AssistantMessage).error?.name === "MessageAbortedError",
   )
+
+  const userHasContent = createMemo(() => {
+    if (!isUser()) return true
+    if (compaction() || showThinking() || edited() > 0 || status().type === "retry") return true
+    for (const p of parts()) {
+      if (p.type === "text") {
+        if (!(p as { synthetic?: boolean }).synthetic && (p.text ?? "").trim()) return true
+      } else if (p.type === "file" || p.type === "agent" || p.type === "compaction") {
+        return true
+      }
+    }
+    return false
+  })
 
   const durationMs = createMemo(() => {
     if (!isAssistant()) return undefined
@@ -303,8 +320,9 @@ export function TimelineMessage(props: {
   })
 
   return (
-    <div data-component="session-turn" data-message={props.message.id} class={props.classes?.root}>
-      <Show when={isUser()}>
+    <Show when={!isUser() || userHasContent()}>
+      <div data-component="session-turn" data-message={props.message.id} class={props.classes?.root}>
+        <Show when={isUser()}>
         <div data-slot="session-turn-message-container" class={props.classes?.container}>
           <div data-slot="session-turn-message-content" aria-live="off">
             <Message message={props.message} parts={parts()} actions={props.actions} />
@@ -445,6 +463,11 @@ export function TimelineMessage(props: {
             shellToolDefaultOpen={props.shellToolDefaultOpen}
             editToolDefaultOpen={props.editToolDefaultOpen}
           />
+          <Show when={showThinking()}>
+            <div data-slot="session-turn-thinking">
+              <TextShimmer text={i18n.t("ui.sessionTurn.status.thinking")} />
+            </div>
+          </Show>
           <Show when={interrupted()}>
             <div data-slot="session-turn-compaction">
               <MessageDivider label={i18n.t("ui.message.interrupted")} />
@@ -457,6 +480,7 @@ export function TimelineMessage(props: {
           </Show>
         </div>
       </Show>
-    </div>
+      </div>
+    </Show>
   )
 }
