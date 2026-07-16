@@ -116,36 +116,9 @@ export function SessionComposerRegion(props: {
         "bg-background-stronger": !props.compact,
       }}
     >
-        <Show when={props.state.questionRequest()} keyed>
-          {(request) => (
-            <div class="w-full pointer-events-auto" classList={{ "md:max-w-200 md:mx-auto 2xl:max-w-[1000px]": props.centered }}>
-              <SessionQuestionDock request={request} onSubmit={props.onResponseSubmit} onStale={props.state.dismissQuestion} />
-            </div>
-          )}
-        </Show>
-
-        <Show when={props.state.permissionRequest()} keyed>
-          {(request) => (
-            <div class="w-full pointer-events-auto" classList={{ "md:max-w-200 md:mx-auto 2xl:max-w-[1000px]": props.centered }}>
-              <SessionPermissionDock
-                request={request}
-                responding={props.state.permissionResponding()}
-                onDecide={(response) => {
-                  props.onResponseSubmit()
-                  props.state.decide(response)
-                }}
-                onAutoAccept={() => {
-                  props.onResponseSubmit()
-                  props.state.autoAccept()
-                }}
-              />
-            </div>
-          )}
-        </Show>
-
         <Show when={dock()}>
           <div
-            class="w-full overflow-hidden"
+            class="w-full overflow-hidden mb-2"
             classList={{
               "pointer-events-none": value() < 0.98,
               "pointer-events-auto": value() >= 0.98,
@@ -181,11 +154,37 @@ export function SessionComposerRegion(props: {
           </div>
         </Show>
 
+        <Show when={props.state.questionRequest()} keyed>
+          {(request) => (
+            <div class="w-full pointer-events-auto mb-2" classList={{ "md:max-w-200 md:mx-auto 2xl:max-w-[1000px]": props.centered }}>
+              <SessionQuestionDock request={request} onSubmit={props.onResponseSubmit} onStale={props.state.dismissQuestion} />
+            </div>
+          )}
+        </Show>
+
+        <Show when={props.state.permissionRequest()} keyed>
+          {(request) => (
+            <div class="w-full pointer-events-auto mb-2" classList={{ "md:max-w-200 md:mx-auto 2xl:max-w-[1000px]": props.centered }}>
+              <SessionPermissionDock
+                request={request}
+                responding={props.state.permissionResponding()}
+                onDecide={(response) => {
+                  props.onResponseSubmit()
+                  props.state.decide(response)
+                }}
+                onAutoAccept={() => {
+                  props.onResponseSubmit()
+                  props.state.autoAccept()
+                }}
+              />
+            </div>
+          )}
+        </Show>
+
         <Show when={!props.state.blocked()}>
           <div
             classList={{
               "w-full px-2 pointer-events-auto relative": true,
-              "mt-2": dock(),
               "md:max-w-200 md:mx-auto 2xl:max-w-[1000px]": props.centered,
             }}
             data-dock-compact=""
