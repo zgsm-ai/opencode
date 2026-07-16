@@ -4,6 +4,7 @@ import type { PermissionRequest, QuestionRequest, Todo } from "@opencode-ai/sdk/
 import { showToast } from "@opencode-ai/ui/toast"
 import { useLanguage } from "@/context/language"
 import type { SessionChatBackend } from "@/context/session-chat"
+import { useSessionComposerRegistry, type SessionComposerRegistryValue } from "@/context/session-composer-registry"
 import { sessionPermissionRequest, sessionQuestionRequest } from "./session-request-tree"
 
 type ComposerDeps = {
@@ -16,6 +17,7 @@ type ComposerDeps = {
 
 export function createDeviceSessionComposerState(deps: ComposerDeps, options?: { closeMs?: number | (() => number) }) {
   const language = useLanguage()
+  const registry: SessionComposerRegistryValue = useSessionComposerRegistry()
 
   const questionRequest = createMemo((): QuestionRequest | undefined => {
     const sid = deps.sessionID()
@@ -39,9 +41,6 @@ export function createDeviceSessionComposerState(deps: ComposerDeps, options?: {
 
   const [store, setStore] = createStore({
     responding: undefined as string | undefined,
-    dock: deps.todos().length > 0,
-    closing: false,
-    opening: false,
   })
 
   const permissionResponding = createMemo(() => {
@@ -55,7 +54,6 @@ export function createDeviceSessionComposerState(deps: ComposerDeps, options?: {
     if (!perm) return
     if (store.responding === perm.id) return
 
-    const sid = deps.sessionID()
     setStore("responding", perm.id)
     deps.chat.permissionRespond(perm.id, response)
       .catch((err: unknown) => {
@@ -94,6 +92,12 @@ export function createDeviceSessionComposerState(deps: ComposerDeps, options?: {
     () => deps.todos().length > 0 && deps.todos().every((todo) => todo.status === "completed" || todo.status === "cancelled"),
   )
 
+  createEffect(() => {
+    const sid = deps.sessionID()
+    const initialDock = deps.todos().length > 0 && !done()
+    registry.ensure(sid, { dock: initialDock, closing: false, opening: false })
+  })
+
   let timer: number | undefined
   let raf: number | undefined
 
@@ -106,8 +110,9 @@ export function createDeviceSessionComposerState(deps: ComposerDeps, options?: {
 
   const scheduleClose = () => {
     if (timer) window.clearTimeout(timer)
+    const targetSid = deps.sessionID()
     timer = window.setTimeout(() => {
-      setStore({ dock: false, closing: false })
+      registry.set(targetSid, { dock: false, closing: false })
       timer = undefined
     }, closeMs())
   }
@@ -119,37 +124,44 @@ export function createDeviceSessionComposerState(deps: ComposerDeps, options?: {
         if (raf) cancelAnimationFrame(raf)
         raf = undefined
 
+        const sid = deps.sessionID()
+        const ui = registry.get(sid)
+
         if (count === 0) {
           if (timer) window.clearTimeout(timer)
           timer = undefined
-          setStore({ dock: false, closing: false, opening: false })
+          registry.set(sid, { dock: false, closing: false, opening: false })
           return
         }
 
         if (!complete) {
           if (timer) window.clearTimeout(timer)
           timer = undefined
-          const hidden = !store.dock || store.closing
-          setStore({ dock: true, closing: false })
+          const hidden = !ui.dock || ui.closing
+          registry.set(sid, { dock: true, closing: false })
           if (hidden) {
-            setStore("opening", true)
+            registry.set(sid, { opening: true })
             raf = requestAnimationFrame(() => {
-              setStore("opening", false)
+              registry.set(sid, { opening: false })
               raf = undefined
             })
             return
           }
-          setStore("opening", false)
+          registry.set(sid, { opening: false })
           return
         }
 
         if (prev && prev[1]) {
-          if (store.closing && !timer) scheduleClose()
+          if (ui.closing && !timer) scheduleClose()
           return
         }
 
-        setStore({ dock: true, opening: false, closing: true })
-        scheduleClose()
+        if (ui.dock && !ui.closing) {
+          registry.set(sid, { dock: true, opening: false, closing: true })
+          scheduleClose()
+        } else {
+          registry.set(sid, { dock: false, closing: false, opening: false })
+        }
       },
     ),
   )
@@ -173,9 +185,9 @@ export function createDeviceSessionComposerState(deps: ComposerDeps, options?: {
     autoAccept,
     dismissQuestion,
     todos: deps.todos,
-    dock: () => store.dock,
-    closing: () => store.closing,
-    opening: () => store.opening,
+    dock: () => registry.get(deps.sessionID()).dock,
+    closing: () => registry.get(deps.sessionID()).closing,
+    opening: () => registry.get(deps.sessionID()).opening,
   }
 }
 

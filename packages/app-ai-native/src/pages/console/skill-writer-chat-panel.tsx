@@ -8,6 +8,8 @@ import { DeviceSessionProvider, DeviceSessionStoreProvider, useDeviceSession } f
 import { ContentTabContext, createContentTabStore } from "@/context/content-tabs"
 import { DeviceSessionView } from "@/pages/workspace/components/device-session-view"
 import { DeviceSessionChatProvider } from "@/context/device-session-chat"
+import { PromptProvider } from "@/context/prompt"
+import { SessionComposerRegistryProvider } from "@/context/session-composer-registry"
 import { deviceApi } from "@/pages/workspace/lib/api"
 import { deviceFileApi } from "@/pages/workspace/lib/cloud-device-api"
 import { getProxyUrl } from "@/pages/workspace/lib/url"
@@ -310,7 +312,9 @@ function PanelBody(props: { directory: string; proxyId: string; onSkillReady: (t
         <DeviceInterface directory={props.directory} deviceLayout={deviceLayout}>
           <ContentTabContext.Provider value={tabStore}>
             <DeviceSessionStoreProvider>
-              <DeviceSessionProvider sessionID={sessionID()}>
+              <PromptProvider>
+                <SessionComposerRegistryProvider>
+                  <DeviceSessionProvider sessionID={sessionID()}>
               {/* PRIMARY real-time sync: react to the agent's write/edit tool
                   calls hitting a skill SKILL.md and mirror it into the editor. */}
               <SkillFileToolWatcher
@@ -328,7 +332,9 @@ function PanelBody(props: { directory: string; proxyId: string; onSkillReady: (t
                   <DeviceSessionView sessionID={sessionID()} hiddenSeed={SKILL_WRITER_INSTRUCTIONS} />
                 </DeviceSessionChatProvider>
               </div>
-            </DeviceSessionProvider>
+                </DeviceSessionProvider>
+                </SessionComposerRegistryProvider>
+              </PromptProvider>
             </DeviceSessionStoreProvider>
           </ContentTabContext.Provider>
         </DeviceInterface>

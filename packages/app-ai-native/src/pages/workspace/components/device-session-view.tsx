@@ -7,7 +7,7 @@ import { FileComponentProvider } from "@opencode-ai/ui/context/file"
 import { File } from "@opencode-ai/ui/file"
 import { useSessionChat } from "@/context/session-chat"
 import { useLanguage } from "@/context/language"
-import { PromptProvider, usePrompt } from "@/context/prompt"
+import { usePrompt } from "@/context/prompt"
 
 import { NewSessionView } from "@/components/session/session-new-view"
 import { MessageTimeline } from "@/pages/session/message-timeline"
@@ -131,18 +131,6 @@ export function DeviceSessionView(props: {
     chat.setActiveSession(currentSessionID())
   })
 
-  createEffect(() => {
-    if (isNew()) return
-    const msgs = effectiveMessages()
-    const last = [...msgs].reverse().find((m) => m.role === "user")
-    if (!last) return
-    if (last.agent) chat.agent.set(last.agent)
-    const lastModel = (last as any).model as { providerID: string; modelID: string } | undefined
-    if (lastModel && lastModel.providerID) {
-      chat.model.set(lastModel)
-    }
-  })
-
   const effectiveMessages = createMemo(() => {
     const cid = currentSessionID()
     if (!cid) return [] as Message[]
@@ -214,15 +202,6 @@ export function DeviceSessionView(props: {
     },
     isAutoAccepting: () => chat.autoAccept.enabled(),
     enableAutoAccept: () => chat.autoAccept.enable(),
-  })
-
-  const [composerMounted, setComposerMounted] = createSignal(true)
-  createEffect(() => {
-    const id = currentSessionID()
-    void id
-    setComposerMounted(false)
-    const frame = requestAnimationFrame(() => setComposerMounted(true))
-    onCleanup(() => cancelAnimationFrame(frame))
   })
 
   const [snap, setSnap] = createSignal(true)
@@ -299,6 +278,10 @@ export function DeviceSessionView(props: {
     const enriched: any[] = []
     for (const m of deduped) {
       if (m.role === "assistant" && m.parentID && !userIDs.has(m.parentID)) {
+        if (!parts?.[m.parentID]?.length) {
+          enriched.push(m)
+          continue
+        }
         if (!orphanCreated || m.parentID !== orphanID) {
           orphanCreated = false
         }
@@ -427,7 +410,6 @@ export function DeviceSessionView(props: {
 
   return (
     <DeviceSessionProvider sessionID={sid()}>
-        <PromptProvider>
             <PromptSeeder seed={props.promptSeed} />
               <DataProvider
                           data={dataProps()!}
@@ -490,10 +472,10 @@ export function DeviceSessionView(props: {
                                     </Show>
                                   </div>
                                   </Show>
-                                  <Show when={chat.agentAvailable() && composerMounted()}>
+                                  <Show when={chat.agentAvailable()}>
                                     <SessionComposerRegion
                                       state={composer}
-                                      ready={true}
+                                      sessionID={currentSessionID}
                                       centered={!props.inputOnly}
                                       compact={props.inputOnly}
                                       inputRef={(el: HTMLDivElement) => {
@@ -535,7 +517,6 @@ export function DeviceSessionView(props: {
                             </div>
                           </FileComponentProvider>
                         </DataProvider>
-                  </PromptProvider>
     </DeviceSessionProvider>
   )
 }

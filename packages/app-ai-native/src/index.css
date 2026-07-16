@@ -9,6 +9,34 @@
   padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
 }
 
+/* Dim non-text assistant parts (tool calls, reasoning, context groups) so the
+   textual response stands out and isn't visually competing with tool chrome.
+   Restores to full opacity on hover or keyboard focus so the content remains
+   readable when the user cares to look. Scoped to app-ai-native — this file
+   loads after the shared UI library styles. compaction-part is excluded since
+   it's already a subtle divider. */
+[data-slot="session-turn-assistant-content"] > [data-component]:not([data-component="text-part"]):not([data-component="compaction-part"]) {
+  opacity: 0.55;
+  transition: opacity 0.15s ease;
+}
+
+[data-slot="session-turn-assistant-content"] > [data-component]:not([data-component="text-part"]):not([data-component="compaction-part"]):hover,
+[data-slot="session-turn-assistant-content"] > [data-component]:not([data-component="text-part"]):not([data-component="compaction-part"]):focus-within {
+  opacity: 1;
+}
+
+/* The copy/meta row under a text response also competes with the response
+   text itself. Dim it by default and restore on text-part hover/focus.
+   Overrides the UI library's `opacity: 1` default via source order. */
+[data-component="text-part"] [data-slot="text-part-copy-wrapper"] {
+  opacity: 0.55;
+}
+
+[data-component="text-part"]:hover [data-slot="text-part-copy-wrapper"],
+[data-component="text-part"]:focus-within [data-slot="text-part-copy-wrapper"] {
+  opacity: 1;
+}
+
 /* The shared List component hides its scrollbar (scrollbar-width: none +
    ::-webkit-scrollbar { display: none }) on [data-slot="list-scroll"].
    Restore a visible thin scrollbar for the remote directory selector so

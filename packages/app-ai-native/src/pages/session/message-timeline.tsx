@@ -143,13 +143,6 @@ function createTimelineStaging(input: TimelineStageInput) {
       ([sessionKey, total]) => {
         cancel()
 
-        // Session switch detected: show all immediately instead of staging
-        const isSessionSwitch = state.completedSession !== "" && state.completedSession !== sessionKey
-        if (isSessionSwitch) {
-          setState({ activeSession: "", count: total, completedSession: sessionKey })
-          return
-        }
-
         const shouldStage =
           total > input.config.init &&
           state.completedSession !== sessionKey &&

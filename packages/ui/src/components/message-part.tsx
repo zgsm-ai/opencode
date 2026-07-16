@@ -1064,6 +1064,7 @@ export function UserMessageDisplay(props: { message: UserMessage; parts: PartTyp
   }
 
   return (
+    <Show when={text() || attachments().length > 0}>
     <div data-component="user-message">
       <Show when={attachments().length > 0}>
         <div data-slot="user-message-attachments">
@@ -1163,6 +1164,7 @@ export function UserMessageDisplay(props: { message: UserMessage; parts: PartTyp
         </>
       </Show>
     </div>
+    </Show>
   )
 }
 

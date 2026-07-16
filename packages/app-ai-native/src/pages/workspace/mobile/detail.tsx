@@ -15,6 +15,8 @@ import { DirectoryContext } from "@/context/directory"
 import { LayoutContext } from "@/context/layout"
 import { ContentTabContext, createContentTabStore, useContentTabs } from "@/context/content-tabs"
 import { DeviceSessionStoreProvider } from "@/context/device-session"
+import { PromptProvider } from "@/context/prompt"
+import { SessionComposerRegistryProvider } from "@/context/session-composer-registry"
 import { SessionTabProvider, useSessionTab } from "@/context/session-tab"
 import { DeviceSessionView } from "../components/device-session-view"
 import { DeviceSessionViewHeader } from "../components/device-session-view-header"
@@ -125,19 +127,23 @@ function MobileContentTabPanel() {
 
   return (
     <DeviceSessionStoreProvider>
-      <For each={tabStore.tabs()}>
-      {(tab) => (
-        <Show when={tabStore.activeId() === tab.id}>
-          <div class="flex-1 min-h-0 h-full">
-            <Show when={tab.kind === "session"}>
-              <SessionTabProvider tabId={tab.id} sessionID={(tab.meta as any)?.sessionID}>
-                <MobileSessionAdapter tabId={tab.id} sessionID={(tab.meta as any)?.sessionID} />
-              </SessionTabProvider>
+      <PromptProvider>
+        <SessionComposerRegistryProvider>
+          <For each={tabStore.tabs()}>
+          {(tab) => (
+            <Show when={tabStore.activeId() === tab.id}>
+              <div class="flex-1 min-h-0 h-full">
+                <Show when={tab.kind === "session"}>
+                  <SessionTabProvider tabId={tab.id} sessionID={(tab.meta as any)?.sessionID}>
+                    <MobileSessionAdapter tabId={tab.id} sessionID={(tab.meta as any)?.sessionID} />
+                  </SessionTabProvider>
+                </Show>
+              </div>
             </Show>
-          </div>
-        </Show>
-      )}
-    </For>
+          )}
+        </For>
+        </SessionComposerRegistryProvider>
+      </PromptProvider>
     </DeviceSessionStoreProvider>
   )
 }

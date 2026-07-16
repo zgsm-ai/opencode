@@ -1,10 +1,10 @@
 import { Show, createEffect, createMemo, createSignal, onCleanup } from "solid-js"
-import { createStore } from "solid-js/store"
 import { useSpring } from "@opencode-ai/ui/motion-spring"
 import { useWorkspaceVisible } from "@/pages/workspace/components/layout"
 import { PromptInput } from "@/components/prompt-input"
 import { useLanguage } from "@/context/language"
 import { usePrompt } from "@/context/prompt"
+import { useSessionComposerRegistry } from "@/context/session-composer-registry"
 import { getSessionHandoff, setSessionHandoff } from "@/pages/session/handoff"
 import { SessionPermissionDock } from "@/pages/session/composer/session-permission-dock"
 import { SessionQuestionDock } from "@/pages/session/composer/session-question-dock"
@@ -15,7 +15,7 @@ import { Icon } from "@opencode-ai/ui/icon"
 
 export function SessionComposerRegion(props: {
   state: SessionComposerState
-  ready: boolean
+  sessionID: () => string | undefined
   centered: boolean
   inputRef: (el: HTMLDivElement) => void
   newSessionWorktree: string
@@ -49,8 +49,7 @@ export function SessionComposerRegion(props: {
 }) {
   const prompt = usePrompt()
   const language = useLanguage()
-
-  const [queued, setQueued] = createSignal<string[]>([])
+  const registry = useSessionComposerRegistry()
 
   const sessionKey = createMemo(() => "")
   const handoffPrompt = createMemo(() => getSessionHandoff(sessionKey())?.prompt)
@@ -73,44 +72,10 @@ export function SessionComposerRegion(props: {
     setSessionHandoff(sessionKey(), { prompt: previewPrompt() })
   })
 
-  const [gate, setGate] = createStore({
-    ready: false,
-  })
-  let timer: number | undefined
-  let frame: number | undefined
+  const queued = createMemo(() => registry.get(props.sessionID()).queued)
+  const setQueued = (items: string[]) => registry.set(props.sessionID(), { queued: items })
 
-  const clear = () => {
-    if (timer !== undefined) {
-      window.clearTimeout(timer)
-      timer = undefined
-    }
-    if (frame !== undefined) {
-      cancelAnimationFrame(frame)
-      frame = undefined
-    }
-  }
-
-  createEffect(() => {
-    sessionKey()
-    const ready = props.ready
-    const delay = 140
-
-    clear()
-    setGate("ready", false)
-    if (!ready) return
-
-    frame = requestAnimationFrame(() => {
-      frame = undefined
-      timer = window.setTimeout(() => {
-        setGate("ready", true)
-        timer = undefined
-      }, delay)
-    })
-  })
-
-  onCleanup(clear)
-
-  const open = createMemo(() => gate.ready && props.state.dock() && !props.state.closing())
+  const open = createMemo(() => props.state.dock() && !props.state.closing())
   const config = createMemo(() =>
     open()
       ? {
@@ -126,7 +91,7 @@ export function SessionComposerRegion(props: {
   const progress = useSpring(() => (open() ? 1 : 0), config, () => !visible())
   const value = createMemo(() => Math.max(0, Math.min(1, progress())))
   const [height, setHeight] = createSignal(320)
-  const dock = createMemo(() => (gate.ready && props.state.dock()) || value() > 0.001)
+  const dock = createMemo(() => props.state.dock() || value() > 0.001)
   const full = createMemo(() => Math.max(78, height()))
   const [contentRef, setContentRef] = createSignal<HTMLDivElement>()
 
@@ -147,40 +112,13 @@ export function SessionComposerRegion(props: {
       ref={props.setPromptDockRef}
       data-component="session-prompt-dock"
       classList={{
-        "shrink-0 w-full py-3 px-1 flex flex-col justify-center items-center pointer-events-none": true,
+        "shrink-0 w-full pt-3 pb-0 px-1 flex flex-col justify-center items-center pointer-events-none": true,
         "bg-background-stronger": !props.compact,
       }}
-      >
-        <Show when={props.state.questionRequest()} keyed>
-          {(request) => (
-            <div class="w-full pointer-events-auto" classList={{ "md:max-w-200 md:mx-auto 2xl:max-w-[1000px]": props.centered }}>
-              <SessionQuestionDock request={request} onSubmit={props.onResponseSubmit} onStale={props.state.dismissQuestion} />
-            </div>
-          )}
-        </Show>
-
-        <Show when={props.state.permissionRequest()} keyed>
-          {(request) => (
-            <div class="w-full pointer-events-auto" classList={{ "md:max-w-200 md:mx-auto 2xl:max-w-[1000px]": props.centered }}>
-              <SessionPermissionDock
-                request={request}
-                responding={props.state.permissionResponding()}
-                onDecide={(response) => {
-                  props.onResponseSubmit()
-                  props.state.decide(response)
-                }}
-                onAutoAccept={() => {
-                  props.onResponseSubmit()
-                  props.state.autoAccept()
-                }}
-              />
-            </div>
-          )}
-        </Show>
-
+    >
         <Show when={dock()}>
           <div
-            class="w-full overflow-hidden"
+            class="w-full overflow-hidden mb-2"
             classList={{
               "pointer-events-none": value() < 0.98,
               "pointer-events-auto": value() >= 0.98,
@@ -188,6 +126,7 @@ export function SessionComposerRegion(props: {
             }}
             style={{
               "max-height": `${full() * value()}px`,
+              "min-height": "0",
             }}
           >
             <div ref={setContentRef}>
@@ -215,13 +154,34 @@ export function SessionComposerRegion(props: {
           </div>
         </Show>
 
-        <Show when={!props.state.blocked()}>
-          <Show when={props.working && !props.state.questionRequest() && !props.state.permissionRequest()}>
-            <div class="w-full" classList={{ "md:max-w-200 md:mx-auto 2xl:max-w-[1000px]": props.centered }}>
-              <StatusDisplay working={props.working ?? false} busySince={props.busySince} />
+        <Show when={props.state.questionRequest()} keyed>
+          {(request) => (
+            <div class="w-full pointer-events-auto mb-2" classList={{ "md:max-w-200 md:mx-auto 2xl:max-w-[1000px]": props.centered }}>
+              <SessionQuestionDock request={request} onSubmit={props.onResponseSubmit} onStale={props.state.dismissQuestion} />
             </div>
-          </Show>
+          )}
+        </Show>
 
+        <Show when={props.state.permissionRequest()} keyed>
+          {(request) => (
+            <div class="w-full pointer-events-auto mb-2" classList={{ "md:max-w-200 md:mx-auto 2xl:max-w-[1000px]": props.centered }}>
+              <SessionPermissionDock
+                request={request}
+                responding={props.state.permissionResponding()}
+                onDecide={(response) => {
+                  props.onResponseSubmit()
+                  props.state.decide(response)
+                }}
+                onAutoAccept={() => {
+                  props.onResponseSubmit()
+                  props.state.autoAccept()
+                }}
+              />
+            </div>
+          )}
+        </Show>
+
+        <Show when={!props.state.blocked()}>
           <div
             classList={{
               "w-full px-2 pointer-events-auto relative": true,
@@ -237,7 +197,7 @@ export function SessionComposerRegion(props: {
                       <span class="truncate min-w-0">{msg}</span>
                       <button
                         type="button"
-                        onClick={() => setQueued((prev) => prev.filter((_, idx) => idx !== i))}
+                        onClick={() => setQueued(queued().filter((_, idx) => idx !== i))}
                         class="size-4 shrink-0 flex items-center justify-center text-icon-weak hover:text-icon-base"
                       >
                         <Icon name="close" size="small" />
@@ -271,11 +231,15 @@ export function SessionComposerRegion(props: {
                     busySince={props.busySince}
                     hiddenSeed={props.hiddenSeed}
                     queued={queued()}
-                    onQueueChange={(items) => setQueued(items)}
+                    onQueueChange={setQueued}
                   />
                 </div>
               </Show>
             </Show>
+          </div>
+
+          <div class="w-full px-2 pointer-events-auto" classList={{ "md:max-w-200 md:mx-auto 2xl:max-w-[1000px]": props.centered }}>
+            <StatusDisplay working={props.working ?? false} busySince={props.busySince} />
           </div>
         </Show>
       </div>
