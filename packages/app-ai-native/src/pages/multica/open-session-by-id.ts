@@ -9,8 +9,11 @@ import type { Device, Workspace } from "@/pages/workspace/types"
  *   1. enumerate the user's devices,
  *   2. probe each ONLINE device for the session id (lookup is directory-
  *      independent on the device side),
- *   3. once found, reuse an existing workspace on that device, or create one
- *      on demand for the session's directory,
+ *   3. once found, reuse the workspace on that device whose registered
+ *      directories CONTAIN the session's directory — never a workspace that
+ *      points elsewhere, or the session would render inside the wrong project
+ *      tree and fall out of the directory-scoped session list — or create a
+ *      workspace on demand for the session's directory,
  *   4. navigate to /workspace/<id>?session=<sessionId>.
  *
  * All I/O is injected so the orchestration is unit-testable.
@@ -50,7 +53,7 @@ export async function openSessionById(sessionId: string, deps: OpenSessionDeps):
     }
 
     const workspaces = await deps.listWorkspaces()
-    const existing = findWorkspaceForDevice(workspaces, hit.device)
+    const existing = findWorkspaceForSession(workspaces, hit.device, hit.directory)
     if (existing) {
       deps.navigateToSession(existing, sessionId)
       return
@@ -68,17 +71,42 @@ export async function openSessionById(sessionId: string, deps: OpenSessionDeps):
 }
 
 /**
- * Find an existing workspace bound to the given device. Matches on the routing
- * id (`Workspace.deviceUniqueId` === `Device.deviceId`) first, then the DB id
- * (`Workspace.deviceId` === `Device.id`).
+ * Find the workspace that owns the session's directory. Only workspaces on the
+ * given device are considered, and a workspace matches only when one of its
+ * registered directories CONTAINS the session's working directory — reusing a
+ * workspace that points at a different directory would render the session
+ * inside the wrong project tree and drop it from the directory-scoped session
+ * list. When several nested directories match, the longest (most specific)
+ * path wins. Returns undefined when nothing contains the directory, so the
+ * caller creates a workspace for the session's own directory instead.
  */
-export function findWorkspaceForDevice(workspaces: Workspace[], device: Device): string | undefined {
-  const match = workspaces.find(
-    (w) =>
+export function findWorkspaceForSession(
+  workspaces: Workspace[],
+  device: Device,
+  directory: string,
+): string | undefined {
+  const dir = normalizePath(directory)
+  if (!dir) return undefined
+  let best: { id: string; len: number } | undefined
+  for (const w of workspaces) {
+    const onDevice =
       (!!w.deviceUniqueId && w.deviceUniqueId === device.deviceId) ||
-      (!!w.deviceId && w.deviceId === device.id),
-  )
-  return match?.id
+      (!!w.deviceId && w.deviceId === device.id)
+    if (!onDevice) continue
+    for (const d of w.directories ?? []) {
+      const p = normalizePath(d.path)
+      if (!p) continue
+      if (dir === p || dir.startsWith(p + "/") || dir.startsWith(p + "\\")) {
+        if (!best || p.length > best.len) best = { id: w.id, len: p.length }
+      }
+    }
+  }
+  return best?.id
+}
+
+/** Strip trailing slashes so directory containment checks compare cleanly. */
+function normalizePath(p: string): string {
+  return (p ?? "").replace(/[/\\]+$/, "")
 }
 
 /** Last path segment of the session's directory, used to name an auto-created workspace. */

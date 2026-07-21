@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { deriveWorkspaceName, findWorkspaceForDevice, openSessionById } from "./open-session-by-id"
+import { deriveWorkspaceName, findWorkspaceForSession, openSessionById } from "./open-session-by-id"
 import type { OpenSessionDeps } from "./open-session-by-id"
 import type { Device, Workspace } from "@/pages/workspace/types"
 
@@ -30,6 +30,15 @@ function workspace(id: string, opts: Partial<Workspace> = {}): Workspace {
   }
 }
 
+/** Shorthand for a workspace bound to a device with one registered directory. */
+function workspaceWithDir(id: string, deviceUniqueId: string, path: string): Workspace {
+  return workspace(id, {
+    deviceUniqueId,
+    // Only `path` matters for directory matching; cast to keep the fixture small.
+    directories: [{ path } as any],
+  })
+}
+
 // Collects the effects of openSessionById for assertions.
 function harness(over: Partial<OpenSessionDeps> = {}) {
   const calls = {
@@ -56,20 +65,43 @@ function harness(over: Partial<OpenSessionDeps> = {}) {
   return { calls, deps }
 }
 
-describe("findWorkspaceForDevice", () => {
-  test("matches on deviceUniqueId (routing id)", () => {
-    const ws = [workspace("w1", { deviceUniqueId: "dev-uniq" })]
-    expect(findWorkspaceForDevice(ws, device("db-1", "dev-uniq"))).toBe("w1")
+describe("findWorkspaceForSession", () => {
+  test("matches the workspace whose directory contains the session dir", () => {
+    const ws = [workspaceWithDir("w1", "dev-uniq", "/p")]
+    expect(findWorkspaceForSession(ws, device("db-1", "dev-uniq"), "/p/workdir")).toBe("w1")
   })
 
-  test("matches on deviceId (db id) as fallback", () => {
-    const ws = [workspace("w1", { deviceId: "db-1" })]
-    expect(findWorkspaceForDevice(ws, device("db-1", "dev-uniq"))).toBe("w1")
+  test("matches on deviceId (db id) when deviceUniqueId is absent", () => {
+    const ws = [workspace("w1", { deviceId: "db-1", directories: [{ path: "/p" } as any] })]
+    expect(findWorkspaceForSession(ws, device("db-1", "dev-uniq"), "/p/workdir")).toBe("w1")
   })
 
-  test("returns undefined when no workspace is on the device", () => {
-    const ws = [workspace("w1", { deviceUniqueId: "other" })]
-    expect(findWorkspaceForDevice(ws, device("db-1", "dev-uniq"))).toBeUndefined()
+  test("prefers the most specific (longest) containing directory", () => {
+    const ws = [
+      workspaceWithDir("w-root", "dev-uniq", "/p"),
+      workspaceWithDir("w-nested", "dev-uniq", "/p/workdir"),
+    ]
+    expect(findWorkspaceForSession(ws, device("db-1", "dev-uniq"), "/p/workdir/task")).toBe("w-nested")
+  })
+
+  test("does not match a same-device workspace with a different directory", () => {
+    const ws = [workspaceWithDir("w1", "dev-uniq", "/other/project")]
+    expect(findWorkspaceForSession(ws, device("db-1", "dev-uniq"), "/p/workdir")).toBeUndefined()
+  })
+
+  test("does not match a containing directory on another device", () => {
+    const ws = [workspaceWithDir("w1", "other-device", "/p")]
+    expect(findWorkspaceForSession(ws, device("db-1", "dev-uniq"), "/p/workdir")).toBeUndefined()
+  })
+
+  test("a path prefix without a separator boundary is not containment", () => {
+    const ws = [workspaceWithDir("w1", "dev-uniq", "/p/work")]
+    expect(findWorkspaceForSession(ws, device("db-1", "dev-uniq"), "/p/workdir")).toBeUndefined()
+  })
+
+  test("returns undefined for an empty session directory", () => {
+    const ws = [workspaceWithDir("w1", "dev-uniq", "/p")]
+    expect(findWorkspaceForSession(ws, device("db-1", "dev-uniq"), "")).toBeUndefined()
   })
 })
 
@@ -86,11 +118,11 @@ describe("deriveWorkspaceName", () => {
 })
 
 describe("openSessionById", () => {
-  test("navigates to an existing workspace on the owning device", async () => {
+  test("navigates to the workspace containing the session directory", async () => {
     const { calls, deps } = harness({
       listDevices: async () => [device("db-1", "dev-1"), device("db-2", "dev-2")],
       probeSession: async (d) => (d.id === "db-2" ? { directory: "/p/workdir" } : null),
-      listWorkspaces: async () => [workspace("w2", { deviceUniqueId: "dev-2" })],
+      listWorkspaces: async () => [workspaceWithDir("w2", "dev-2", "/p")],
     })
     await openSessionById("sess-1", deps)
     expect(calls.navigated).toEqual({ workspaceId: "w2", sessionId: "sess-1" })
@@ -113,6 +145,24 @@ describe("openSessionById", () => {
     expect(calls.navigated).toEqual({ workspaceId: "ws-new", sessionId: "sess-1" })
   })
 
+  test("creates a new workspace when the device only has mismatched-directory workspaces", async () => {
+    // Regression: reusing a same-device workspace that points at another
+    // directory rendered the session in the wrong project tree and dropped it
+    // from the directory-scoped session list (lost on refresh).
+    const { calls, deps } = harness({
+      listDevices: async () => [device("db-1", "dev-1")],
+      probeSession: async () => ({ directory: "/p/multica_workspaces/x/workdir" }),
+      listWorkspaces: async () => [workspaceWithDir("w-other", "dev-1", "/Users/x/project")],
+    })
+    await openSessionById("sess-1", deps)
+    expect(calls.created).toEqual({
+      name: "workdir",
+      deviceId: "db-1",
+      directory: "/p/multica_workspaces/x/workdir",
+    })
+    expect(calls.navigated).toEqual({ workspaceId: "ws-new", sessionId: "sess-1" })
+  })
+
   test("skips offline devices when probing", async () => {
     const probed: string[] = []
     const { calls, deps } = harness({
@@ -121,7 +171,7 @@ describe("openSessionById", () => {
         probed.push(d.id)
         return d.id === "db-2" ? { directory: "/p/workdir" } : null
       },
-      listWorkspaces: async () => [workspace("w2", { deviceUniqueId: "dev-2" })],
+      listWorkspaces: async () => [workspaceWithDir("w2", "dev-2", "/p")],
     })
     await openSessionById("sess-1", deps)
     expect(probed).toEqual(["db-2"])
@@ -145,7 +195,7 @@ describe("openSessionById", () => {
         if (d.id === "db-1") throw new Error("proxy down")
         return { directory: "/p/workdir" }
       },
-      listWorkspaces: async () => [workspace("w2", { deviceUniqueId: "dev-2" })],
+      listWorkspaces: async () => [workspaceWithDir("w2", "dev-2", "/p")],
     })
     await openSessionById("sess-1", deps)
     expect(calls.navigated?.workspaceId).toBe("w2")
