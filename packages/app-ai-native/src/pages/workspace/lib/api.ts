@@ -43,6 +43,7 @@ import type {
   UpdateDeviceRequest,
   ListWorkspaceDevicesResponse,
 } from "../types"
+import { setDeviceClusterAPIURL } from "./url"
 
 type DeviceResponse = Partial<Device> & {
   id: string
@@ -60,11 +61,13 @@ type DeviceResponse = Partial<Device> & {
   lastSeenAt?: string | null
   canUpdate?: boolean | null
   latestVersion?: string | null
+  clusterAPIURL?: string | null
   createdAt?: string
   updatedAt?: string
 }
 
 function normalizeDevice(device: DeviceResponse): Device {
+  setDeviceClusterAPIURL(device.deviceId, device.clusterAPIURL)
   return {
     id: device.id,
     deviceId: device.deviceId,
@@ -81,6 +84,7 @@ function normalizeDevice(device: DeviceResponse): Device {
     lastSeenAt: device.lastSeenAt ?? undefined,
     canUpdate: device.canUpdate ?? undefined,
     latestVersion: device.latestVersion ?? undefined,
+    clusterAPIURL: device.clusterAPIURL ?? undefined,
     createdAt: device.createdAt ?? "",
     updatedAt: device.updatedAt ?? "",
   }

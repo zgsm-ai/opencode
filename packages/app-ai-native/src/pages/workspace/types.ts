@@ -18,6 +18,7 @@ export interface Device {
   lastSeenAt?: string
   canUpdate?: boolean
   latestVersion?: string
+  clusterAPIURL?: string | null
   createdAt: string
   updatedAt: string
 }

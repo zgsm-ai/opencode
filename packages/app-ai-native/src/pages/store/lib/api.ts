@@ -9,6 +9,7 @@ import type {
   UpdateDeviceRequest,
   CommandStatusResponse,
 } from "@/pages/workspace/types"
+import { setDeviceClusterAPIURL } from "@/pages/workspace/lib/url"
 
 // In dev the Vite proxy forwards /api/* to the real backend.
 // Set VITE_API_URL only for standalone mode (packages/store dev server on port 3002).
@@ -410,6 +411,7 @@ type DeviceResponse = Partial<Device> & {
   lastSeenAt?: string | null
   canUpdate?: boolean | null
   latestVersion?: string | null
+  clusterAPIURL?: string | null
   createdAt?: string
   updatedAt?: string
 }
@@ -452,6 +454,7 @@ export type WecomChannelPayload = {
 }
 
 function normalizeDevice(device: DeviceResponse): Device {
+  setDeviceClusterAPIURL(device.deviceId, device.clusterAPIURL)
   return {
     id: device.id,
     deviceId: device.deviceId,
@@ -468,6 +471,7 @@ function normalizeDevice(device: DeviceResponse): Device {
     lastSeenAt: device.lastSeenAt ?? undefined,
     canUpdate: device.canUpdate ?? undefined,
     latestVersion: device.latestVersion ?? undefined,
+    clusterAPIURL: device.clusterAPIURL ?? undefined,
     createdAt: device.createdAt ?? "",
     updatedAt: device.updatedAt ?? "",
   }
