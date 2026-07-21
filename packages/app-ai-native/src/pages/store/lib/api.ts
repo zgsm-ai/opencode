@@ -9,7 +9,8 @@ import type {
   UpdateDeviceRequest,
   CommandStatusResponse,
 } from "@/pages/workspace/types"
-import { setDeviceClusterAPIURL } from "@/pages/workspace/lib/url"
+import { getProxyUrl, setDeviceClusterAPIURL } from "@/pages/workspace/lib/url"
+import { withClusterRetry } from "@/pages/workspace/lib/cluster-retry"
 
 // In dev the Vite proxy forwards /api/* to the real backend.
 // Set VITE_API_URL only for standalone mode (packages/store dev server on port 3002).
@@ -1976,21 +1977,36 @@ export const updateApi = {
   check: (platform: string, version: string) =>
     apiFetch<UpdateCheckResponse>(`/api/updates/check?platform=${encodeURIComponent(platform)}&version=${encodeURIComponent(version)}`),
 
-  sendCommand: (deviceId: string, cmd: DeviceCommandRequest) =>
-    apiFetch<DeviceCommandAck>(`/cloud/device/${deviceId}/proxy/api/v1/commands`, {
-      method: "POST",
-      body: JSON.stringify(cmd),
+  sendCommand: async (deviceId: string, cmd: DeviceCommandRequest): Promise<DeviceCommandAck> =>
+    withClusterRetry(deviceId, async () => {
+      const res = await fetch(`${getProxyUrl(deviceId)}/api/v1/commands`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(cmd),
+      })
+      if (!res.ok) {
+        if (res.status === 401) onUnauthorized(`/cloud/device/${deviceId}/proxy/api/v1/commands`)
+        const err = await res.json().catch(() => ({ error: res.statusText }))
+        throw new Error(err.error || err.message || `Request failed: ${res.status}`)
+      }
+      return res.json()
     }),
 
   getCommandStatus: async (deviceId: string, commandId: string): Promise<CommandStatusResponse | null> => {
-    const res = await fetch(`${API_BASE}/cloud/device/${deviceId}/proxy/api/v1/commands/status?command_id=${encodeURIComponent(commandId)}`, { headers: { "Content-Type": "application/json" } })
-    if (res.status === 404) return null
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ error: res.statusText }))
-      throw new Error(err.error || err.message || `Request failed: ${res.status}`)
-    }
-    const json = await res.json()
-    return json?.data ?? json
+    return withClusterRetry(deviceId, async () => {
+      const res = await fetch(`${getProxyUrl(deviceId)}/api/v1/commands/status?command_id=${encodeURIComponent(commandId)}`, {
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+      })
+      if (res.status === 404) return null
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: res.statusText }))
+        throw new Error(err.error || err.message || `Request failed: ${res.status}`)
+      }
+      const json = await res.json()
+      return json?.data ?? json
+    })
   },
 }
 
