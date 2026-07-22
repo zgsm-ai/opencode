@@ -66,7 +66,7 @@ export default function MulticaPage() {
   // lives in an isolated working dir that belongs to no workspace, so we probe
   // the user's devices to find which one has it, then reuse or create a
   // workspace on that device and deep-link into the session viewer.
-  const openSession = (sessionId: string) =>
+  const openSession = (sessionId: string, tab?: Window) =>
     openSessionById(sessionId, {
       listDevices: async () => (await deviceApi.list()).devices,
       probeSession: async (device, sid) => {
@@ -83,9 +83,16 @@ export default function MulticaPage() {
         })
         return res.workspace.id
       },
-      navigateToSession: (workspaceId, sid) =>
-        navigate(`/workspace/${workspaceId}?session=${encodeURIComponent(sid)}`),
-      onError: (reason) =>
+      navigateToSession: (workspaceId, sid) => {
+        const path = `/workspace/${workspaceId}?session=${encodeURIComponent(sid)}`
+        if (tab) {
+          if (!tab.closed) tab.location.href = new URL(path, window.location.origin).toString()
+          return
+        }
+        navigate(path)
+      },
+      onError: (reason) => {
+        tab?.close()
         showToast({
           variant: "error",
           title: t("toast.multica.openSession.title"),
@@ -94,7 +101,8 @@ export default function MulticaPage() {
               ? "toast.multica.openSession.notFound"
               : "toast.multica.openSession.failed",
           ),
-        }),
+        })
+      },
     })
 
   // Post-message bridge: listen for navigation/location requests from the
@@ -106,7 +114,19 @@ export default function MulticaPage() {
     if (event.data.type === "multica:navigate") {
       // Open a csc session by id.
       if (event.data.target === "session" && typeof event.data.sessionId === "string") {
-        void openSession(event.data.sessionId)
+        const tab = event.data.newTab === true
+          ? window.open("about:blank", "_blank") ?? undefined
+          : undefined
+        if (event.data.newTab === true && !tab) {
+          showToast({
+            variant: "error",
+            title: t("toast.multica.openSession.title"),
+            description: t("toast.multica.openSession.failed"),
+          })
+          return
+        }
+        if (tab) tab.opener = null
+        void openSession(event.data.sessionId, tab)
         return
       }
       // Legacy: bare href navigation requests (currently logged only).
