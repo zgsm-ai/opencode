@@ -8,6 +8,7 @@ import { workspaceApi, deviceApi } from "@/pages/workspace/lib/api"
 import { getProxyUrl } from "@/pages/workspace/lib/url"
 import { createDeviceClient } from "@/client/device-client"
 import { env } from "@/lib/env"
+import { href } from "@/lib/router"
 import { fetchCostrictUniversalId, postCostrictIdentity } from "./identity-handoff"
 import { openSessionById } from "./open-session-by-id"
 import { decideSyncAction } from "./sync-action"
@@ -86,7 +87,7 @@ export default function MulticaPage() {
       navigateToSession: (workspaceId, sid) => {
         const path = `/workspace/${workspaceId}?session=${encodeURIComponent(sid)}`
         if (tab) {
-          if (!tab.closed) tab.location.href = new URL(path, window.location.origin).toString()
+          if (!tab.closed) tab.location.href = href(path)
           return
         }
         navigate(path)
