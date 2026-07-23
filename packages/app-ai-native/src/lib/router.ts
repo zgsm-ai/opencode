@@ -10,6 +10,11 @@ export function appPath(path: string) {
   return path
 }
 
+export function href(path: string) {
+  const base = (env.BASE_PATH || "").replace(/\/+$/, "")
+  return new URL(`${base}${path.startsWith("/") ? path : `/${path}`}`, window.location.origin).toString()
+}
+
 export function isWorkspacePath(path: string) {
   return path === "/workspace" || path.startsWith("/workspace/")
 }

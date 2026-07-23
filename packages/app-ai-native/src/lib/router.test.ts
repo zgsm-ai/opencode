@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test"
-import { appPath, isChromePath, isWorkspacePath } from "./router"
+import { appPath, href, isChromePath, isWorkspacePath } from "./router"
 
 afterEach(() => {
   window.__ENV__ = undefined
@@ -12,6 +12,15 @@ describe("router helpers", () => {
     expect(appPath("/app")).toBe("/")
     expect(appPath("/app/workspace/demo")).toBe("/workspace/demo")
     expect(appPath("/workspace/demo")).toBe("/workspace/demo")
+  })
+
+  test("href includes the configured base path for a new tab", () => {
+    window.__ENV__ = { VITE_BASE_PATH: "/cloud" }
+    window.location.href = "https://zgsmtest.cn:30443/cloud/workflow"
+
+    expect(href("/workspace/demo?session=sess-1")).toBe(
+      `${window.location.origin}/cloud/workspace/demo?session=sess-1`,
+    )
   })
 
   test("isWorkspacePath matches workspace root and children only", () => {
