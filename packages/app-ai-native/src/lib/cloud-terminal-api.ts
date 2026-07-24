@@ -1,4 +1,5 @@
 import type { ServerConnection } from "@/context/server"
+import { getAuthHeaders, withTokenQuery } from "@/lib/auth-token"
 
 const CONTROL_TAG_JSON = 0x01
 const WS_CONNECT_TIMEOUT_MS = 5000
@@ -77,18 +78,18 @@ export class CloudTerminalApi {
   }
 
   private buildWsUrl(): string {
-    const httpUrl = this.buildUrl("/input-ws")
+    const httpUrl = withTokenQuery(this.buildUrl("/input-ws"))
     return httpUrl.replace(/^http/, "ws")
   }
 
   private buildSseUrl(sessionId: string): string {
-    return this.buildUrl(`/${sessionId}/stream`)
+    return withTokenQuery(this.buildUrl(`/${sessionId}/stream`))
   }
 
   async create(cwd: string, rows: number, cols: number): Promise<CloudTerminalSession> {
     const response = await fetch(this.buildUrl(""), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...getAuthHeaders() },
       credentials: "include",
       body: JSON.stringify({ cwd, rows, cols }),
     })
@@ -104,6 +105,7 @@ export class CloudTerminalApi {
   async kill(sessionId: string): Promise<void> {
     const response = await fetch(this.buildUrl(`/${sessionId}`), {
       method: "DELETE",
+      headers: { ...getAuthHeaders() },
       credentials: "include",
     })
     if (!response.ok) {
@@ -114,7 +116,7 @@ export class CloudTerminalApi {
   async resize(sessionId: string, rows: number, cols: number): Promise<void> {
     const response = await fetch(this.buildUrl(`/${sessionId}/resize`), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...getAuthHeaders() },
       credentials: "include",
       body: JSON.stringify({ rows, cols }),
     })
@@ -127,7 +129,7 @@ export class CloudTerminalApi {
   async restart(sessionId: string, cwd: string): Promise<CloudTerminalSession> {
     const response = await fetch(this.buildUrl(`/${sessionId}/restart`), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...getAuthHeaders() },
       credentials: "include",
       body: JSON.stringify({ cwd }),
     })
@@ -143,7 +145,7 @@ export class CloudTerminalApi {
     const encoded = btoa(data)
     const response = await fetch(this.buildUrl(`/${sessionId}/input`), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...getAuthHeaders() },
       credentials: "include",
       body: JSON.stringify({ data: encoded }),
     })

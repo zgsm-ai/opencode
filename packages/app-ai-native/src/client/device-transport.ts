@@ -1,5 +1,6 @@
 import { onUnauthorized } from "@/lib/session-expired"
 import { onRateLimited } from "@/lib/rate-limit-toast"
+import { getAuthHeaders } from "@/lib/auth-token"
 
 export type TransportOpts = {
   baseUrl: string
@@ -101,6 +102,7 @@ export function createDeviceTransport(opts: TransportOpts) {
       headers: {
         "Content-Type": "application/json",
         ...(dir ? { "X-Workspace-Directory": encodeURIComponent(dir) } : {}),
+        ...getAuthHeaders(),
         ...opts.headers,
       },
       signal: input?.signal ?? opts.signal,

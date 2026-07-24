@@ -1,6 +1,7 @@
 import type { Event, OpencodeClient } from "@opencode-ai/sdk/v2/client"
 import { createOpencodeClient } from "@opencode-ai/sdk/v2/client"
 import { createDeviceTransport } from "./device-transport"
+import { getAuthHeaders } from "@/lib/auth-token"
 
 type ClientOpts = {
   baseUrl: string
@@ -170,7 +171,7 @@ function auth(headers: HeadersInit | undefined, baseUrl: string) {
 export function createDeviceClient(opts: ClientOpts): DeviceClient {
   const http = createDeviceTransport(opts)
   const sdk = createOpencodeClient({
-    ...auth(opts.headers, opts.baseUrl),
+    ...auth({ ...getAuthHeaders(), ...(opts.headers as Record<string, string> | undefined) }, opts.baseUrl),
     fetch: opts.fetch,
     signal: opts.signal,
     directory: opts.directory,
@@ -296,6 +297,7 @@ export function createDeviceClient(opts: ClientOpts): DeviceClient {
               headers: {
                 Accept: "text/event-stream",
                 ...(opts.directory ? { "X-Workspace-Directory": encodeURIComponent(opts.directory) } : {}),
+                ...getAuthHeaders(),
                 ...(opts.headers ?? {}),
               },
               signal: controller.signal,
