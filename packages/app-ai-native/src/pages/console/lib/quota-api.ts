@@ -1,5 +1,6 @@
 import { env } from "@/lib/env"
 import { onUnauthorized } from "@/lib/session-expired"
+import { getAuthHeaders } from "@/lib/auth-token"
 
 const QUOTA_PREFIX = env.QUOTA_PREFIX
 const QUOTA_BASE = env.QUOTA_URL || QUOTA_PREFIX
@@ -17,12 +18,6 @@ export async function quotaApiFetch<T>(path: string, options?: RequestInit): Pro
     throw new Error(err.error || err.message || `Request failed: ${res.status}`)
   }
   return res.json()
-}
-
-function getAuthHeaders(): Record<string, string> {
-  const match = document.cookie.match(/(?:^|;\s*)zgsmAdminToken=([^;]+)/)
-  if (!match) return {}
-  return { Authorization: `Bearer ${match[1]}` }
 }
 
 export interface QuotaList {
