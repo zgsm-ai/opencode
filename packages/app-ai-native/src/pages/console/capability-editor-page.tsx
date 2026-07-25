@@ -29,6 +29,7 @@ import { ConfirmDialog } from "@/pages/store/components/confirm-dialog"
 import { SkillWriterChatPanel } from "@/pages/console/skill-writer-chat-panel"
 import { deviceApi } from "@/pages/workspace/lib/api"
 import { buildTreeFromPaths, dedupeTreeNodes, type VirtualTreeNode } from "@/lib/virtual-tree"
+import { slugify } from "@/lib/capability-slug"
 
 type ItemType = "skill" | "subagent" | "command" | "mcp" | "plugin"
 
@@ -435,15 +436,8 @@ function sanitizeIdentifier(value: string) {
   return value.replace(/[^A-Za-z0-9_-]+/g, "")
 }
 
-// Derive a URL-safe slug from a human name: lowercase, non-alphanumerics to hyphens.
-// Falls back to the trimmed original (e.g. CJK names) so the slug is never empty.
 function autoSlugFromName(value: string) {
-  const trimmed = value.trim()
-  const slug = trimmed
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
-  return slug || trimmed
+  return slugify(value)
 }
 
 function formatImportedTitle(value: string) {

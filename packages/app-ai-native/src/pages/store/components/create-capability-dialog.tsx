@@ -10,6 +10,7 @@ import { canArchive, contentValue, usableMode } from "../lib/content"
 import { TYPE_CONTENT_PLACEHOLDER, typeKey } from "../lib/constants"
 import { ContentField } from "./content-field"
 import { Modal } from "@/components/modal"
+import { slugify } from "@/lib/capability-slug"
 
 type NamespaceOption = {
   value: string
@@ -28,13 +29,6 @@ type CreateCapabilityDialogProps = {
 
 const CREATE_ITEM_TYPES = ["skill", "subagent", "command", "mcp", "plugin"] as const
 type CreateItemType = (typeof CREATE_ITEM_TYPES)[number]
-
-function slugify(value: string) {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
-}
 
 export function CreateCapabilityDialog(props: CreateCapabilityDialogProps) {
   const dialog = useDialog()
