@@ -1,4 +1,5 @@
 import { createMemo, createSignal, For, Match, onMount, onCleanup, Show, Switch, createEffect, untrack } from "solid-js"
+import { createStore } from "solid-js/store"
 import { useParams, useSearchParams } from "@solidjs/router"
 import { Toast } from "@opencode-ai/ui/toast"
 import { IconButton } from "@opencode-ai/ui/icon-button"
@@ -20,6 +21,7 @@ import { SessionTabProvider, useSessionTab } from "@/context/session-tab"
 import { DeviceSessionView } from "./device-session-view"
 import { DeviceSessionViewHeader } from "./device-session-view-header"
 import { DeviceSessionChatProvider } from "@/context/device-session-chat"
+import { useConversationAdapter } from "@/context/device-adapter"
 import { TerminalTab } from "./terminal-tab"
 import { useDeviceTerminal } from "@/context/device-terminal"
 import { ContentTabContext, useContentTabs, type ContentTab } from "@/context/content-tabs"
@@ -36,6 +38,7 @@ import { useWorkspace } from "../context"
 import { useWorkspaceVisible } from "./layout"
 import { filePreviewConfig } from "../lib/file-preview-config"
 import { MessageSquare, FolderOpen, GitBranch, Terminal } from "lucide-solid"
+import { SessionActionMenuItems } from "./session-action-menu"
 
 let newSessionCounter = 0
 
@@ -463,6 +466,7 @@ function ContentSidebar(props: { directory: string; autoExpandGroup?: () => { gr
   const file = useFile()
   const diff = useDiff()
   const treePolling = useTreePolling()
+  const adapter = useConversationAdapter()
   const [sidebarSearch] = useSearchParams<{ session?: string }>()
   const [active, setActive] = createSignal<SidebarSection | undefined>("sessions")
   const [diffGroups, setDiffGroups] = createSignal<Record<string, boolean>>({})
@@ -512,10 +516,6 @@ function ContentSidebar(props: { directory: string; autoExpandGroup?: () => { gr
       icon: SESSION_TAB_ICON,
       meta: { sessionID: session.id },
     })
-  }
-
-  const deleteSession = async (session: Session) => {
-    await dw.session.remove(session.id)
   }
 
   createEffect(() => {
@@ -731,15 +731,42 @@ function ContentSidebar(props: { directory: string; autoExpandGroup?: () => { gr
                                         <span class="shrink-0 w-2 h-2 rounded-full bg-native-primary" />
                                       </Show>
                                       <span class="truncate flex-1 min-w-0">{session.title || language.t("command.session.new")}</span>
-                                      <button
-                                        class="shrink-0 size-5 flex items-center justify-center rounded opacity-0 group-hover/s:opacity-100 transition-[width,opacity] duration-150 w-0 overflow-hidden group-hover/s:w-5 hover:bg-native-active"
-                                        onClick={(e) => {
-                                          e.stopPropagation()
-                                          deleteSession(session)
-                                        }}
+                                      <div
+                                        onClick={(e) => e.stopPropagation()}
+                                        onPointerDown={(e) => e.stopPropagation()}
                                       >
-                                        <Icon name="trash" size="small" class="text-native-dim" />
-                                      </button>
+                                        <DropdownMenu placement="bottom-end" gutter={4}>
+                                          <DropdownMenu.Trigger
+                                            as={IconButton}
+                                            icon="dot-grid"
+                                            variant="ghost"
+                                            iconSize="small"
+                                            class="shrink-0 size-6 rounded-md opacity-0 group-hover/s:opacity-100 transition-[width,opacity] duration-150 w-0 overflow-hidden group-hover/s:w-6"
+                                          />
+                                          <DropdownMenu.Portal>
+                                            <DropdownMenu.Content style={{ "min-width": "104px" }}>
+                                              <SessionActionMenuItems
+                                                sessionID={session.id}
+                                                getTitle={() => dw.session.get(session.id)?.title ?? ""}
+                                                onRename={async (title) => {
+                                                  await adapter.sessionUpdate({ sessionID: session.id, title })
+                                                  dw.session.patch(session.id, { title })
+                                                }}
+                                                onDelete={() =>
+                                                  adapter
+                                                    .sessionDelete(session.id)
+                                                    .then((x) => {
+                                                      const ok = !!x.data
+                                                      if (ok) dw.session.removeLocal(session.id)
+                                                      return ok
+                                                    })
+                                                    .catch(() => false)
+                                                }
+                                              />
+                                            </DropdownMenu.Content>
+                                          </DropdownMenu.Portal>
+                                        </DropdownMenu>
+                                      </div>
                                     </div>
                                   )
                                 }}

@@ -1,9 +1,13 @@
 import { createEffect, createMemo, createSignal, For, Show } from "solid-js"
 import { Icon } from "@opencode-ai/ui/icon"
+import { IconButton } from "@opencode-ai/ui/icon-button"
+import { DropdownMenu } from "@opencode-ai/ui/dropdown-menu"
 import { useLanguage } from "@/context/language"
 import { useDeviceWorkspace } from "@/context/device-workspace"
-import { useContentTabs, type ContentTab } from "@/context/content-tabs"
+import { useContentTabs } from "@/context/content-tabs"
+import { useSessionChat } from "@/context/session-chat"
 import { sessionTreeIDs } from "@/pages/session/composer/session-request-tree"
+import { SessionActionMenuItems } from "./session-action-menu"
 import type { Session } from "@opencode-ai/sdk/v2/client"
 
 const SESSION_TAB_ICON = "bubble-5"
@@ -51,6 +55,7 @@ export function SessionListPanel() {
   const language = useLanguage()
   const dw = useDeviceWorkspace()
   const tabStore = useContentTabs()
+  const chat = useSessionChat()
   const [groups, setGroups] = createSignal<Record<string, boolean>>({ older: true })
 
   const sortedSessions = createMemo(() => {
@@ -97,10 +102,6 @@ export function SessionListPanel() {
       icon: SESSION_TAB_ICON,
       meta: { sessionID: session.id },
     })
-  }
-
-  const deleteSession = async (session: Session) => {
-    await dw.session.remove(session.id)
   }
 
   createEffect(() => {
@@ -175,15 +176,30 @@ export function SessionListPanel() {
                                     <span class="shrink-0 w-2 h-2 rounded-full bg-native-primary" />
                                   </Show>
                                   <span class="truncate flex-1 min-w-0">{session.title || language.t("command.session.new")}</span>
-                                  <button
-                                    class="shrink-0 size-5 flex items-center justify-center rounded opacity-0 group-hover/s:opacity-100 transition-[width,opacity] duration-150 w-0 overflow-hidden group-hover/s:w-5 hover:bg-native-active"
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      deleteSession(session)
-                                    }}
+                                  <div
+                                    onClick={(e) => e.stopPropagation()}
+                                    onPointerDown={(e) => e.stopPropagation()}
                                   >
-                                    <Icon name="trash" size="small" class="text-native-dim" />
-                                  </button>
+                                    <DropdownMenu placement="bottom-end" gutter={4}>
+                                      <DropdownMenu.Trigger
+                                        as={IconButton}
+                                        icon="dot-grid"
+                                        variant="ghost"
+                                        iconSize="small"
+                                        class="shrink-0 size-6 rounded-md opacity-0 group-hover/s:opacity-100 transition-[width,opacity] duration-150 w-0 overflow-hidden group-hover/s:w-6"
+                                      />
+                                    <DropdownMenu.Portal>
+                                      <DropdownMenu.Content style={{ "min-width": "104px" }}>
+                                        <SessionActionMenuItems
+                                          sessionID={session.id}
+                                          getTitle={() => chat.getSession(session.id)?.title ?? ""}
+                                          onRename={(title) => chat.renameSession(session.id, title)}
+                                          onDelete={() => chat.deleteSession(session.id)}
+                                        />
+                                      </DropdownMenu.Content>
+                                    </DropdownMenu.Portal>
+                                  </DropdownMenu>
+                                  </div>
                                 </div>
                               )
                             }}
