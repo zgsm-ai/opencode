@@ -63,6 +63,7 @@ type DeviceWorkspaceValue = {
     get: (id: string) => Session | undefined
     fetch(count?: number): Promise<void>
     remove(id: string): Promise<void>
+    patch(id: string, partial: Partial<Session>): void
     setStatus(id: string, status: SessionStatus | undefined): void
     setQuestions(questions: Record<string, QuestionRequest[]>): void
     setPermissions(permissions: Record<string, PermissionRequest[]>): void
@@ -278,6 +279,19 @@ export function DeviceWorkspaceProvider(props: ParentProps<{ workspaceId?: strin
       return
     }
     setStore("sessionStatus", id, reconcile(status))
+  }
+
+  const patchSession = (id: string, partial: Partial<Session>) => {
+    if (!id) return
+    setStore("session", produce((draft: Session[]) => {
+      const idx = draft.findIndex((s) => s.id === id)
+      if (idx === -1) return
+      draft[idx] = {
+        ...draft[idx],
+        ...partial,
+        time: { ...draft[idx].time, updated: Date.now() },
+      }
+    }))
   }
 
   const addQuestion = (item: QuestionRequest) => {
@@ -982,6 +996,7 @@ export function DeviceWorkspaceProvider(props: ParentProps<{ workspaceId?: strin
       get: getSession,
       fetch: fetchSessions,
       remove: deleteSession,
+      patch: patchSession,
       setStatus: setSessionStatus,
       setQuestions: (q: Record<string, QuestionRequest[]>) => setStore("questions", reconcile(q)),
       setPermissions: (p: Record<string, PermissionRequest[]>) => setStore("permissions", reconcile(p)),

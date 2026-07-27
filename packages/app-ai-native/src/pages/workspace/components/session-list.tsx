@@ -1,8 +1,14 @@
 import { createEffect, createMemo, createSignal, For, Show } from "solid-js"
+import { createStore } from "solid-js/store"
 import { Icon } from "@opencode-ai/ui/icon"
+import { Button } from "@opencode-ai/ui/button"
+import { Dialog } from "@opencode-ai/ui/dialog"
+import { useDialog } from "@opencode-ai/ui/context/dialog"
+import { ContextMenu } from "@/components/ui/context-menu"
 import { useLanguage } from "@/context/language"
 import { useDeviceWorkspace } from "@/context/device-workspace"
 import { useContentTabs, type ContentTab } from "@/context/content-tabs"
+import { useSessionChat } from "@/context/session-chat"
 import { sessionTreeIDs } from "@/pages/session/composer/session-request-tree"
 import type { Session } from "@opencode-ai/sdk/v2/client"
 
@@ -51,7 +57,98 @@ export function SessionListPanel() {
   const language = useLanguage()
   const dw = useDeviceWorkspace()
   const tabStore = useContentTabs()
+  const chat = useSessionChat()
+  const dialog = useDialog()
   const [groups, setGroups] = createSignal<Record<string, boolean>>({ older: true })
+
+  const [ctxMenu, setCtxMenu] = createStore<{
+    open: boolean
+    position: { x: number; y: number }
+    sessionID: string | null
+  }>({ open: false, position: { x: 0, y: 0 }, sessionID: null })
+
+  const openSessionContextMenu = (e: MouseEvent, session: Session) => {
+    console.log("[session-list] contextmenu fired", { clientX: e.clientX, clientY: e.clientY, sessionId: session.id })
+    e.preventDefault()
+    e.stopPropagation()
+    setCtxMenu({
+      open: true,
+      position: { x: e.clientX, y: e.clientY },
+      sessionID: session.id,
+    })
+    queueMicrotask(() => console.log("[session-list] ctxMenu after set", ctxMenu))
+  }
+
+  function DialogRenameSession(props: { sessionID: string }) {
+    const initial = chat.getSession(props.sessionID)?.title ?? ""
+    const [value, setValue] = createSignal(initial)
+    const handleRename = async () => {
+      const next = value().trim()
+      if (!next || next === initial) {
+        dialog.close()
+        return
+      }
+      await chat.renameSession(props.sessionID, next)
+      dialog.close()
+    }
+    return (
+      <Dialog title={language.t("common.rename")} fit>
+        <div class="flex flex-col gap-4 pl-6 pr-2.5 pb-3 pt-4">
+          <input
+            autofocus
+            value={value()}
+            onInput={(e) => setValue(e.currentTarget.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault()
+                void handleRename()
+              }
+              if (e.key === "Escape") {
+                e.preventDefault()
+                dialog.close()
+              }
+            }}
+            class="w-full rounded-md border border-border-strong bg-bg-base px-3 py-2 text-14-regular text-text-strong outline-none focus:border-border-active"
+          />
+          <div class="flex justify-end gap-2">
+            <Button variant="ghost" size="large" onClick={() => dialog.close()}>
+              {language.t("common.cancel")}
+            </Button>
+            <Button variant="primary" size="large" onClick={() => void handleRename()}>
+              {language.t("common.confirm")}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+    )
+  }
+
+  function DialogDeleteSession(props: { sessionID: string }) {
+    const name = createMemo(() => chat.getSession(props.sessionID)?.title ?? language.t("command.session.new"))
+    const handleDelete = async () => {
+      await chat.deleteSession(props.sessionID)
+      dialog.close()
+    }
+    return (
+      <Dialog title={language.t("session.delete.title")} fit>
+        <div class="flex flex-col gap-4 pl-6 pr-2.5 pb-3">
+          <div class="flex flex-col gap-1">
+            <span class="text-14-regular text-text-strong">
+              {language.t("session.delete.confirm", { name: name() })}
+            </span>
+          </div>
+          <div class="flex justify-end gap-2">
+            <Button variant="ghost" size="large" onClick={() => dialog.close()}>
+              {language.t("common.cancel")}
+            </Button>
+            <Button variant="primary" size="large" onClick={() => void handleDelete()}>
+              {language.t("session.delete.button")}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+    )
+  }
 
   const sortedSessions = createMemo(() => {
     const sessions = dw.data.session
@@ -119,6 +216,35 @@ export function SessionListPanel() {
 
   return (
     <div class="flex flex-col h-full">
+      <ContextMenu
+        open={ctxMenu.open}
+        position={ctxMenu.position}
+        onOpenChange={(open) => {
+          console.log("[session-list] onOpenChange", open)
+          setCtxMenu("open", open)
+        }}
+        items={[
+          {
+            label: language.t("common.rename"),
+            onSelect: () => {
+              const id = ctxMenu.sessionID
+              if (!id) return
+              setCtxMenu("open", false)
+              dialog.show(() => <DialogRenameSession sessionID={id} />)
+            },
+          },
+          {
+            label: language.t("common.delete"),
+            danger: true,
+            onSelect: () => {
+              const id = ctxMenu.sessionID
+              if (!id) return
+              setCtxMenu("open", false)
+              dialog.show(() => <DialogDeleteSession sessionID={id} />)
+            },
+          },
+        ]}
+      />
       <div class="flex-1 min-h-0 overflow-y-auto">
         <Show
           when={dw.data.status === "loading"}
@@ -159,6 +285,7 @@ export function SessionListPanel() {
                                     "text-native-muted hover:bg-native-hover hover:text-native-foreground": !isActive(),
                                   }}
                                   onClick={() => openSession(session)}
+                                  onContextMenu={(e) => openSessionContextMenu(e, session)}
                                 >
                                   <Show when={hasPendingInteraction(dw.data.session, dw.data.questions, dw.data.permissions, session.id)}>
                                     <PendingInteractionIcon />

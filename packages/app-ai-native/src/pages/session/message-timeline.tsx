@@ -192,8 +192,6 @@ export function MessageTimeline(props: {
     draft: "",
     editing: false,
     saving: false,
-    menuOpen: false,
-    pendingRename: false,
   })
   let titleRef: HTMLInputElement | undefined
 
@@ -209,7 +207,7 @@ export function MessageTimeline(props: {
   createEffect(
     on(
       sessionKey,
-      () => setTitle({ draft: "", editing: false, saving: false, menuOpen: false, pendingRename: false }),
+      () => setTitle({ draft: "", editing: false, saving: false }),
       { defer: true },
     ),
   )
@@ -421,10 +419,7 @@ export function MessageTimeline(props: {
                       <Show
                         when={title.editing}
                         fallback={
-                          <h1
-                            class="text-14-medium text-text-strong truncate grow-1 min-w-0 pl-2"
-                            onDblClick={openTitleEditor}
-                          >
+                          <h1 class="text-14-medium text-text-strong truncate grow-1 min-w-0 pl-2 cursor-default">
                             {titleValue()}
                           </h1>
                         }
@@ -457,51 +452,31 @@ export function MessageTimeline(props: {
                   </div>
                   <Show when={sessionID()} keyed>
                     {(id) => (
-                      <div class="shrink-0 flex items-center gap-3">
-                        <DropdownMenu
-                          gutter={4}
-                          placement="bottom-end"
-                          open={title.menuOpen}
-                          onOpenChange={(open) => setTitle("menuOpen", open)}
-                        >
-                          <DropdownMenu.Trigger
-                            as={IconButton}
-                            icon="dot-grid"
-                            variant="ghost"
-                            class="size-6 rounded-md data-[expanded]:bg-surface-base-active"
-                            aria-label={language.t("common.moreOptions")}
-                          />
-                          <DropdownMenu.Portal>
-                            <DropdownMenu.Content
-                              style={{ "min-width": "104px" }}
-                              onCloseAutoFocus={(event) => {
-                                if (!title.pendingRename) return
-                                event.preventDefault()
-                                setTitle("pendingRename", false)
-                                openTitleEditor()
-                              }}
+                      <DropdownMenu
+                        gutter={4}
+                        placement="bottom-end"
+                      >
+                        <DropdownMenu.Trigger
+                          as={IconButton}
+                          icon="dot-grid"
+                          variant="ghost"
+                          class="size-6 rounded-md data-[expanded]:bg-surface-base-active"
+                          aria-label={language.t("common.moreOptions")}
+                        />
+                        <DropdownMenu.Portal>
+                          <DropdownMenu.Content style={{ "min-width": "104px" }}>
+                            <DropdownMenu.Item onSelect={openTitleEditor}>
+                              <DropdownMenu.ItemLabel>{language.t("common.rename")}</DropdownMenu.ItemLabel>
+                            </DropdownMenu.Item>
+                            <DropdownMenu.Separator />
+                            <DropdownMenu.Item
+                              onSelect={() => dialog.show(() => <DialogDeleteSession sessionID={id} />)}
                             >
-                              <DropdownMenu.Item
-                                onSelect={() => {
-                                  setTitle("pendingRename", true)
-                                  setTitle("menuOpen", false)
-                                }}
-                              >
-                                <DropdownMenu.ItemLabel>{language.t("common.rename")}</DropdownMenu.ItemLabel>
-                              </DropdownMenu.Item>
-                               <DropdownMenu.Item onSelect={() => void deleteSession(id)}>
-                                <DropdownMenu.ItemLabel>{language.t("common.delete")}</DropdownMenu.ItemLabel>
-                              </DropdownMenu.Item>
-                              <DropdownMenu.Separator />
-                              <DropdownMenu.Item
-                                onSelect={() => dialog.show(() => <DialogDeleteSession sessionID={id} />)}
-                              >
-                                <DropdownMenu.ItemLabel>{language.t("common.delete")}</DropdownMenu.ItemLabel>
-                              </DropdownMenu.Item>
-                            </DropdownMenu.Content>
-                          </DropdownMenu.Portal>
-                        </DropdownMenu>
-                      </div>
+                              <DropdownMenu.ItemLabel>{language.t("common.delete")}</DropdownMenu.ItemLabel>
+                            </DropdownMenu.Item>
+                          </DropdownMenu.Content>
+                        </DropdownMenu.Portal>
+                      </DropdownMenu>
                     )}
                   </Show>
                 </div>

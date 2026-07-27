@@ -1,13 +1,18 @@
 import { createMemo, createSignal, For, Match, onMount, onCleanup, Show, Switch, createEffect, untrack } from "solid-js"
+import { createStore } from "solid-js/store"
 import { useParams, useSearchParams } from "@solidjs/router"
 import { Toast } from "@opencode-ai/ui/toast"
 import { IconButton } from "@opencode-ai/ui/icon-button"
 import { Icon } from "@opencode-ai/ui/icon"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { DropdownMenu } from "@opencode-ai/ui/dropdown-menu"
+import { Button } from "@opencode-ai/ui/button"
+import { Dialog } from "@opencode-ai/ui/dialog"
+import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { FileIcon } from "@opencode-ai/ui/file-icon"
 import { ResizeHandle } from "@opencode-ai/ui/resize-handle"
 import { Tabs } from "@opencode-ai/ui/tabs"
+import { ContextMenu } from "@/components/ui/context-menu"
 import { useLanguage } from "@/context/language"
 import { useFile } from "@/context/file"
 import { useDiff, useTreePolling } from "@/context/device-file"
@@ -20,6 +25,7 @@ import { SessionTabProvider, useSessionTab } from "@/context/session-tab"
 import { DeviceSessionView } from "./device-session-view"
 import { DeviceSessionViewHeader } from "./device-session-view-header"
 import { DeviceSessionChatProvider } from "@/context/device-session-chat"
+import { useConversationAdapter } from "@/context/device-adapter"
 import { TerminalTab } from "./terminal-tab"
 import { useDeviceTerminal } from "@/context/device-terminal"
 import { ContentTabContext, useContentTabs, type ContentTab } from "@/context/content-tabs"
@@ -463,10 +469,108 @@ function ContentSidebar(props: { directory: string; autoExpandGroup?: () => { gr
   const file = useFile()
   const diff = useDiff()
   const treePolling = useTreePolling()
+  const adapter = useConversationAdapter()
+  const dialog = useDialog()
   const [sidebarSearch] = useSearchParams<{ session?: string }>()
   const [active, setActive] = createSignal<SidebarSection | undefined>("sessions")
   const [diffGroups, setDiffGroups] = createSignal<Record<string, boolean>>({})
   const [groups, setGroups] = createSignal<Record<string, boolean>>({ older: true })
+
+  const [ctxMenu, setCtxMenu] = createStore<{
+    open: boolean
+    position: { x: number; y: number }
+    sessionID: string | null
+  }>({ open: false, position: { x: 0, y: 0 }, sessionID: null })
+
+  const openSessionContextMenu = (e: MouseEvent, session: Session) => {
+    console.log("[content-sidebar] contextmenu fired", { clientX: e.clientX, clientY: e.clientY, sessionId: session.id })
+    e.preventDefault()
+    e.stopPropagation()
+    setCtxMenu({
+      open: true,
+      position: { x: e.clientX, y: e.clientY },
+      sessionID: session.id,
+    })
+    queueMicrotask(() => console.log("[content-sidebar] ctxMenu after set", ctxMenu))
+  }
+
+  function DialogRenameSession(props: { sessionID: string }) {
+    const initial = dw.session.get(props.sessionID)?.title ?? ""
+    const [value, setValue] = createSignal(initial)
+    const handleRename = async () => {
+      const next = value().trim()
+      console.log("[rename] handleRename", { id: props.sessionID, initial, next })
+      if (!next || next === initial) {
+        console.log("[rename] skip: empty or unchanged")
+        dialog.close()
+        return
+      }
+      try {
+        await adapter.sessionUpdate({ sessionID: props.sessionID, title: next })
+        dw.session.patch(props.sessionID, { title: next })
+      } catch (err) {
+        console.error("[rename] sessionUpdate failed", err)
+      }
+      dialog.close()
+    }
+    return (
+      <Dialog title={language.t("common.rename")} fit>
+        <div class="flex flex-col gap-4 pl-6 pr-2.5 pb-3 pt-4">
+          <input
+            autofocus
+            value={value()}
+            onInput={(e) => setValue(e.currentTarget.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault()
+                void handleRename()
+              }
+              if (e.key === "Escape") {
+                e.preventDefault()
+                dialog.close()
+              }
+            }}
+            class="w-full rounded-md border border-border-strong bg-bg-base px-3 py-2 text-14-regular text-text-strong outline-none focus:border-border-active"
+          />
+          <div class="flex justify-end gap-2">
+            <Button variant="ghost" size="large" onClick={() => dialog.close()}>
+              {language.t("common.cancel")}
+            </Button>
+            <Button variant="primary" size="large" onClick={() => void handleRename()}>
+              {language.t("common.confirm")}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+    )
+  }
+
+  function DialogDeleteSession(props: { sessionID: string }) {
+    const name = createMemo(() => dw.session.get(props.sessionID)?.title ?? language.t("command.session.new"))
+    const handleDelete = async () => {
+      await dw.session.remove(props.sessionID)
+      dialog.close()
+    }
+    return (
+      <Dialog title={language.t("session.delete.title")} fit>
+        <div class="flex flex-col gap-4 pl-6 pr-2.5 pb-3">
+          <div class="flex flex-col gap-1">
+            <span class="text-14-regular text-text-strong">
+              {language.t("session.delete.confirm", { name: name() })}
+            </span>
+          </div>
+          <div class="flex justify-end gap-2">
+            <Button variant="ghost" size="large" onClick={() => dialog.close()}>
+              {language.t("common.cancel")}
+            </Button>
+            <Button variant="primary" size="large" onClick={() => void handleDelete()}>
+              {language.t("session.delete.button")}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+    )
+  }
 
   const sortedSessions = createMemo(() => {
     const sessions = dw.data.session
@@ -575,6 +679,35 @@ function ContentSidebar(props: { directory: string; autoExpandGroup?: () => { gr
 
   return (
     <div class="flex flex-col h-full border-r">
+      <ContextMenu
+        open={ctxMenu.open}
+        position={ctxMenu.position}
+        onOpenChange={(open) => {
+          console.log("[content-sidebar] onOpenChange", open)
+          setCtxMenu("open", open)
+        }}
+        items={[
+          {
+            label: language.t("common.rename"),
+            onSelect: () => {
+              const id = ctxMenu.sessionID
+              if (!id) return
+              setCtxMenu("open", false)
+              dialog.show(() => <DialogRenameSession sessionID={id} />)
+            },
+          },
+          {
+            label: language.t("common.delete"),
+            danger: true,
+            onSelect: () => {
+              const id = ctxMenu.sessionID
+              if (!id) return
+              setCtxMenu("open", false)
+              dialog.show(() => <DialogDeleteSession sessionID={id} />)
+            },
+          },
+        ]}
+      />
       <div class="h-[41px] shrink-0 flex items-center gap-0.5 px-2 border-b">
         <Show when={!work.sidebarOpened()}>
           <Tooltip value={language.t("workspace.sidebar.expand")} placement="bottom">
@@ -715,6 +848,7 @@ function ContentSidebar(props: { directory: string; autoExpandGroup?: () => { gr
                                         "text-native-muted hover:bg-native-hover hover:text-native-foreground": !isActive(),
                                       }}
                                       onClick={() => openSession(session)}
+                                      onContextMenu={(e) => openSessionContextMenu(e, session)}
                                     >
                                       <Show when={hasPendingInteraction(dw.data.session, dw.data.questions, dw.data.permissions, session.id)}>
                                         <PendingInteractionIcon />
