@@ -1,15 +1,13 @@
-import { Show, For } from "solid-js"
+import { Show, For, createMemo } from "solid-js"
 import { Icon } from "@opencode-ai/ui/icon"
 import { IconButton } from "@opencode-ai/ui/icon-button"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { DropdownMenu } from "@opencode-ai/ui/dropdown-menu"
-import { Dialog } from "@opencode-ai/ui/dialog"
-import { Button } from "@opencode-ai/ui/button"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
-import { useDeviceSDK } from "@/context/device-sdk"
-import { useDeviceWorkspace } from "@/context/device-workspace"
 import { useLanguage } from "@/context/language"
+import { useSessionChat } from "@/context/session-chat"
 import { SessionQrCodeContent } from "./session-qrcode-dialog"
+import { SessionActionMenuItems } from "./session-action-menu"
 import { isMobile } from "@/lib/mobile"
 import { env } from "@/lib/env"
 
@@ -30,10 +28,10 @@ export type HeaderState = {
 
 export function DeviceSessionViewHeader(props: { state: HeaderState }) {
   const s = props.state
-  const device = useDeviceSDK()
-  const workspace = useDeviceWorkspace()
   const language = useLanguage()
   const dialog = useDialog()
+  const chat = useSessionChat()
+  const rootSessionID = createMemo(() => s.rootSessionID())
 
   return (
     <div class="shrink-0 flex items-center gap-0.5 px-3 h-8 border-b bg-background-base z-10">
@@ -114,50 +112,15 @@ export function DeviceSessionViewHeader(props: { state: HeaderState }) {
               />
               <DropdownMenu.Portal>
                 <DropdownMenu.Content style={{ "min-width": "104px" }}>
-                  <DropdownMenu.Item
-                    onSelect={() => {
-                      const sid = s.rootSessionID()
-                      if (!sid) return
-                      const name =
-                        workspace.data.session.find((se) => se.id === sid)?.title ??
-                        language.t("command.session.new")
-                      dialog.show(() => (
-                        <Dialog title={language.t("session.delete.title")} fit>
-                          <div class="flex flex-col gap-4 pl-6 pr-2.5 pb-3">
-                            <div class="flex flex-col gap-1">
-                              <span class="text-14-regular text-text-strong">
-                                {language.t("session.delete.confirm", { name })}
-                              </span>
-                            </div>
-                            <div class="flex justify-end gap-2">
-                              <Button
-                                variant="ghost"
-                                size="large"
-                                onClick={() => dialog.close()}
-                              >
-                                {language.t("common.cancel")}
-                              </Button>
-                              <Button
-                                variant="primary"
-                                size="large"
-                                onClick={async () => {
-                                  await device.client.conversation.delete(sid).catch(() => {})
-                                  s.onClose?.()
-                                  dialog.close()
-                                }}
-                              >
-                                {language.t("session.delete.button")}
-                              </Button>
-                            </div>
-                          </div>
-                        </Dialog>
-                      ))
-                    }}
-                  >
-                    <DropdownMenu.ItemLabel>
-                      {language.t("common.delete")}
-                    </DropdownMenu.ItemLabel>
-                  </DropdownMenu.Item>
+                  <Show when={rootSessionID()}>
+                    <SessionActionMenuItems
+                      sessionID={rootSessionID()!}
+                      getTitle={() => chat.getSession(rootSessionID()!)?.title ?? ""}
+                      onRename={(title) => chat.renameSession(rootSessionID()!, title)}
+                      onDelete={() => chat.deleteSession(rootSessionID()!)}
+                      onDeleted={() => s.onClose?.()}
+                    />
+                  </Show>
                 </DropdownMenu.Content>
               </DropdownMenu.Portal>
             </DropdownMenu>

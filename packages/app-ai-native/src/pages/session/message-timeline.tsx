@@ -6,7 +6,6 @@ import { FileIcon } from "@opencode-ai/ui/file-icon"
 import { Icon } from "@opencode-ai/ui/icon"
 import { IconButton } from "@opencode-ai/ui/icon-button"
 import { DropdownMenu } from "@opencode-ai/ui/dropdown-menu"
-import { Dialog } from "@opencode-ai/ui/dialog"
 import { InlineInput } from "@opencode-ai/ui/inline-input"
 import { TimelineMessage } from "@opencode-ai/ui/timeline-message"
 import { ScrollView } from "@opencode-ai/ui/scroll-view"
@@ -20,6 +19,7 @@ import { useLanguage } from "@/context/language"
 import { useSettings } from "@/context/settings"
 import { useSessionChat } from "@/context/session-chat"
 import { parseCommentNote, readCommentMetadata } from "@/utils/comment-note"
+import { DialogDeleteSession } from "@/pages/workspace/components/session-dialogs"
 
 type MessageComment = {
   path: string
@@ -262,24 +262,16 @@ export function MessageTimeline(props: {
     navigate(`/workspace/${params.workspaceID}`)
   }
 
-  const deleteSession = async (sessionID: string) => {
+  const handleSessionDeleted = (sessionID: string) => {
     const session = chat.getSession(sessionID)
-    if (!session) return false
+    navigateAfterSessionRemoval(sessionID, session?.parentID)
+  }
 
-    const result = await chat
-      .deleteSession(sessionID)
-      .catch((err) => {
-        showToast({
-          title: language.t("session.delete.failed.title"),
-          description: errorMessage(err),
-        })
-        return false
-      })
-
-    if (!result) return false
-
-    navigateAfterSessionRemoval(sessionID, session.parentID)
-    return true
+  const handleSessionDeleteFailed = (err: unknown) => {
+    showToast({
+      title: language.t("session.delete.failed.title"),
+      description: errorMessage(err),
+    })
   }
 
   const navigateParent = () => {
@@ -288,34 +280,6 @@ export function MessageTimeline(props: {
     const back = chat.navigateBack?.()
     if (back) { back(); return }
     navigate(`/workspace/${params.workspaceID}/${id}`)
-  }
-
-  function DialogDeleteSession(props: { sessionID: string }) {
-    const name = createMemo(() => chat.getSession(props.sessionID)?.title ?? language.t("command.session.new"))
-    const handleDelete = async () => {
-      await deleteSession(props.sessionID)
-      dialog.close()
-    }
-
-    return (
-      <Dialog title={language.t("session.delete.title")} fit>
-        <div class="flex flex-col gap-4 pl-6 pr-2.5 pb-3">
-          <div class="flex flex-col gap-1">
-            <span class="text-14-regular text-text-strong">
-              {language.t("session.delete.confirm", { name: name() })}
-            </span>
-          </div>
-          <div class="flex justify-end gap-2">
-            <Button variant="ghost" size="large" onClick={() => dialog.close()}>
-              {language.t("common.cancel")}
-            </Button>
-            <Button variant="primary" size="large" onClick={handleDelete}>
-              {language.t("session.delete.button")}
-            </Button>
-          </div>
-        </div>
-      </Dialog>
-    )
   }
 
   return (
@@ -470,7 +434,14 @@ export function MessageTimeline(props: {
                             </DropdownMenu.Item>
                             <DropdownMenu.Separator />
                             <DropdownMenu.Item
-                              onSelect={() => dialog.show(() => <DialogDeleteSession sessionID={id} />)}
+                              onSelect={() => dialog.show(() => (
+                                <DialogDeleteSession
+                                  name={chat.getSession(id)?.title ?? language.t("command.session.new")}
+                                  onConfirm={() => chat.deleteSession(id)}
+                                  onDeleted={() => handleSessionDeleted(id)}
+                                  onDeleteFailed={handleSessionDeleteFailed}
+                                />
+                              ))}
                             >
                               <DropdownMenu.ItemLabel>{language.t("common.delete")}</DropdownMenu.ItemLabel>
                             </DropdownMenu.Item>

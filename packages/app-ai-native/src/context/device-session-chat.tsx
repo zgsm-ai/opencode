@@ -45,9 +45,18 @@ export function DeviceSessionChatProvider(props: ParentProps) {
 
     getSession: (id) => workspace.session.get(id),
     renameSession: (id, title) =>
-      adapter.sessionUpdate({ sessionID: id, title }).then(() => {}),
+      adapter.sessionUpdate({ sessionID: id, title }).then(() => {
+        workspace.session.patch(id, { title })
+      }),
     deleteSession: (id) =>
-      adapter.sessionDelete(id).then((x) => !!x.data).catch(() => false),
+      adapter
+        .sessionDelete(id)
+        .then((x) => {
+          const ok = !!x.data
+          if (ok) workspace.session.removeLocal(id)
+          return ok
+        })
+        .catch(() => false),
 
     permissionRespond: (id, decision) =>
       device.client.permission.respond(id, { decision }).then(() => {}),

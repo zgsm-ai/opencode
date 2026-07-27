@@ -63,6 +63,7 @@ type DeviceWorkspaceValue = {
     get: (id: string) => Session | undefined
     fetch(count?: number): Promise<void>
     remove(id: string): Promise<void>
+    removeLocal(id: string): void
     patch(id: string, partial: Partial<Session>): void
     setStatus(id: string, status: SessionStatus | undefined): void
     setQuestions(questions: Record<string, QuestionRequest[]>): void
@@ -375,30 +376,33 @@ export function DeviceWorkspaceProvider(props: ParentProps<{ workspaceId?: strin
     } catch {}
   }
 
+  const removeSessionLocal = (id: string) => {
+    batch(() => {
+      setStore("session", produce((draft) => {
+        const idx = draft.findIndex((s) => s.id === id)
+        if (idx !== -1) draft.splice(idx, 1)
+      }))
+      setSessionStatus(id, undefined)
+      setStore("unread", produce((draft) => { delete draft[id] }))
+      setStore("questions", produce((draft) => { delete draft[id] }))
+      setStore("permissions", produce((draft) => { delete draft[id] }))
+      if (props.workspaceId) {
+        syncSummary(props.workspaceId, {
+          vcs: store.vcs,
+          sessionStatus: store.sessionStatus,
+          questions: store.questions,
+          permissions: store.permissions,
+          hasUnreadSession: store.session.some((s) => !s.parentID && store.unread[s.id]),
+        })
+      }
+    })
+  }
+
   const deleteSession = async (id: string) => {
     if (!store.agentAvailable) return
     try {
       await device.client.conversation.delete(id)
-      batch(() => {
-        setStore("session", produce((draft) => {
-          const idx = draft.findIndex((s) => s.id === id)
-          if (idx !== -1) draft.splice(idx, 1)
-        }))
-        setSessionStatus(id, undefined)
-        setStore("unread", produce((draft) => { delete draft[id] }))
-        setStore("questions", produce((draft) => { delete draft[id] }))
-        setStore("permissions", produce((draft) => { delete draft[id] }))
-        if (props.workspaceId) {
-          syncSummary(props.workspaceId, {
-            vcs: store.vcs,
-            sessionStatus: store.sessionStatus,
-            questions: store.questions,
-            permissions: store.permissions,
-            hasUnreadSession: store.session.some((s) => !s.parentID && store.unread[s.id]),
-          })
-        }
-      })
-
+      removeSessionLocal(id)
     } catch {}
   }
 
@@ -606,6 +610,17 @@ export function DeviceWorkspaceProvider(props: ParentProps<{ workspaceId?: strin
   const UPDATE_DEBOUNCE_MS = 250
   const SUMMARY_DEBOUNCE_MS = 100
 
+  // ── Watchdog: fallback for dropped session.status events ──
+  // If a session is stuck in busy/retry longer than STALE_MS without any
+  // status event, poll the authoritative /session/status and correct it.
+  const WATCHDOG_INTERVAL_MS = 60_000
+  const STALE_MS = 90_000
+  const RETRY_GRACE_MS = 30_000
+  const WATCHDOG_MAX_FAILURES = 5
+  const lastEventAt = new Map<string, number>()
+  let watchdogFailures = 0
+  let watchdogTimer: ReturnType<typeof setInterval> | undefined
+
   const statusTimers = new Map<string, ReturnType<typeof setTimeout>>()
   const pendingStatus = new Map<string, SessionStatus>()
 
@@ -682,6 +697,55 @@ export function DeviceWorkspaceProvider(props: ParentProps<{ workspaceId?: strin
     if (updateTimer) { clearTimeout(updateTimer); updateTimer = undefined }
     pendingUpdates.clear()
     if (summaryTimer) { clearTimeout(summaryTimer); summaryTimer = undefined }
+  }
+
+  // ── Watchdog sweep: detect sessions stuck in busy/retry due to dropped
+  // idle events, and correct them from the authoritative /session/status. ──
+  const runWatchdogSweep = async () => {
+    if (watchdogFailures >= WATCHDOG_MAX_FAILURES) return
+    if (!store.agentAvailable) return
+
+    const now = Date.now()
+    const stale = new Set<string>()
+    for (const [id, status] of Object.entries(store.sessionStatus)) {
+      if (status.type === "retry") {
+        if (now > status.next + RETRY_GRACE_MS) stale.add(id)
+        continue
+      }
+      if (status.type === "busy") {
+        const last = lastEventAt.get(id) ?? 0
+        if (now - last > STALE_MS) stale.add(id)
+      }
+    }
+    if (stale.size === 0) return
+
+    let fresh: Record<string, SessionStatus>
+    try {
+      const res = await device.client.conversation.status()
+      fresh = (res as Record<string, SessionStatus>) ?? {}
+    } catch {
+      watchdogFailures++
+      return
+    }
+    watchdogFailures = 0
+
+    batch(() => {
+      for (const id of stale) {
+        const remote = fresh[id]
+        const local = store.sessionStatus[id]
+        if (!local || local.type === "idle") continue
+        if (remote && remote.type === "idle") {
+          setSessionStatus(id, { type: "idle" })
+          lastEventAt.set(id, now)
+        } else if (remote) {
+          lastEventAt.set(id, now)
+        }
+      }
+    })
+  }
+
+  const stopWatchdog = () => {
+    if (watchdogTimer) { clearInterval(watchdogTimer); watchdogTimer = undefined }
   }
 
   let streamAbort: AbortController | undefined
@@ -799,6 +863,7 @@ export function DeviceWorkspaceProvider(props: ParentProps<{ workspaceId?: strin
                     setStore("unread", produce((draft) => { delete draft[id] }))
                     setStore("questions", produce((draft) => { delete draft[id] }))
                     setStore("permissions", produce((draft) => { delete draft[id] }))
+                    lastEventAt.delete(id)
                   })
                   summaryChanged = true
                   break
@@ -808,6 +873,7 @@ export function DeviceWorkspaceProvider(props: ParentProps<{ workspaceId?: strin
                   const sp = payload.properties as { sessionID?: string; status?: SessionStatus }
                   const id = sp?.sessionID ?? payload.sessionID
                   if (!id || !sp?.status) break
+                  lastEventAt.set(id, Date.now())
                   // idle must be immediate
                   if (sp.status.type === "idle") {
                     const existingTimer = statusTimers.get(id)
@@ -971,12 +1037,20 @@ export function DeviceWorkspaceProvider(props: ParentProps<{ workspaceId?: strin
     }
   }
 
+  const onVisibilityChange = () => {
+    if (!document.hidden) void runWatchdogSweep()
+  }
+  document.addEventListener("visibilitychange", onVisibilityChange)
+  watchdogTimer = setInterval(() => { void runWatchdogSweep() }, WATCHDOG_INTERVAL_MS)
+
   onCleanup(() => {
     streamDisposed = true
     streamAbort?.abort()
     streamAbort = undefined
     disarmAliveTimer()
     clearDebounceTimers()
+    stopWatchdog()
+    document.removeEventListener("visibilitychange", onVisibilityChange)
     if (props.workspaceId) clearSummary(props.workspaceId)
   })
 
@@ -996,6 +1070,7 @@ export function DeviceWorkspaceProvider(props: ParentProps<{ workspaceId?: strin
       get: getSession,
       fetch: fetchSessions,
       remove: deleteSession,
+      removeLocal: removeSessionLocal,
       patch: patchSession,
       setStatus: setSessionStatus,
       setQuestions: (q: Record<string, QuestionRequest[]>) => setStore("questions", reconcile(q)),
