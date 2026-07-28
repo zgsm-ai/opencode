@@ -3,7 +3,7 @@ import { LanguageDescription, LanguageSupport, defaultHighlightStyle, syntaxHigh
 import { languages } from "@codemirror/language-data"
 import { markdown } from "@codemirror/lang-markdown"
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands"
-import { Compartment, EditorSelection, EditorState } from "@codemirror/state"
+import { Annotation, Compartment, EditorSelection, EditorState } from "@codemirror/state"
 import { EditorView, drawSelection, dropCursor, highlightActiveLine, highlightActiveLineGutter, keymap, lineNumbers, rectangularSelection } from "@codemirror/view"
 import { Button } from "@/components/ui/button"
 import { Icon } from "@opencode-ai/ui/icon"
@@ -21,6 +21,16 @@ import { Spinner } from "@opencode-ai/ui/spinner"
 import { showToast } from "@opencode-ai/ui/toast"
 import { createEffect, createMemo, createResource, createSignal, For, onCleanup, onMount, Show, untrack } from "solid-js"
 import { createStore } from "solid-js/store"
+import {
+  buildCapabilityPayloadFromFiles,
+  defaultSourcePathForItemType,
+  fileContentsUpdate,
+  isPathOrDescendant,
+  removeFileContents,
+  renameFileContents,
+  type FileContentMap,
+  type ItemType,
+} from "./capability-editor-files"
 import { TYPE_COLORS, TYPE_CONTENT_PLACEHOLDER, typeKey } from "@/pages/store/lib/constants"
 import { itemApi, registryApi2, repoApi, type CapabilityItem, type CapabilityItemAsset, type Repository } from "@/pages/store/lib/api"
 import { getInstallCommand } from "@/pages/store/components/item-detail-content"
@@ -30,16 +40,12 @@ import { SkillWriterChatPanel } from "@/pages/console/skill-writer-chat-panel"
 import { deviceApi } from "@/pages/workspace/lib/api"
 import { buildTreeFromPaths, dedupeTreeNodes, type VirtualTreeNode } from "@/lib/virtual-tree"
 
-type ItemType = "skill" | "subagent" | "command" | "mcp" | "plugin"
-
 type NamespaceOption = {
   value: string
   label: string
   description: string
   visibility: "public" | "private" | "repo"
 }
-
-type FileContentMap = Record<string, string>
 
 type PendingTreeAction = {
   mode: "create-file" | "create-directory" | "rename"
@@ -266,29 +272,6 @@ function createDefaultFileContents(itemType: ItemType, slug: string): FileConten
   return { [filePath]: TYPE_CONTENT_PLACEHOLDER[itemType] ?? "" }
 }
 
-function defaultSourcePathForItemType(itemType: ItemType, slug: string) {
-  if (itemType === "skill") return "SKILL.md"
-  if (itemType === "mcp") return ".mcp.json"
-  const root = slug || "untitled"
-  if (itemType === "subagent" || itemType === "command") return `${root}.md`
-  return `${root}/${root}.md`
-}
-
-function buildCapabilityPayloadFromFiles(itemType: ItemType, slug: string, fileContents: FileContentMap) {
-  const sourcePath = defaultSourcePathForItemType(itemType, slug)
-  const content = fileContents[sourcePath]
-    ?? (itemType === "skill" ? fileContents["SKILL.md"] : undefined)
-    ?? (itemType === "mcp" ? fileContents[".mcp.json"] : undefined)
-    ?? fileContents[Object.keys(fileContents)[0] ?? ""]
-    ?? ""
-
-  const assets: CapabilityItemAsset[] = Object.entries(fileContents)
-    .filter(([path]) => path && path !== sourcePath)
-    .map(([relPath, textContent]) => ({ relPath, textContent }))
-
-  return { sourcePath, content, assets }
-}
-
 function buildFileContentsFromItem(item: CapabilityItem, assets?: CapabilityItemAsset[]): FileContentMap {
   const itemType = (item.itemType as ItemType) || "skill"
   const sourcePath = item.sourcePath || defaultSourcePathForItemType(itemType, item.slug || "")
@@ -367,18 +350,6 @@ function renameTreeNode(nodes: VirtualTreeNode[], path: string, nextName: string
   return visit(nodes)
 }
 
-function renameFileContents(contents: FileContentMap, from: string, to: string) {
-  const next: FileContentMap = {}
-  for (const [path, value] of Object.entries(contents)) {
-    if (path === from || path.startsWith(`${from}/`)) {
-      next[path.replace(from, to)] = value
-    } else {
-      next[path] = value
-    }
-  }
-  return next
-}
-
 function removeTreeNode(nodes: VirtualTreeNode[], path: string): VirtualTreeNode[] {
   return nodes
     .filter((node) => node.path !== path)
@@ -386,15 +357,6 @@ function removeTreeNode(nodes: VirtualTreeNode[], path: string): VirtualTreeNode
       ...node,
       children: node.children ? removeTreeNode(node.children, path) : node.children,
     }))
-}
-
-function removeFileContents(contents: FileContentMap, path: string) {
-  const next: FileContentMap = {}
-  for (const [key, value] of Object.entries(contents)) {
-    if (key === path || key.startsWith(`${path}/`)) continue
-    next[key] = value
-  }
-  return next
 }
 
 function appendTreeNode(nodes: VirtualTreeNode[], targetPath: string | null, nextNode: VirtualTreeNode): VirtualTreeNode[] {
@@ -1158,6 +1120,12 @@ function WorkspaceLikeTree(props: {
   )
 }
 
+// Marks transactions dispatched by the value-sync effect. The updateListener
+// must not report these back through onChange: when the selected file is
+// deleted or renamed, the sync briefly rewrites the document, and echoing that
+// as a user edit would resurrect the removed path in the form store.
+const programmaticSync = Annotation.define<boolean>()
+
 function MarkdownCodeEditor(props: {
   value: string
   path: string
@@ -1243,6 +1211,18 @@ function MarkdownCodeEditor(props: {
     props.onScrollRatioChange?.(max > 0 ? scroller.scrollTop / max : 0)
   }
 
+  // Single source for the update listener so every (re)configuration keeps the
+  // programmaticSync check. The path/theme/editable reconfigure effect used to
+  // install a listener WITHOUT it, silently reverting the annotation fix after
+  // the first reconfigure and echoing sync rewrites back as user edits.
+  const makeUpdateListener = () =>
+    EditorView.updateListener.of((update) => {
+      const isSync = update.transactions.some((tr) => tr.annotation(programmaticSync))
+      if (update.docChanged && !isSync) props.onChange(update.state.doc.toString())
+      if (update.docChanged || update.selectionSet) emitCursor(update.state)
+      if (update.viewportChanged || update.geometryChanged || update.docChanged) emitScrollRatio(update.view)
+    })
+
   onMount(() => {
     void preloadCommonLanguages()
     view = new EditorView({
@@ -1262,11 +1242,7 @@ function MarkdownCodeEditor(props: {
           EditorView.lineWrapping,
           editableCompartment.of(EditorView.editable.of(props.editable ?? true)),
           readOnlyCompartment.of(EditorState.readOnly.of(!(props.editable ?? true))),
-          listenerCompartment.of(EditorView.updateListener.of((update) => {
-            if (update.docChanged) props.onChange(update.state.doc.toString())
-            if (update.docChanged || update.selectionSet) emitCursor(update.state)
-            if (update.viewportChanged || update.geometryChanged || update.docChanged) emitScrollRatio(update.view)
-          })),
+          listenerCompartment.of(makeUpdateListener()),
           themeCompartment.of(theme()),
         ],
       }),
@@ -1293,6 +1269,7 @@ function MarkdownCodeEditor(props: {
     view.dispatch({
       changes: { from: 0, to: current.length, insert: next },
       selection: EditorSelection.single(anchor, head),
+      annotations: programmaticSync.of(true),
     })
     emitCursor(view.state)
     emitScrollRatio(view)
@@ -1307,11 +1284,7 @@ function MarkdownCodeEditor(props: {
         themeCompartment.reconfigure(theme()),
         editableCompartment.reconfigure(EditorView.editable.of(props.editable ?? true)),
         readOnlyCompartment.reconfigure(EditorState.readOnly.of(!(props.editable ?? true))),
-        listenerCompartment.reconfigure(EditorView.updateListener.of((update) => {
-          if (update.docChanged) props.onChange(update.state.doc.toString())
-          if (update.docChanged || update.selectionSet) emitCursor(update.state)
-          if (update.viewportChanged || update.geometryChanged || update.docChanged) emitScrollRatio(update.view)
-        })),
+        listenerCompartment.reconfigure(makeUpdateListener()),
       ],
     })
 
@@ -1425,6 +1398,8 @@ export default function CapabilityEditorPage() {
     installCommandCopied: false,
     selectedRevision: 0,
   })
+
+  const replaceFileContents = (next: FileContentMap) => setForm("fileContents", fileContentsUpdate(next))
 
   // Fill the editor with a device-generated SKILL.md for human review, then the
   // user clicks the existing "create" button to publish through the normal flow.
@@ -1815,7 +1790,7 @@ export default function CapabilityEditorPage() {
     }
     const paths = Object.keys(fileContents).sort()
     setPluginPathToChild(map)
-    setForm("fileContents", fileContents)
+    replaceFileContents(fileContents)
     setForm("treeNodes", dedupeTreeNodes(buildTreeFromPaths(paths)))
     untrack(() => {
       if (!form.selectedTreePath || fileContents[form.selectedTreePath] === undefined) {
@@ -1846,7 +1821,7 @@ export default function CapabilityEditorPage() {
   const updateType = (value: ItemType) => {
     setForm("itemType", value)
     setForm("treeNodes", createDefaultTree(value, form.slug || ""))
-    setForm("fileContents", createDefaultFileContents(value, form.slug || ""))
+    replaceFileContents(createDefaultFileContents(value, form.slug || ""))
     setForm("selectedTreePath", defaultSourcePathForItemType(value, form.slug || ""))
     setForm("pendingTreeAction", null)
     setForm("pendingTreeActionLocked", false)
@@ -1902,11 +1877,11 @@ export default function CapabilityEditorPage() {
 
   const deleteTreeItem = (path: string) => {
     if (isViewingHistoricalVersion() || isProtectedSkillFile(path) || isProtectedSkillRoot(path)) return
+    const nextContents = removeFileContents(form.fileContents, path)
     setForm("treeNodes", removeTreeNode(form.treeNodes, path))
-    setForm("fileContents", removeFileContents(form.fileContents, path))
-    if (form.selectedTreePath === path) {
-      const remaining = Object.keys(removeFileContents(form.fileContents, path))
-      setForm("selectedTreePath", remaining[0] ?? "")
+    replaceFileContents(nextContents)
+    if (isPathOrDescendant(form.selectedTreePath, path)) {
+      setForm("selectedTreePath", Object.keys(nextContents)[0] ?? "")
     }
   }
 
@@ -1944,8 +1919,10 @@ export default function CapabilityEditorPage() {
         return
       }
       setForm("treeNodes", renameTreeNode(form.treeNodes, pending.targetPath, name))
-      setForm("fileContents", renameFileContents(form.fileContents, pending.targetPath, nextPath))
-      if (form.selectedTreePath === pending.targetPath) setForm("selectedTreePath", nextPath)
+      replaceFileContents(renameFileContents(form.fileContents, pending.targetPath, nextPath))
+      if (isPathOrDescendant(form.selectedTreePath, pending.targetPath)) {
+        setForm("selectedTreePath", nextPath + form.selectedTreePath.slice(pending.targetPath.length))
+      }
       setForm("pendingTreeAction", null)
       releaseLock()
       return
@@ -2023,7 +2000,7 @@ export default function CapabilityEditorPage() {
         setForm("description", importedDescription)
       }
       setForm("treeNodes", imported.tree)
-      setForm("fileContents", imported.contents)
+      replaceFileContents(imported.contents)
       setForm("selectedTreePath", imported.firstFile || Object.keys(imported.contents)[0] || "")
       setForm("pendingTreeAction", null)
       showToast({
@@ -2731,6 +2708,9 @@ export default function CapabilityEditorPage() {
                       setForm("fileContents", "SKILL.md", `${extractLeadingFrontmatter(current)}${value}`)
                       return
                     }
+                    // Writing to a path that is no longer in the map would
+                    // resurrect a just-deleted or just-renamed file.
+                    if (form.fileContents[form.selectedTreePath] === undefined) return
                     setForm("fileContents", form.selectedTreePath, value)
                   }}
                   onCursorChange={({ line, column }) => {
