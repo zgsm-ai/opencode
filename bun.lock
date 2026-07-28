@@ -107,6 +107,7 @@
         "@solidjs/router": "catalog:",
         "@tanstack/solid-table": "8.21.3",
         "@thisbeyond/solid-dnd": "0.7.5",
+        "@zip.js/zip.js": "2.7.62",
         "class-variance-authority": "0.7.1",
         "clsx": "2.1.1",
         "codemirror": "6.0.2",
