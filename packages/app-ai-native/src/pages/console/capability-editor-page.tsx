@@ -21,6 +21,16 @@ import { Spinner } from "@opencode-ai/ui/spinner"
 import { showToast } from "@opencode-ai/ui/toast"
 import { createEffect, createMemo, createResource, createSignal, For, onCleanup, onMount, Show, untrack } from "solid-js"
 import { createStore } from "solid-js/store"
+import {
+  buildCapabilityPayloadFromFiles,
+  defaultSourcePathForItemType,
+  fileContentsUpdate,
+  isPathOrDescendant,
+  removeFileContents,
+  renameFileContents,
+  type FileContentMap,
+  type ItemType,
+} from "./capability-editor-files"
 import { TYPE_COLORS, TYPE_CONTENT_PLACEHOLDER, typeKey } from "@/pages/store/lib/constants"
 import { itemApi, registryApi2, repoApi, type CapabilityItem, type CapabilityItemAsset, type Repository } from "@/pages/store/lib/api"
 import { getInstallCommand } from "@/pages/store/components/item-detail-content"
@@ -30,16 +40,12 @@ import { SkillWriterChatPanel } from "@/pages/console/skill-writer-chat-panel"
 import { deviceApi } from "@/pages/workspace/lib/api"
 import { buildTreeFromPaths, dedupeTreeNodes, type VirtualTreeNode } from "@/lib/virtual-tree"
 
-type ItemType = "skill" | "subagent" | "command" | "mcp" | "plugin"
-
 type NamespaceOption = {
   value: string
   label: string
   description: string
   visibility: "public" | "private" | "repo"
 }
-
-type FileContentMap = Record<string, string>
 
 type PendingTreeAction = {
   mode: "create-file" | "create-directory" | "rename"
@@ -266,29 +272,6 @@ function createDefaultFileContents(itemType: ItemType, slug: string): FileConten
   return { [filePath]: TYPE_CONTENT_PLACEHOLDER[itemType] ?? "" }
 }
 
-function defaultSourcePathForItemType(itemType: ItemType, slug: string) {
-  if (itemType === "skill") return "SKILL.md"
-  if (itemType === "mcp") return ".mcp.json"
-  const root = slug || "untitled"
-  if (itemType === "subagent" || itemType === "command") return `${root}.md`
-  return `${root}/${root}.md`
-}
-
-function buildCapabilityPayloadFromFiles(itemType: ItemType, slug: string, fileContents: FileContentMap) {
-  const sourcePath = defaultSourcePathForItemType(itemType, slug)
-  const content = fileContents[sourcePath]
-    ?? (itemType === "skill" ? fileContents["SKILL.md"] : undefined)
-    ?? (itemType === "mcp" ? fileContents[".mcp.json"] : undefined)
-    ?? fileContents[Object.keys(fileContents)[0] ?? ""]
-    ?? ""
-
-  const assets: CapabilityItemAsset[] = Object.entries(fileContents)
-    .filter(([path]) => path && path !== sourcePath)
-    .map(([relPath, textContent]) => ({ relPath, textContent }))
-
-  return { sourcePath, content, assets }
-}
-
 function buildFileContentsFromItem(item: CapabilityItem, assets?: CapabilityItemAsset[]): FileContentMap {
   const itemType = (item.itemType as ItemType) || "skill"
   const sourcePath = item.sourcePath || defaultSourcePathForItemType(itemType, item.slug || "")
@@ -367,18 +350,6 @@ function renameTreeNode(nodes: VirtualTreeNode[], path: string, nextName: string
   return visit(nodes)
 }
 
-function renameFileContents(contents: FileContentMap, from: string, to: string) {
-  const next: FileContentMap = {}
-  for (const [path, value] of Object.entries(contents)) {
-    if (path === from || path.startsWith(`${from}/`)) {
-      next[path.replace(from, to)] = value
-    } else {
-      next[path] = value
-    }
-  }
-  return next
-}
-
 function removeTreeNode(nodes: VirtualTreeNode[], path: string): VirtualTreeNode[] {
   return nodes
     .filter((node) => node.path !== path)
@@ -386,15 +357,6 @@ function removeTreeNode(nodes: VirtualTreeNode[], path: string): VirtualTreeNode
       ...node,
       children: node.children ? removeTreeNode(node.children, path) : node.children,
     }))
-}
-
-function removeFileContents(contents: FileContentMap, path: string) {
-  const next: FileContentMap = {}
-  for (const [key, value] of Object.entries(contents)) {
-    if (key === path || key.startsWith(`${path}/`)) continue
-    next[key] = value
-  }
-  return next
 }
 
 function appendTreeNode(nodes: VirtualTreeNode[], targetPath: string | null, nextNode: VirtualTreeNode): VirtualTreeNode[] {
@@ -1426,6 +1388,8 @@ export default function CapabilityEditorPage() {
     selectedRevision: 0,
   })
 
+  const replaceFileContents = (next: FileContentMap) => setForm("fileContents", fileContentsUpdate(next))
+
   // Fill the editor with a device-generated SKILL.md for human review, then the
   // user clicks the existing "create" button to publish through the normal flow.
   const handleSkillReady = (skillMdText: string, name: string) => {
@@ -1815,7 +1779,7 @@ export default function CapabilityEditorPage() {
     }
     const paths = Object.keys(fileContents).sort()
     setPluginPathToChild(map)
-    setForm("fileContents", fileContents)
+    replaceFileContents(fileContents)
     setForm("treeNodes", dedupeTreeNodes(buildTreeFromPaths(paths)))
     untrack(() => {
       if (!form.selectedTreePath || fileContents[form.selectedTreePath] === undefined) {
@@ -1846,7 +1810,7 @@ export default function CapabilityEditorPage() {
   const updateType = (value: ItemType) => {
     setForm("itemType", value)
     setForm("treeNodes", createDefaultTree(value, form.slug || ""))
-    setForm("fileContents", createDefaultFileContents(value, form.slug || ""))
+    replaceFileContents(createDefaultFileContents(value, form.slug || ""))
     setForm("selectedTreePath", defaultSourcePathForItemType(value, form.slug || ""))
     setForm("pendingTreeAction", null)
     setForm("pendingTreeActionLocked", false)
@@ -1902,11 +1866,11 @@ export default function CapabilityEditorPage() {
 
   const deleteTreeItem = (path: string) => {
     if (isViewingHistoricalVersion() || isProtectedSkillFile(path) || isProtectedSkillRoot(path)) return
+    const nextContents = removeFileContents(form.fileContents, path)
     setForm("treeNodes", removeTreeNode(form.treeNodes, path))
-    setForm("fileContents", removeFileContents(form.fileContents, path))
-    if (form.selectedTreePath === path) {
-      const remaining = Object.keys(removeFileContents(form.fileContents, path))
-      setForm("selectedTreePath", remaining[0] ?? "")
+    replaceFileContents(nextContents)
+    if (isPathOrDescendant(form.selectedTreePath, path)) {
+      setForm("selectedTreePath", Object.keys(nextContents)[0] ?? "")
     }
   }
 
@@ -1944,8 +1908,10 @@ export default function CapabilityEditorPage() {
         return
       }
       setForm("treeNodes", renameTreeNode(form.treeNodes, pending.targetPath, name))
-      setForm("fileContents", renameFileContents(form.fileContents, pending.targetPath, nextPath))
-      if (form.selectedTreePath === pending.targetPath) setForm("selectedTreePath", nextPath)
+      replaceFileContents(renameFileContents(form.fileContents, pending.targetPath, nextPath))
+      if (isPathOrDescendant(form.selectedTreePath, pending.targetPath)) {
+        setForm("selectedTreePath", nextPath + form.selectedTreePath.slice(pending.targetPath.length))
+      }
       setForm("pendingTreeAction", null)
       releaseLock()
       return
@@ -2023,7 +1989,7 @@ export default function CapabilityEditorPage() {
         setForm("description", importedDescription)
       }
       setForm("treeNodes", imported.tree)
-      setForm("fileContents", imported.contents)
+      replaceFileContents(imported.contents)
       setForm("selectedTreePath", imported.firstFile || Object.keys(imported.contents)[0] || "")
       setForm("pendingTreeAction", null)
       showToast({
