@@ -1211,6 +1211,18 @@ function MarkdownCodeEditor(props: {
     props.onScrollRatioChange?.(max > 0 ? scroller.scrollTop / max : 0)
   }
 
+  // Single source for the update listener so every (re)configuration keeps the
+  // programmaticSync check. The path/theme/editable reconfigure effect used to
+  // install a listener WITHOUT it, silently reverting the annotation fix after
+  // the first reconfigure and echoing sync rewrites back as user edits.
+  const makeUpdateListener = () =>
+    EditorView.updateListener.of((update) => {
+      const isSync = update.transactions.some((tr) => tr.annotation(programmaticSync))
+      if (update.docChanged && !isSync) props.onChange(update.state.doc.toString())
+      if (update.docChanged || update.selectionSet) emitCursor(update.state)
+      if (update.viewportChanged || update.geometryChanged || update.docChanged) emitScrollRatio(update.view)
+    })
+
   onMount(() => {
     void preloadCommonLanguages()
     view = new EditorView({
@@ -1230,12 +1242,7 @@ function MarkdownCodeEditor(props: {
           EditorView.lineWrapping,
           editableCompartment.of(EditorView.editable.of(props.editable ?? true)),
           readOnlyCompartment.of(EditorState.readOnly.of(!(props.editable ?? true))),
-          listenerCompartment.of(EditorView.updateListener.of((update) => {
-            const isSync = update.transactions.some((tr) => tr.annotation(programmaticSync))
-            if (update.docChanged && !isSync) props.onChange(update.state.doc.toString())
-            if (update.docChanged || update.selectionSet) emitCursor(update.state)
-            if (update.viewportChanged || update.geometryChanged || update.docChanged) emitScrollRatio(update.view)
-          })),
+          listenerCompartment.of(makeUpdateListener()),
           themeCompartment.of(theme()),
         ],
       }),
@@ -1277,11 +1284,7 @@ function MarkdownCodeEditor(props: {
         themeCompartment.reconfigure(theme()),
         editableCompartment.reconfigure(EditorView.editable.of(props.editable ?? true)),
         readOnlyCompartment.reconfigure(EditorState.readOnly.of(!(props.editable ?? true))),
-        listenerCompartment.reconfigure(EditorView.updateListener.of((update) => {
-          if (update.docChanged) props.onChange(update.state.doc.toString())
-          if (update.docChanged || update.selectionSet) emitCursor(update.state)
-          if (update.viewportChanged || update.geometryChanged || update.docChanged) emitScrollRatio(update.view)
-        })),
+        listenerCompartment.reconfigure(makeUpdateListener()),
       ],
     })
 
