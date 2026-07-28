@@ -3,7 +3,7 @@ import { LanguageDescription, LanguageSupport, defaultHighlightStyle, syntaxHigh
 import { languages } from "@codemirror/language-data"
 import { markdown } from "@codemirror/lang-markdown"
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands"
-import { Compartment, EditorSelection, EditorState } from "@codemirror/state"
+import { Annotation, Compartment, EditorSelection, EditorState } from "@codemirror/state"
 import { EditorView, drawSelection, dropCursor, highlightActiveLine, highlightActiveLineGutter, keymap, lineNumbers, rectangularSelection } from "@codemirror/view"
 import { Button } from "@/components/ui/button"
 import { Icon } from "@opencode-ai/ui/icon"
@@ -1120,6 +1120,12 @@ function WorkspaceLikeTree(props: {
   )
 }
 
+// Marks transactions dispatched by the value-sync effect. The updateListener
+// must not report these back through onChange: when the selected file is
+// deleted or renamed, the sync briefly rewrites the document, and echoing that
+// as a user edit would resurrect the removed path in the form store.
+const programmaticSync = Annotation.define<boolean>()
+
 function MarkdownCodeEditor(props: {
   value: string
   path: string
@@ -1225,7 +1231,8 @@ function MarkdownCodeEditor(props: {
           editableCompartment.of(EditorView.editable.of(props.editable ?? true)),
           readOnlyCompartment.of(EditorState.readOnly.of(!(props.editable ?? true))),
           listenerCompartment.of(EditorView.updateListener.of((update) => {
-            if (update.docChanged) props.onChange(update.state.doc.toString())
+            const isSync = update.transactions.some((tr) => tr.annotation(programmaticSync))
+            if (update.docChanged && !isSync) props.onChange(update.state.doc.toString())
             if (update.docChanged || update.selectionSet) emitCursor(update.state)
             if (update.viewportChanged || update.geometryChanged || update.docChanged) emitScrollRatio(update.view)
           })),
@@ -1255,6 +1262,7 @@ function MarkdownCodeEditor(props: {
     view.dispatch({
       changes: { from: 0, to: current.length, insert: next },
       selection: EditorSelection.single(anchor, head),
+      annotations: programmaticSync.of(true),
     })
     emitCursor(view.state)
     emitScrollRatio(view)
@@ -2697,6 +2705,9 @@ export default function CapabilityEditorPage() {
                       setForm("fileContents", "SKILL.md", `${extractLeadingFrontmatter(current)}${value}`)
                       return
                     }
+                    // Writing to a path that is no longer in the map would
+                    // resurrect a just-deleted or just-renamed file.
+                    if (form.fileContents[form.selectedTreePath] === undefined) return
                     setForm("fileContents", form.selectedTreePath, value)
                   }}
                   onCursorChange={({ line, column }) => {
