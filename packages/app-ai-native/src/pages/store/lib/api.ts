@@ -1,5 +1,6 @@
 import { env } from "@/lib/env"
 import { onUnauthorized } from "@/lib/session-expired"
+import { getAuthHeaders } from "@/lib/auth-token"
 import type {
   Device,
   DeviceCommandAck,
@@ -1982,7 +1983,7 @@ export const updateApi = {
       const res = await fetch(`${getProxyUrl(deviceId)}/api/v1/commands`, {
         method: "POST",
         credentials: "include",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify(cmd),
       })
       if (!res.ok) {
@@ -1997,7 +1998,7 @@ export const updateApi = {
     return withClusterRetry(deviceId, async () => {
       const res = await fetch(`${getProxyUrl(deviceId)}/api/v1/commands/status?command_id=${encodeURIComponent(commandId)}`, {
         credentials: "include",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
       })
       if (res.status === 404) return null
       if (!res.ok) {
