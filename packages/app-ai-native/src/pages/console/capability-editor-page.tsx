@@ -22,12 +22,14 @@ import { showToast } from "@opencode-ai/ui/toast"
 import { createEffect, createMemo, createResource, createSignal, For, onCleanup, onMount, Show, untrack } from "solid-js"
 import { createStore } from "solid-js/store"
 import {
+  binaryFilesUpdate,
   buildCapabilityPayloadFromFiles,
   defaultSourcePathForItemType,
   fileContentsUpdate,
   isPathOrDescendant,
   removeFileContents,
   renameFileContents,
+  type BinaryFileMap,
   type FileContentMap,
   type ItemType,
 } from "./capability-editor-files"
@@ -61,11 +63,28 @@ type DirectoryInputAttributes = HTMLInputElement & {
 type ImportedDirectoryFiles = {
   tree: VirtualTreeNode[]
   contents: FileContentMap
+  binaries: BinaryFileMap
   firstFile: string
   hasSkillFile: boolean
   rootName: string
   importedCount: number
   filteredCount: number
+  oversizedCount: number
+  tooLarge: boolean
+}
+
+// Mirror of the server-side archive limits (services.MaxSingleFileSize /
+// MaxUncompressedSize). Enforced as an import preflight only when the selected
+// directory contains binary files, i.e. when submission will go through the
+// multipart zip path; a text-only import keeps using the JSON path, which has
+// no such limits, so it must not regress.
+const MAX_ARCHIVE_SINGLE_FILE_SIZE = 10 * 1024 * 1024
+const MAX_ARCHIVE_TOTAL_SIZE = 50 * 1024 * 1024
+
+function formatFileSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
 const TYPE_DROPDOWN_LABELS_ZH: Record<ItemType, string> = {
@@ -172,6 +191,9 @@ function isLikelyTextBytes(bytes: Uint8Array) {
   return suspicious / sample.length < 0.02
 }
 
+// Classify an imported file as text (returning its decoded content) or binary
+// (returning null). Binary files are no longer dropped by the import: on create
+// they ride along in the uploaded zip archive.
 async function readTextFileIfSupported(file: File, relativePath: string) {
   const bytes = new Uint8Array(await file.arrayBuffer())
   const extension = getExtension(relativePath)
@@ -680,6 +702,7 @@ function resetCapabilityDraft(setForm: (setter: unknown, ...args: unknown[]) => 
     treeExpanded: {},
     treeNodes: createDefaultTree(itemType, ""),
     fileContents: createDefaultFileContents(itemType, ""),
+    binaryFiles: {},
     pendingTreeAction: null,
     pendingTreeActionLocked: false,
     installCommandCopied: false,
@@ -762,10 +785,16 @@ function preloadCommonLanguages() {
   return languagePreloadPromise
 }
 
-async function readDirectoryFiles(files: FileList | File[]): Promise<ImportedDirectoryFiles> {
+// includeBinaries: create flow keeps binary files (they get zipped and posted
+// through the multipart branch). The edit flow passes false and keeps today's
+// behavior: binaries are counted as filtered and dropped, because editing an
+// existing item still submits through the JSON path only.
+async function readDirectoryFiles(files: FileList | File[], includeBinaries: boolean): Promise<ImportedDirectoryFiles> {
   const entries = Array.from(files)
   const BATCH_SIZE = 24
   const textContents: FileContentMap = {}
+  const binaryContents: BinaryFileMap = {}
+  const fileSizes: Record<string, number> = {}
   const rawPaths: string[] = []
   let filteredCount = 0
 
@@ -777,21 +806,30 @@ async function readDirectoryFiles(files: FileList | File[]): Promise<ImportedDir
 
       try {
         const content = await readTextFileIfSupported(file, relativePath)
-        if (content === null) return { relativePath, filtered: true as const }
-        return { relativePath, content, filtered: false as const }
+        if (content === null) return { relativePath, file, binary: true as const }
+        return { relativePath, content, binary: false as const }
       } catch {
-        return { relativePath, filtered: true as const }
+        // Unreadable now: classify as binary and let the zip reader retry the
+        // Blob at submit time instead of silently dropping the file.
+        return { relativePath, file, binary: true as const }
       }
     }))
 
     for (const result of results) {
       if (!result) continue
-      if (result.filtered) {
-        filteredCount += 1
+      if (result.binary) {
+        if (!includeBinaries) {
+          filteredCount += 1
+          continue
+        }
+        rawPaths.push(result.relativePath)
+        binaryContents[result.relativePath] = result.file
+        fileSizes[result.relativePath] = result.file.size
         continue
       }
       rawPaths.push(result.relativePath)
       textContents[result.relativePath] = result.content
+      fileSizes[result.relativePath] = new TextEncoder().encode(result.content).length
     }
 
     if (i + BATCH_SIZE < entries.length) {
@@ -800,24 +838,70 @@ async function readDirectoryFiles(files: FileList | File[]): Promise<ImportedDir
   }
 
   const rootName = rawPaths[0]?.split("/")[0] ?? ""
-  const paths = rawPaths.map((path) => path.startsWith(`${rootName}/`) ? path.slice(rootName.length + 1) : path).filter(Boolean)
+  const stripRoot = (path: string) => path.startsWith(`${rootName}/`) ? path.slice(rootName.length + 1) : path
   const normalizedContents: FileContentMap = {}
+  const normalizedBinaries: BinaryFileMap = {}
+  let oversizedCount = 0
+  let totalSize = 0
+  const paths: string[] = []
+  // Preflight against the server's zip limits, enforced only when the import
+  // carries binaries (multipart submission); the text-only JSON path is
+  // unlimited and stays untouched.
+  const hasBinaries = Object.keys(binaryContents).length > 0
 
-  for (const [path, value] of Object.entries(textContents)) {
-    const normalizedPath = path.startsWith(`${rootName}/`) ? path.slice(rootName.length + 1) : path
+  for (const rawPath of rawPaths) {
+    const normalizedPath = stripRoot(rawPath)
     if (!normalizedPath) continue
-    normalizedContents[normalizedPath] = value
+    const size = fileSizes[rawPath] ?? 0
+    if (hasBinaries && size > MAX_ARCHIVE_SINGLE_FILE_SIZE) {
+      oversizedCount += 1
+      continue
+    }
+    totalSize += size
+    paths.push(normalizedPath)
+    if (rawPath in binaryContents) {
+      normalizedBinaries[normalizedPath] = binaryContents[rawPath]!
+    } else {
+      normalizedContents[normalizedPath] = textContents[rawPath]!
+    }
   }
+
+  const tooLarge = Object.keys(normalizedBinaries).length > 0 && totalSize > MAX_ARCHIVE_TOTAL_SIZE
 
   return {
     tree: buildTreeFromPaths(paths),
     contents: normalizedContents,
+    binaries: normalizedBinaries,
     firstFile: paths.sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }))[0] ?? "",
     hasSkillFile: paths.some((path) => path.split("/").pop()?.toUpperCase() === "SKILL.MD"),
     rootName,
     importedCount: paths.length,
     filteredCount,
+    oversizedCount,
+    tooLarge,
   }
+}
+
+// Pack the current editor state (text contents + imported binary files) into a
+// zip that the server's multipart POST /api/items branch understands: text
+// assets land in Postgres, binary assets go to object storage, and the zip is
+// kept as an artifact. Paths are already root-less (SKILL.md at zip root).
+async function buildSkillArchiveFile(slug: string, textFiles: FileContentMap, binaryFiles: BinaryFileMap): Promise<File> {
+  const zip = await import("@zip.js/zip.js")
+  // Deterministic single-threaded packing; avoids worker bootstrapping issues
+  // under dev/bundled environments and is plenty fast for the 50MB cap.
+  zip.configure({ useWebWorkers: false })
+  const writer = new zip.ZipWriter(new zip.BlobWriter("application/zip"))
+  for (const [path, content] of Object.entries(textFiles)) {
+    if (!path) continue
+    await writer.add(path, new zip.TextReader(content))
+  }
+  for (const [path, file] of Object.entries(binaryFiles)) {
+    if (!path) continue
+    await writer.add(path, new zip.BlobReader(file))
+  }
+  const blob = await writer.close()
+  return new File([blob], `${slug || "skill"}.zip`, { type: "application/zip" })
 }
 
 function InlineTreeInput(props: {
@@ -1393,6 +1477,7 @@ export default function CapabilityEditorPage() {
     treeExpanded: {} as Record<string, boolean>,
     treeNodes: createDefaultTree("skill", "") as VirtualTreeNode[],
     fileContents: createDefaultFileContents("skill", "") as FileContentMap,
+    binaryFiles: {} as BinaryFileMap,
     pendingTreeAction: null as PendingTreeAction | null,
     pendingTreeActionLocked: false,
     installCommandCopied: false,
@@ -1400,6 +1485,7 @@ export default function CapabilityEditorPage() {
   })
 
   const replaceFileContents = (next: FileContentMap) => setForm("fileContents", fileContentsUpdate(next))
+  const replaceBinaryFiles = (next: BinaryFileMap) => setForm("binaryFiles", binaryFilesUpdate(next))
 
   // Fill the editor with a device-generated SKILL.md for human review, then the
   // user clicks the existing "create" button to publish through the normal flow.
@@ -1610,6 +1696,9 @@ export default function CapabilityEditorPage() {
 
   const selectedFileContent = createMemo(() => form.fileContents[form.selectedTreePath] ?? "")
   const activeFilePath = createMemo(() => form.selectedTreePath || Object.keys(form.fileContents)[0] || "")
+  // The File behind the selected tree path when it is an imported binary; the
+  // editor shows a read-only placeholder instead of CodeMirror for these.
+  const selectedBinaryFile = createMemo(() => form.binaryFiles[form.selectedTreePath])
   // True only when the editor is showing a skill's SKILL.md. In that case the
   // middle editor edits the BODY only (frontmatter is managed by the left form
   // and stays out of the editor); every other type / attached file edits the
@@ -1822,6 +1911,7 @@ export default function CapabilityEditorPage() {
     setForm("itemType", value)
     setForm("treeNodes", createDefaultTree(value, form.slug || ""))
     replaceFileContents(createDefaultFileContents(value, form.slug || ""))
+    replaceBinaryFiles({})
     setForm("selectedTreePath", defaultSourcePathForItemType(value, form.slug || ""))
     setForm("pendingTreeAction", null)
     setForm("pendingTreeActionLocked", false)
@@ -1880,6 +1970,7 @@ export default function CapabilityEditorPage() {
     const nextContents = removeFileContents(form.fileContents, path)
     setForm("treeNodes", removeTreeNode(form.treeNodes, path))
     replaceFileContents(nextContents)
+    replaceBinaryFiles(removeFileContents(form.binaryFiles, path))
     if (isPathOrDescendant(form.selectedTreePath, path)) {
       setForm("selectedTreePath", Object.keys(nextContents)[0] ?? "")
     }
@@ -1920,6 +2011,7 @@ export default function CapabilityEditorPage() {
       }
       setForm("treeNodes", renameTreeNode(form.treeNodes, pending.targetPath, name))
       replaceFileContents(renameFileContents(form.fileContents, pending.targetPath, nextPath))
+      replaceBinaryFiles(renameFileContents(form.binaryFiles, pending.targetPath, nextPath))
       if (isPathOrDescendant(form.selectedTreePath, pending.targetPath)) {
         setForm("selectedTreePath", nextPath + form.selectedTreePath.slice(pending.targetPath.length))
       }
@@ -1975,7 +2067,19 @@ export default function CapabilityEditorPage() {
     setForm("importing", true)
 
     try {
-      const imported = await readDirectoryFiles(files)
+      // Binary files are only importable on create (multipart zip submission);
+      // the edit flow still filters them out and keeps the JSON-only path.
+      const imported = await readDirectoryFiles(files, !isEdit())
+      if (imported.tooLarge) {
+        showToast({
+          variant: "error",
+          icon: "warning",
+          title: language.t("store.capabilityEditor.uploadArchive"),
+          description: language.t("store.capabilityEditor.importTooLarge"),
+          duration: 4000,
+        })
+        return
+      }
       if (imported.tree.length === 0) return
       if (!imported.hasSkillFile) {
         showToast({
@@ -2001,6 +2105,9 @@ export default function CapabilityEditorPage() {
       }
       setForm("treeNodes", imported.tree)
       replaceFileContents(imported.contents)
+      // A re-upload must replace the binary map wholesale too, so entries from a
+      // previous import can't leak into the next submission.
+      replaceBinaryFiles(imported.binaries)
       setForm("selectedTreePath", imported.firstFile || Object.keys(imported.contents)[0] || "")
       setForm("pendingTreeAction", null)
       showToast({
@@ -2008,6 +2115,15 @@ export default function CapabilityEditorPage() {
         description: language.t("store.capabilityEditor.importedFiles", { count: imported.importedCount }),
         duration: 3000,
       })
+      if (imported.oversizedCount > 0) {
+        showToast({
+          variant: "error",
+          icon: "warning",
+          title: language.t("store.capabilityEditor.uploadArchive"),
+          description: language.t("store.capabilityEditor.oversizedFilesSkipped", { count: imported.oversizedCount }),
+          duration: 4000,
+        })
+      }
       if (imported.filteredCount > 0) {
         showToast({
           variant: "error",
@@ -2182,20 +2298,39 @@ export default function CapabilityEditorPage() {
       } else {
         const registryId = await resolveRegistryId()
         const userId = auth.user()?.id ?? auth.user()?.subjectId ?? auth.user()?.sub
-        await itemApi.createDirect({
-          itemType: form.itemType,
-          name: form.name.trim(),
-          slug: finalSlug,
-          description: form.description.trim(),
-          category: form.category,
-          content: payload.content,
-          sourcePath: payload.sourcePath,
-          assets: payload.assets,
-          tags: form.tags,
-          visibility: selectedNamespace()?.visibility,
-          registryId,
-          createdBy: userId,
-        })
+        if (Object.keys(form.binaryFiles).length > 0) {
+          // Binary files can't ride the JSON body (assets are text-only), so
+          // pack text + binaries into a zip and go through the multipart branch.
+          // The server parses SKILL.md (incl. the form-synced frontmatter tags),
+          // stores text assets in Postgres, binaries in object storage, and
+          // keeps the zip as an artifact.
+          const archive = await buildSkillArchiveFile(finalSlug, form.fileContents, form.binaryFiles)
+          await itemApi.createDirect({
+            itemType: form.itemType,
+            name: form.name.trim(),
+            slug: finalSlug,
+            description: form.description.trim(),
+            category: form.category,
+            registryId,
+            createdBy: userId,
+            file: archive,
+          })
+        } else {
+          await itemApi.createDirect({
+            itemType: form.itemType,
+            name: form.name.trim(),
+            slug: finalSlug,
+            description: form.description.trim(),
+            category: form.category,
+            content: payload.content,
+            sourcePath: payload.sourcePath,
+            assets: payload.assets,
+            tags: form.tags,
+            visibility: selectedNamespace()?.visibility,
+            registryId,
+            createdBy: userId,
+          })
+        }
         showToast({ title: language.t("store.capabilityDialog.toast.created", { type: typeLabel() }) })
         if (mode === "continue") {
           resetCapabilityDraft(setForm as unknown as (setter: unknown, ...args: unknown[]) => void, form.itemType)
@@ -2695,6 +2830,32 @@ export default function CapabilityEditorPage() {
                   "border-right": showPreview() ? "1px solid color-mix(in srgb, var(--native-border) 18%, transparent)" : "none",
                 }}
               >
+                <Show
+                  when={!selectedBinaryFile()}
+                  fallback={
+                    <div class="flex min-h-0 flex-1 items-center justify-center bg-[var(--native-bg-subtle)] p-6">
+                      <div
+                        data-testid="binary-file-placeholder"
+                        class="flex w-full max-w-sm flex-col items-center gap-2 rounded-[8px] border border-dashed px-6 py-8 text-center"
+                        style={{ border: "1px dashed var(--native-border)" }}
+                      >
+                        <FileIcon node={{ path: form.selectedTreePath, type: "file" }} class="size-8" />
+                        <div class="max-w-full truncate text-sm font-medium text-[var(--native-foreground)]">
+                          {form.selectedTreePath.split("/").pop() || form.selectedTreePath}
+                        </div>
+                        <div class="text-xs text-[var(--native-muted)]">
+                          {language.t("store.capabilityEditor.binaryFileBadge")}
+                          {" · "}
+                          {formatFileSize(selectedBinaryFile()?.size ?? 0)}
+                          <Show when={selectedBinaryFile()?.type}>{" · "}{selectedBinaryFile()?.type}</Show>
+                        </div>
+                        <div class="text-xs leading-5 text-[var(--native-muted)]">
+                          {language.t("store.capabilityEditor.binaryFileHint")}
+                        </div>
+                      </div>
+                    </div>
+                  }
+                >
                 <MarkdownCodeEditor
                   path={activeFilePath()}
                   value={editorValue()}
@@ -2719,6 +2880,7 @@ export default function CapabilityEditorPage() {
                   }}
                   onScrollRatioChange={(ratio) => setForm("previewScrollRatio", ratio)}
                 />
+                </Show>
               </section>
 
               <Show when={showPreview()}>

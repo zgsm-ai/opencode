@@ -3,6 +3,10 @@ import type { CapabilityItemAsset } from "@/pages/store/lib/api"
 
 export type ItemType = "skill" | "subagent" | "command" | "mcp" | "plugin"
 export type FileContentMap = Record<string, string>
+// Binary files imported from a directory upload. They never enter the text
+// editor; on create they are packed together with the text files into a zip
+// and submitted through the multipart branch of POST /api/items.
+export type BinaryFileMap = Record<string, File>
 
 export function defaultSourcePathForItemType(itemType: ItemType, slug: string) {
   if (itemType === "skill") return "SKILL.md"
@@ -27,8 +31,12 @@ export function buildCapabilityPayloadFromFiles(itemType: ItemType, slug: string
   return { sourcePath, content, assets }
 }
 
-export function renameFileContents(contents: FileContentMap, from: string, to: string) {
-  const next: FileContentMap = {}
+// Generic over the value type so the same path semantics apply to both the
+// text-content map (string values) and the binary-file map (File values):
+// renaming/removing a directory must move/drop its descendants in BOTH maps,
+// otherwise stale binary entries would survive tree operations.
+export function renameFileContents<T>(contents: Record<string, T>, from: string, to: string): Record<string, T> {
+  const next: Record<string, T> = {}
   for (const [path, value] of Object.entries(contents)) {
     if (path === from || path.startsWith(`${from}/`)) {
       next[path.replace(from, to)] = value
@@ -39,8 +47,8 @@ export function renameFileContents(contents: FileContentMap, from: string, to: s
   return next
 }
 
-export function removeFileContents(contents: FileContentMap, path: string) {
-  const next: FileContentMap = {}
+export function removeFileContents<T>(contents: Record<string, T>, path: string): Record<string, T> {
+  const next: Record<string, T> = {}
   for (const [key, value] of Object.entries(contents)) {
     if (key === path || key.startsWith(`${path}/`)) continue
     next[key] = value
@@ -56,5 +64,13 @@ export function isPathOrDescendant(candidate: string, ancestor: string) {
 // dropped from the new map would survive and still be submitted as assets.
 // Every whole-map write must go through this so the map is replaced outright.
 export function fileContentsUpdate(next: FileContentMap) {
+  return reconcile(next)
+}
+
+// Same replacement semantics for the binary-file map: a directory re-upload or
+// item-type switch must not leave stale binary entries behind (they would be
+// zipped up and submitted). File values are not wrappable by the Solid store,
+// so reconcile assigns them as-is and instances stay intact.
+export function binaryFilesUpdate(next: BinaryFileMap) {
   return reconcile(next)
 }
