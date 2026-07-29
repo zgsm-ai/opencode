@@ -28,6 +28,13 @@ async function getMockApiFetch() {
   return _mockApiFetch
 }
 
+// Prefix a relative /api path with the configured API base so raw fetch()
+// callers (e.g. binary asset downloads that must not go through res.json())
+// hit the same origin as apiFetch.
+export function apiUrl(path: string) {
+  return `${API_BASE}${path}`
+}
+
 export async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   // In demo mode, intercept all API calls and return mock data
   if (env.DEMO_MODE) {
