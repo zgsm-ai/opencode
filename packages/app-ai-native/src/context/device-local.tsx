@@ -124,8 +124,26 @@ export function DeviceLocalProvider(props: ParentProps<{ workspaceId?: string }>
     setActiveSessionID(sessionID)
     if (sessionID) {
       const cachedModel = sessionModels[sessionID]
-      setStore("currentModel", cachedModel && cachedModel.providerID ? { ...cachedModel } : undefined)
-      setStore("currentAgent", sessionAgents[sessionID])
+      if (cachedModel && cachedModel.providerID) {
+        setStore("currentModel", { ...cachedModel })
+      } else if (!prev && store.currentModel) {
+        // Carrying the user's selection from the new-session composer into the
+        // freshly created session: there was no sid to persist against before,
+        // so commit it now instead of dropping it.
+        sessionModels[sessionID] = store.currentModel
+        saveSessionModels()
+      } else {
+        setStore("currentModel", undefined)
+      }
+      const cachedAgent = sessionAgents[sessionID]
+      if (cachedAgent) {
+        setStore("currentAgent", cachedAgent)
+      } else if (!prev && store.currentAgent) {
+        sessionAgents[sessionID] = store.currentAgent
+        saveSessionAgents()
+      } else {
+        setStore("currentAgent", undefined)
+      }
     } else {
       setStore("currentModel", undefined)
       setStore("currentAgent", undefined)
