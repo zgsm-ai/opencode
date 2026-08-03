@@ -282,7 +282,11 @@ function MobileWorkspaceContentLayout(props: { workspaceId: string; directory: s
             class="absolute inset-y-0 left-0 w-[280px] bg-background-base border-r border-border overflow-y-auto thin-scrollbar transition-transform duration-200 ease-in-out pointer-events-auto"
             style={{ transform: work.sidebarOpened() ? "translateX(0)" : "translateX(-100%)" }}
           >
-            <SessionListPanel />
+            <DeviceSessionStoreProvider>
+              <DeviceSessionChatProvider>
+                <SessionListPanel />
+              </DeviceSessionChatProvider>
+            </DeviceSessionStoreProvider>
           </div>
         </div>
 
