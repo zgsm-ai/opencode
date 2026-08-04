@@ -1,4 +1,5 @@
 import { DeviceHttpError } from "./device-transport"
+import { getAuthHeaders } from "@/lib/auth-token"
 
 export type UploadedAttachment = {
   id: string
@@ -32,7 +33,11 @@ export async function uploadAttachment(file: File | Blob, opts: UploadOpts): Pro
   const filename = (file as File).name ?? `upload-${Date.now()}`
   form.append("file", file, filename)
 
-  const headers: Record<string, string> = {}
+  // The zgsmAdminToken cookie is SameSite=Lax, so the browser does NOT send it
+  // on cross-origin POSTs. Attach the token explicitly via Authorization, the
+  // same as every other device client (device-transport / device-client /
+  // cloud-terminal-api). See src/lib/auth-token.ts.
+  const headers: Record<string, string> = { ...getAuthHeaders() }
   if (opts.directory) headers["X-Workspace-Directory"] = encodeURIComponent(opts.directory)
 
   const res = await fn(joinUrl(opts.baseUrl, "/api/v1/attachments"), {
