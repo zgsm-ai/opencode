@@ -1,6 +1,7 @@
 import { Dialog as Kobalte } from "@kobalte/core/dialog"
 import { useI18n } from "../context/i18n"
 import { IconButton } from "./icon-button"
+import { AttachmentImage } from "./attachment-image"
 
 export interface ImagePreviewProps {
   src: string
@@ -23,7 +24,7 @@ export function ImagePreview(props: ImagePreviewProps) {
             />
           </div>
           <div data-slot="image-preview-body">
-            <img src={props.src} alt={props.alt ?? i18n.t("ui.imagePreview.alt")} data-slot="image-preview-image" />
+            <AttachmentImage url={props.src} alt={props.alt ?? i18n.t("ui.imagePreview.alt")} data-slot="image-preview-image" />
           </div>
         </Kobalte.Content>
       </div>

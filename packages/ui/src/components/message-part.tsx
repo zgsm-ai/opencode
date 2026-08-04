@@ -45,6 +45,7 @@ import { Checkbox } from "./checkbox"
 import { DiffChanges } from "./diff-changes"
 import { Markdown } from "./markdown"
 import { ImagePreview } from "./image-preview"
+import { AttachmentImage } from "./attachment-image"
 import { getDirectory as _getDirectory, getFilename } from "@opencode-ai/util/path"
 import { checksum } from "@opencode-ai/util/encode"
 import { stripPromptSeed } from "@opencode-ai/util/prompt-seed"
@@ -1092,7 +1093,7 @@ export function UserMessageDisplay(props: { message: UserMessage; parts: PartTyp
                       </div>
                     }
                   >
-                    <img data-slot="user-message-attachment-image" src={file.url} alt={name} />
+                    <AttachmentImage data-slot="user-message-attachment-image" url={file.url} alt={name} />
                   </Show>
                 </div>
               )
