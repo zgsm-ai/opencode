@@ -195,7 +195,7 @@ export const deviceApi = {
 
   // 轮换设备令牌
   rotateToken: (deviceId: string) =>
-    apiFetch<{ token: string; rotatedAt: string }>(`/api/devices/${deviceId}/rotate-token`, {
+    apiFetch<{ token: string; rotatedAt: string }>(`/api/devices/${deviceId}/token/rotate`, {
       method: "POST",
     }),
 
