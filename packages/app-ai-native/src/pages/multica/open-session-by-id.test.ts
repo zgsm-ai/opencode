@@ -219,3 +219,96 @@ describe("openSessionById", () => {
     expect(calls.navigated).toBeUndefined()
   })
 })
+
+describe("openSessionById workspace name conflicts", () => {
+  const conflict = () => Object.assign(new Error("workspace name already exists"), { status: 409 })
+
+  test("retries with a numeric suffix when the derived name is taken", async () => {
+    const attempted: string[] = []
+    const { calls, deps } = harness({
+      listDevices: async () => [device("db-1", "dev-1")],
+      probeSession: async () => ({ directory: "/p/multica_workspaces/x/workdir" }),
+      listWorkspaces: async () => [],
+      createWorkspace: async (input) => {
+        attempted.push(input.name)
+        if (input.name === "workdir") throw conflict()
+        return "ws-new"
+      },
+    })
+    await openSessionById("sess-1", deps)
+    expect(attempted).toEqual(["workdir", "workdir-2"])
+    expect(calls.navigated).toEqual({ workspaceId: "ws-new", sessionId: "sess-1" })
+    expect(calls.error).toBeUndefined()
+  })
+
+  test("keeps retrying through several taken names", async () => {
+    const attempted: string[] = []
+    const { calls, deps } = harness({
+      listDevices: async () => [device("db-1", "dev-1")],
+      probeSession: async () => ({ directory: "/p/workdir" }),
+      listWorkspaces: async () => [],
+      createWorkspace: async (input) => {
+        attempted.push(input.name)
+        if (input.name !== "workdir-4") throw conflict()
+        return "ws-new"
+      },
+    })
+    await openSessionById("sess-1", deps)
+    expect(attempted).toEqual(["workdir", "workdir-2", "workdir-3", "workdir-4"])
+    expect(calls.navigated?.workspaceId).toBe("ws-new")
+  })
+
+  test("a non-conflict creation error aborts immediately", async () => {
+    const attempted: string[] = []
+    const { calls, deps } = harness({
+      listDevices: async () => [device("db-1", "dev-1")],
+      probeSession: async () => ({ directory: "/p/workdir" }),
+      listWorkspaces: async () => [],
+      createWorkspace: async (input) => {
+        attempted.push(input.name)
+        throw new Error("device offline")
+      },
+    })
+    await openSessionById("sess-1", deps)
+    expect(attempted).toEqual(["workdir"])
+    expect(calls.error).toBe("failed")
+    expect(calls.navigated).toBeUndefined()
+  })
+
+  test("when every suffix conflicts, re-checks for a concurrently created containing workspace", async () => {
+    const attempted: string[] = []
+    let listed = false
+    const { calls, deps } = harness({
+      listDevices: async () => [device("db-1", "dev-1")],
+      probeSession: async () => ({ directory: "/p/workdir" }),
+      listWorkspaces: async () => {
+        if (!listed) return []
+        // The concurrent creator won the name race and registered the dir.
+        return [workspaceWithDir("w-race", "dev-1", "/p/workdir")]
+      },
+      createWorkspace: async (input) => {
+        attempted.push(input.name)
+        listed = true
+        throw conflict()
+      },
+    })
+    await openSessionById("sess-1", deps)
+    expect(attempted.length).toBeGreaterThan(1)
+    expect(calls.navigated).toEqual({ workspaceId: "w-race", sessionId: "sess-1" })
+    expect(calls.error).toBeUndefined()
+  })
+
+  test("reports failed when every suffix conflicts and no containing workspace appears", async () => {
+    const { calls, deps } = harness({
+      listDevices: async () => [device("db-1", "dev-1")],
+      probeSession: async () => ({ directory: "/p/workdir" }),
+      listWorkspaces: async () => [],
+      createWorkspace: async () => {
+        throw conflict()
+      },
+    })
+    await openSessionById("sess-1", deps)
+    expect(calls.error).toBe("failed")
+    expect(calls.navigated).toBeUndefined()
+  })
+})
