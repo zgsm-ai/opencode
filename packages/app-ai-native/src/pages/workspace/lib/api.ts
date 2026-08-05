@@ -13,7 +13,9 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   if (!res.ok) {
     if (res.status === 401) onUnauthorized(path)
     const err = await res.json().catch(() => ({ error: res.statusText }))
-    throw new Error(err.error || `Request failed: ${res.status}`)
+    // Attach the HTTP status so callers can branch on it (e.g. 409 conflict)
+    // without parsing the message text.
+    throw Object.assign(new Error(err.error || `Request failed: ${res.status}`), { status: res.status })
   }
 
   if (res.status === 204 || res.status === 205) {

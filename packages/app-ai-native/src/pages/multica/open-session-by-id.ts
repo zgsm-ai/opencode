@@ -13,7 +13,10 @@ import type { Device, Workspace } from "@/pages/workspace/types"
  *      directories CONTAIN the session's directory — never a workspace that
  *      points elsewhere, or the session would render inside the wrong project
  *      tree and fall out of the directory-scoped session list — or create a
- *      workspace on demand for the session's directory,
+ *      workspace on demand for the session's directory (retrying with a
+ *      numeric suffix when the derived name is already taken — the server
+ *      enforces per-user unique workspace names and isolated task dirs often
+ *      share the same leaf name),
  *   4. navigate to /workspace/<id>?session=<sessionId>.
  *
  * All I/O is injected so the orchestration is unit-testable.
@@ -59,15 +62,50 @@ export async function openSessionById(sessionId: string, deps: OpenSessionDeps):
       return
     }
 
-    const newWorkspaceId = await deps.createWorkspace({
-      name: deriveWorkspaceName(hit.directory),
-      deviceId: hit.device.id,
-      directory: hit.directory,
-    })
+    const newWorkspaceId = await createWorkspaceForSession(deps, hit)
     deps.navigateToSession(newWorkspaceId, sessionId)
   } catch {
     deps.onError("failed")
   }
+}
+
+/**
+ * The server answers POST /workspaces with 409 "workspace name already
+ * exists" when the name is taken. The API client attaches `status` to the
+ * thrown error; the message match is a fallback for callers that don't.
+ */
+function isWorkspaceNameConflict(err: unknown): boolean {
+  if (typeof err !== "object" || err === null) return false
+  if ((err as { status?: unknown }).status === 409) return true
+  const message = (err as { message?: unknown }).message
+  return typeof message === "string" && message.includes("workspace name already exists")
+}
+
+const MAX_CREATE_ATTEMPTS = 5
+
+/**
+ * Create a workspace for the session's directory, retrying with a numeric
+ * suffix ("workdir", "workdir-2", ...) when the derived name is taken. When
+ * every attempt conflicts, re-check whether a concurrently created workspace
+ * now contains the directory before giving up.
+ */
+async function createWorkspaceForSession(
+  deps: OpenSessionDeps,
+  hit: { device: Device; directory: string },
+): Promise<string> {
+  const base = deriveWorkspaceName(hit.directory)
+  for (let attempt = 0; attempt < MAX_CREATE_ATTEMPTS; attempt++) {
+    const name = attempt === 0 ? base : `${base}-${attempt + 1}`
+    try {
+      return await deps.createWorkspace({ name, deviceId: hit.device.id, directory: hit.directory })
+    } catch (err) {
+      if (!isWorkspaceNameConflict(err)) throw err
+    }
+  }
+  const workspaces = await deps.listWorkspaces()
+  const existing = findWorkspaceForSession(workspaces, hit.device, hit.directory)
+  if (existing) return existing
+  throw new Error(`could not create a workspace for ${hit.directory}: name "${base}" is taken`)
 }
 
 /**
