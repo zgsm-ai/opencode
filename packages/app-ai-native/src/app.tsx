@@ -4,6 +4,7 @@ import { File } from "@opencode-ai/ui/file"
 import { I18nProvider } from "@opencode-ai/ui/context"
 import { DialogProvider } from "@opencode-ai/ui/context/dialog"
 import { FileComponentProvider } from "@opencode-ai/ui/context/file"
+import { AttachmentLoaderProvider, type AttachmentUrlResolver } from "@opencode-ai/ui/context/attachment-loader"
 import { MarkedProvider } from "@opencode-ai/ui/context/marked"
 import { Font } from "@opencode-ai/ui/font"
 import { ThemeProvider } from "@opencode-ai/ui/theme"
@@ -14,6 +15,7 @@ import { useLanguage } from "@/context/language"
 import { LanguageProvider } from "@/context/language"
 import { SettingsProvider } from "@/context/settings"
 import { AuthProvider } from "@/context/auth"
+import { getAuthHeaders } from "@/lib/auth-token"
 import { SessionExpiredProvider } from "@/lib/session-expired"
 import { RateLimitToastProvider } from "@/lib/rate-limit-toast"
 import { ItemFilterOptionsProvider } from "@/context/item-filter-options"
@@ -21,6 +23,20 @@ import { ErrorPage } from "./pages/error"
 import { useTheme } from "@opencode-ai/ui/theme"
 
 const Loading = () => <div class="size-full" />
+
+// Resolves a device-proxy attachment URL to a same-origin blob: object URL.
+// Cross-origin (cross-cluster) attachment URLs get no SameSite=Lax cookie on a
+// bare <img> fetch, and <img> can't send an Authorization header — so fetch
+// the bytes with the session token instead and render the blob. See
+// packages/ui/src/context/attachment-loader.tsx.
+const resolveAttachmentUrl: AttachmentUrlResolver = async (url) => {
+  const res = await fetch(url, {
+    headers: { ...getAuthHeaders() },
+    credentials: "include",
+  })
+  if (!res.ok) throw new Error(`Failed to load attachment: ${res.status}`)
+  return URL.createObjectURL(await res.blob())
+}
 
 function UiI18nBridge(props: ParentProps) {
   const language = useLanguage()
@@ -59,9 +75,11 @@ export function AppBaseProviders(props: ParentProps) {
                       <RateLimitToastProvider>
                         <MarkedProviderWithNativeParser>
                         <FileComponentProvider component={File}>
-                          <AuthProvider>
-                            <ItemFilterOptionsProvider>{props.children}</ItemFilterOptionsProvider>
-                          </AuthProvider>
+                          <AttachmentLoaderProvider value={resolveAttachmentUrl}>
+                            <AuthProvider>
+                              <ItemFilterOptionsProvider>{props.children}</ItemFilterOptionsProvider>
+                            </AuthProvider>
+                          </AttachmentLoaderProvider>
                         </FileComponentProvider>
                       </MarkedProviderWithNativeParser>
                       </RateLimitToastProvider>
