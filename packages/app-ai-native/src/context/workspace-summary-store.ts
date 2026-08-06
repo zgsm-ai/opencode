@@ -29,7 +29,7 @@ export function syncSummary(
   },
 ) {
   const hasActiveSession = Object.values(data.sessionStatus).some(
-    (s) => s.type === "busy" || s.type === "retry",
+    (s) => s.type === "busy" || s.type === "retry" || s.type === "compacting",
   )
   const hasPendingInteraction =
     Object.values(data.questions).some((q) => q.length > 0) ||

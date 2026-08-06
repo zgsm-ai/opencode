@@ -146,6 +146,9 @@ export function AuthProvider(props: ParentProps) {
       setState("permissions", DEMO_PERMISSIONS)
       return
     }
+    // Frontend fallback: expire the session cookie in case the backend
+    // Set-Cookie lands with a mismatched Path/Domain and leaves the token.
+    document.cookie = "zgsmAdminToken=; Path=/; Max-Age=0; SameSite=Lax"
     await fetch(`${PREFIX}/api/auth/logout`, { method: "POST", credentials: "include" }).catch(() => {})
     setState("user", null)
     setState("permissions", null)

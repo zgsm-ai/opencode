@@ -1156,7 +1156,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     on(
       () => status().type,
       (curr, prev) => {
-        if (curr === "idle" && (prev === "busy" || prev === "retry")) {
+        if (curr === "idle" && (prev === "busy" || prev === "retry" || prev === "compacting")) {
           const msgs = q()
           if (msgs.length > 0) {
             setQ([])

@@ -85,7 +85,7 @@ export function SessionListPanel() {
 
   const isWorking = (id: string) => {
     const s = dw.data.sessionStatus[id]
-    return s?.type === "busy" || s?.type === "retry"
+    return s?.type === "busy" || s?.type === "retry" || s?.type === "compacting"
   }
 
   const openSession = (session: Session) => {

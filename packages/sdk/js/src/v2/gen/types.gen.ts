@@ -136,6 +136,9 @@ export type SessionStatus =
   | {
       type: "busy"
     }
+  | {
+      type: "compacting"
+    }
 
 export type EventSessionStatus = {
   type: "session.status"

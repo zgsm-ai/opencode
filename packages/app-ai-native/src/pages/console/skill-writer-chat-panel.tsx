@@ -379,7 +379,7 @@ function SessionIdleWatcher(props: { onIdle: () => void }) {
           wasActive = false
           return
         }
-        const isActive = status === "busy" || status === "retry"
+        const isActive = status === "busy" || status === "retry" || status === "compacting"
         if (wasActive && !isActive) props.onIdle()
         wasActive = isActive
       },
