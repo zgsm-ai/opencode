@@ -136,7 +136,7 @@ function SessionTabIcon(props: { tab: ContentTab }) {
   })
   const working = createMemo(() => {
     const t = status()?.type
-    return t === "busy" || t === "retry"
+    return t === "busy" || t === "retry" || t === "compacting"
   })
   const pending = createMemo(() => {
     const id = props.tab.meta?.sessionID as string | undefined
@@ -161,7 +161,7 @@ function SessionTabIcon(props: { tab: ContentTab }) {
           </Show>
         }>
           <WorkingIcon
-            title={status()?.type === "retry" ? "retry" : "busy"}
+            title={status()?.type === "retry" ? "retry" : status()?.type === "compacting" ? "compacting" : "busy"}
             classList={{
               "border-native-primary": isActiveTab(),
               "border-native-dim": !isActiveTab(),
@@ -499,7 +499,7 @@ function ContentSidebar(props: { directory: string; autoExpandGroup?: () => { gr
 
   const isWorking = (id: string) => {
     const s = dw.data.sessionStatus[id]
-    return s?.type === "busy" || s?.type === "retry"
+    return s?.type === "busy" || s?.type === "retry" || s?.type === "compacting"
   }
 
   const openSession = (session: Session) => {

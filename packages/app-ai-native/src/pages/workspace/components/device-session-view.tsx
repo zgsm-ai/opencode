@@ -145,7 +145,7 @@ export function DeviceSessionView(props: {
 
   const isWorking = createMemo(() => {
     const t = effectiveStatus()?.type
-    return t === "busy" || t === "retry"
+    return t === "busy" || t === "retry" || t === "compacting"
   })
 
   const busySince = createMemo(() => {

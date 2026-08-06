@@ -662,12 +662,12 @@ export function DeviceWorkspaceProvider(props: ParentProps<{ workspaceId?: strin
     const status = pendingStatus.get(id)
     if (!status) return
     const prev = store.sessionStatus[id]
-    const wasBusy = prev?.type === "busy" || prev?.type === "retry"
+    const wasBusy = prev?.type === "busy" || prev?.type === "retry" || prev?.type === "compacting"
     const nowIdle = status.type === "idle"
     setSessionStatus(id, status)
     if (wasBusy && nowIdle) {
       setStore("unread", id, true)
-    } else if (status.type === "busy" || status.type === "retry") {
+    } else if (status.type === "busy" || status.type === "retry" || status.type === "compacting") {
       setStore("unread", produce((d) => { delete d[id] }))
     }
     scheduleSummarySync()
@@ -712,7 +712,7 @@ export function DeviceWorkspaceProvider(props: ParentProps<{ workspaceId?: strin
         if (now > status.next + RETRY_GRACE_MS) stale.add(id)
         continue
       }
-      if (status.type === "busy") {
+      if (status.type === "busy" || status.type === "compacting") {
         const last = lastEventAt.get(id) ?? 0
         if (now - last > STALE_MS) stale.add(id)
       }
@@ -883,7 +883,7 @@ export function DeviceWorkspaceProvider(props: ParentProps<{ workspaceId?: strin
                       if (pendingStatus.has(id)) flushStatus(id)
                     }
                     const prev = store.sessionStatus[id]
-                    const wasBusy = prev?.type === "busy" || prev?.type === "retry"
+                    const wasBusy = prev?.type === "busy" || prev?.type === "retry" || prev?.type === "compacting"
                     setSessionStatus(id, sp.status)
                     if (wasBusy) setStore("unread", id, true)
                     scheduleSummarySync()
