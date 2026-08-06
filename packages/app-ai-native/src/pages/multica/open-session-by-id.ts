@@ -32,7 +32,22 @@ export interface OpenSessionDeps {
   onError: (reason: "not_found" | "failed") => void
 }
 
-export async function openSessionById(sessionId: string, deps: OpenSessionDeps): Promise<void> {
+export interface OpenSessionOptions {
+  /**
+   * Human-readable name hint for the workspace auto-created for this session
+   * (multica sends the issue identifier, e.g. "MUL-123"). Without it the
+   * workspace is named after the session directory's leaf, which for multica
+   * workflow task sessions is a bare task UUID. Blank values are ignored so
+   * older embedded multica builds keep the old behavior.
+   */
+  workspaceName?: string
+}
+
+export async function openSessionById(
+  sessionId: string,
+  deps: OpenSessionDeps,
+  options: OpenSessionOptions = {},
+): Promise<void> {
   if (!sessionId) return
   try {
     const devices = await deps.listDevices()
@@ -62,7 +77,7 @@ export async function openSessionById(sessionId: string, deps: OpenSessionDeps):
       return
     }
 
-    const newWorkspaceId = await createWorkspaceForSession(deps, hit)
+    const newWorkspaceId = await createWorkspaceForSession(deps, hit, options.workspaceName)
     deps.navigateToSession(newWorkspaceId, sessionId)
   } catch {
     deps.onError("failed")
@@ -85,15 +100,18 @@ const MAX_CREATE_ATTEMPTS = 5
 
 /**
  * Create a workspace for the session's directory, retrying with a numeric
- * suffix ("workdir", "workdir-2", ...) when the derived name is taken. When
- * every attempt conflicts, re-check whether a concurrently created workspace
- * now contains the directory before giving up.
+ * suffix ("workdir", "workdir-2", ...) when the derived name is taken. A
+ * non-blank `nameHint` (e.g. the multica issue identifier) becomes the base
+ * name instead of the directory leaf. When every attempt conflicts, re-check
+ * whether a concurrently created workspace now contains the directory before
+ * giving up.
  */
 async function createWorkspaceForSession(
   deps: OpenSessionDeps,
   hit: { device: Device; directory: string },
+  nameHint?: string,
 ): Promise<string> {
-  const base = deriveWorkspaceName(hit.directory)
+  const base = nameHint?.trim() || deriveWorkspaceName(hit.directory)
   for (let attempt = 0; attempt < MAX_CREATE_ATTEMPTS; attempt++) {
     const name = attempt === 0 ? base : `${base}-${attempt + 1}`
     try {
