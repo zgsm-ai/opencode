@@ -220,6 +220,56 @@ describe("openSessionById", () => {
   })
 })
 
+describe("openSessionById workspace name hint", () => {
+  const conflict = () => Object.assign(new Error("workspace name already exists"), { status: 409 })
+
+  test("uses the provided name hint instead of the directory leaf when creating a workspace", async () => {
+    // The session directory leaf for multica workflow tasks is a bare task
+    // UUID — the hint (issue identifier) is what makes the auto-created
+    // workspace recognizable.
+    const { calls, deps } = harness({
+      listDevices: async () => [device("db-1", "dev-1")],
+      probeSession: async () => ({ directory: "/p/multica_workspaces/x/9b1c2d3e-task-uuid" }),
+      listWorkspaces: async () => [],
+    })
+    await openSessionById("sess-1", deps, { workspaceName: "MUL-123" })
+    expect(calls.created).toEqual({
+      name: "MUL-123",
+      deviceId: "db-1",
+      directory: "/p/multica_workspaces/x/9b1c2d3e-task-uuid",
+    })
+    expect(calls.navigated).toEqual({ workspaceId: "ws-new", sessionId: "sess-1" })
+  })
+
+  test("retries with a numeric suffix on the hinted name when it is taken", async () => {
+    const attempted: string[] = []
+    const { deps } = harness({
+      listDevices: async () => [device("db-1", "dev-1")],
+      probeSession: async () => ({ directory: "/p/x/task-uuid" }),
+      listWorkspaces: async () => [],
+      createWorkspace: async (input) => {
+        attempted.push(input.name)
+        if (input.name === "MUL-123") throw conflict()
+        return "ws-new"
+      },
+    })
+    await openSessionById("sess-1", deps, { workspaceName: "MUL-123" })
+    expect(attempted).toEqual(["MUL-123", "MUL-123-2"])
+  })
+
+  test("a blank hint falls back to the directory leaf name", async () => {
+    // Older embedded multica builds never send the hint — the parent must
+    // keep working against them.
+    const { calls, deps } = harness({
+      listDevices: async () => [device("db-1", "dev-1")],
+      probeSession: async () => ({ directory: "/p/workdir" }),
+      listWorkspaces: async () => [],
+    })
+    await openSessionById("sess-1", deps, { workspaceName: "  " })
+    expect(calls.created?.name).toBe("workdir")
+  })
+})
+
 describe("openSessionById workspace name conflicts", () => {
   const conflict = () => Object.assign(new Error("workspace name already exists"), { status: 409 })
 

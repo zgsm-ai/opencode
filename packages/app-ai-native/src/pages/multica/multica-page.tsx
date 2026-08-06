@@ -66,8 +66,10 @@ export default function MulticaPage() {
   // Open a csc session by id. multica reports only the session id; the session
   // lives in an isolated working dir that belongs to no workspace, so we probe
   // the user's devices to find which one has it, then reuse or create a
-  // workspace on that device and deep-link into the session viewer.
-  const openSession = (sessionId: string, tab?: Window) =>
+  // workspace on that device and deep-link into the session viewer. An
+  // optional workspaceName hint (the issue identifier) names the auto-created
+  // workspace — without it the name would be the task-UUID directory leaf.
+  const openSession = (sessionId: string, tab?: Window, workspaceName?: string) =>
     openSessionById(sessionId, {
       listDevices: async () => (await deviceApi.list()).devices,
       probeSession: async (device, sid) => {
@@ -104,7 +106,7 @@ export default function MulticaPage() {
           ),
         })
       },
-    })
+    }, { workspaceName })
 
   // Post-message bridge: listen for navigation/location requests from the
   // embedded app so we can mirror its path in our URL and deep-link back.
@@ -127,7 +129,9 @@ export default function MulticaPage() {
           return
         }
         if (tab) tab.opener = null
-        void openSession(event.data.sessionId, tab)
+        const workspaceName =
+          typeof event.data.workspaceName === "string" ? event.data.workspaceName : undefined
+        void openSession(event.data.sessionId, tab, workspaceName)
         return
       }
       // Legacy: bare href navigation requests (currently logged only).
