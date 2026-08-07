@@ -870,12 +870,15 @@ export function DeviceWorkspaceProvider(props: ParentProps<{ workspaceId?: strin
                 }
                 // ── session.status: debounce per sessionID, idle is immediate ──
                 case "session.status": {
-                  const sp = payload.properties as { sessionID?: string; status?: SessionStatus }
+                  const sp = payload.properties as { sessionID?: string; status?: SessionStatus | string }
                   const id = sp?.sessionID ?? payload.sessionID
-                  if (!id || !sp?.status) break
+                  // upstream gateway may emit status as a bare string ("compacting") instead of { type }: normalize
+                  const raw = sp?.status
+                  const status: SessionStatus | undefined = typeof raw === "string" ? ({ type: raw } as SessionStatus) : raw
+                  if (!id || !status) break
                   lastEventAt.set(id, Date.now())
                   // idle must be immediate
-                  if (sp.status.type === "idle") {
+                  if (status.type === "idle") {
                     const existingTimer = statusTimers.get(id)
                     if (existingTimer) {
                       clearTimeout(existingTimer)
@@ -884,14 +887,14 @@ export function DeviceWorkspaceProvider(props: ParentProps<{ workspaceId?: strin
                     }
                     const prev = store.sessionStatus[id]
                     const wasBusy = prev?.type === "busy" || prev?.type === "retry" || prev?.type === "compacting"
-                    setSessionStatus(id, sp.status)
+                    setSessionStatus(id, status)
                     if (wasBusy) setStore("unread", id, true)
                     scheduleSummarySync()
                     break
                   }
                   // busy/retry: debounce
                   const wasIdle = !store.sessionStatus[id] || store.sessionStatus[id]?.type === "idle"
-                  pendingStatus.set(id, sp.status)
+                  pendingStatus.set(id, status)
                   const existingTimer = statusTimers.get(id)
                   if (existingTimer) clearTimeout(existingTimer)
                   statusTimers.set(id, setTimeout(() => {
