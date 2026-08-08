@@ -20,6 +20,7 @@ import { pickItemDescription } from "../lib/item-description"
 import SecurityTag, { VerdictTag, type Verdict } from "./security-tag"
 import HealthRadar from "./health-radar"
 import { SubscribeButton } from "./subscribe-button"
+import { UsageSection } from "./usage-section"
 import { matchEnterprise, matchEnterpriseByName, type EnterpriseInfo } from "../lib/enterprise"
 import { useLogoColor } from "../lib/use-logo-color"
 import { StoreIcon } from "../lib/store-icons"
@@ -461,7 +462,8 @@ interface ItemDetailContentProps {
   favoriteCount?: number
   previewCount?: number
   installCount?: number
-  onToggleFavorite?: () => Promise<void>
+  /** invokeMode is forwarded to the favorite API for skill-family subscribe/switch. */
+  onToggleFavorite?: (invokeMode?: "auto" | "manual") => Promise<void>
   favoritePending?: boolean
   isAuthenticated?: boolean
 }
@@ -485,6 +487,22 @@ export default function ItemDetailContent(props: ItemDetailContentProps) {
   createEffect(() => {
     const data = item()
     if (data) props.onItemLoaded?.(data)
+  })
+
+  // ─── 订阅调用模式（allow AI auto-invoke vs manual /name only）──────────────────────────
+  // 仅 skill / command 走 skill discovery、disable-model-invocation 才真实生效。subagent 经
+  // Task 工具调用、不受此键影响，故不提供模式开关（其用法在「使用方法」区块单独说明）。
+  const INVOKE_MODE_TYPES = new Set(["skill", "command"])
+  const invokeModeEnabled = () => INVOKE_MODE_TYPES.has(item()?.itemType ?? "")
+  // 本地维护当前模式（乐观更新）：已订阅时显示其模式，未订阅为 null。
+  const [invokeMode, setInvokeMode] = createSignal<"auto" | "manual" | null>(null)
+  // item 载入时按云端回显 seed；取消订阅（favorited 变 false）时清空。
+  createEffect(() => {
+    const data = item()
+    if (data && props.favorited) setInvokeMode(data.invokeMode ?? "auto")
+  })
+  createEffect(() => {
+    if (!props.favorited) setInvokeMode(null)
   })
   const [authorName] = createResource(
     () => item()?.createdBy,
@@ -851,11 +869,32 @@ export default function ItemDetailContent(props: ItemDetailContentProps) {
                         pending={props.favoritePending}
                         authenticated={!!props.isAuthenticated}
                         disabled={mcpPluginRuntimeBlocks() || mcpGateBlocks()}
-                        onToggle={() => void props.onToggleFavorite?.()}
+                        invokeModeEnabled={invokeModeEnabled()}
+                        currentMode={invokeMode()}
+                        onToggle={(_item, mode) => {
+                          if (mode) {
+                            setInvokeMode(mode)
+                            // Patch the resource so the cloud-echo re-seed (when favorited flips
+                            // false→true) reads the chosen mode instead of the stale undefined.
+                            mutateItem((p) => (p ? { ...p, invokeMode: mode, favorited: true } : p))
+                          }
+                          void props.onToggleFavorite?.(mode)
+                        }}
                         labels={{
                           subscribe: language.t("store.detail.favorite"),
                           subscribed: language.t("store.detail.unfavorite"),
-                          tooltip: language.t("store.distribute.tooltip"),
+                          tooltip: language.t("store.detail.subscribeTooltip"),
+                        }}
+                        modeLabels={{
+                          menuTooltip: language.t("store.detail.invokeMode.menuTooltip"),
+                          subscribeAuto: language.t("store.detail.invokeMode.subscribeAuto"),
+                          subscribeAutoDesc: language.t("store.detail.invokeMode.subscribeAutoDesc"),
+                          subscribeManual: language.t("store.detail.invokeMode.subscribeManual"),
+                          subscribeManualDesc: language.t("store.detail.invokeMode.subscribeManualDesc"),
+                          currentAuto: language.t("store.detail.invokeMode.currentAuto"),
+                          currentManual: language.t("store.detail.invokeMode.currentManual"),
+                          switchToAuto: language.t("store.detail.invokeMode.switchToAuto"),
+                          switchToManual: language.t("store.detail.invokeMode.switchToManual"),
                         }}
                       />
                     </Show>
@@ -968,6 +1007,13 @@ export default function ItemDetailContent(props: ItemDetailContentProps) {
                   <Show when={pickItemDescription(data(), language.locale())}>
                     <p class="text-[13px] leading-6 text-text-weak">{pickItemDescription(data(), language.locale())}</p>
                   </Show>
+
+                  <UsageSection
+                    itemType={data().itemType}
+                    name={data().slug ?? data().name}
+                    invokeMode={invokeMode()}
+                    favorited={!!props.favorited}
+                  />
 
                   <Show when={data().parentPluginName && data().parentPluginId}>
                     <div class="flex flex-wrap items-center gap-1.5 rounded-[var(--native-radius-md)] border border-border-weak-base bg-bg-muted/40 px-3 py-2 text-[13px] leading-5 text-text-weak">

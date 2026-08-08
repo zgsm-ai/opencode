@@ -13,6 +13,7 @@ import { itemApi, userApi, behaviorApi, type McpConfigStatus } from "../lib/api"
 import { detectMcpFields, mcpRequiresPluginRuntime } from "../lib/mcp-config"
 import { McpConfigForm } from "../components/mcp-config-form"
 import SecurityTag from "../components/security-tag"
+import { UsageSection } from "../components/usage-section"
 import "@/styles/vscode-markdown.css"
 
 const TYPE_META: Record<
@@ -141,14 +142,34 @@ export default function MobileStoreDetail() {
 
   const meta = () => TYPE_META[item()?.itemType ?? "skill"] ?? TYPE_META.skill
 
-  const toggleFavorite = async () => {
+  // 订阅调用模式：仅 skill / command 真实生效（subagent 经 Task 工具调用，不受影响）。
+  const INVOKE_MODE_TYPES = new Set(["skill", "command"])
+  const invokeModeEnabled = () => INVOKE_MODE_TYPES.has(item()?.itemType ?? "")
+  const [invokeMode, setInvokeMode] = createSignal<"auto" | "manual" | null>(null)
+  createEffect(() => {
+    const data = item()
+    if (data && favorited()) setInvokeMode(data.invokeMode ?? "auto")
+  })
+  createEffect(() => {
+    if (!favorited()) setInvokeMode(null)
+  })
+
+  const toggleFavorite = async (mode?: "auto" | "manual") => {
     const data = item()
     if (!data || !auth.user() || auth.loading() || favoritePending()) return
     setFavoritePending(true)
     try {
-      const result = favorited()
-        ? await behaviorApi.unfavorite(data.id)
-        : await behaviorApi.favorite(data.id)
+      // mode present = subscribe-or-switch (upsert mode); absent = plain toggle.
+      const result = mode
+        ? await behaviorApi.favorite(data.id, mode)
+        : favorited()
+          ? await behaviorApi.unfavorite(data.id)
+          : await behaviorApi.favorite(data.id)
+      if (mode) {
+        setInvokeMode(mode)
+        // Patch the resource so the favorited false→true re-seed reads the chosen mode.
+        mutateItem((p) => (p ? { ...p, invokeMode: mode, favorited: true } : p))
+      }
       setFavorited(result.favorited)
       setFavoriteCount(result.favoriteCount)
     } finally {
@@ -338,6 +359,16 @@ export default function MobileStoreDetail() {
                   <p class="px-4 pt-4 pb-2 text-[13px] leading-6 text-text-weak">{data().description}</p>
                 </Show>
 
+                {/* 使用方法 */}
+                <div class="px-4 pt-2 pb-1">
+                  <UsageSection
+                    itemType={data().itemType}
+                    name={data().slug ?? data().name}
+                    invokeMode={invokeMode()}
+                    favorited={favorited()}
+                  />
+                </div>
+
                 <Show when={data().parentPluginName && data().parentPluginId}>
                   <div class="mx-4 mt-2 flex flex-wrap items-center gap-1.5 rounded-[var(--native-radius-md)] border border-border-weak-base bg-bg-muted/40 px-3 py-2 text-[13px] leading-5 text-text-weak">
                     <Icon name="configuration" size="small" />
@@ -411,7 +442,7 @@ export default function MobileStoreDetail() {
                   </p>
                 </Show>
                 <button
-                  onClick={() => void toggleFavorite()}
+                  onClick={() => void toggleFavorite(!favorited() && invokeModeEnabled() ? "auto" : undefined)}
                   disabled={!auth.user() || auth.loading() || favoritePending() || mcpPluginRuntimeBlocks() || mcpGateBlocks()}
                   class="flex h-11 w-full items-center justify-center gap-2 rounded-xl text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60"
                   classList={{
@@ -423,10 +454,39 @@ export default function MobileStoreDetail() {
                     {auth.user()
                       ? favorited()
                         ? language.t("store.detail.unfavorite")
-                        : language.t("store.detail.favorite")
+                        : invokeModeEnabled()
+                          ? language.t("store.detail.invokeMode.subscribeAuto")
+                          : language.t("store.detail.favorite")
                       : language.t("store.detail.favoriteSignIn")}
                   </span>
                 </button>
+                {/* skill 系：第二选项（订阅即选 / 已订阅可切换模式） */}
+                <Show when={auth.user() && invokeModeEnabled() && !mcpPluginRuntimeBlocks() && !mcpGateBlocks()}>
+                  <Show
+                    when={favorited()}
+                    fallback={
+                      <button
+                        onClick={() => void toggleFavorite("manual")}
+                        disabled={auth.loading() || favoritePending()}
+                        class="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-border-weak-base text-sm font-medium text-text-strong transition-colors hover:bg-bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <span>{language.t("store.detail.invokeMode.subscribeManual")}</span>
+                      </button>
+                    }
+                  >
+                    <button
+                      onClick={() => void toggleFavorite(invokeMode() === "manual" ? "auto" : "manual")}
+                      disabled={auth.loading() || favoritePending()}
+                      class="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-border-weak-base text-sm font-medium text-text-weak transition-colors hover:bg-bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <span>
+                        {invokeMode() === "manual"
+                          ? language.t("store.detail.invokeMode.switchToAuto")
+                          : language.t("store.detail.invokeMode.switchToManual")}
+                      </span>
+                    </button>
+                  </Show>
+                </Show>
               </div>
             </div>
           )

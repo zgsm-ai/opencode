@@ -23,12 +23,17 @@ export default function StoreDetail() {
     setFavoriteCount(item.favoriteCount ?? 0)
   }
 
-  const toggleFavorite = async () => {
+  const toggleFavorite = async (invokeMode?: "auto" | "manual") => {
     const data = currentItem()
     if (!data || !auth.user() || auth.loading() || favoritePending()) return
     setFavoritePending(true)
     try {
-      const result = favorited() ? await behaviorApi.unfavorite(data.id) : await behaviorApi.favorite(data.id)
+      // invokeMode present = subscribe-or-switch (upsert mode); absent = plain toggle.
+      const result = invokeMode
+        ? await behaviorApi.favorite(data.id, invokeMode)
+        : favorited()
+          ? await behaviorApi.unfavorite(data.id)
+          : await behaviorApi.favorite(data.id)
       setFavorited(result.favorited)
       setFavoriteCount(result.favoriteCount)
     } finally {

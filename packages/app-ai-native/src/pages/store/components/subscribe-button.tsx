@@ -1,9 +1,29 @@
 import { createEffect, createSignal, on, onCleanup, onMount, Show, type JSX } from "solid-js"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
+import { DropdownMenu } from "@opencode-ai/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 import { formatCompact } from "./store-capability-table"
 import { StoreIcon } from "../lib/store-icons"
 import type { CapabilityItem } from "../lib/api"
+
+/** Per-user subscription invoke mode for skill-family items. */
+export type InvokeMode = "auto" | "manual"
+
+export interface SubscribeModeLabels {
+  /** Tooltip on the dropdown caret. */
+  menuTooltip: string
+  /** Subscribe-time choices (shown when not yet subscribed). */
+  subscribeAuto: string
+  subscribeAutoDesc: string
+  subscribeManual: string
+  subscribeManualDesc: string
+  /** Group label showing the active mode when subscribed, e.g. "当前：AI 自动调用". */
+  currentAuto: string
+  currentManual: string
+  /** Switch actions (shown when already subscribed). */
+  switchToAuto: string
+  switchToManual: string
+}
 
 // Does the user prefer reduced motion? Read once per render so the width FLIP and the label
 // cross-fade both honor it (CSS already strips the bell/ping/transition keyframes separately).
@@ -20,8 +40,18 @@ export interface SubscribeButtonProps {
   authenticated: boolean
   /** True when subscribing is blocked (parent passes mcpListSubscribeBlocked(item)). */
   disabled?: boolean
-  onToggle: (item: CapabilityItem) => void
+  /**
+   * onToggle is called with an optional invokeMode. When undefined (non-skill items, or
+   * unsubscribe), the backend keeps its default ("auto"). Skill-family subscribe actions
+   * pass "auto" / "manual" explicitly.
+   */
+  onToggle: (item: CapabilityItem, invokeMode?: InvokeMode) => void
   labels: { subscribe: string; subscribed: string; tooltip: string }
+  /** Enables the "订阅即选" split dropdown (skill-family items only). */
+  invokeModeEnabled?: boolean
+  /** The user's current subscription mode; null/undefined when not subscribed. */
+  currentMode?: InvokeMode | null
+  modeLabels?: SubscribeModeLabels
 }
 
 /**
@@ -111,14 +141,27 @@ export function SubscribeButton(props: SubscribeButtonProps): JSX.Element {
     })
   }
 
+  // Main pill: subscribing defaults to "auto" for skill-family (the recommended mode);
+  // unsubscribing carries no mode. Non-skill items pass undefined (backend default).
+  const primaryMode = (): InvokeMode | undefined =>
+    props.favorited ? undefined : props.invokeModeEnabled ? "auto" : undefined
+
   const handleClick = (event: MouseEvent) => {
     event.stopPropagation()
     if (!interactive()) return
     triggerAnimation()
-    props.onToggle(props.item)
+    props.onToggle(props.item, primaryMode())
   }
 
-  return (
+  // Selecting a mode from the dropdown both subscribes (when not yet) and switches mode
+  // (when already subscribed) — the backend favorite endpoint upserts the mode either way.
+  const selectMode = (mode: InvokeMode) => {
+    if (!interactive()) return
+    if (!props.favorited) triggerAnimation()
+    props.onToggle(props.item, mode)
+  }
+
+  const pill = (
     <Tooltip value={props.labels.tooltip} placement="top">
       <button
         ref={buttonRef}
@@ -213,6 +256,76 @@ export function SubscribeButton(props: SubscribeButtonProps): JSX.Element {
         </span>
       </button>
     </Tooltip>
+  )
+
+  // Non-skill items keep the original single-button control.
+  if (!props.invokeModeEnabled || !props.modeLabels) return pill
+
+  const ml = () => props.modeLabels as SubscribeModeLabels
+
+  return (
+    <span class="inline-flex items-center gap-1">
+      {pill}
+      <DropdownMenu placement="bottom-end">
+        <Tooltip value={ml().menuTooltip} placement="top">
+          <DropdownMenu.Trigger
+            type="button"
+            disabled={!interactive()}
+            onClick={(e: MouseEvent) => e.stopPropagation()}
+            aria-label={ml().menuTooltip}
+            class={cn(
+              "store-subscribe-btn inline-flex h-8 w-7 cursor-pointer items-center justify-center rounded-[var(--native-radius-full)] border text-[var(--native-foreground)]",
+              "[transition:background-color_0.25s_cubic-bezier(0.22,1,0.36,1),border-color_0.25s_cubic-bezier(0.22,1,0.36,1),transform_0.12s_cubic-bezier(0.34,1.56,0.64,1)]",
+              "active:scale-[0.94] disabled:cursor-not-allowed disabled:opacity-[var(--native-disabled-opacity)]",
+              props.favorited
+                ? "border-[color:color-mix(in_oklab,var(--native-primary)_45%,transparent)] bg-[color:color-mix(in_oklab,var(--native-primary)_15%,transparent)] text-[var(--native-primary)]"
+                : "border-[color:color-mix(in_oklab,var(--native-foreground)_11%,transparent)] bg-[color:color-mix(in_oklab,var(--native-foreground)_4%,transparent)] hover:border-[var(--native-dim)]",
+            )}
+          >
+            <StoreIcon name="caret" size={13} />
+          </DropdownMenu.Trigger>
+        </Tooltip>
+        <DropdownMenu.Portal>
+          <DropdownMenu.Content class="min-w-[260px]">
+            <Show
+              when={props.favorited}
+              fallback={
+                <>
+                  <DropdownMenu.Item onSelect={() => selectMode("auto")}>
+                    <DropdownMenu.ItemLabel>{ml().subscribeAuto}</DropdownMenu.ItemLabel>
+                    <DropdownMenu.ItemDescription>{ml().subscribeAutoDesc}</DropdownMenu.ItemDescription>
+                  </DropdownMenu.Item>
+                  <DropdownMenu.Item onSelect={() => selectMode("manual")}>
+                    <DropdownMenu.ItemLabel>{ml().subscribeManual}</DropdownMenu.ItemLabel>
+                    <DropdownMenu.ItemDescription>{ml().subscribeManualDesc}</DropdownMenu.ItemDescription>
+                  </DropdownMenu.Item>
+                </>
+              }
+            >
+              {/* GroupLabel requires an enclosing Group (Kobalte throws otherwise). */}
+              <DropdownMenu.Group>
+                <DropdownMenu.GroupLabel>
+                  {props.currentMode === "manual" ? ml().currentManual : ml().currentAuto}
+                </DropdownMenu.GroupLabel>
+                <DropdownMenu.Separator />
+                <Show
+                  when={props.currentMode === "manual"}
+                  fallback={
+                    <DropdownMenu.Item onSelect={() => selectMode("manual")}>
+                      <DropdownMenu.ItemLabel>{ml().switchToManual}</DropdownMenu.ItemLabel>
+                    </DropdownMenu.Item>
+                  }
+                >
+                  <DropdownMenu.Item onSelect={() => selectMode("auto")}>
+                    <DropdownMenu.ItemLabel>{ml().switchToAuto}</DropdownMenu.ItemLabel>
+                  </DropdownMenu.Item>
+                </Show>
+              </DropdownMenu.Group>
+            </Show>
+          </DropdownMenu.Content>
+        </DropdownMenu.Portal>
+      </DropdownMenu>
+    </span>
   )
 }
 

@@ -403,7 +403,7 @@ export default function Home() {
     setListCache(data)
   })
 
-  const toggleFavorite = async () => {
+  const toggleFavorite = async (invokeMode?: "auto" | "manual") => {
     const data = detailItem()
     if (!data || !auth.user() || auth.loading() || favoritePending()) return
 
@@ -415,7 +415,13 @@ export default function Home() {
 
     setFavoritePending(true)
     try {
-      const result = favorited() ? await behaviorApi.unfavorite(data.id) : await behaviorApi.favorite(data.id)
+      // invokeMode present = subscribe-or-switch (upsert mode, never unfavorite);
+      // absent = plain toggle.
+      const result = invokeMode
+        ? await behaviorApi.favorite(data.id, invokeMode)
+        : favorited()
+          ? await behaviorApi.unfavorite(data.id)
+          : await behaviorApi.favorite(data.id)
       setFavorited(result.favorited)
       setFavoriteCount(result.favoriteCount)
       // Keep the list view's per-item store in sync with a detail-page toggle (no item-object
@@ -785,7 +791,7 @@ export default function Home() {
     favoriteLabels: {
       subscribe: language.t("store.detail.favorite"),
       subscribed: language.t("store.detail.unfavorite"),
-      tooltip: language.t("store.distribute.tooltip"),
+      tooltip: language.t("store.detail.subscribeTooltip"),
     },
     emptyMessage: language.t("store.noResults"),
   }))

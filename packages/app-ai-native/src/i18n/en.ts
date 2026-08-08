@@ -780,6 +780,7 @@ export const dict = {
   "store.detail.favorite": "Subscribe",
   "store.detail.favorited": "Subscribed",
   "store.detail.unfavorite": "Unsubscribe",
+  "store.detail.subscribeTooltip": "Once subscribed, every terminal signed in to this account can use this capability — no install needed.",
   "store.detail.favoriteSignIn": "Sign in to subscribe",
   "store.detail.mcpConfig.title": "Parameters",
   "store.detail.mcpConfig.description":
@@ -857,6 +858,26 @@ export const dict = {
   "store.detail.usage.title": "Install command",
   "store.detail.usage.copy": "Copy command",
   "store.detail.usage.copied": "Copied",
+  "store.detail.usage.sectionTitle": "How to use",
+  "store.detail.usage.skill.auto":
+    "The AI may invoke this automatically when relevant. You can also trigger it manually with the slash command below — in the Workspace, CSC, or any CS-IDE:",
+  "store.detail.usage.skill.manual":
+    "The AI will not invoke this automatically. Trigger it manually with the slash command below — in the Workspace, CSC, or any CS-IDE:",
+  "store.detail.usage.subagent":
+    "Once subscribed, the AI can delegate to this subagent via its Task tool when relevant.",
+  "store.detail.usage.mcp":
+    "Once subscribed and configured, the AI can call this MCP's tools directly — no slash command needed.",
+  "store.detail.usage.rule": "Once subscribed, this rule is injected into the AI conversation as context.",
+  "store.detail.usage.template": "Once subscribed, apply this template when creating the matching resource.",
+  "store.detail.invokeMode.menuTooltip": "Choose how it's invoked",
+  "store.detail.invokeMode.subscribeAuto": "Subscribe, allow AI auto-invoke",
+  "store.detail.invokeMode.subscribeAutoDesc": "AI can call it automatically; /name still works",
+  "store.detail.invokeMode.subscribeManual": "Subscribe, manual /name only",
+  "store.detail.invokeMode.subscribeManualDesc": "AI won't auto-invoke; trigger with /name",
+  "store.detail.invokeMode.currentAuto": "Current: AI auto-invoke allowed",
+  "store.detail.invokeMode.currentManual": "Current: manual /name only",
+  "store.detail.invokeMode.switchToAuto": "Switch to AI auto-invoke",
+  "store.detail.invokeMode.switchToManual": "Switch to manual /name only",
   "store.detail.enterprise.label": "Enterprise",
   "store.scanResults": "Scan Results",
   "store.scanResults.verdict": "Verdict",
