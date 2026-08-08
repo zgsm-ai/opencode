@@ -20,6 +20,7 @@ import {
   uninstallFavoriteItem,
   type FavoriteItemType,
 } from "@/costrict/cloud/favorite"
+import { syncCloudFavoritesNow, syncCloudFavoritesForList } from "@/costrict/cloud/favorite-sync"
 
 const log = Log.create({ service: "server" })
 
@@ -349,10 +350,47 @@ export const GlobalRoutes = lazy(() =>
       }),
       async (c) => {
         try {
+          // workspace 的 /hub 面板经 cs-cloud 转发到这里。先同步一次，面板打开
+          // 即与 csc 的启用状态一致，不必等后台周期。内部有节流与静默失败。
+          await syncCloudFavoritesForList()
           const type = c.req.query("type") as FavoriteItemType | undefined
           const validTypes = ["skill", "agent", "command", "mcp"]
           const items = await listFavoriteItems(type && validTypes.includes(type) ? type : undefined)
           return c.json(items)
+        } catch (e) {
+          return c.json({ error: e instanceof Error ? e.message : String(e) }, 500)
+        }
+      },
+    )
+    .post(
+      "/favorite/sync",
+      describeRoute({
+        summary: "Sync cloud favorites (subscription → active)",
+        description:
+          "Enable subscribed capability items that were never activated on this device, and re-activate items an admin re-pushed after a local unload. Items the user unloaded without a newer distribution stay disabled. Safe to call repeatedly.",
+        operationId: "global.favorite.sync",
+        responses: {
+          200: {
+            description: "Sync result",
+            content: {
+              "application/json": {
+                schema: resolver(
+                  z.object({
+                    enabled: z.array(z.string()),
+                    reactivated: z.array(z.string()),
+                    errors: z.array(z.object({ slug: z.string(), message: z.string() })),
+                  }),
+                ),
+              },
+            },
+          },
+          ...errors(500),
+        },
+      }),
+      async (c) => {
+        try {
+          const summary = await syncCloudFavoritesNow()
+          return c.json(summary ?? { enabled: [], reactivated: [], errors: [] })
         } catch (e) {
           return c.json({ error: e instanceof Error ? e.message : String(e) }, 500)
         }

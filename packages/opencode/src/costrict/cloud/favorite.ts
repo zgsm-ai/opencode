@@ -11,6 +11,9 @@ import { Filesystem } from "../../util/filesystem"
 import { Config } from "../../config/config"
 import { ConfigMarkdown } from "../../config/markdown"
 import { Log } from "../../util/log"
+import { planFavoriteEnable } from "./favorite-plan"
+
+export { planFavoriteEnable, newDistributionAtFor, type FavoriteEnablePlan } from "./favorite-plan"
 
 const log = Log.create({ service: "cloud-favorite" })
 
@@ -30,6 +33,11 @@ type FavoriteStateRecord = {
   lifecycle: FavoriteLifecycle
   installedAt: string
   updatedAt: string
+  // 分发重推水位线：本客户端已应用过的最新一条 distribution 的 createdAt。
+  // 订阅项被用户手动 unload 后，只有当管理员推来更新的分发（createdAt 大于
+  // 此水位线）才会重新启用，从而区分「用户主动关掉的旧分发」与「管理员刚
+  // 重推的新分发」。缺失 = 从未收到过分发（纯收藏），永不跨 unload 重启用。
+  lastAppliedDistributionAt?: string
 }
 
 type FavoriteState = {
@@ -60,6 +68,8 @@ export type FavoriteStatus = "Cloud" | "Downloaded" | "Active" | "Unloaded"
 export type FavoriteItemWithStatus = FavoriteItem & {
   status: FavoriteStatus
   localPath?: string
+  /** 分发重推水位线，见 FavoriteStateRecord.lastAppliedDistributionAt */
+  lastAppliedDistributionAt?: string
 }
 
 /** @deprecated Use FavoriteItemWithStatus instead */
@@ -607,6 +617,9 @@ async function persistInstalledItem(item: FavoriteItem) {
       lifecycle: state.items[item.slug]?.lifecycle ?? "downloaded",
       installedAt: state.items[item.slug]?.installedAt ?? new Date().toISOString(),
       updatedAt: new Date().toISOString(),
+      // 重装/更新不得清空水位线，否则一条早已应用的旧分发会在下次同步里
+      // 重新“变新”，把用户手动关掉的项again启用。
+      lastAppliedDistributionAt: state.items[item.slug]?.lastAppliedDistributionAt,
     }
   })
 
@@ -698,6 +711,7 @@ export async function listFavoriteItems(type?: FavoriteItemType): Promise<Favori
       ...item,
       status: deriveStatus(local, activeSkillPaths, activeAgentNames, activeCommandNames, activeMcpNames),
       localPath: local?.localPath,
+      lastAppliedDistributionAt: local?.lastAppliedDistributionAt,
     })
   }
 
@@ -716,6 +730,7 @@ export async function listFavoriteItems(type?: FavoriteItemType): Promise<Favori
         content: "",
         status: deriveStatus(record, activeSkillPaths, activeAgentNames, activeCommandNames, activeMcpNames),
         localPath: record.localPath,
+        lastAppliedDistributionAt: record.lastAppliedDistributionAt,
       })
     }
   }
@@ -803,6 +818,99 @@ export async function uninstallFavoriteItem(slugOrId: string) {
 /** @deprecated Use uninstallFavoriteItem */
 export async function uninstallFavoriteSkill(slugOrId: string) {
   return uninstallFavoriteItem(slugOrId)
+}
+
+// ── 订阅即启用 (auto-enable) ─────────────────────────────────────────────
+
+/**
+ * 拉取本账号收到的分发回执，聚合成 itemId → 最新一条 distribution.createdAt。
+ * fail-open：这只是重启用增强，云端不可用时不应拖垮主收藏流程。
+ */
+export async function fetchReceivedDistributionMap(): Promise<Map<string, string>> {
+  const map = new Map<string, string>()
+  try {
+    const { baseUrl, json } = await createAuthenticatedFetch()
+    const data = await json<{
+      receipts?: Array<{ distribution?: { itemId?: string; createdAt?: string } }>
+    }>(`${baseUrl}/api/distributions/my/received`)
+    for (const receipt of data.receipts ?? []) {
+      const itemId = receipt.distribution?.itemId
+      const createdAt = receipt.distribution?.createdAt
+      if (!itemId || !createdAt) continue
+      const prev = map.get(itemId)
+      if (!prev || new Date(createdAt).getTime() > new Date(prev).getTime()) {
+        map.set(itemId, createdAt)
+      }
+    }
+  } catch {
+    // fail open
+  }
+  return map
+}
+
+async function applyDistributionWatermark(slug: string, at: string): Promise<void> {
+  await mutateState((state) => {
+    const record = state.items[slug]
+    if (!record) return
+    if (
+      !record.lastAppliedDistributionAt ||
+      new Date(at).getTime() > new Date(record.lastAppliedDistributionAt).getTime()
+    ) {
+      record.lastAppliedDistributionAt = at
+    }
+  })
+}
+
+export type EnablePendingSummary = {
+  enabled: string[]
+  reactivated: string[]
+  errors: Array<{ slug: string; message: string }>
+}
+
+/** 按 planFavoriteEnable 的结果启用收藏项，并持久化水位线。 */
+export async function enablePendingFavorites(
+  items: FavoriteItemWithStatus[],
+  distMap: Map<string, string>,
+): Promise<EnablePendingSummary> {
+  const summary: EnablePendingSummary = { enabled: [], reactivated: [], errors: [] }
+  const plan = planFavoriteEnable(items, distMap)
+  const reactivateSet = new Set<string>(plan.toReactivate)
+
+  // 串行而非 Promise.all：loadFavoriteItem 对 state.json 是读-改-写，
+  // 并发会 last-write-wins 丢记录和水位线。收藏数量很小，串行足够便宜。
+  for (const slug of [...plan.toEnable, ...plan.toReactivate]) {
+    try {
+      await loadFavoriteItem(slug)
+      if (reactivateSet.has(slug)) summary.reactivated.push(slug)
+      else summary.enabled.push(slug)
+    } catch (error) {
+      summary.errors.push({ slug, message: error instanceof Error ? error.message : String(error) })
+    }
+  }
+
+  // 只为启用成功的项推进水位线：一次瞬时失败不应把水位线推过一条从未真正
+  // 应用的分发，否则这条分发再也不会被重试。
+  const failed = new Set<string>(summary.errors.map((e) => e.slug))
+  for (const { slug, at } of plan.watermarks) {
+    if (failed.has(slug)) continue
+    await applyDistributionWatermark(slug, at)
+  }
+
+  return summary
+}
+
+/**
+ * 订阅即启用：拉一次收藏列表 + 分发回执，启用尚未激活的项，并让管理员重推
+ * 穿透用户此前的 unload。静默失败，云端抖动不应影响调用方。
+ */
+export async function autoEnableCloudFavorites(): Promise<EnablePendingSummary | undefined> {
+  try {
+    const items = await listFavoriteItems()
+    const distMap = await fetchReceivedDistributionMap()
+    return await enablePendingFavorites(items, distMap)
+  } catch {
+    return undefined
+  }
 }
 
 // ── Internal helpers ────────────────────────────────────────────────────
