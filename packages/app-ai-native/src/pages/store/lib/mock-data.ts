@@ -927,7 +927,6 @@ const linkMember = (
         displayName: local.displayName,
         email: local.email,
         avatarUrl: local.avatarUrl,
-        organization: local.organization,
         status: local.status,
         roles: [...local.roles],
       }

@@ -1529,6 +1529,9 @@ export interface AdminDept {
 
 // One member of a department: the dept-sync record plus the correlated local
 // user (linked === null when the dept-sync member has no costrict-web account).
+//
+// Note: dept-sync's linked user no longer carries `organization` (D12=B). The
+// admin org view renders org via the dedicated org-tree API, not via this shape.
 export interface AdminDeptMember {
   userId: string
   username: string
@@ -1541,7 +1544,6 @@ export interface AdminDeptMember {
     displayName: string
     email: string
     avatarUrl: string
-    organization: string
     status: AdminUserStatus
     roles: string[]
   } | null
