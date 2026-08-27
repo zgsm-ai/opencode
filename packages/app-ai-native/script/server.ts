@@ -28,7 +28,6 @@ const stripBase = (p: string) =>
   basePath && p.startsWith(basePath) ? p.slice(basePath.length) || "/" : p
 
 const isEntryDocument = (p: string) => p === "/" || p.endsWith(".html")
-const isServiceWorker = (p: string) => p === "/sw.js" || p === "/registerSW.js"
 
 const isCompressible = (file: Bun.BunFile, p: string) => {
   if (p.endsWith(".gz")) return false
@@ -120,7 +119,7 @@ Bun.serve({
     return serve(
       req,
       filePath,
-      isEntryDocument(filePath) || isServiceWorker(filePath) ? ENTRY_CACHE_CONTROL : STATIC_CACHE_CONTROL,
+      isEntryDocument(filePath) ? ENTRY_CACHE_CONTROL : STATIC_CACHE_CONTROL,
     ).then(
       (res) =>
         res ?? withCacheHeaders(Bun.file(join(dist, "index.html")), ENTRY_CACHE_CONTROL),
