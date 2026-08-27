@@ -284,7 +284,7 @@ export default function AdminMembers() {
       displayName: l.displayName,
       email: l.email,
       avatarUrl: l.avatarUrl,
-      organization: l.organization,
+      organization: "",
       status: l.status,
       roles: l.roles,
       lastLoginAt: null,
