@@ -17,6 +17,7 @@ import { lazy } from "@/util/lazy"
 import { errorHandler } from "./middleware"
 import { InstanceRoutes } from "./instance"
 import { initProjectors } from "./projectors"
+import { startCloudFavoritesSync, stopCloudFavoritesSync } from "../costrict/cloud/favorite-sync"
 
 // @ts-ignore This global is needed to prevent ai-sdk from logging warnings to stdout https://github.com/vercel/ai/blob/2dc67e0ef538307f21368db32d5a12345d98831b/packages/ai/src/logger/log-warnings.ts#L85
 globalThis.AI_SDK_LOG_WARNINGS = false
@@ -301,9 +302,14 @@ export namespace Server {
       log.warn("mDNS enabled but hostname is loopback; skipping mDNS publish")
     }
 
+    // 订阅即启用：用户在 web 上订阅的能力项，无需打开 /hub 就会在本设备生效。
+    // 未登录/云端不可达时内部静默跳过，不影响 server 启动。
+    startCloudFavoritesSync()
+
     const originalStop = server.stop.bind(server)
     server.stop = async (closeActiveConnections?: boolean) => {
       if (shouldPublishMDNS) MDNS.unpublish()
+      stopCloudFavoritesSync()
       return originalStop(closeActiveConnections)
     }
 
